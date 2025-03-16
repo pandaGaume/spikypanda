@@ -69,6 +69,6 @@ npm run build
 MIT License © 2024 SpikyPanda Team
 
 ---
-🐼 Made with spikes by [YOUR NAME]
+🐼 Made with spikes by Guillaume Pelletier
 
 # spikypanda
