@@ -1,0 +1,27 @@
+{
+    "name": "spikypanda/root",
+    "version": "1.0.0",
+    "private": true,
+
+    "compilerOptions": {
+        "baseUrl": "packages",
+        "moduleResolution": "node",
+        "module": "ES2020",
+        "target": "es2021",
+        "declaration": true,
+        "sourceMap": true,
+        "inlineSources": true,
+        "experimentalDecorators": true,
+        "noImplicitAny": true,
+        "noImplicitReturns": true,
+        "noImplicitThis": true,
+        "noUnusedLocals": true,
+        "strictNullChecks": true,
+        "strictFunctionTypes": true,
+        "skipLibCheck": true,
+        "removeComments": true,
+        "forceConsistentCasingInFileNames": true,
+        "strict": true
+    },
+    "workspaces": ["packages/**/*"]
+}

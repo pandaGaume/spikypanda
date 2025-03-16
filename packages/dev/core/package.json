@@ -1,0 +1,26 @@
+{
+    "name": "spikypanda-core",
+    "version": "0.0.1a",
+    "main": "dist/index",
+    "module": "dist/index",
+    "esnext": "dist/index",
+    "types": "dist/index",
+    "private": true,
+    "files": [
+        "./src"
+    ],
+    "scripts": {
+        "build:core:dev": "npm run clean:core && npm run compile:core",
+        "clean:core": "rimraf dist && rimraf tsconfig.tsbuildinfo",
+        "compile:core": "npm run compile:core:source",
+        "compile:core:source": "tsc --project tsconfig.json",
+        "webpack:core:dev": "webpack --mode development",
+        "copy:core:bundle": "copyfiles -V -u 1 \"./bundles/*.*\" \"../../host/www/libs\"",
+        "publish:core:dev": "npm run build:core:dev && npm run webpack:core:dev && npm run copy:core:bundle",
+        "test:core": "jest -c ../../../jest.config.ts --verbose"
+    },
+    "sideEffects": false,
+    "devDependencies": {
+        "rimraf": "^4.4.1"
+    }
+}

@@ -1,0 +1,15 @@
+{
+    "extends": "../../../tsconfig.json",
+    "name": "spikypanda-core",
+    "compilerOptions": {
+        "composite": true,
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "declarationDir": "./types",
+        "skipLibCheck": true,
+        "paths": {}
+    },
+
+    "include": ["./src/**/*.ts"],
+    "exclude": ["**/node_modules", "**/dist", "**/types"]
+}
