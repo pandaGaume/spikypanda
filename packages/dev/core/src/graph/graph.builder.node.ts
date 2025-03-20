@@ -29,13 +29,13 @@ export class GraphNodeBuilder implements INodeBuilder {
 
     public withInputs(link: SingleOrArray<IOlink> | SingleOrArray<ILinkBuilder>): INodeBuilder {
         this._inputs = this._inputs ?? [];
-        this._inputs.push(...GraphNodeBuilder.ResolveLinksOrNodes(link, isOlink));
+        this._inputs.push(...GraphNodeBuilder.ResolveLinksOrNodes(link, isOlink<IOlink>));
         return this;
     }
 
     public withOutputs(link: SingleOrArray<IOlink> | SingleOrArray<ILinkBuilder>): INodeBuilder {
         this._outputs = this._outputs ?? [];
-        this._outputs.push(...GraphNodeBuilder.ResolveLinksOrNodes(link, isOlink));
+        this._outputs.push(...GraphNodeBuilder.ResolveLinksOrNodes(link, isOlink<IOlink>));
         return this;
     }
 

@@ -24,7 +24,7 @@ export interface IGraph<N extends INode, L extends IOlink> extends INode {
 /**
  * Type guard for INode
  */
-export function isNode(obj: unknown): obj is INode {
+export function isNode<N extends INode>(obj: unknown): obj is N {
     return (
         typeof obj === "object" &&
         obj !== null &&
@@ -36,7 +36,7 @@ export function isNode(obj: unknown): obj is INode {
 /**
  * Type guard for IOlink
  */
-export function isOlink(obj: unknown): obj is IOlink {
+export function isOlink<L extends IOlink>(obj: unknown): obj is L {
     return typeof obj === "object" && obj !== null && "oini" in obj && "ofin" in obj && isNode((obj as IOlink).oini) && isNode((obj as IOlink).ofin);
 }
 

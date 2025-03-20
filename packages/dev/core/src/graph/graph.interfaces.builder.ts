@@ -32,13 +32,15 @@ export type GraphConstructor<N extends INode, L extends IOlink, T extends IGraph
     ...args: any[]
 ) => T;
 
-export interface IGraphBuilder {
-    withNodePosition(p: ICartesian): IGraphBuilder;
-    withNodeInputs(link: SingleOrArray<IOlink> | SingleOrArray<ILinkBuilder>): IGraphBuilder;
-    withNodeOutputs(link: SingleOrArray<IOlink> | SingleOrArray<ILinkBuilder>): IGraphBuilder;
+export interface IGraphBuilder<N extends INode, L extends IOlink> {
+    // the Node part of the graph
+    withNodePosition(p: ICartesian): IGraphBuilder<N, L>;
+    withNodeInputs(link: SingleOrArray<IOlink> | SingleOrArray<ILinkBuilder>): IGraphBuilder<N, L>;
+    withNodeOutputs(link: SingleOrArray<IOlink> | SingleOrArray<ILinkBuilder>): IGraphBuilder<N, L>;
 
-    withType<N extends INode, L extends IOlink, T extends IGraph<N, L>>(c: GraphConstructor<N, L, T>): IGraphBuilder;
-    withNodes(node: SingleOrArray<INode> | SingleOrArray<INodeBuilder>): IGraphBuilder;
-    withLinks(link: SingleOrArray<IOlink> | SingleOrArray<ILinkBuilder>): IGraphBuilder;
-    build<N extends INode, L extends IOlink>(...args: any[]): IGraph<N, L>;
+    // the graph part of the graph
+    withType<T extends IGraph<N, L>>(c: GraphConstructor<N, L, T>): IGraphBuilder<N, L>;
+    withNodes(node: SingleOrArray<N> | SingleOrArray<INodeBuilder>): IGraphBuilder<N, L>;
+    withLinks(link: SingleOrArray<L> | SingleOrArray<ILinkBuilder>): IGraphBuilder<N, L>;
+    build<T extends IGraph<N, L>>(...args: any[]): Nullable<T>;
 }
