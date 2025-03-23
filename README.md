@@ -15,9 +15,8 @@ The ultimate goal is to **implement a common runtime and training engine** that 
 - 🔁 **Backpropagation Engine**: Standard MLP training with optimizers like SGD, Momentum, Adam.
 - ⚡ **WebGPU Acceleration**: Designed for high performance on parallel hardware.
 - 📡 **Real-time Processing**: Targets streaming time-series inputs (e.g., IMU, motion capture).
-- 🎨 **Interactive Visualization**: WebGL-based visual feedback on neuron activity.
-- 🏗 **Intel Hardware Compatibility**: Built for WebGPU and oneAPI optimizations.
-- 🔗 **Neuromorphic Extension Path**: Designed to integrate with Loihi and similar hardware later.
+- 🎨 **Interactive Visualization**: WebGL-based visual feedback on neuron activity using Babylon JS.
+- 🔗 **Intel Neuromorphic Extension Path**: Designed to integrate with Loihi and similar hardware later.
 
 ## 🧪 Current Work in Progress
 
