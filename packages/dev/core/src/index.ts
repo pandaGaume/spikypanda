@@ -1,6 +1,8 @@
 export * from "./types";
 export * from "./geometry";
 export * from "./graph";
+export * from "./layout";
+export * from "./neuralnetwork";
 
 (<any>window).SPIKYPANDA = (<any>window).SPIKYPANDA || {};
 

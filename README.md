@@ -2,20 +2,34 @@
 
 ## 🚀 Introduction
 
-**SpikyPanda** is an experimental **Spiking Neural Network (SNN)** implementation in **TypeScript**, leveraging **WebGPU/WebGL** for real-time neural computation. Inspired by biological neural systems, it aims to process time-series data such as IMU sensor readings and detect patterns through STDP-based learning.
+**SpikyPanda** is an experimental **Neural Network framework** in **TypeScript**, starting from classical networks and converging toward biologically inspired **Spiking Neural Networks (SNNs)**.
+
+We use a **graph-based architecture** to model neurons and synapses across various network types (MLP, SNN, etc.), enabling consistent runtime and training logic that can be compared across models.
+
+The ultimate goal is to **implement a common runtime and training engine** that can evolve into a spiking model and allow side-by-side comparison with more traditional neural networks.
 
 ## 🎯 Features
 
--   🧠 **SNN Engine**: Implements a spiking neuron model (LIF) with synaptic plasticity (STDP).
--   ⚡ **WebGPU Acceleration**: Runs spikes and synapses in parallel for high performance.
--   📡 **Real-time Processing**: Designed for streaming data like accelerometer inputs.
--   🎨 **Interactive Visualization**: Displays neuron activity using WebGL.
--   🏗 **Intel Hardware Compatibility**: Supports WebGPU and oneAPI for optimized execution on Intel platforms.
--   🔗 **Loihi Research Potential**: Can be adapted for neuromorphic hardware, such as Intel's Loihi.
+- 🧠 **Graph-based Neural Engine**: A unified structure to run and train classical and spiking models.
+- 🧩 **Modular Runtime**: Includes inference and training pipelines for MLP and will evolve to support STDP and SNNs.
+- 🔁 **Backpropagation Engine**: Standard MLP training with optimizers like SGD, Momentum, Adam.
+- ⚡ **WebGPU Acceleration**: Designed for high performance on parallel hardware.
+- 📡 **Real-time Processing**: Targets streaming time-series inputs (e.g., IMU, motion capture).
+- 🎨 **Interactive Visualization**: WebGL-based visual feedback on neuron activity.
+- 🏗 **Intel Hardware Compatibility**: Built for WebGPU and oneAPI optimizations.
+- 🔗 **Neuromorphic Extension Path**: Designed to integrate with Loihi and similar hardware later.
+
+## 🧪 Current Work in Progress
+
+- ✅ Inference + training for MLPs using backpropagation
+- 🧠 Runtime context (`bag`) system for neurons and synapses
+- 📐 Activation and loss functions are fully modular
+- 🔧 Optimizer engine with pluggable strategies (SGD, Momentum, NAG, Adam)
+- 🧬 SNN support is next — including spike dynamics and STDP learning
 
 ## 📦 Installation
 
-Ensure you have **Node.js** installed. Then, clone the repository and install dependencies:
+Make sure you have **Node.js** installed. Then, clone the repository and install dependencies:
 
 ```sh
 # Clone the repository
@@ -26,50 +40,11 @@ cd SpikyPanda
 npm install
 ```
 
-## 🏃‍♂️ Running SpikyPanda
+## 🧭 Roadmap
 
-```sh
-npm run dev
-```
-
-This will start the simulation and visualize neuron activity in a **WebGL canvas**.
-
-## 📜 Example Usage
-
-### 1️⃣ **Streaming IMU Data with Sliding Window**
-
-```typescript
-import { StreamingSNN } from "./streamingSnn";
-
-const mySnnGraph = ...; // Define the SNN graph structure
-const streamingProcessor = new StreamingSNN(mySnnGraph);
-
-// Simulate a live stream (calling every 100ms)
-setInterval(() => {
-    const imuReading: [number, number, number] = [
-        Math.random() * 2 - 1, // Random X (-1 to 1)
-        Math.random() * 2 - 1, // Random Y (-1 to 1)
-        Math.random() * 2 - 1, // Random Z (-1 to 1)
-    ];
-
-    streamingProcessor.processLiveData(imuReading);
-
-    const activity = streamingProcessor.detectActivity();
-    console.log("Detected Activity:", activity);
-}, 100);
-```
-
-## 📌 Roadmap
-
--   🏗 **Intel oneAPI Integration**: Explore compatibility with **oneDNN** for optimized neural network execution on Intel architectures.
--   🤖 **Neuromorphic Computing Support**: Investigate potential for deploying SpikyPanda on **Intel Loihi** for research applications.
--   📊 **Real-time Visualization**: Implement a WebGL-based UI to observe spiking behavior dynamically.
--   🚀 **Optimized Memory Usage**: Improve spike event storage and processing efficiency for large datasets.
-
-## 📜 License
-
-MIT License © 2024 SpikyPanda Team
-
----
-
-🐼 Made with spikes by Guillaume Pelletier
+- [x] Graph-based runtime for MLP
+- [x] Training engine with optimizer support
+- [ ] Add recurrent connections
+- [ ] Implement spiking neuron (LIF)
+- [ ] STDP-based learning for SNNs
+- [ ] Comparative benchmarks: MLP vs SNN
