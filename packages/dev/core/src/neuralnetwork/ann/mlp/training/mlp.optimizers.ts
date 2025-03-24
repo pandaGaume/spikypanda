@@ -3,58 +3,58 @@
 
 import { IBackpropSynapseContext, IOptimizer } from "./mlp.interfaces.training";
 
-/// </summary>
-export const SGD: IOptimizer = {
-    apply(synapse, lr, gradient, ctx) {
-        const bag = (synapse.bag ??= { gradient: gradient }) as IBackpropSynapseContext;
+export class Optimizers {
+    /// </summary>
+    public static SGD: IOptimizer = {
+        apply(synapse, lr, gradient, ctx) {
+            const bag = (synapse.bag ??= { gradient: gradient }) as IBackpropSynapseContext;
 
-        bag.gradient = gradient;
-        bag.weightDelta = -lr * gradient;
+            bag.gradient = gradient;
+            bag.weightDelta = -lr * gradient;
 
-        synapse.weight += bag.weightDelta;
-    },
-};
+            synapse.weight += bag.weightDelta;
+        },
+    };
 
-/// <summary>
-/// SGD with Momentum optimizer
-/// </summary>
-export const MomentumSGD = (momentum: number): IOptimizer => ({
-    apply(synapse, lr, gradient, ctx) {
-        const bag = (synapse.bag ??= { gradient: gradient }) as IBackpropSynapseContext;
+    /// <summary>
+    /// SGD with Momentum optimizer
+    /// </summary>
+    public static MomentumSGD = (momentum: number): IOptimizer => ({
+        apply(synapse, lr, gradient, ctx) {
+            const bag = (synapse.bag ??= { gradient: gradient }) as IBackpropSynapseContext;
 
-        bag.gradient = gradient;
-        bag.velocity ??= 0;
+            bag.gradient = gradient;
+            bag.velocity ??= 0;
 
-        bag.velocity = momentum * bag.velocity - lr * gradient;
-        bag.weightDelta = bag.velocity;
+            bag.velocity = momentum * bag.velocity - lr * gradient;
+            bag.weightDelta = bag.velocity;
 
-        synapse.weight += bag.weightDelta;
-    },
-});
+            synapse.weight += bag.weightDelta;
+        },
+    });
 
-/// <summary>
-/// Nesterov Accelerated Gradient (NAG) optimizer
-/// </summary>
-export const NAG = (momentum: number = 0.9): IOptimizer => ({
-    apply(synapse, lr, gradient, ctx) {
-        const bag = (synapse.bag ??= { gradient: gradient }) as IBackpropSynapseContext;
+    /// <summary>
+    /// Nesterov Accelerated Gradient (NAG) optimizer
+    /// </summary>
+    public static NAG = (momentum: number = 0.9): IOptimizer => ({
+        apply(synapse, lr, gradient, ctx) {
+            const bag = (synapse.bag ??= { gradient: gradient }) as IBackpropSynapseContext;
 
-        bag.gradient = gradient;
-        bag.velocity ??= 0;
+            bag.gradient = gradient;
+            bag.velocity ??= 0;
 
-        bag.velocity = momentum * bag.velocity - lr * gradient;
-        bag.weightDelta = bag.velocity;
+            bag.velocity = momentum * bag.velocity - lr * gradient;
+            bag.weightDelta = bag.velocity;
 
-        synapse.weight += bag.weightDelta;
-        bag.prelookedWeight = undefined;
-    },
-});
+            synapse.weight += bag.weightDelta;
+            bag.prelookedWeight = undefined;
+        },
+    });
 
-/// <summary>
-/// Adam optimizer with bias correction
-/// </summary>
-export function Adam(beta1 = 0.9, beta2 = 0.999, epsilon = 1e-8): IOptimizer {
-    return {
+    /// <summary>
+    /// Adam optimizer with bias correction
+    /// </summary>
+    public static Adam = (beta1 = 0.9, beta2 = 0.999, epsilon = 1e-8): IOptimizer => ({
         apply(synapse, lr, gradient, ctx) {
             const bag = (synapse.bag ??= { gradient: gradient }) as IBackpropSynapseContext;
             const t = ctx.iteration + 1;
@@ -72,5 +72,5 @@ export function Adam(beta1 = 0.9, beta2 = 0.999, epsilon = 1e-8): IOptimizer {
             bag.weightDelta = (-lr * mHat) / (Math.sqrt(vHat) + epsilon);
             synapse.weight += bag.weightDelta;
         },
-    };
+    });
 }

@@ -1,4 +1,5 @@
-import { IGraph } from "dev/core/src/graph";
+
+import { IGraph } from "../../../graph";
 import { INeuron, ISynapse } from "../../nn.interfaces";
 
 /// <summary>

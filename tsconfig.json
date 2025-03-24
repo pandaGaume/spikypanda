@@ -4,7 +4,8 @@
     "private": true,
 
     "compilerOptions": {
-        "baseUrl": "packages",
+        "esModuleInterop": true,
+        "baseUrl": ".",
         "moduleResolution": "node",
         "module": "ES2020",
         "target": "es2021",
@@ -21,7 +22,11 @@
         "skipLibCheck": true,
         "removeComments": true,
         "forceConsistentCasingInFileNames": true,
-        "strict": true
+        "strict": true,
+        "paths": {
+            "@core/*": ["packages/dev/core/src/*"],
+            "@core": ["packages/dev/core/src/index.ts"]
+        }
     },
     "workspaces": ["packages/**/*"]
 }

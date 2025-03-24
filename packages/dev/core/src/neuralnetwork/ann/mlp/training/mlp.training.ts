@@ -5,21 +5,21 @@ import { IBackpropNeuronContext, IBackpropSynapseContext, ILossFunction, IOptimi
 /// <summary>
 /// Handles backpropagation and weight updates for an MLP graph.
 /// </summary>
-export class MLPTraining {
+export class MLPTrainingRuntime {
     private context: ITrainingContext = { iteration: 0 };
 
     constructor(
-        private readonly graph: IMlpGraph,
-        private readonly runtime: MLPRuntime,
-        private readonly lossFn: ILossFunction,
-        private readonly learningRate: number,
-        private readonly optimizer: IOptimizer
+        public readonly graph: IMlpGraph,
+        public readonly runtime: MLPRuntime,
+        public readonly lossFn: ILossFunction,
+        public readonly learningRate: number,
+        public readonly optimizer: IOptimizer
     ) {}
 
     /// <summary>
     /// Runs a forward + backward pass and updates weights.
     /// </summary>
-    trainStep(inputs: number[], expected: number[]): number {
+    public trainStep(inputs: number[], expected: number[]): number {
         const outputs = this.runtime.run(inputs);
         const loss = this._backpropagate(outputs, expected);
         this._applyGradients();
@@ -60,7 +60,7 @@ export class MLPTraining {
         for (let i = this.graph.nodes.length - 1; i >= 0; i--) {
             const neuron = this.graph.nodes[i] as IMlpNeuron;
             const bag = neuron.bag as IBackpropNeuronContext;
-            if (!bag || bag.gradient === undefined) continue;
+            if (!bag) continue;
 
             const activation = bag.activation;
             const activationPrime = (neuron.activationFn ?? this.runtime.mainActivation).derivative;
