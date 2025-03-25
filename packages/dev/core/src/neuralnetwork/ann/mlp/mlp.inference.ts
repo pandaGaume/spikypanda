@@ -2,7 +2,7 @@ import { ActivationFunctions } from "./mlp.activation";
 import { IMlpGraph, IMlpNeuron, IMlpSynapse, IInferenceNeuronContext, IActivationFunction } from "./mlp.interfaces";
 import { MLPRuntimeUtils } from "./mlp.runtime.utils";
 
-export class MLPRuntime {
+export class MLPInferenceRuntime {
     public constructor(public readonly graph: IMlpGraph, public mainActivation: IActivationFunction = ActivationFunctions.relu) {}
 
     /**
@@ -56,5 +56,16 @@ export class MLPRuntime {
 
         // Return output activations
         return this.graph.outputs.map((n) => (n.bag as IInferenceNeuronContext).activation);
+    }
+
+    public clearContext() {
+        for (const neuron of this.graph.nodes) {
+            MLPRuntimeUtils.resetInferenceContext(neuron);
+        }
+    }
+    public deleteContext() {
+        for (const neuron of this.graph.nodes) {
+            neuron.bag = undefined;
+        }
     }
 }

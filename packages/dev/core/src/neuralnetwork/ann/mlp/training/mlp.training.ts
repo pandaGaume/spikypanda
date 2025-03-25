@@ -1,6 +1,7 @@
 import { IMlpGraph, IMlpNeuron, IMlpSynapse } from "../mlp.interfaces";
-import { MLPRuntime } from "../mlp.runtime";
+import { MLPInferenceRuntime } from "../mlp.inference";
 import { IBackpropNeuronContext, IBackpropSynapseContext, ILossFunction, IOptimizer, ITrainingContext } from "./mlp.interfaces.training";
+import { MLPRuntimeUtils } from "../mlp.runtime.utils";
 
 /// <summary>
 /// Handles backpropagation and weight updates for an MLP graph.
@@ -10,7 +11,7 @@ export class MLPTrainingRuntime {
 
     constructor(
         public readonly graph: IMlpGraph,
-        public readonly runtime: MLPRuntime,
+        public readonly runtime: MLPInferenceRuntime,
         public readonly lossFn: ILossFunction,
         public readonly learningRate: number,
         public readonly optimizer: IOptimizer
@@ -27,70 +28,58 @@ export class MLPTrainingRuntime {
         return loss;
     }
 
-    /// <summary>
-    /// Performs backpropagation and stores gradients in neuron and synapse bags.
-    /// This version assumes:
-    /// + The graph is feedforward (no cycles)
-    /// + Activations are already computed (via MLPRuntime.run())
-    /// + Each neuron uses an activationFn with a known derivative
-    /// </summary>
+    /**
+     * Performs backpropagation and stores gradients in neuron and synapse bags.
+     * This version properly propagates gradients through all layers of the network.
+     */
     private _backpropagate(outputs: number[], expected: number[]): number {
         let totalLoss = 0;
 
-        // STEP 1 – Output layer: compute error and delta
+        // STEP 1 – Output layer: compute error and gradient
         for (let i = 0; i < this.graph.outputs.length; i++) {
             const neuron = this.graph.outputs[i] as IMlpNeuron;
             const y = expected[i];
-            const o = (neuron.bag as IBackpropNeuronContext).activation;
-
-            const loss = this.lossFn.loss(o, y);
-            totalLoss += loss;
-
-            const dLoss = this.lossFn.dLoss(o, y); // ∂L/∂o
-            const activationPrime = (neuron.activationFn ?? this.runtime.mainActivation).derivative;
-            const delta = dLoss * activationPrime(o); // ∂L/∂z
 
             const bag = (neuron.bag ??= {}) as IBackpropNeuronContext;
-            bag.error = y - o;
-            bag.gradient = delta;
+            const output = bag.activation;
+
+            const loss = this.lossFn.loss(output, y);
+            totalLoss += loss;
+
+            const dLoss = this.lossFn.dLoss(output, y); // ∂L/∂o
+            const activationPrime = (neuron.activationFn ?? this.runtime.mainActivation).derivative;
+
+            bag.gradient = dLoss * activationPrime(output); // ∂L/∂z
+            bag.error = y - output;
         }
 
-        // STEP 2 – Hidden layers: propagate error backward
-        // Reverse topological order (no cycle assumed)
-        for (let i = this.graph.nodes.length - 1; i >= 0; i--) {
-            const neuron = this.graph.nodes[i] as IMlpNeuron;
-            const bag = neuron.bag as IBackpropNeuronContext;
-            if (!bag) continue;
-
+        // STEP 2 – Hidden layer: compute gradients from output layer
+        for (let i = this.graph.hiddens.length - 1; i >= 0; i--) {
+            const neuron = this.graph.hiddens[i] as IMlpNeuron;
+            const bag = (neuron.bag ??= {}) as IBackpropNeuronContext;
             const activation = bag.activation;
             const activationPrime = (neuron.activationFn ?? this.runtime.mainActivation).derivative;
 
-            // If it's not an output neuron, compute its delta from its downstream connections
-            if (!this.graph.outputs.includes(neuron)) {
-                let downstreamGradientSum = 0;
-                const outgoing = neuron.onsc<IMlpSynapse>() ?? [];
-
-                for (const syn of outgoing) {
-                    const target = syn.ofin as IMlpNeuron;
-                    const targetBag = target.bag as IBackpropNeuronContext;
-                    downstreamGradientSum += syn.weight * (targetBag?.gradient ?? 0);
-                }
-
-                bag.gradient = activationPrime(activation) * downstreamGradientSum;
+            let downstreamSum = 0;
+            for (const syn of neuron.onsc<IMlpSynapse>() ?? []) {
+                const to = syn.ofin as IMlpNeuron;
+                const toBag = to.bag as IBackpropNeuronContext;
+                downstreamSum += syn.weight * (toBag?.gradient ?? 0);
             }
 
-            // STEP 3 – Accumulate gradient into incoming synapses
-            const incoming = neuron.opsc<IMlpSynapse>() ?? [];
-            for (const syn of incoming) {
-                const from = syn.oini as IMlpNeuron;
-                const fromBag = from.bag as IBackpropNeuronContext;
+            bag.gradient = activationPrime(activation) * downstreamSum;
+        }
 
-                const g = bag.gradient ?? 0;
-                const a = fromBag?.activation ?? 0;
+        // STEP 3 – Accumulate gradient on all synapses
+        for (const syn of this.graph.links) {
+            const from = syn.oini as IMlpNeuron;
+            const to = syn.ofin as IMlpNeuron;
 
-                const synBag = (syn.bag ??= { gradient: 0 }) as IBackpropSynapseContext;
-                synBag.gradient = g * a;
-            }
+            const fromBag = from.bag as IBackpropNeuronContext;
+            const toBag = to.bag as IBackpropNeuronContext;
+
+            const synBag = (syn.bag ??= {}) as IBackpropSynapseContext;
+            synBag.gradient = (toBag?.gradient ?? 0) * (fromBag?.activation ?? 0);
         }
 
         return totalLoss;
@@ -104,11 +93,42 @@ export class MLPTrainingRuntime {
             const ctx = synapse.bag as IBackpropSynapseContext;
             if (ctx?.gradient !== undefined) {
                 this.optimizer.apply(synapse, this.learningRate, ctx.gradient, this.context);
+                (<IMlpNeuron>synapse.ofin).bias -= this.learningRate * ctx.gradient;
             }
         }
+        /*
+        let avgGrad = 0;
+        let count = 0;
+
+        for (const syn of this.graph.links) {
+            const bag = syn.bag as IBackpropSynapseContext;
+            if (bag?.gradient !== undefined) {
+                avgGrad += Math.abs(bag.gradient);
+                count++;
+            }
+        }
+        console.log("Mean weight gradient:", avgGrad / count);*/
     }
 
     get trainingContext(): Readonly<ITrainingContext> {
         return this.context;
+    }
+
+    public clearContext() {
+        for (const neuron of this.graph.nodes) {
+            MLPRuntimeUtils.resetBackpropContext(neuron);
+        }
+        for (const synapse of this.graph.links) {
+            MLPRuntimeUtils.resetBackpropContext(synapse);
+        }
+    }
+
+    public deleteContext() {
+        for (const neuron of this.graph.nodes) {
+            neuron.bag = undefined;
+        }
+        for (const synapse of this.graph.links) {
+            synapse.bag = undefined;
+        }
     }
 }

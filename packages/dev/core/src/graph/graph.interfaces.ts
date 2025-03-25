@@ -19,6 +19,7 @@ export interface IGraph<N extends INode, L extends IOlink> extends INode {
     links: Array<L>;
     inputs: Array<N>;
     outputs: Array<N>;
+    hiddens: Array<N>;
 }
 
 /**

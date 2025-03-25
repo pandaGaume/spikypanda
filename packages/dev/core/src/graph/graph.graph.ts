@@ -8,6 +8,7 @@ export class Graph<N extends INode, L extends IOlink> extends GraphNode implemen
     public links: L[];
     public inputs: N[];
     public outputs: N[];
+    public hiddens: N[];
 
     public constructor(
         nodes: N[] = [],
@@ -23,5 +24,6 @@ export class Graph<N extends INode, L extends IOlink> extends GraphNode implemen
         this.links = links;
         this.inputs = inputs ?? this.nodes.filter((n) => !n.opsc || n.opsc.length === 0);
         this.outputs = outputs ?? this.nodes.filter((n) => !n.onsc || n.onsc.length === 0);
+        this.hiddens = this.nodes.filter((n) => !this.inputs.includes(n) && !this.outputs.includes(n));
     }
 }

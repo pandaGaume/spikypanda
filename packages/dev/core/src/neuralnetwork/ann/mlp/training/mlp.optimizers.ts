@@ -5,7 +5,7 @@ import { IBackpropSynapseContext, IOptimizer } from "./mlp.interfaces.training";
 
 export class Optimizers {
     /// </summary>
-    public static SGD: IOptimizer = {
+    public static SGD = (): IOptimizer => ({
         apply(synapse, lr, gradient, ctx) {
             const bag = (synapse.bag ??= { gradient: gradient }) as IBackpropSynapseContext;
 
@@ -14,7 +14,7 @@ export class Optimizers {
 
             synapse.weight += bag.weightDelta;
         },
-    };
+    });
 
     /// <summary>
     /// SGD with Momentum optimizer
