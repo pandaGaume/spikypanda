@@ -1,6 +1,6 @@
 import { IMlpGraph, IMlpNeuron, IMlpSynapse } from "../mlp.interfaces";
 import { MLPInferenceRuntime } from "../mlp.inference";
-import { IBackpropNeuronContext, IBackpropSynapseContext, ILossFunction, IOptimizer, ITrainingContext } from "./mlp.interfaces.training";
+import { IBackpropNeuronContext, IBackpropSynapseContext, ILossFunction, IOptimizer, ITrainingContext } from "./mlp.training.interfaces";
 import { MLPRuntimeUtils } from "../mlp.runtime.utils";
 
 /// <summary>
@@ -89,27 +89,22 @@ export class MLPTrainingRuntime {
     /// Applies weight updates using the selected optimizer.
     /// </summary>
     private _applyGradients(): void {
+        // Update synapse weights
         for (const synapse of this.graph.links) {
             const ctx = synapse.bag as IBackpropSynapseContext;
             if (ctx?.gradient !== undefined) {
                 this.optimizer.apply(synapse, this.learningRate, ctx.gradient, this.context);
-                (<IMlpNeuron>synapse.ofin).bias -= this.learningRate * ctx.gradient;
             }
         }
-        /*
-        let avgGrad = 0;
-        let count = 0;
 
-        for (const syn of this.graph.links) {
-            const bag = syn.bag as IBackpropSynapseContext;
-            if (bag?.gradient !== undefined) {
-                avgGrad += Math.abs(bag.gradient);
-                count++;
+        // Update neuron biases
+        for (const neuron of this.graph.nodes) {
+            const ctx = neuron.bag as IBackpropNeuronContext;
+            if (ctx?.gradient !== undefined) {
+                neuron.bias -= this.learningRate * ctx.gradient;
             }
         }
-        console.log("Mean weight gradient:", avgGrad / count);*/
     }
-
     get trainingContext(): Readonly<ITrainingContext> {
         return this.context;
     }

@@ -1,4 +1,4 @@
-import { ILossFunction } from "./mlp.interfaces.training";
+import { ILossFunction } from "./mlp.training.interfaces";
 
 export const LossFunctions = {
     MSE: {

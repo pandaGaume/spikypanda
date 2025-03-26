@@ -9,17 +9,24 @@ export interface INode extends IGraphItem {
     opsc<L extends IOlink>(): Nullable<Array<L>>;
 }
 
+// we define the INodeSet and ILinkSet interfaces to be able to use them to group nodes and links
+// this is particularly useful when we want to perform operations on a group such Layers in Neural Networks
+// or attach specific properties to a group of nodes or links.
+export interface INodeSet<N extends INode> extends Array<N> {}
+
 export interface IOlink extends IGraphItem {
     oini: INode;
     ofin: INode;
 }
 
+export interface ILinkSet<L extends IOlink> extends Array<L> {}
+
 export interface IGraph<N extends INode, L extends IOlink> extends INode {
-    nodes: Array<N>;
-    links: Array<L>;
-    inputs: Array<N>;
-    outputs: Array<N>;
-    hiddens: Array<N>;
+    nodes: INodeSet<N>;
+    links: ILinkSet<L>;
+    inputs: INodeSet<N>;
+    outputs: INodeSet<N>;
+    hiddens: INodeSet<N>;
 }
 
 /**

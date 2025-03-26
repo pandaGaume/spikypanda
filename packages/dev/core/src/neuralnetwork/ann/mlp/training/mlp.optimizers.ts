@@ -1,7 +1,7 @@
 /// <summary>
 /// Stochastic Gradient Descent (SGD) optimizer
 
-import { IBackpropSynapseContext, IOptimizer } from "./mlp.interfaces.training";
+import { IBackpropSynapseContext, IOptimizer } from "./mlp.training.interfaces";
 
 export class Optimizers {
     /// </summary>

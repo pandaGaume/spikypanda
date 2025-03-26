@@ -3,6 +3,7 @@ export * from "./geometry";
 export * from "./graph";
 export * from "./layout";
 export * from "./neuralnetwork";
+export * from "./utils";
 
 // ensure that the global namespace is defined
 if (typeof window !== "undefined") {
