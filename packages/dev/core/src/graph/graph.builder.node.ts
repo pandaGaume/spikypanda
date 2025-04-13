@@ -43,4 +43,12 @@ export class GraphNodeBuilder implements INodeBuilder {
         const ctr = this._ctor ?? GraphNode;
         return new ctr(this._inputs, this._outputs, this._position, ...args);
     }
+
+    public reset(): INodeBuilder {
+        this._ctor = GraphNode; // Reset to default constructor
+        this._position = undefined;
+        this._inputs = null;
+        this._outputs = null;
+        return this;
+    }
 }

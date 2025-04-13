@@ -27,4 +27,10 @@ export class LinkBuilder implements ILinkBuilder {
         const ctr = this._ctor ?? GraphOLink;
         return new ctr(this._from, this._to, ...args);
     }
+    public reset(): ILinkBuilder {
+        this._ctor = GraphOLink; // Reset to default constructor
+        this._from = undefined;
+        this._to = undefined;
+        return this;
+    }
 }

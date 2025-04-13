@@ -1,4 +1,3 @@
-
 import { IGraph } from "../../../graph";
 import { INeuron, ISynapse } from "../../nn.interfaces";
 

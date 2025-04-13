@@ -14,13 +14,14 @@
         "ts-node": "^10.9.1",
         "typescript": "^5.0.2",
         "webpack": "^5.94.0",
+        "webpack-bundle-analyzer": "^4.10.2",
         "webpack-cli": "^5.0.1"
     },
     "workspaces": [
         "packages/**/*"
     ],
-    "scripts": {
-    },
+    "scripts": {},
     "dependencies": {
+        "reflect-metadata": "^0.2.2"
     }
 }

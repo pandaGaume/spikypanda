@@ -1,4 +1,4 @@
-import { INode, IOlink } from "../graph";
+import { ILinkSet, INode, INodeSet, IOlink } from "../graph";
 
 export interface IHasBag {
     /**
@@ -15,6 +15,32 @@ export interface IHasBag {
 export interface INeuron extends INode, IHasBag {
     /// <summary>Resets the neuron to its initial state</summary>
     reset(): void;
+}
+
+/// <summary>
+/// Represents a Layer in a neural network.
+/// </summary>
+export interface ILayer<N extends INeuron> extends INodeSet<N> {}
+
+export interface ILayerConnection<L extends ISynapse> extends ILinkSet<L> {}
+
+/// <summary>
+/// Describes how two neural layers are connected.
+/// </summary>
+export enum LayerConnectionType {
+    /// <summary>
+    /// Every neuron in the source layer is connected to every neuron in the target layer.
+    /// This is the standard connection in most MLP architectures.
+    /// </summary>
+    FullyConnected = "fully_connected",
+
+    /// <summary>
+    /// Each neuron in the source layer is connected to the neuron with the same index in the target layer.
+    /// Requires source and target layers to have the same number of neurons.
+    /// </summary>
+    OneToOne = "one_to_one",
+
+    Unknown = "unknown",
 }
 
 /// <summary>

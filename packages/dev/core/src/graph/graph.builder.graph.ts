@@ -79,4 +79,17 @@ export class GraphBuilder<N extends INode, L extends IOlink> implements IGraphBu
             ...args
         ) as T;
     }
+
+    /**
+     * Reset the builder to its initial state.
+     */
+    public reset(): IGraphBuilder<N, L> {
+        this._position = undefined;
+        this._inputs = null;
+        this._outputs = null;
+        this._ctor = Graph; // Reset to default constructor
+        this._nodes = [];
+        this._links = [];
+        return this;
+    }
 }

@@ -1,0 +1,17 @@
+{
+    "name": "bestiole",
+    "version": "0.0.1a",
+    "main": "dist/index",
+    "module": "dist/index",
+    "esnext": "dist/index",
+    "types": "dist/index",
+    "private": true,
+    "files": [
+        "./src"
+    ],
+    "scripts": {},
+    "sideEffects": false,
+    "devDependencies": {
+        "rimraf": "^4.4.1"
+    }
+}

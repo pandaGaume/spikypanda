@@ -1,12 +1,40 @@
 import { ICartesian, isCartesian } from "../geometry/geometry.interfaces";
-import { Nullable } from "../types";
 
-export interface IGraphItem {}
+export const CloneMetadataKey = Symbol("cloneable");
+
+/// <summary>
+/// Marks a property as cloneable for automatic deep copying
+/// </summary>
+export function cloneable(target: Object, propertyKey: string | symbol): void {
+    const proto = target.constructor.prototype;
+    const existingProps: string[] = Reflect.getMetadata(CloneMetadataKey, proto) || [];
+    Reflect.defineMetadata(CloneMetadataKey, [...existingProps, propertyKey], proto);
+}
+
+/// <summary>
+/// Interface for cloneable objects
+/// </summary>
+export interface ICloneable<T = any> {
+    clone(): T;
+}
+
+/// <summary>
+/// Type guard to check if an object implements ICloneable
+/// </summary>
+export function IsCloneable<T = any>(obj: unknown): obj is ICloneable<T> {
+    return typeof obj === "object" && obj !== null && typeof (obj as any).clone === "function";
+}
+
+export interface IDisposable {
+    dispose(): void;
+}
+
+export interface IGraphItem extends IDisposable, ICloneable {}
 
 export interface INode extends IGraphItem {
     position?: ICartesian;
-    onsc<L extends IOlink>(): Nullable<Array<L>>;
-    opsc<L extends IOlink>(): Nullable<Array<L>>;
+    onsc<L extends IOlink>(): Array<L>;
+    opsc<L extends IOlink>(): Array<L>;
 }
 
 // we define the INodeSet and ILinkSet interfaces to be able to use them to group nodes and links

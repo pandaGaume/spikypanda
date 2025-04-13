@@ -26,4 +26,13 @@ export class Graph<N extends INode, L extends IOlink> extends GraphNode implemen
         this.outputs = outputs ?? this.nodes.filter((n) => !n.onsc || n.onsc.length === 0);
         this.hiddens = this.nodes.filter((n) => !this.inputs.includes(n) && !this.outputs.includes(n));
     }
+
+    public clone(): any {
+        var copy = super.clone();
+        copy.nodes = this.nodes.map((n) => n.clone());
+        copy.links = this.links.map((n) => n.clone());
+        copy.inputs = this.nodes.filter((n) => !n.opsc || n.opsc.length === 0);
+        copy.outputs = this.nodes.filter((n) => !n.onsc || n.onsc.length === 0);
+        copy.hiddens = this.nodes.filter((n) => !this.inputs.includes(n) && !this.outputs.includes(n));
+    }
 }
