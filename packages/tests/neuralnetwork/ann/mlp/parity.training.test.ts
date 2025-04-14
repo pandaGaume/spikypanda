@@ -1,4 +1,4 @@
-import { LossFunctions, MLPInferenceRuntime, MLPTrainingRuntime, Optimizers } from "@core/neuralnetwork";
+import { LossFunctions, MLPInferenceRuntime, MLPTrainingRuntime, Optimizers } from "spikypanda-core";
 import { createParityGraph } from "./xor.graph";
 
 function log(message: string) {

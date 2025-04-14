@@ -9,7 +9,10 @@ import {
     Optimizers,
     CSVParser,
     IInferenceNeuronContext,
-} from "@core";
+    MlpGraph,
+    Synapse,
+    MlpNeuron,
+} from "spikypanda-core";
 import * as fs from "fs";
 import path from "path";
 
@@ -19,14 +22,14 @@ import path from "path";
 
 describe("Classic Backpropagation Example (Matt Mazur)", () => {
     // Create neurons with initial biases
-    const i1: IMlpNeuron = <any>{ bias: 0, activationFn: ActivationFunctions.sigmoid };
-    const i2: IMlpNeuron = <any>{ bias: 0, activationFn: ActivationFunctions.sigmoid };
+    const i1: IMlpNeuron = new MlpNeuron(0, ActivationFunctions.sigmoid);
+    const i2: IMlpNeuron = new MlpNeuron(0, ActivationFunctions.sigmoid);
 
-    const h1: IMlpNeuron = <any>{ bias: 0.35, activationFn: ActivationFunctions.sigmoid };
-    const h2: IMlpNeuron = <any>{ bias: 0.35, activationFn: ActivationFunctions.sigmoid };
+    const h1: IMlpNeuron = new MlpNeuron(0.35, ActivationFunctions.sigmoid);
+    const h2: IMlpNeuron = new MlpNeuron(0.35, ActivationFunctions.sigmoid);
 
-    const o1: IMlpNeuron = <any>{ bias: 0.6, activationFn: ActivationFunctions.sigmoid };
-    const o2: IMlpNeuron = <any>{ bias: 0.6, activationFn: ActivationFunctions.sigmoid };
+    const o1: IMlpNeuron = new MlpNeuron(0.6, ActivationFunctions.sigmoid);
+    const o2: IMlpNeuron = new MlpNeuron(0.6, ActivationFunctions.sigmoid);
 
     // Synapses with initial weights
     // because we use Pytorch terminology, model.input.weight.data[i][j] where i = index of the neuron in the next layer (e.g., hidden layer)
@@ -36,14 +39,14 @@ describe("Classic Backpropagation Example (Matt Mazur)", () => {
     // w_in_1_0: from i1 to h2
     // w_in_1_1: from i2 to h2
     const synapses: IMlpSynapse[] = [
-        { oini: i1, ofin: h1, weight: 0.15 }, // w_in_0_0
-        { oini: i2, ofin: h1, weight: 0.2 }, // w_in_0_1
-        { oini: i1, ofin: h2, weight: 0.25 }, // w_in_1_0
-        { oini: i2, ofin: h2, weight: 0.3 }, // w_in_1_1
-        { oini: h1, ofin: o1, weight: 0.4 },
-        { oini: h2, ofin: o1, weight: 0.45 },
-        { oini: h1, ofin: o2, weight: 0.5 },
-        { oini: h2, ofin: o2, weight: 0.55 },
+        new Synapse(i1, h1, 0.15), // w_in_0_0
+        new Synapse(i2, h1, 0.2), // w_in_0_1
+        new Synapse(i1, h2, 0.25), // w_in_1_0
+        new Synapse(i2, h2, 0.3), // w_in_1_1
+        new Synapse(h1, o1, 0.4),
+        new Synapse(h2, o1, 0.45),
+        new Synapse(h1, o2, 0.5),
+        new Synapse(h2, o2, 0.55),
     ];
 
     // Setup neuron connections
@@ -54,15 +57,7 @@ describe("Classic Backpropagation Example (Matt Mazur)", () => {
     });
 
     // Define graph
-    const graph: IMlpGraph = {
-        nodes: neurons,
-        links: synapses,
-        inputs: [i1, i2],
-        outputs: [o1, o2],
-        hiddens: [h1, h2],
-        onsc: () => null,
-        opsc: () => null,
-    };
+    const graph: IMlpGraph = new MlpGraph(neurons, synapses, [i1, i2], [o1, o2], [h1, h2]);
 
     // Create runtime and trainer
     const runtime = new MLPInferenceRuntime(graph, ActivationFunctions.sigmoid);

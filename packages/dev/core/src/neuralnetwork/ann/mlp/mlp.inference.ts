@@ -55,7 +55,8 @@ export class MLPInferenceRuntime {
         }
 
         // Return output activations
-        return this.graph.outputs.map((n) => (n.bag as IInferenceNeuronContext).activation);
+        const results = this.graph.outputs.map((n) => (n.bag as IInferenceNeuronContext).activation);
+        return results;
     }
 
     public clearContext() {

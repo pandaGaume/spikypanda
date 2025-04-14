@@ -25,10 +25,9 @@
         "forceConsistentCasingInFileNames": true,
         "strict": true,
         "paths": {
-            "spikypanda-core": ["packages/dev/core/src/index.ts"],
-            "core/*": ["packages/dev/core/src/*"]
+            "spikypanda-core": ["packages/dev/core/src/index.ts"]
         },
-        "types": ["reflect-metadata"]
+        "types": ["reflect-metadata", "jest"]
     },
     "workspaces": ["packages/**/*"]
 }

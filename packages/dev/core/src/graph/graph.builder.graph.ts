@@ -73,6 +73,8 @@ export class GraphBuilder<N extends INode, L extends IOlink> implements IGraphBu
             this._links as L[],
             null,
             null,
+            null,
+            // this is the node part of the graph (graph are also node..)
             this._inputs ? ([...this._inputs] as L[]) : null,
             this._outputs ? ([...this._outputs] as L[]) : null,
             this._position,

@@ -26,6 +26,7 @@ export type GraphConstructor<N extends INode, L extends IOlink, T extends IGraph
     links: L[],
     inputs: Nullable<N[]>,
     outputs: Nullable<N[]>,
+    hiddens: Nullable<N[]>,
     onsc: Nullable<L[]>,
     opsc: Nullable<L[]>,
     position?: ICartesian,

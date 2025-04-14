@@ -9,7 +9,15 @@
     "files": [
         "./src"
     ],
-    "scripts": {},
+    "scripts": {
+        "build:bestioles:dev": "npm run clean:bestioles && npm run compile:bestioles",
+        "clean:bestioles": "rimraf dist && rimraf tsconfig.tsbuildinfo",
+        "compile:bestioles": "npm run compile:bestioles:source",
+        "compile:bestioles:source": "tsc --project tsconfig.json",
+        "webpack:bestioles:dev": "webpack --mode development",
+        "copy:bestioles:bundle": "copyfiles -V -u 1 \"./bundles/*.*\" \"../../host/www/libs\"",
+        "publish:bestioles:dev": "npm run build:bestioles:dev && npm run webpack:bestioles:dev && npm run copy:bestioles:bundle"
+    },
     "sideEffects": false,
     "devDependencies": {
         "rimraf": "^4.4.1"

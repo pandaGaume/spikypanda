@@ -1,32 +1,16 @@
-import { ActivationFunctions, IMlpGraph, IMlpNeuron, IMlpSynapse, MLPInferenceRuntime } from "@core";
+import { ActivationFunctions, IMlpGraph, IMlpNeuron, MLPInferenceRuntime, Synapse, MlpGraph, MlpNeuron, ISynapse } from "spikypanda-core";
 import { createTrainedXorGraph } from "./xor.graph";
 
 function buildPerceptron(weights: number[], bias: number, activation = ActivationFunctions.sigmoid): IMlpGraph {
     const [w1, w2] = weights;
-    const i1: IMlpNeuron = <any>{ bias: 0, activationFn: activation };
-    const i2: IMlpNeuron = <any>{ bias: 0, activationFn: activation };
-    const o: IMlpNeuron = <any>{ bias, activationFn: activation };
+    const i1: IMlpNeuron = new MlpNeuron(0, activation).withTag("input1") as IMlpNeuron;
+    const i2: IMlpNeuron = new MlpNeuron(0, activation).withTag("input2") as IMlpNeuron;
+    const o: IMlpNeuron = new MlpNeuron(bias, activation).withTag("output") as IMlpNeuron;
 
-    const synapses: IMlpSynapse[] = [
-        { oini: i1, ofin: o, weight: w1 },
-        { oini: i2, ofin: o, weight: w2 },
-    ];
+    const s1 = new Synapse(i1, o, w1).withTag("synapse1") as ISynapse;
+    const s2 = new Synapse(i2, o, w2).withTag("synapse2") as ISynapse;
 
-    const all: IMlpNeuron[] = [i1, i2, o];
-    all.forEach((n) => {
-        n.onsc = () => <any>synapses.filter((s) => s.oini === n);
-        n.opsc = () => <any>synapses.filter((s) => s.ofin === n);
-    });
-
-    return {
-        nodes: all,
-        links: synapses,
-        inputs: [i1, i2],
-        outputs: [o],
-        hiddens: [],
-        onsc: () => null,
-        opsc: () => null,
-    };
+    return new MlpGraph([i1, i2, o], [s1, s2]);
 }
 
 function runTestSuite(name: string, graph: IMlpGraph, cases: { input: number[]; expected: number }[]) {

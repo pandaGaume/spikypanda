@@ -5,4 +5,8 @@ export interface ICreatureBrain {
     runtime: MLPInferenceRuntime;
     evaluate(inputs: number[]): number[];
     mutate(): void;
+    evaluateAndTrack(inputs: number[][]): {
+        trajectory: { x: number; y: number }[];
+        fitness: number;
+    };
 }

@@ -1,10 +1,16 @@
 import { LinkBuilder } from "../graph";
 import { ILayer, ILayerConnection, INeuron, ISynapse, LayerConnectionType } from "./nn.interfaces";
 import { ILayerConnectionBuilder, ISynapseBuilder } from "./nn.interfaces.builder";
+import { Synapse } from "./nn.synapse";
 import { IWeightInitializer, Uniform } from "./nn.weights";
 
 export class SynapseBuilder extends LinkBuilder implements ISynapseBuilder {
     private _weight: number = 0.0; // Default weight
+
+    public constructor() {
+        super();
+        this.withType(Synapse);
+    }
 
     public withWeight(weight: number): ISynapseBuilder {
         this._weight = weight;

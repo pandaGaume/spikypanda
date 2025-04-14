@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>CreatureWorld 2D Simulation</title>
+        <style>
+            canvas {
+                border: 1px solid #000;
+                background-color: #f0f0f0;
+                display: block;
+                margin: 0 auto;
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="world" width="800" height="600"></canvas>
+
+        <script src="./libs/bestiole.0.0.1a.js"></script>
+        <script>
+            const canvas = document.getElementById("world");
+            const ctx = canvas.getContext("2d");
+
+            const WIDTH = canvas.width;
+            const HEIGHT = canvas.height;
+            const CENTER = { x: WIDTH / 2, y: HEIGHT / 2 };
+            const NUM_CREATURES = 50;
+
+            // Dummy input generator
+            const simulationEngine = {
+                generateInputs: () => {
+                    return Array.from({ length: 10 }, () => Array.from({ length: 40 }, () => Math.random()));
+                },
+            };
+
+            // Création du monde réel
+            const world = new BESTIOLES.CreatureWorld(NUM_CREATURES, simulationEngine);
+
+            function update() {
+                world.updateWorld();
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+                for (const creature of world.creatures) {
+                    if (!creature.alive) continue;
+
+                    const pos = creature.position;
+                    ctx.beginPath();
+                    ctx.arc(
+                        CENTER.x + pos.x, // position relative au centre
+                        CENTER.y + pos.y,
+                        4,
+                        0,
+                        Math.PI * 2
+                    );
+                    ctx.fillStyle = "black";
+                    ctx.fill();
+                    ctx.closePath();
+                }
+            }
+
+            function loop() {
+                update();
+                draw();
+                requestAnimationFrame(loop);
+            }
+
+            loop();
+        </script>
+    </body>
+</html>

@@ -6,7 +6,7 @@
 /// as it gets stuck on a flat region (plateau) of the loss surface.
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-import { ActivationFunctions, IMlpGraph, MLPInferenceRuntime, MLPTrainingRuntime, LossFunctions, Optimizers } from "@core";
+import { ActivationFunctions, IMlpGraph, MLPInferenceRuntime, MLPTrainingRuntime, LossFunctions, Optimizers } from "spikypanda-core";
 import { createXorGraph, xorData } from "./xor.graph";
 
 function log(message: string) {
@@ -37,7 +37,7 @@ const optimizer = Optimizers.SGD(); // or .adam()
 trainer = new MLPTrainingRuntime(graph, runtime, LossFunctions.MSE, 0.5, optimizer);
 
 // Training loop
-const epochs = 10000;
+const epochs = 20000;
 
 for (let epoch = 0; epoch < epochs; epoch++) {
     let epochLoss = 0;

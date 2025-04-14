@@ -1,4 +1,5 @@
 import { ICartesian, isCartesian } from "../geometry/geometry.interfaces";
+import { Nullable } from "../types";
 
 export const CloneMetadataKey = Symbol("cloneable");
 
@@ -29,7 +30,12 @@ export interface IDisposable {
     dispose(): void;
 }
 
-export interface IGraphItem extends IDisposable, ICloneable {}
+export interface ITaggable {
+    withTag(tag: string): ITaggable;
+    tag?: string;
+}
+
+export interface IGraphItem extends IDisposable, ICloneable, ITaggable {}
 
 export interface INode extends IGraphItem {
     position?: ICartesian;
@@ -43,8 +49,8 @@ export interface INode extends IGraphItem {
 export interface INodeSet<N extends INode> extends Array<N> {}
 
 export interface IOlink extends IGraphItem {
-    oini: INode;
-    ofin: INode;
+    oini: Nullable<INode>;
+    ofin: Nullable<INode>;
 }
 
 export interface ILinkSet<L extends IOlink> extends Array<L> {}

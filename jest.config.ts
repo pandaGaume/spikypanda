@@ -15,8 +15,8 @@ const config: Config = {
         },
     },
     moduleNameMapper: {
-        "^@core$": "<rootDir>/packages/dev/core/src/index.ts",
-        "^@core/(.*)$": "<rootDir>/packages/dev/core/src/$1",
+        "^spikypanda-core$": "<rootDir>/packages/dev/core/src/index.ts",
+        "^spikypanda-core/(.*)$": "<rootDir>/packages/dev/core/src/$1",
     },
 };
 

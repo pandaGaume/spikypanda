@@ -1,6 +1,17 @@
-import { CloneMetadataKey, IGraphItem, IsCloneable } from "./graph.interfaces";
+import { CloneMetadataKey, IGraphItem, IsCloneable, ITaggable } from "./graph.interfaces";
 
 export class GraphItem implements IGraphItem {
+    private _tag?: string;
+
+    public get tag(): string | undefined {
+        return this._tag;
+    }
+
+    public withTag(tag: string): ITaggable {
+        this._tag = tag;
+        return this;
+    }
+
     public dispose(): void {
         // Dispose logic if needed
     }

@@ -4,3 +4,6 @@ export * from "./mlp.inference";
 export * from "./mlp.runtime.utils";
 export * from "./mlp.builder";
 export * from "./training";
+export * from "./mlp.synapse";
+export * from "./mlp.neuron";
+export * from "./mlp.graph";
