@@ -1,10 +1,28 @@
 import { CloneMetadataKey, IGraphItem, IsCloneable, ITaggable } from "./graph.interfaces";
 
 export class GraphItem implements IGraphItem {
+    private _id?:any;
     private _tag?: string;
+    private _bag?: unknown;
 
     public get tag(): string | undefined {
         return this._tag;
+    }
+
+    public get id() : any | undefined{
+        return this._id;
+    }
+
+    public set id(v:any) {
+        this._id = v;
+    }
+
+    public get bag() : unknown | undefined{
+        return this._bag;
+    }
+
+    public set bag(v:unknown) {
+        this._bag = v;
     }
 
     public withTag(tag: string): ITaggable {

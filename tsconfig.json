@@ -25,7 +25,8 @@
         "forceConsistentCasingInFileNames": true,
         "strict": true,
         "paths": {
-            "spikypanda-core": ["packages/dev/core/src/index.ts"]
+            "spikypanda-core": ["packages/dev/core/src/index.ts"],
+           "tensegrity": ["packages/dev/tensegrity/src/index.ts"]
         },
         "types": ["reflect-metadata", "jest"]
     },

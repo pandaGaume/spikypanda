@@ -35,7 +35,19 @@ export interface ITaggable {
     tag?: string;
 }
 
-export interface IGraphItem extends IDisposable, ICloneable, ITaggable {}
+export interface IIDentifiable{
+    id?:any;
+}
+
+export interface IHasBag {
+    /**
+     * Runtime-only container for execution context.
+     * Can be safely overwritten between runs.
+     */
+    bag?: unknown;
+}
+
+export interface IGraphItem extends IDisposable, ICloneable, ITaggable, IIDentifiable, IHasBag {}
 
 export interface INode extends IGraphItem {
     position?: ICartesian;

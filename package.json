@@ -20,7 +20,10 @@
     "workspaces": [
         "packages/**/*"
     ],
-    "scripts": {},
+    "scripts": {
+        "test": "jest --passWithNoTests",
+        "test:watch": "jest --watch"
+    },
     "dependencies": {
         "babylonjs": "^8.34.0",
         "reflect-metadata": "^0.2.2"

@@ -1,7 +1,19 @@
-export interface ICartesian2 {
+
+export interface ICartesian {
+    distance(b:ICartesian) : number; 
+    subtract(b:ICartesian) : this;
+    add(b:ICartesian) : this;
+    addInPlace(b:ICartesian) :this;
+    multiplyByScalar(n:number):this;
+    divideByScalar(n:number):this;
+    magnitude():number;
+    toString(): string;
+    clone(): this;
+}
+
+export interface ICartesian2 extends ICartesian {
     x: number;
     y: number;
-    toString(): string;
 }
 
 export interface ICartesian3 extends ICartesian2 {
@@ -11,8 +23,6 @@ export interface ICartesian3 extends ICartesian2 {
 export interface ICartesian4 extends ICartesian3 {
     w: number;
 }
-
-export type ICartesian = ICartesian2 | ICartesian3 | ICartesian4;
 
 /**
  * Type guard for ICartesian (ICartesian2 | ICartesian3 | ICartesian4)

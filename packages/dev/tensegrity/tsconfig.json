@@ -1,14 +1,14 @@
 {
     "extends": "../../../tsconfig.json",
-    "name": "spikypanda-core",
+    "name": "tensegrity",
     "compilerOptions": {
         "composite": true,
         "outDir": "./dist",
         "rootDir": "./src",
         "declarationDir": "./types",
-        "skipLibCheck": true,
+        "skipLibCheck": true
     },
-
+    "references": [{ "path": "../core" }],
     "include": ["./src/**/*.ts"],
     "exclude": ["**/node_modules", "**/dist", "**/types"]
 }
