@@ -80,12 +80,16 @@ These test cases verify that the perceptron engine produces correct logic infere
 - Easy to integrate with D3.js, Babylon.js or WebNN APIs
 
 ---
+## 🚧 Finalized Goals
+
+| Goal                             | Description                                                |
+|----------------------------------|------------------------------------------------------------|
+| ✅ Training Runtime (MLPTraining)   | Implement full backprop with optimizer and loss tracking   |
 
 ## 🚧 Upcoming Goals
 
 | Goal                             | Description                                                |
 |----------------------------------|------------------------------------------------------------|
-| Training Runtime (MLPTraining)   | Implement full backprop with optimizer and loss tracking   |
 | JSON Exporter (Python ↔ TS)      | Import/export models between scikit-learn / TF / TS graph |
 | Visualization                    | Render graph and runtime state dynamically                |
 | Spiking Engine                   | Activate SNN version of the runtime                       |
