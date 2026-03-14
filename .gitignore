@@ -7,6 +7,7 @@ yarn.lock
 # Ignore TypeScript build outputs
 dist/
 build/
+bundle/
 out/
 *.js
 *.js.map

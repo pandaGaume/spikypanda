@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/GuillaumePelletier/Documents/GitHub/spikypanda -maxdepth 3 ! -path */node_modules* ! -path */.git* -type f)",
+      "Bash(git rm:*)",
+      "Bash(rm -rf packages/dev/tensegrity/)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm test:*)"
+    ]
+  }
+}

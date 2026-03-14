@@ -7,12 +7,10 @@ const config: Config = {
     moduleFileExtensions: ["ts", "js", "json"],
     transform: {
         "^.+\\.ts$": ["ts-jest",{
-        tsconfig: "tsconfig.json"}]
+        tsconfig: "tsconfig.build.json"}]
     },
     testRegex: ".*\\.test\\.ts$",
     moduleNameMapper: {
-        "^tensegrity$": "<rootDir>/packages/dev/tensegrity/src/index.ts",
-        "^tensegrity/(.*)$": "<rootDir>/packages/dev/tensegrity/src/$1",
         "^spikypanda-core$": "<rootDir>/packages/dev/core/src/index.ts",
         "^spikypanda-core/(.*)$": "<rootDir>/packages/dev/core/src/$1",
     },

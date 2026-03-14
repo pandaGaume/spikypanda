@@ -1,34 +1,8 @@
 {
-    "name": "spikypanda/root",
-    "version": "1.0.0",
-    "private": true,
-
-    "compilerOptions": {
-        "esModuleInterop": true,
-        "baseUrl": ".",
-        "moduleResolution": "node",
-        "module": "ES2020",
-        "target": "ES2021",
-        "declaration": true,
-        "sourceMap": true,
-        "inlineSources": true,
-        "experimentalDecorators": true,
-        "emitDecoratorMetadata": true,
-        "noImplicitAny": true,
-        "noImplicitReturns": true,
-        "noImplicitThis": true,
-        "noUnusedLocals": true,
-        "strictNullChecks": true,
-        "strictFunctionTypes": true,
-        "skipLibCheck": true,
-        "removeComments": true,
-        "forceConsistentCasingInFileNames": true,
-        "strict": true,
-        "paths": {
-            "spikypanda-core": ["packages/dev/core/src/index.ts"],
-           "tensegrity": ["packages/dev/tensegrity/src/index.ts"]
-        },
-        "types": ["reflect-metadata", "jest"]
-    },
-    "workspaces": ["packages/**/*"]
+    "files": [],
+    "references": [
+        { "path": "packages/dev/core/tsconfig.build.json" },
+        { "path": "packages/dev/bestioles/tsconfig.build.json" },
+        { "path": "packages/dev/babylonjs/tsconfig.build.json" }
+    ]
 }
