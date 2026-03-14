@@ -1,9 +1,9 @@
 import { ISpikeNeuron, ISnnGraph, ISpike, ISpikeSynapse } from "./spike.interfaces";
-import { STDP, STDPFunction } from "./spike.stdp";
+import { STDP, STDPFunction, ISTDPConfig, DEFAULT_STDP_CONFIG } from "./spike.stdp";
 
 export class SNNRuntime {
     /**
-     * Prepares input spikes from an ISnnGraph by binding input data to the graph’s input nodes.
+     * Prepares input spikes from an ISnnGraph by binding input data to the graph's input nodes.
      */
     public static prepareInputs(graph: ISnnGraph, inputData: number[]): Array<{ neuron: ISpikeNeuron; amplitude: number }> {
         if (graph.inputs.length !== inputData.length) {
@@ -17,9 +17,16 @@ export class SNNRuntime {
     }
 
     private _stdpRule: STDPFunction;
+    private _stdpConfig: ISTDPConfig;
+    private _tick: number = 0;
 
-    public constructor(stdpRule?: STDPFunction) {
-        this._stdpRule = stdpRule ?? STDP.exponential;
+    public constructor(stdpRule?: STDPFunction, stdpConfig?: ISTDPConfig) {
+        this._stdpRule = stdpRule ?? STDP.exponential();
+        this._stdpConfig = stdpConfig ?? DEFAULT_STDP_CONFIG;
+    }
+
+    public get tick(): number {
+        return this._tick;
     }
 
     /**
@@ -28,7 +35,7 @@ export class SNNRuntime {
     public pulse(inputSpikes: Array<{ neuron: ISpikeNeuron; amplitude: number }>) {
         let activeSpikes: ISpike[] = [];
 
-        // 🔹 Step 1: Inject initial spikes
+        // Step 1: Inject initial spikes
         for (const { neuron, amplitude } of inputSpikes) {
             neuron.membranePotential += amplitude;
 
@@ -37,16 +44,16 @@ export class SNNRuntime {
             }
         }
 
-        // 🔹 Step 2: Process spikes continuously until no more spikes are generated
+        // Step 2: Process spikes continuously until no more spikes are generated
         while (activeSpikes.length > 0) {
-            let nextSpikes: ISpike[] = [];
-            const spikeTimestamp = Date.now();
+            const nextSpikes: ISpike[] = [];
+            this._tick++;
 
             for (const spike of activeSpikes) {
                 const neuron = spike.source;
 
-                // 🔹 Step 3: Propagate to connected neurons via 'onsc' links
-                const synapses = neuron.onsc<ISpikeSynapse>(); // Ensure 'onsc' is an array
+                // Step 3: Propagate to connected neurons via 'onsc' links
+                const synapses = neuron.onsc<ISpikeSynapse>();
                 if (synapses) {
                     for (const synapse of synapses) {
                         const postNeuron = synapse.ofin as ISpikeNeuron;
@@ -60,7 +67,7 @@ export class SNNRuntime {
                             nextSpikes.push(newSpike);
 
                             // Apply STDP only to the active synapse
-                            this._applySTDP(synapse, spikeTimestamp);
+                            this._applySTDP(synapse);
                         }
                     }
                 }
@@ -75,30 +82,31 @@ export class SNNRuntime {
      * Fires a neuron and resets its membrane potential.
      */
     private _fireNeuron(neuron: ISpikeNeuron): ISpike {
+        this._tick++;
         const spike: ISpike = {
-            timestamp: Date.now(),
+            timestamp: this._tick,
             amplitude: neuron.membranePotential,
             source: neuron,
         };
 
         neuron.spikes.push(spike);
-        neuron.membranePotential = 0; // Reset after firing
+        neuron.membranePotential = 0;
         neuron.lastSpikeTime = spike.timestamp;
 
         return spike;
     }
 
     /**
-     * Applies STDP Learning **only** to the active synapse instead of all synapses.
+     * Applies STDP learning to the active synapse using the configured rule and weight bounds.
      */
-    private _applySTDP(synapse: ISpikeSynapse, spikeTimestamp: number) {
+    private _applySTDP(synapse: ISpikeSynapse) {
         const preNeuron = synapse.oini as ISpikeNeuron;
         const postNeuron = synapse.ofin as ISpikeNeuron;
 
         if (preNeuron.lastSpikeTime !== null && postNeuron.lastSpikeTime !== null) {
-            const deltaT = spikeTimestamp - preNeuron.lastSpikeTime;
+            const deltaT = postNeuron.lastSpikeTime - preNeuron.lastSpikeTime;
             synapse.weight = this._stdpRule(deltaT, synapse.weight);
-            synapse.weight = Math.max(0.01, Math.min(1, synapse.weight)); // Keep within range
+            synapse.weight = Math.max(this._stdpConfig.minWeight, Math.min(this._stdpConfig.maxWeight, synapse.weight));
         }
     }
 }

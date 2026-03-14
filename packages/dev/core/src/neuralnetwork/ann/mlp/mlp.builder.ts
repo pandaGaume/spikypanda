@@ -9,11 +9,11 @@ export class MlpNeuronBuilder extends GraphNodeBuilder {
     _bias?: number;
     _activationFn?: IActivationFunction;
 
-    public WithBias(bias: number): MlpNeuronBuilder {
+    public withBias(bias: number): MlpNeuronBuilder {
         this._bias = bias;
         return this;
     }
-    public WithActivationFn(fn: IActivationFunction): MlpNeuronBuilder {
+    public withActivationFn(fn: IActivationFunction): MlpNeuronBuilder {
         this._activationFn = fn;
         return this;
     }
@@ -35,27 +35,27 @@ export class MlpLayerBuilder {
     _count: number = 0;
     _neuronBuilder?: MlpNeuronBuilder;
 
-    public WithNeuron(bias: number | MlpNeuronBuilder, fn?: IActivationFunction): MlpLayerBuilder {
+    public withNeuron(bias: number | MlpNeuronBuilder, fn?: IActivationFunction): MlpLayerBuilder {
         if (bias instanceof MlpNeuronBuilder) {
             this._neuronBuilder = bias;
             return this;
         }
         this._neuronBuilder = this._neuronBuilder ?? new MlpNeuronBuilder();
-        this._neuronBuilder.WithBias(bias);
+        this._neuronBuilder.withBias(bias);
         if (fn) {
-            this._neuronBuilder.WithActivationFn(fn);
+            this._neuronBuilder.withActivationFn(fn);
         }
         return this;
     }
 
-    public WithCount(count: number): MlpLayerBuilder {
+    public withCount(count: number): MlpLayerBuilder {
         this._count = count;
         return this;
     }
 
     public build(...args: any[]): ILayer<IMlpNeuron> {
         if (!this._neuronBuilder) {
-            throw new Error("Neuron builder is not defined. Please set it using WithNeurons() method.");
+            throw new Error("Neuron builder is not defined. Please set it using withNeuron() method.");
         }
         if (this._count <= 0) {
             throw new Error("Neuron count must be greater than zero.");
@@ -77,7 +77,7 @@ export class PerceptronBuilder {
     _defaultLayerConnBuilder: ILayerConnectionBuilder = new LayerConnectionBuilder();
     _connectionBuilders: Array<{ conn: ILayerConnectionBuilder; from: number; to: number }> = [];
 
-    public WithInputLayer(count: number | MlpLayerBuilder, bias?: number, activation?: IActivationFunction): PerceptronBuilder {
+    public withInputLayer(count: number | MlpLayerBuilder, bias?: number, activation?: IActivationFunction): PerceptronBuilder {
         if (count instanceof MlpLayerBuilder) {
             this._inputLayerBuilder = count;
             this._layerCount++;
@@ -87,12 +87,12 @@ export class PerceptronBuilder {
             throw new Error("Bias and activation function must be provided when using count.");
         }
         this._inputLayerBuilder = this._inputLayerBuilder ?? new MlpLayerBuilder();
-        this._inputLayerBuilder.WithCount(count).WithNeuron(bias, activation);
+        this._inputLayerBuilder.withCount(count).withNeuron(bias, activation);
         this._layerCount++;
         return this;
     }
 
-    public WithHiddenLayer(
+    public withHiddenLayer(
         count: number | MlpLayerBuilder | [{ count: number; bias?: number; activation?: IActivationFunction; conn?: ILayerConnectionBuilder }],
         bias?: number,
         activation?: IActivationFunction
@@ -104,9 +104,9 @@ export class PerceptronBuilder {
         }
         if (Array.isArray(count)) {
             for (const layer of count) {
-                this.WithHiddenLayer(layer.count, layer.bias, layer.activation);
+                this.withHiddenLayer(layer.count, layer.bias, layer.activation);
                 if (layer.conn) {
-                    this.WithConnectionBuilder(layer.conn);
+                    this.withConnectionBuilder(layer.conn);
                 }
             }
             return this;
@@ -115,12 +115,12 @@ export class PerceptronBuilder {
             throw new Error("Bias and activation function must be provided when using count.");
         }
         this._hiddenLayerBuilders[this._hiddenLayerCount] = this._hiddenLayerBuilders[this._hiddenLayerCount] ?? new MlpLayerBuilder();
-        this._hiddenLayerBuilders[this._hiddenLayerCount].WithCount(count).WithNeuron(bias, activation);
+        this._hiddenLayerBuilders[this._hiddenLayerCount].withCount(count).withNeuron(bias, activation);
         this._layerCount++;
         return this;
     }
 
-    public WithOutputLayer(count: number | MlpLayerBuilder, bias?: number, activation?: IActivationFunction): PerceptronBuilder {
+    public withOutputLayer(count: number | MlpLayerBuilder, bias?: number, activation?: IActivationFunction): PerceptronBuilder {
         if (count instanceof MlpLayerBuilder) {
             this._outputLayerBuilder = count;
             this._layerCount++;
@@ -130,16 +130,12 @@ export class PerceptronBuilder {
             throw new Error("Bias and activation function must be provided when using count.");
         }
         this._outputLayerBuilder = this._outputLayerBuilder ?? new MlpLayerBuilder();
-        this._outputLayerBuilder.WithCount(count).WithNeuron(bias, activation);
+        this._outputLayerBuilder.withCount(count).withNeuron(bias, activation);
         this._layerCount++;
         return this;
     }
 
-    /// <sumary>
-    /// link the previous layer to the current one.
-    /// from MUST be >= 0, to MUST be >=0.
-    /// </sumary>
-    public WithConnectionBuilder(connBuilder?: ILayerConnectionBuilder, from?: number, to?: number): PerceptronBuilder {
+    public withConnectionBuilder(connBuilder?: ILayerConnectionBuilder, from?: number, to?: number): PerceptronBuilder {
         const b = connBuilder ?? this._defaultLayerConnBuilder ?? new LayerConnectionBuilder();
         const f = from != undefined ? from : this._layerCount - 2;
         const t = to != undefined ? to : this._layerCount - 1;
@@ -149,7 +145,7 @@ export class PerceptronBuilder {
         return this;
     }
 
-    public WithDefaultConnectionBuilder(conn: ILayerConnectionBuilder): PerceptronBuilder {
+    public withDefaultConnectionBuilder(conn: ILayerConnectionBuilder): PerceptronBuilder {
         this._defaultLayerConnBuilder = conn;
         return this;
     }
@@ -164,12 +160,12 @@ export class PerceptronBuilder {
 
         for (let i = 0; i != this._connectionBuilders.length; i++) {
             let layerIndex = this._connectionBuilders[i].from;
-            if (layerIndex < 0 && layerIndex >= layers.length) {
+            if (layerIndex < 0 || layerIndex >= layers.length) {
                 continue;
             }
             const a = layers[layerIndex];
             layerIndex = this._connectionBuilders[i].to;
-            if (layerIndex < 0 && layerIndex >= layers.length) {
+            if (layerIndex < 0 || layerIndex >= layers.length) {
                 continue;
             }
             const b = layers[layerIndex];
@@ -177,7 +173,7 @@ export class PerceptronBuilder {
             if (links) builder.withLinks(links);
         }
 
-        builder.withNodes(layers.flat()); // layers are array of nodes, so we can use flat to access the nodes
+        builder.withNodes(layers.flat());
 
         const g = builder.build() as IMlpGraph;
         return g;

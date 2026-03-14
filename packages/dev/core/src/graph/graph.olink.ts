@@ -23,7 +23,7 @@ export class GraphOLink extends GraphItem implements IOlink {
     }
 
     public set oini(n: Nullable<INode>) {
-        if (this._oini != n) {
+        if (this._oini !== n) {
             if (this._oini) {
                 const a = this._oini.onsc();
                 a.splice(a.indexOf(this));

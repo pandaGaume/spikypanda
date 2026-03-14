@@ -10,11 +10,11 @@ export class CreatureBrain implements ICreatureBrain {
         };
 
         const builder = new PerceptronBuilder()
-            .WithInputLayer(40, 0, ActivationFunctions.linear)
-            .WithHiddenLayer(25, 0, ActivationFunctions.tanh)
-            .WithConnectionBuilder(createConnBuilder(40, 25))
-            .WithOutputLayer(3, 0, ActivationFunctions.sigmoid)
-            .WithConnectionBuilder(createConnBuilder(25, 3));
+            .withInputLayer(40, 0, ActivationFunctions.linear)
+            .withHiddenLayer(25, 0, ActivationFunctions.tanh)
+            .withConnectionBuilder(createConnBuilder(40, 25))
+            .withOutputLayer(3, 0, ActivationFunctions.sigmoid)
+            .withConnectionBuilder(createConnBuilder(25, 3));
 
         return builder.build();
     }
