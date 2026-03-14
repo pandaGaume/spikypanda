@@ -2,7 +2,7 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <title>CreatureWorld 2D Simulation</title>
+        <title>CreatureWorld 2D Simulation (3D projection)</title>
         <style>
             canvas {
                 border: 1px solid #000;
@@ -15,54 +15,70 @@
     <body>
         <canvas id="world" width="800" height="600"></canvas>
 
-        <script src="./libs/bestiole.0.0.1a.js"></script>
+        <script src="./bundle/bestioles.js"></script>
         <script>
             const canvas = document.getElementById("world");
             const ctx = canvas.getContext("2d");
 
             const WIDTH = canvas.width;
             const HEIGHT = canvas.height;
-            const CENTER = { x: WIDTH / 2, y: HEIGHT / 2 };
             const NUM_CREATURES = 50;
 
-            // Dummy input generator
-            const simulationEngine = {
-                generateInputs: () => {
-                    return Array.from({ length: 10 }, () => Array.from({ length: 40 }, () => Math.random()));
-                },
-            };
+            // 3D world — 2D harness just renders x,y and ignores z
+            const world = new BESTIOLES.CreatureWorld(NUM_CREATURES, { width: WIDTH, height: HEIGHT, depth: 400 });
 
-            // Création du monde réel
-            const world = new BESTIOLES.CreatureWorld(NUM_CREATURES, simulationEngine);
-
-            function update() {
-                world.updateWorld();
-            }
+            let frameCount = 0;
 
             function draw() {
                 ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
+                let aliveCount = 0;
+                let totalFitness = 0;
+
                 for (const creature of world.creatures) {
                     if (!creature.alive) continue;
+                    aliveCount++;
+                    totalFitness += creature.fitness;
 
                     const pos = creature.position;
+                    const heading = creature.heading;
+
+                    // Body — size varies slightly by z for depth cue
+                    const depthScale = 0.5 + 0.5 * (pos.z / 400);
+                    const radius = 3 + depthScale * 3;
+
                     ctx.beginPath();
-                    ctx.arc(
-                        CENTER.x + pos.x, // position relative au centre
-                        CENTER.y + pos.y,
-                        4,
-                        0,
-                        Math.PI * 2
-                    );
-                    ctx.fillStyle = "black";
+                    ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+                    // Color by depth: near = dark, far = light
+                    const gray = Math.floor(20 + depthScale * 60);
+                    ctx.fillStyle = `rgb(${gray},${gray},${gray})`;
                     ctx.fill();
                     ctx.closePath();
+
+                    // Heading indicator
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x, pos.y);
+                    ctx.lineTo(pos.x + Math.cos(heading) * (6 + depthScale * 6), pos.y + Math.sin(heading) * (6 + depthScale * 6));
+                    ctx.strokeStyle = "#c33";
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                    ctx.closePath();
                 }
+
+                // HUD
+                ctx.fillStyle = "rgba(0,0,0,0.7)";
+                ctx.fillRect(5, 5, 280, 50);
+                ctx.fillStyle = "#0f0";
+                ctx.font = "12px monospace";
+                ctx.fillText(`Frame: ${frameCount}  Alive: ${aliveCount}/${NUM_CREATURES}`, 10, 20);
+                ctx.fillText(`Avg fitness: ${aliveCount > 0 ? (totalFitness / aliveCount).toFixed(4) : "N/A"}`, 10, 35);
+                ctx.fillText(`(2D projection of 3D world — z shown as size)`, 10, 48);
             }
 
             function loop() {
-                update();
+                world.updateWorld();
                 draw();
+                frameCount++;
                 requestAnimationFrame(loop);
             }
 

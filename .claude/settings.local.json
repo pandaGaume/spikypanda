@@ -6,7 +6,12 @@
       "Bash(rm -rf packages/dev/tensegrity/)",
       "Bash(npm install:*)",
       "Bash(npx tsc:*)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(npx webpack:*)",
+      "Bash(grep -E \"\\\\.\\(ts|json\\)$\")",
+      "Bash(npm list:*)",
+      "Bash(copy \"C:\\\\Users\\\\GuillaumePelletier\\\\Documents\\\\GitHub\\\\spikypanda\\\\packages\\\\dev\\\\babylonjs\\\\bundle\\\\spbabylon.js\" \"C:\\\\Users\\\\GuillaumePelletier\\\\Documents\\\\GitHub\\\\spikypanda\\\\packages\\\\host\\\\www\\\\bundle\\\\spbabylon.js\")",
+      "Bash(copy \"C:\\\\Users\\\\GuillaumePelletier\\\\Documents\\\\GitHub\\\\spikypanda\\\\packages\\\\dev\\\\bestioles\\\\bundle\\\\bestioles.js\" \"C:\\\\Users\\\\GuillaumePelletier\\\\Documents\\\\GitHub\\\\spikypanda\\\\packages\\\\host\\\\www\\\\bundle\\\\bestioles.js\" /Y)"
     ]
   }
 }

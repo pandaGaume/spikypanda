@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>CreatureWorld 3D — BabylonJS SPS</title>
+        <style>
+            * { box-sizing: border-box; }
+            html, body {
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+                background-color: rgb(37, 37, 37);
+                font-family: 'Segoe UI', Tahoma, sans-serif;
+            }
+            #world3d {
+                position: absolute;
+                top: 0;
+                left: 240px;
+                width: calc(100% - 240px);
+                height: 100%;
+                touch-action: none;
+            }
+            #hud {
+                position: absolute;
+                top: 10px;
+                left: 250px;
+                color: #0f0;
+                font: 13px monospace;
+                background: rgba(0,0,0,0.6);
+                padding: 8px 12px;
+                border-radius: 4px;
+                pointer-events: none;
+                z-index: 10;
+            }
+
+            /* ─── Left Control Panel ─── */
+            #panel {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 240px;
+                height: 100%;
+                background: #111827;
+                border-right: 1px solid #2d3748;
+                overflow-y: auto;
+                padding: 12px 10px;
+                color: #e2e8f0;
+                font-size: 12px;
+                z-index: 20;
+            }
+            #panel h2 {
+                margin: 0 0 8px;
+                font-size: 14px;
+                color: #81e6d9;
+                border-bottom: 1px solid #2d3748;
+                padding-bottom: 6px;
+            }
+            .section {
+                margin-bottom: 14px;
+            }
+            .section-title {
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: #63b3ed;
+                margin-bottom: 6px;
+                font-weight: 600;
+            }
+            .param-row {
+                display: flex;
+                align-items: center;
+                margin-bottom: 5px;
+                gap: 6px;
+            }
+            .param-row label {
+                flex: 0 0 90px;
+                font-size: 11px;
+                color: #a0aec0;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .param-row input[type="range"] {
+                flex: 1;
+                height: 4px;
+                accent-color: #63b3ed;
+                cursor: pointer;
+            }
+            .param-row .val {
+                flex: 0 0 38px;
+                text-align: right;
+                font-size: 11px;
+                font-family: monospace;
+                color: #e2e8f0;
+            }
+            #panel button {
+                width: 100%;
+                padding: 6px;
+                margin-top: 4px;
+                background: #2d3748;
+                color: #e2e8f0;
+                border: 1px solid #4a5568;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 11px;
+            }
+            #panel button:hover {
+                background: #4a5568;
+            }
+            #panel button.danger {
+                border-color: #e53e3e;
+                color: #feb2b2;
+            }
+            #panel button.danger:hover {
+                background: #742a2a;
+            }
+            #panel select {
+                width: 100%;
+                padding: 5px 6px;
+                background: #1a202c;
+                color: #e2e8f0;
+                border: 1px solid #4a5568;
+                border-radius: 4px;
+                font-size: 11px;
+                cursor: pointer;
+                outline: none;
+            }
+            #panel select:hover { border-color: #63b3ed; }
+            .preset-desc {
+                font-size: 10px;
+                color: #718096;
+                font-style: italic;
+                margin: 4px 0 6px;
+                line-height: 1.4;
+            }
+
+            /* ─── Right Stats Panel ─── */
+            #stats-panel {
+                position: absolute;
+                top: 0;
+                right: 0;
+                width: 220px;
+                height: 100%;
+                background: #111827ee;
+                border-left: 1px solid #2d3748;
+                overflow-y: auto;
+                padding: 12px 10px;
+                color: #e2e8f0;
+                font-size: 12px;
+                z-index: 20;
+            }
+            #stats-panel h2 {
+                margin: 0 0 8px;
+                font-size: 14px;
+                color: #f6ad55;
+                border-bottom: 1px solid #2d3748;
+                padding-bottom: 6px;
+            }
+            .stat-row {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 4px;
+                font-size: 11px;
+            }
+            .stat-label {
+                color: #a0aec0;
+            }
+            .stat-value {
+                font-family: monospace;
+                color: #e2e8f0;
+                font-weight: 600;
+            }
+            .stat-value.good { color: #48bb78; }
+            .stat-value.warn { color: #f6ad55; }
+            .stat-value.bad  { color: #fc8181; }
+            .stat-bar-bg {
+                height: 6px;
+                background: #2d3748;
+                border-radius: 3px;
+                margin: 2px 0 6px;
+                overflow: hidden;
+            }
+            .stat-bar-fill {
+                height: 100%;
+                border-radius: 3px;
+                transition: width 0.3s ease;
+            }
+            #fitnessChart {
+                width: 100%;
+                height: 120px;
+                margin-top: 4px;
+                border-radius: 4px;
+                background: #1a202c;
+                border: 1px solid #2d3748;
+            }
+            .health-indicator {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 8px;
+                border-radius: 4px;
+                margin-bottom: 10px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            .health-indicator .dot {
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                animation: pulse 2s infinite;
+            }
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.4; }
+            }
+        </style>
+    </head>
+    <body>
+        <!-- Left Control Panel -->
+        <div id="panel">
+            <h2>🧬 Bestioles Config</h2>
+
+            <!-- Presets -->
+            <div class="section">
+                <div class="section-title">Behavior Preset</div>
+                <select id="presetSelect">
+                    <option value="swarmOrbit">Swarm Orbit</option>
+                    <option value="tightFlock">Tight Flock</option>
+                    <option value="scatteredExplorers">Scattered Explorers</option>
+                    <option value="slowDrift">Slow Drift</option>
+                    <option value="chaos">Chaos</option>
+                    <option value="tornado">Tornado</option>
+                    <option value="custom" disabled>— Custom —</option>
+                </select>
+                <div class="preset-desc" id="presetDesc">Creatures orbit together as a spinning group moving through the world.</div>
+                <button id="btnApplyPreset">✨ Apply Preset & Respawn</button>
+            </div>
+
+            <div class="section" style="margin-bottom:10px;">
+                <div style="display:flex; align-items:center; gap:6px; font-size:10px; color:#718096;">
+                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:linear-gradient(90deg,#ff3319,#ffc107,#1aff4d);"></span>
+                    Particle color: <span style="color:#ff6644;">red</span> = low fitness →
+                    <span style="color:#44ff77;">green</span> = high fitness
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Fitness Weights</div>
+                <div class="param-row">
+                    <label title="fitnessCohesion">Cohesion</label>
+                    <input type="range" id="sl_fitnessCohesion" min="0" max="1" step="0.01" />
+                    <span class="val" id="vl_fitnessCohesion"></span>
+                </div>
+                <div class="param-row">
+                    <label title="fitnessAlignment">Alignment</label>
+                    <input type="range" id="sl_fitnessAlignment" min="0" max="1" step="0.01" />
+                    <span class="val" id="vl_fitnessAlignment"></span>
+                </div>
+                <div class="param-row">
+                    <label title="fitnessSeparation">Separation</label>
+                    <input type="range" id="sl_fitnessSeparation" min="0" max="1" step="0.01" />
+                    <span class="val" id="vl_fitnessSeparation"></span>
+                </div>
+                <div class="param-row">
+                    <label title="fitnessMovement">Movement</label>
+                    <input type="range" id="sl_fitnessMovement" min="0" max="1" step="0.01" />
+                    <span class="val" id="vl_fitnessMovement"></span>
+                </div>
+                <div class="param-row" style="justify-content:space-between; color:#718096; font-size:10px; margin-top:2px;">
+                    <label style="flex:0 0 auto; display:flex; align-items:center; gap:4px; cursor:pointer;">
+                        <input type="checkbox" id="cbNormalize" checked
+                               style="accent-color:#63b3ed; cursor:pointer;" />
+                        <span style="color:#a0aec0;">Auto-normalize</span>
+                    </label>
+                    <span>Sum: <span id="weightSum" style="margin-left:2px;color:#f6e05e;">1.00</span></span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Movement</div>
+                <div class="param-row">
+                    <label title="maxSpeed">Max Speed</label>
+                    <input type="range" id="sl_maxSpeed" min="0.5" max="10" step="0.1" />
+                    <span class="val" id="vl_maxSpeed"></span>
+                </div>
+                <div class="param-row">
+                    <label title="maxTurnRate">Yaw Rate</label>
+                    <input type="range" id="sl_maxTurnRate" min="0.02" max="0.5" step="0.01" />
+                    <span class="val" id="vl_maxTurnRate"></span>
+                </div>
+                <div class="param-row">
+                    <label title="maxPitchRate">Pitch Rate</label>
+                    <input type="range" id="sl_maxPitchRate" min="0.02" max="0.5" step="0.01" />
+                    <span class="val" id="vl_maxPitchRate"></span>
+                </div>
+                <div class="param-row">
+                    <label title="turnDamping — inertia on turn rate changes. 0=instant, 0.95=very smooth arcs">Turn Inertia</label>
+                    <input type="range" id="sl_turnDamping" min="0" max="0.98" step="0.01" />
+                    <span class="val" id="vl_turnDamping"></span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Perception</div>
+                <div class="param-row">
+                    <label title="neighborRadius — how far a creature can sense neighbors">Vision Range</label>
+                    <input type="range" id="sl_neighborRadius" min="10" max="300" step="1" />
+                    <span class="val" id="vl_neighborRadius"></span>
+                </div>
+                <div class="param-row">
+                    <label title="separationDist — minimum comfortable distance between creatures">Personal Space</label>
+                    <input type="range" id="sl_separationDist" min="1" max="40" step="1" />
+                    <span class="val" id="vl_separationDist"></span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Wall Avoidance</div>
+                <div class="param-row">
+                    <label title="wallMargin">Wall Margin</label>
+                    <input type="range" id="sl_wallMargin" min="5" max="6000" step="10" />
+                    <span class="val" id="vl_wallMargin"></span>
+                </div>
+                <div class="param-row">
+                    <label title="wallSteerStrength">Steer Force</label>
+                    <input type="range" id="sl_wallSteerStrength" min="0.01" max="0.4" step="0.01" />
+                    <span class="val" id="vl_wallSteerStrength"></span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Mutation</div>
+                <div class="param-row">
+                    <label title="mutationWeightScale">Weight σ</label>
+                    <input type="range" id="sl_mutationWeightScale" min="0.01" max="0.5" step="0.01" />
+                    <span class="val" id="vl_mutationWeightScale"></span>
+                </div>
+                <div class="param-row">
+                    <label title="mutationBiasScale">Bias σ</label>
+                    <input type="range" id="sl_mutationBiasScale" min="0.01" max="0.3" step="0.01" />
+                    <span class="val" id="vl_mutationBiasScale"></span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Lifecycle</div>
+                <div class="param-row">
+                    <label title="creatureMaxAge — average lifespan in ticks (actual ±50%). Higher = slower evolution but group has more time to develop coherent movement.">Lifespan</label>
+                    <input type="range" id="sl_creatureMaxAge" min="200" max="10000" step="100" />
+                    <span class="val" id="vl_creatureMaxAge"></span>
+                </div>
+                <div class="param-row">
+                    <label title="isolationDeathTicks — consecutive ticks with fewer than minNeighbors before death. 0 = disabled. Keeps the flock together by killing stragglers and small sub-groups.">Isolation Kill</label>
+                    <input type="range" id="sl_isolationDeathTicks" min="0" max="500" step="10" />
+                    <span class="val" id="vl_isolationDeathTicks"></span>
+                </div>
+            </div>
+
+            <div class="section">
+                <button id="btnReset">🔄 Reset to Defaults</button>
+                <button id="btnRespawn" class="danger" style="margin-top:6px;">💀 Kill All & Respawn</button>
+            </div>
+        </div>
+
+        <!-- Right Stats Panel -->
+        <div id="stats-panel">
+            <h2>📊 Colony Stats</h2>
+
+            <!-- Overall health indicator -->
+            <div class="health-indicator" id="healthBanner" style="background:#1a3a2a;">
+                <span class="dot" id="healthDot" style="background:#48bb78;"></span>
+                <span id="healthLabel">Colony healthy</span>
+            </div>
+
+            <!-- Population -->
+            <div class="section">
+                <div class="section-title">Population</div>
+                <div class="stat-row">
+                    <span class="stat-label">Alive</span>
+                    <span class="stat-value" id="st_alive">0 / 0</span>
+                </div>
+                <div class="stat-bar-bg">
+                    <div class="stat-bar-fill" id="bar_alive" style="width:100%;background:#48bb78;"></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Deaths / sec</span>
+                    <span class="stat-value" id="st_deathRate">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Generation est.</span>
+                    <span class="stat-value" id="st_generation">0</span>
+                </div>
+            </div>
+
+            <!-- Fitness -->
+            <div class="section">
+                <div class="section-title">Fitness</div>
+                <div class="stat-row">
+                    <span class="stat-label">Average</span>
+                    <span class="stat-value" id="st_avgFit">0.000</span>
+                </div>
+                <div class="stat-bar-bg">
+                    <div class="stat-bar-fill" id="bar_avgFit" style="width:0%;background:#63b3ed;"></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Best</span>
+                    <span class="stat-value good" id="st_bestFit">0.000</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Worst</span>
+                    <span class="stat-value bad" id="st_worstFit">0.000</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Std Dev</span>
+                    <span class="stat-value" id="st_stdFit">0.000</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Trend (30s)</span>
+                    <span class="stat-value" id="st_trend">—</span>
+                </div>
+            </div>
+
+            <!-- Fitness history chart -->
+            <div class="section">
+                <div class="section-title">Fitness History</div>
+                <canvas id="fitnessChart"></canvas>
+            </div>
+
+            <!-- Movement -->
+            <div class="section">
+                <div class="section-title">Movement</div>
+                <div class="stat-row">
+                    <span class="stat-label">Avg Speed</span>
+                    <span class="stat-value" id="st_avgSpeed">0.0</span>
+                </div>
+                <div class="stat-bar-bg">
+                    <div class="stat-bar-fill" id="bar_avgSpeed" style="width:0%;background:#81e6d9;"></div>
+                </div>
+            </div>
+
+            <!-- Spatial -->
+            <div class="section">
+                <div class="section-title">Spatial</div>
+                <div class="stat-row">
+                    <span class="stat-label">Spread (σ)</span>
+                    <span class="stat-value" id="st_spread">0.0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Avg Neighbor Dist</span>
+                    <span class="stat-value" id="st_avgNeighDist">0.0</span>
+                </div>
+            </div>
+        </div>
+
+        <canvas id="world3d"></canvas>
+        <div id="hud">Loading...</div>
+
+        <!-- BabylonJS from CDN -->
+        <script src="https://cdn.babylonjs.com/babylon.js"></script>
+
+        <!-- Simulation engine -->
+        <script src="./bundle/bestioles.js"></script>
+
+        <!-- BabylonJS renderer -->
+        <script src="./bundle/spbabylon.js"></script>
+
+        <script>
+            const canvas = document.getElementById("world3d");
+            const hud = document.getElementById("hud");
+
+            let WORLD_SIZE = 200;
+            let NUM_CREATURES = 100;
+
+            // Adjust canvas for stats panel on the right
+            canvas.style.width = "calc(100% - 240px - 220px)";
+
+            const config = BESTIOLES.SimConfig;
+            const DEFAULTS = Object.assign({}, config);
+
+            // ─── Behavior Presets ───
+            const PRESETS = {
+                swarmOrbit: {
+                    desc: "Creatures orbit together as a spinning group moving through 3D space.",
+                    values: {
+                        fitnessCohesion: 0.55, fitnessAlignment: 0.05, fitnessSeparation: 0.10, fitnessMovement: 0.30,
+                        maxSpeed: 2.5, maxTurnRate: 0.18, maxPitchRate: 0.18, turnDamping: 0,
+                        neighborRadius: 50, separationDist: 5,
+                        wallMargin: 35, wallSteerStrength: 0.15,
+                        mutationWeightScale: 0.10, mutationBiasScale: 0.05,
+                        creatureMaxAge: 1000,
+                        isolationDeathTicks: 150,                    }
+                },
+                tightFlock: {
+                    desc: "A dense, coordinated flock — creatures align headings and stay very close together.",
+                    values: {
+                        fitnessCohesion: 0.40, fitnessAlignment: 0.35, fitnessSeparation: 0.05, fitnessMovement: 0.20,
+                        maxSpeed: 2.0, maxTurnRate: 0.10, maxPitchRate: 0.10, turnDamping: 0.5,
+                        neighborRadius: 80, separationDist: 3,
+                        wallMargin: 40, wallSteerStrength: 0.12,
+                        mutationWeightScale: 0.08, mutationBiasScale: 0.04,
+                        creatureMaxAge: 1500,
+                        isolationDeathTicks: 150,                    }
+                },
+                scatteredExplorers: {
+                    desc: "Creatures spread out and explore independently, with minimal grouping tendency.",
+                    values: {
+                        fitnessCohesion: 0.10, fitnessAlignment: 0.05, fitnessSeparation: 0.35, fitnessMovement: 0.50,
+                        maxSpeed: 3.5, maxTurnRate: 0.12, maxPitchRate: 0.12, turnDamping: 0,
+                        neighborRadius: 30, separationDist: 15,
+                        wallMargin: 25, wallSteerStrength: 0.10,
+                        mutationWeightScale: 0.15, mutationBiasScale: 0.08,
+                        creatureMaxAge: 1000,
+                        isolationDeathTicks: 0,                    }
+                },
+                slowDrift: {
+                    desc: "A calm, slow-moving cloud — creatures drift gently and stay loosely grouped.",
+                    values: {
+                        fitnessCohesion: 0.45, fitnessAlignment: 0.15, fitnessSeparation: 0.15, fitnessMovement: 0.25,
+                        maxSpeed: 1.0, maxTurnRate: 0.06, maxPitchRate: 0.06, turnDamping: 0.3,
+                        neighborRadius: 70, separationDist: 8,
+                        wallMargin: 30, wallSteerStrength: 0.08,
+                        mutationWeightScale: 0.05, mutationBiasScale: 0.03,
+                        creatureMaxAge: 2000,
+                        isolationDeathTicks: 200,                    }
+                },
+                chaos: {
+                    desc: "High speed, high mutation, weak cohesion — unpredictable, erratic movement.",
+                    values: {
+                        fitnessCohesion: 0.15, fitnessAlignment: 0.05, fitnessSeparation: 0.20, fitnessMovement: 0.60,
+                        maxSpeed: 5.0, maxTurnRate: 0.40, maxPitchRate: 0.40, turnDamping: 0,
+                        neighborRadius: 25, separationDist: 10,
+                        wallMargin: 20, wallSteerStrength: 0.20,
+                        mutationWeightScale: 0.40, mutationBiasScale: 0.20,
+                        creatureMaxAge: 800,
+                        isolationDeathTicks: 0,                    }
+                },
+                tornado: {
+                    desc: "Extreme turning with strong cohesion — creatures form a tight, fast vortex.",
+                    values: {
+                        fitnessCohesion: 0.60, fitnessAlignment: 0.02, fitnessSeparation: 0.08, fitnessMovement: 0.30,
+                        maxSpeed: 3.5, maxTurnRate: 0.45, maxPitchRate: 0.45, turnDamping: 0,
+                        neighborRadius: 40, separationDist: 4,
+                        wallMargin: 30, wallSteerStrength: 0.18,
+                        mutationWeightScale: 0.12, mutationBiasScale: 0.06,
+                        creatureMaxAge: 1000,
+                        isolationDeathTicks: 150,                    }
+                },
+            };
+
+            let world = createWorld(WORLD_SIZE, NUM_CREATURES);
+            let renderer = createRenderer(canvas, world, WORLD_SIZE);
+
+            function createWorld(size, count) {
+                return new BESTIOLES.CreatureWorld(count, {
+                    width: size, height: size, depth: size,
+                });
+            }
+            function createRenderer(cvs, w, size) {
+                // The cluster at spawn is ~neighborRadius×2 wide (~240 for murmuration).
+                // Particle size and camera distance must be relative to the CLUSTER,
+                // not the world size — otherwise particles are gigantic blobs in huge worlds.
+                const nr = BESTIOLES.SimConfig.neighborRadius;
+                const isLargeWorld = size > 1000;
+
+                // Particle size: ~1% of neighborRadius, clamped to reasonable range
+                // 200³ world (nr=50): 1.5 — small dots
+                // 50000³ world (nr=120): 2.4 — still small dots in the cluster
+                const particleSize = isLargeWorld
+                    ? Math.max(1.5, Math.min(4, nr * 0.02))
+                    : size < 300 ? 1.5 : 2.5;
+
+                // Camera distance: ~4× the cluster radius so the whole group fits in view
+                // 200³ world: size*1.5 = 300
+                // 50000³ world (nr=120): 120*4 = 480
+                const camDist = isLargeWorld
+                    ? nr * 4
+                    : size * 1.5;
+                
+                const options = {
+                    cameraDistance: camDist,
+                    particleSize: particleSize,
+                    showBounds: !isLargeWorld,
+                    trackGroupCenter: isLargeWorld,
+                }
+                    // Get the computed background color of the body
+                const bodyStyle = window.getComputedStyle(document.body);
+                const bgColor = bodyStyle.backgroundColor;
+
+                // Convert the RGB color to Babylon.js Color3 or Color4
+                const rgbValues = bgColor.match(/\d+/g); // Extract RGB values from "rgb(255, 255, 255)" string
+                if (rgbValues) {
+                    const [r, g, b] = rgbValues.map(Number).map((v) => v / 255); // Normalize to [0, 1] range
+                    options.clearColor = new BABYLON.Color3(r, g, b); // Set clearColor using the computed background color
+                }
+                return new SPBABYLON.BestiolesRenderer(cvs, w, options);
+            }
+
+            // ─── Panel wiring ───
+            const paramKeys = [
+                "fitnessCohesion", "fitnessAlignment", "fitnessSeparation", "fitnessMovement",
+                "maxSpeed", "maxTurnRate", "maxPitchRate", "turnDamping",
+                "neighborRadius", "separationDist",
+                "wallMargin", "wallSteerStrength",
+                "mutationWeightScale", "mutationBiasScale",
+                "creatureMaxAge",
+                "isolationDeathTicks",
+            ];
+
+            const fitnessKeys = ["fitnessCohesion", "fitnessAlignment", "fitnessSeparation", "fitnessMovement"];
+            const cbNormalize = document.getElementById("cbNormalize");
+
+            function updateWeightSum() {
+                const sum = fitnessKeys.reduce((s, k) => s + config[k], 0);
+                document.getElementById("weightSum").textContent = sum.toFixed(2);
+                document.getElementById("weightSum").style.color = Math.abs(sum - 1) < 0.05 ? "#48bb78" : "#f6ad55";
+            }
+
+            function normalizeWeights(changedKey) {
+                if (!cbNormalize.checked) return;
+                const newVal = config[changedKey];
+                const remaining = 1 - newVal;
+                const otherKeys = fitnessKeys.filter(k => k !== changedKey);
+                const otherSum = otherKeys.reduce((s, k) => s + config[k], 0);
+
+                if (remaining <= 0) {
+                    otherKeys.forEach(k => config[k] = 0);
+                } else if (otherSum > 0) {
+                    const scale = remaining / otherSum;
+                    otherKeys.forEach(k => config[k] = +(config[k] * scale).toFixed(4));
+                } else {
+                    const each = remaining / otherKeys.length;
+                    otherKeys.forEach(k => config[k] = +each.toFixed(4));
+                }
+
+                otherKeys.forEach(k => {
+                    const sl = document.getElementById("sl_" + k);
+                    const vl = document.getElementById("vl_" + k);
+                    if (sl) sl.value = config[k];
+                    if (vl) vl.textContent = config[k].toFixed(2);
+                });
+            }
+
+            paramKeys.forEach(key => {
+                const slider = document.getElementById("sl_" + key);
+                const valEl = document.getElementById("vl_" + key);
+                if (!slider || !valEl) return;
+                slider.value = config[key];
+                valEl.textContent = (key === "creatureMaxAge" || key === "isolationDeathTicks") ? Number(config[key]).toFixed(0) : Number(config[key]).toFixed(2);
+                slider.addEventListener("input", () => {
+                    const v = parseFloat(slider.value);
+                    config[key] = v;
+                    valEl.textContent = (key === "creatureMaxAge" || key === "isolationDeathTicks") ? v.toFixed(0) : v.toFixed(2);
+                    if (fitnessKeys.includes(key)) {
+                        normalizeWeights(key);
+                        updateWeightSum();
+                    }
+                });
+            });
+            updateWeightSum();
+
+            // ─── Preset wiring ───
+            const presetSelect = document.getElementById("presetSelect");
+            const presetDesc = document.getElementById("presetDesc");
+            let userChangedSlider = false;
+
+            function syncAllSliders() {
+                paramKeys.forEach(key => {
+                    const slider = document.getElementById("sl_" + key);
+                    const valEl = document.getElementById("vl_" + key);
+                    if (slider) slider.value = config[key];
+                    if (valEl) valEl.textContent = (key === "creatureMaxAge" || key === "isolationDeathTicks") ? Number(config[key]).toFixed(0) : Number(config[key]).toFixed(2);
+                });
+                updateWeightSum();
+            }
+
+            function applyPreset(name) {
+                const preset = PRESETS[name];
+                if (!preset) return;
+                // Copy all preset values to SimConfig
+                for (const [k, v] of Object.entries(preset.values)) {
+                    config[k] = v;
+                }
+                // Recreate world/renderer if preset specifies different size or count
+                const newSize = preset.worldSize || 200;
+                const newCount = preset.numCreatures || 100;
+                if (newSize !== WORLD_SIZE || newCount !== NUM_CREATURES) {
+                    WORLD_SIZE = newSize;
+                    NUM_CREATURES = newCount;
+                    renderer.stop();
+                    renderer.dispose();
+                    world = createWorld(WORLD_SIZE, NUM_CREATURES);
+                    renderer = createRenderer(canvas, world, WORLD_SIZE);
+                    attachStatsObserver();
+                    renderer.start();
+                }
+                syncAllSliders();
+                presetDesc.textContent = preset.desc;
+                userChangedSlider = false;
+            }
+
+            presetSelect.addEventListener("change", () => {
+                const name = presetSelect.value;
+                if (name === "custom") return;
+                const preset = PRESETS[name];
+                if (preset) presetDesc.textContent = preset.desc;
+            });
+
+            document.getElementById("btnApplyPreset").addEventListener("click", () => {
+                const name = presetSelect.value;
+                if (name === "custom") return;
+                applyPreset(name);
+                // Respawn all creatures
+                world.creatures.forEach(c => c.alive = false);
+                // Reset stats tracking
+                fitnessHistory.length = 0;
+                trendWindow.length = 0;
+                totalDeaths = 0;
+                prevAlive = NUM_CREATURES;
+                generationEst = 0;
+                startTime = performance.now();
+            });
+
+            // Mark preset as "custom" when user manually changes a slider
+            paramKeys.forEach(key => {
+                const slider = document.getElementById("sl_" + key);
+                if (!slider) return;
+                slider.addEventListener("input", () => {
+                    if (!userChangedSlider) {
+                        userChangedSlider = true;
+                        presetSelect.value = "custom";
+                        presetDesc.textContent = "Parameters have been manually adjusted.";
+                    }
+                });
+            });
+
+            document.getElementById("btnReset").addEventListener("click", () => {
+                // Reset to Swarm Orbit defaults (including world size)
+                applyPreset("swarmOrbit");
+                world.creatures.forEach(c => c.alive = false);
+                fitnessHistory.length = 0;
+                trendWindow.length = 0;
+                totalDeaths = 0;
+                prevAlive = NUM_CREATURES;
+                generationEst = 0;
+                startTime = performance.now();
+                presetSelect.value = "swarmOrbit";
+                userChangedSlider = false;
+            });
+
+            document.getElementById("btnRespawn").addEventListener("click", () => {
+                world.creatures.forEach(c => c.alive = false);
+            });
+
+            // ─── Stats tracking ───
+            const HISTORY_LEN = 200;       // data points in chart
+            const fitnessHistory = [];      // { avg, best, worst }
+            const trendWindow = [];         // last ~30 sec of avg fitness
+            let totalDeaths = 0;
+            let prevAlive = NUM_CREATURES;
+            let generationEst = 0;
+            let startTime = performance.now();
+
+            // Chart canvas
+            const chartCanvas = document.getElementById("fitnessChart");
+            const chartCtx = chartCanvas.getContext("2d");
+
+            function drawChart() {
+                const dpr = devicePixelRatio || 1;
+                const cssW = chartCanvas.clientWidth;
+                const cssH = chartCanvas.clientHeight;
+                chartCanvas.width = cssW * dpr;
+                chartCanvas.height = cssH * dpr;
+                const w = chartCanvas.width;
+                const h = chartCanvas.height;
+                chartCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                chartCtx.clearRect(0, 0, cssW, cssH);
+
+                // Layout: left margin for Y labels, bottom margin for X label
+                const marginL = 32;
+                const marginR = 6;
+                const marginT = 16;
+                const marginB = 18;
+                const plotW = cssW - marginL - marginR;
+                const plotH = cssH - marginT - marginB;
+
+                if (fitnessHistory.length < 2) {
+                    chartCtx.fillStyle = "#4a5568";
+                    chartCtx.font = "10px 'Segoe UI', sans-serif";
+                    chartCtx.textAlign = "center";
+                    chartCtx.fillText("Waiting for data…", cssW / 2, cssH / 2);
+                    return;
+                }
+
+                // Y range: use 5th percentile → 95th percentile of ALL values
+                // This prevents one bad frame from crushing the scale
+                const allVals = [];
+                for (const pt of fitnessHistory) {
+                    allVals.push(pt.avg, pt.best, pt.worst);
+                }
+                allVals.sort((a, b) => a - b);
+                const p5  = allVals[Math.floor(allVals.length * 0.05)];
+                const p95 = allVals[Math.floor(allVals.length * 0.95)];
+                const range = Math.max(0.05, p95 - p5);
+                const yMin = Math.max(0, Math.floor((p5 - range * 0.15) * 20) / 20);   // pad 15% below, snap to 0.05
+                const yMax = Math.ceil((p95 + range * 0.15) * 20) / 20;                 // pad 15% above
+
+                const toX = (i) => marginL + (i / (HISTORY_LEN - 1)) * plotW;
+                const clamp = (v) => Math.max(yMin, Math.min(yMax, v));
+                const toY = (v) => marginT + plotH - ((clamp(v) - yMin) / (yMax - yMin)) * plotH;
+
+                // ── Gridlines + Y axis labels ──
+                chartCtx.font = "9px monospace";
+                chartCtx.textAlign = "right";
+                const gridSteps = 4;
+                for (let g = 0; g <= gridSteps; g++) {
+                    const val = yMin + (yMax - yMin) * (g / gridSteps);
+                    const y = toY(val);
+
+                    // Gridline
+                    chartCtx.beginPath();
+                    chartCtx.moveTo(marginL, y);
+                    chartCtx.lineTo(cssW - marginR, y);
+                    chartCtx.strokeStyle = g === 0 ? "#4a5568" : "#2d3748";
+                    chartCtx.lineWidth = 0.5;
+                    chartCtx.stroke();
+
+                    // Y label
+                    chartCtx.fillStyle = "#718096";
+                    chartCtx.fillText(val.toFixed(1), marginL - 4, y + 3);
+                }
+
+                // ── Filled range between best and worst ──
+                chartCtx.beginPath();
+                chartCtx.moveTo(toX(0), toY(fitnessHistory[0].best));
+                for (let i = 1; i < fitnessHistory.length; i++) {
+                    chartCtx.lineTo(toX(i), toY(fitnessHistory[i].best));
+                }
+                for (let i = fitnessHistory.length - 1; i >= 0; i--) {
+                    chartCtx.lineTo(toX(i), toY(fitnessHistory[i].worst));
+                }
+                chartCtx.closePath();
+                chartCtx.fillStyle = "rgba(99,179,237,0.08)";
+                chartCtx.fill();
+
+                // ── Worst line (red dashed) ──
+                chartCtx.beginPath();
+                chartCtx.setLineDash([3, 3]);
+                chartCtx.moveTo(toX(0), toY(fitnessHistory[0].worst));
+                for (let i = 1; i < fitnessHistory.length; i++) {
+                    chartCtx.lineTo(toX(i), toY(fitnessHistory[i].worst));
+                }
+                chartCtx.strokeStyle = "rgba(252,129,129,0.5)";
+                chartCtx.lineWidth = 1;
+                chartCtx.stroke();
+                chartCtx.setLineDash([]);
+
+                // ── Best line (green dashed) ──
+                chartCtx.beginPath();
+                chartCtx.setLineDash([3, 3]);
+                chartCtx.moveTo(toX(0), toY(fitnessHistory[0].best));
+                for (let i = 1; i < fitnessHistory.length; i++) {
+                    chartCtx.lineTo(toX(i), toY(fitnessHistory[i].best));
+                }
+                chartCtx.strokeStyle = "rgba(72,187,120,0.6)";
+                chartCtx.lineWidth = 1;
+                chartCtx.stroke();
+                chartCtx.setLineDash([]);
+
+                // ── Average line (solid blue, thick) ──
+                chartCtx.beginPath();
+                chartCtx.moveTo(toX(0), toY(fitnessHistory[0].avg));
+                for (let i = 1; i < fitnessHistory.length; i++) {
+                    chartCtx.lineTo(toX(i), toY(fitnessHistory[i].avg));
+                }
+                chartCtx.strokeStyle = "#63b3ed";
+                chartCtx.lineWidth = 2;
+                chartCtx.stroke();
+
+                // ── Current value dot on avg line ──
+                const last = fitnessHistory[fitnessHistory.length - 1];
+                const dotX = toX(fitnessHistory.length - 1);
+                const dotY = toY(last.avg);
+                chartCtx.beginPath();
+                chartCtx.arc(dotX, dotY, 3, 0, Math.PI * 2);
+                chartCtx.fillStyle = "#63b3ed";
+                chartCtx.fill();
+
+                // ── X axis label ──
+                chartCtx.fillStyle = "#4a5568";
+                chartCtx.font = "9px 'Segoe UI', sans-serif";
+                chartCtx.textAlign = "center";
+                chartCtx.fillText("← time (last ~30 sec) →", marginL + plotW / 2, cssH - 3);
+
+                // ── Y axis label ──
+                chartCtx.save();
+                chartCtx.translate(8, marginT + plotH / 2);
+                chartCtx.rotate(-Math.PI / 2);
+                chartCtx.textAlign = "center";
+                chartCtx.fillStyle = "#4a5568";
+                chartCtx.font = "9px 'Segoe UI', sans-serif";
+                chartCtx.fillText("fitness", 0, 0);
+                chartCtx.restore();
+
+                // ── Legend (top right) ──
+                const legX = cssW - marginR - 4;
+                const legY = marginT + 2;
+                chartCtx.textAlign = "right";
+                chartCtx.font = "9px monospace";
+
+                chartCtx.fillStyle = "#48bb78";
+                chartCtx.fillText("── best", legX, legY);
+                chartCtx.fillStyle = "#63b3ed";
+                chartCtx.fillText("━━ avg", legX, legY + 11);
+                chartCtx.fillStyle = "#fc8181";
+                chartCtx.fillText("── worst", legX, legY + 22);
+            }
+
+            function computeStats() {
+                const alive = world.creatures.filter(c => c.alive);
+                const aliveCount = alive.length;
+
+                // Deaths tracking
+                if (aliveCount < prevAlive) {
+                    totalDeaths += (prevAlive - aliveCount);
+                }
+                prevAlive = aliveCount;
+
+                const elapsed = (performance.now() - startTime) / 1000;
+                const deathRate = elapsed > 0 ? (totalDeaths / elapsed).toFixed(1) : "0";
+                generationEst = Math.floor(totalDeaths / Math.max(1, NUM_CREATURES));
+
+                // Fitness stats
+                const fitnesses = alive.map(c => c.fitness);
+                const avgFit = fitnesses.length ? fitnesses.reduce((a, b) => a + b, 0) / fitnesses.length : 0;
+                const bestFit = fitnesses.length ? Math.max(...fitnesses) : 0;
+                const worstFit = fitnesses.length ? Math.min(...fitnesses) : 0;
+                const variance = fitnesses.length
+                    ? fitnesses.reduce((s, f) => s + (f - avgFit) ** 2, 0) / fitnesses.length
+                    : 0;
+                const stdFit = Math.sqrt(variance);
+
+                // Speed stats
+                const speeds = alive.map(c => c.speed);
+                const avgSpeed = speeds.length ? speeds.reduce((a, b) => a + b, 0) / speeds.length : 0;
+
+                // Spatial: spread (std dev of positions from centroid)
+                let cx = 0, cy = 0, cz = 0;
+                for (const c of alive) { cx += c.position.x; cy += c.position.y; cz += c.position.z; }
+                if (alive.length) { cx /= alive.length; cy /= alive.length; cz /= alive.length; }
+                let spreadVar = 0;
+                for (const c of alive) {
+                    spreadVar += (c.position.x - cx) ** 2 + (c.position.y - cy) ** 2 + (c.position.z - cz) ** 2;
+                }
+                const spread = alive.length ? Math.sqrt(spreadVar / alive.length) : 0;
+
+                // Average nearest neighbor distance (sample 20 for performance)
+                let avgNeighDist = 0;
+                const sample = alive.length > 20 ? alive.slice(0, 20) : alive;
+                for (const c of sample) {
+                    let minD = Infinity;
+                    for (const o of alive) {
+                        if (o === c) continue;
+                        const d = Math.sqrt(
+                            (c.position.x - o.position.x) ** 2 +
+                            (c.position.y - o.position.y) ** 2 +
+                            (c.position.z - o.position.z) ** 2
+                        );
+                        if (d < minD) minD = d;
+                    }
+                    if (minD < Infinity) avgNeighDist += minD;
+                }
+                avgNeighDist = sample.length ? avgNeighDist / sample.length : 0;
+
+                // History
+                fitnessHistory.push({ avg: avgFit, best: bestFit, worst: worstFit });
+                if (fitnessHistory.length > HISTORY_LEN) fitnessHistory.shift();
+
+                // Trend: compare avg now vs 30s ago (~1800 frames at 60fps, or ~180 samples at 10-frame intervals)
+                trendWindow.push(avgFit);
+                const trendSamples = 180; // ~30 sec at sample-every-10-frames
+                if (trendWindow.length > trendSamples) trendWindow.shift();
+                let trendText = "—";
+                let trendClass = "";
+                if (trendWindow.length >= 20) {
+                    const oldAvg = trendWindow.slice(0, 10).reduce((a, b) => a + b, 0) / 10;
+                    const newAvg = trendWindow.slice(-10).reduce((a, b) => a + b, 0) / 10;
+                    const diff = newAvg - oldAvg;
+                    if (diff > 0.005) { trendText = "▲ improving"; trendClass = "good"; }
+                    else if (diff < -0.005) { trendText = "▼ declining"; trendClass = "bad"; }
+                    else { trendText = "— stable"; trendClass = "warn"; }
+                }
+
+                // Overall health
+                let health = "healthy";
+                let healthColor = "#48bb78";
+                let healthBg = "#1a3a2a";
+                if (aliveCount < NUM_CREATURES * 0.3) {
+                    health = "critical"; healthColor = "#fc8181"; healthBg = "#3a1a1a";
+                } else if (avgFit < 0.15 || trendClass === "bad") {
+                    health = "declining"; healthColor = "#f6ad55"; healthBg = "#3a2a1a";
+                } else if (avgFit > 0.4 && trendClass === "good") {
+                    health = "thriving"; healthColor = "#48bb78"; healthBg = "#1a3a2a";
+                } else if (stdFit < 0.01 && trendClass !== "good") {
+                    health = "stagnant"; healthColor = "#a0aec0"; healthBg = "#1a2030";
+                }
+
+                // Update DOM
+                document.getElementById("st_alive").textContent = `${aliveCount} / ${NUM_CREATURES}`;
+                const barAlive = document.getElementById("bar_alive");
+                barAlive.style.width = (aliveCount / NUM_CREATURES * 100) + "%";
+                barAlive.style.background = aliveCount > NUM_CREATURES * 0.5 ? "#48bb78" : aliveCount > NUM_CREATURES * 0.2 ? "#f6ad55" : "#fc8181";
+
+                document.getElementById("st_deathRate").textContent = deathRate + " /s";
+                document.getElementById("st_generation").textContent = generationEst;
+
+                const stAvg = document.getElementById("st_avgFit");
+                stAvg.textContent = avgFit.toFixed(4);
+                stAvg.className = "stat-value " + (avgFit > 0.4 ? "good" : avgFit > 0.2 ? "warn" : "bad");
+                document.getElementById("bar_avgFit").style.width = (Math.min(1, avgFit) * 100) + "%";
+
+                document.getElementById("st_bestFit").textContent = bestFit.toFixed(4);
+                document.getElementById("st_worstFit").textContent = worstFit.toFixed(4);
+                document.getElementById("st_stdFit").textContent = stdFit.toFixed(4);
+
+                const stTrend = document.getElementById("st_trend");
+                stTrend.textContent = trendText;
+                stTrend.className = "stat-value " + trendClass;
+
+                document.getElementById("bar_avgSpeed").style.width = (avgSpeed / config.maxSpeed * 100) + "%";
+                document.getElementById("st_avgSpeed").textContent = avgSpeed.toFixed(2) + " / " + config.maxSpeed.toFixed(1);
+
+                document.getElementById("st_spread").textContent = spread.toFixed(1);
+                document.getElementById("st_avgNeighDist").textContent = avgNeighDist.toFixed(1);
+
+                const banner = document.getElementById("healthBanner");
+                banner.style.background = healthBg;
+                document.getElementById("healthDot").style.background = healthColor;
+                document.getElementById("healthLabel").textContent = "Colony " + health;
+                document.getElementById("healthLabel").style.color = healthColor;
+
+                drawChart();
+            }
+
+            // ─── Main loop ───
+            let frameCount = 0;
+
+            function attachStatsObserver() {
+                renderer.scene.onAfterRenderObservable.add(() => {
+                    frameCount++;
+                    if (frameCount % 10 === 0) {
+                        const alive = world.creatures.filter(c => c.alive).length;
+                        const avgFit = world.creatures
+                            .filter(c => c.alive)
+                            .reduce((s, c) => s + c.fitness, 0) / (alive || 1);
+                        hud.textContent =
+                            `Frame: ${frameCount}  Alive: ${alive}/${NUM_CREATURES}  ` +
+                            `Avg fitness: ${avgFit.toFixed(4)}`;
+
+                        computeStats();
+                    }
+                });
+            }
+
+            attachStatsObserver();
+            renderer.start();
+        </script>
+    </body>
+</html>
