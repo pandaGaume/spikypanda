@@ -72,10 +72,7 @@ export class CreatureWorld {
         // In a 1000³ world with radius 100: spread = min(400, 200) = 200.
         // Without this cap, large worlds would spawn creatures so far apart
         // that they'd never find each other and the group would never form.
-        const spread = Math.min(
-            Math.min(this._bounds.width, this._bounds.height, this._bounds.depth) * 0.4,
-            SimConfig.neighborRadius * 2
-        );
+        const spread = Math.min(Math.min(this._bounds.width, this._bounds.height, this._bounds.depth) * 0.4, SimConfig.neighborRadius * 2);
         // Ages are staggered (500–1500 ticks) so deaths happen gradually
         // rather than all at once — this prevents population crashes that
         // would erase evolved behaviors.
@@ -324,7 +321,7 @@ export class CreatureWorld {
         // which way to turn to align with neighbors (critical for murmuration).
         let neighborAlignDot = 0;
         let neighborHeadingRight = 0; // sensor 15: avg neighbor heading → my right axis
-        let neighborHeadingUp = 0;    // sensor 16: avg neighbor heading → my up axis
+        let neighborHeadingUp = 0; // sensor 16: avg neighbor heading → my up axis
         if (gCount > 0) {
             // Average neighbor heading (normalize the accumulated vector)
             avgNDirX /= gCount;
@@ -349,17 +346,14 @@ export class CreatureWorld {
             // Projecting the avg neighbor heading onto this tells the brain:
             //   positive → neighbors heading to my RIGHT → turn right to align
             //   negative → neighbors heading to my LEFT → turn left to align
-            neighborHeadingRight = avgNDirX * (-sinYaw) + avgNDirY * cosYaw;
+            neighborHeadingRight = avgNDirX * -sinYaw + avgNDirY * cosYaw;
 
             // Local UP axis: perpendicular to both forward and right.
             // Up = (-sin(pitch)*cos(yaw), -sin(pitch)*sin(yaw), cos(pitch))
             // Projecting tells the brain:
             //   positive → neighbors heading ABOVE me → pitch up to align
             //   negative → neighbors heading BELOW me → pitch down to align
-            neighborHeadingUp =
-                avgNDirX * (-sinPitch2 * cosYaw) +
-                avgNDirY * (-sinPitch2 * sinYaw) +
-                avgNDirZ * cosPitch2;
+            neighborHeadingUp = avgNDirX * (-sinPitch2 * cosYaw) + avgNDirY * (-sinPitch2 * sinYaw) + avgNDirZ * cosPitch2;
         }
 
         // --- Wall proximity sensor ---
@@ -431,10 +425,7 @@ export class CreatureWorld {
         const groupCenter = this._getGroupCenter();
         // Offspring spawn spread: 30% of world size, or neighborRadius, whichever is smaller.
         // This keeps children near the group but not all on top of each other.
-        const spread = Math.min(
-            Math.min(this._bounds.width, this._bounds.height, this._bounds.depth) * 0.3,
-            SimConfig.neighborRadius * 1.5
-        );
+        const spread = Math.min(Math.min(this._bounds.width, this._bounds.height, this._bounds.depth) * 0.3, SimConfig.neighborRadius * 1.5);
 
         for (let i = 0; i < this._creatures.length; i++) {
             if (!this._creatures[i].alive) {

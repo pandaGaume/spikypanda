@@ -11,7 +11,10 @@
       "Bash(grep -E \"\\\\.\\(ts|json\\)$\")",
       "Bash(npm list:*)",
       "Bash(copy \"C:\\\\Users\\\\GuillaumePelletier\\\\Documents\\\\GitHub\\\\spikypanda\\\\packages\\\\dev\\\\babylonjs\\\\bundle\\\\spbabylon.js\" \"C:\\\\Users\\\\GuillaumePelletier\\\\Documents\\\\GitHub\\\\spikypanda\\\\packages\\\\host\\\\www\\\\bundle\\\\spbabylon.js\")",
-      "Bash(copy \"C:\\\\Users\\\\GuillaumePelletier\\\\Documents\\\\GitHub\\\\spikypanda\\\\packages\\\\dev\\\\bestioles\\\\bundle\\\\bestioles.js\" \"C:\\\\Users\\\\GuillaumePelletier\\\\Documents\\\\GitHub\\\\spikypanda\\\\packages\\\\host\\\\www\\\\bundle\\\\bestioles.js\" /Y)"
+      "Bash(copy \"C:\\\\Users\\\\GuillaumePelletier\\\\Documents\\\\GitHub\\\\spikypanda\\\\packages\\\\dev\\\\bestioles\\\\bundle\\\\bestioles.js\" \"C:\\\\Users\\\\GuillaumePelletier\\\\Documents\\\\GitHub\\\\spikypanda\\\\packages\\\\host\\\\www\\\\bundle\\\\bestioles.js\" /Y)",
+      "Bash(npm run:*)",
+      "Bash(npm pack:*)",
+      "Bash(npm publish:*)"
     ]
   }
 }

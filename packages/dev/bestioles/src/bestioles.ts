@@ -116,11 +116,7 @@ export class Creature {
      *   - tooCloseCount:  Number of neighbors within separationDist.
      * @param bounds        World bounding box dimensions.
      */
-    public update(
-        sensors: number[],
-        neighborInfo: { avgDist: number; alignmentDot: number; tooCloseCount: number; neighborCount: number },
-        bounds: IWorldBounds
-    ) {
+    public update(sensors: number[], neighborInfo: { avgDist: number; alignmentDot: number; tooCloseCount: number; neighborCount: number }, bounds: IWorldBounds) {
         // ── Step 1: Brain inference ──
         // Feed 18 sensors through the 18→10→3 neural network.
         // Outputs are sigmoid [0,1]:
@@ -221,27 +217,28 @@ export class Creature {
         // The penalty only activates within wallMargin distance.
         const wallMargin = SimConfig.wallMargin;
         const nearestWall = Math.min(
-            this._position.x, bounds.width - this._position.x,
-            this._position.y, bounds.height - this._position.y,
-            this._position.z, bounds.depth - this._position.z
+            this._position.x,
+            bounds.width - this._position.x,
+            this._position.y,
+            bounds.height - this._position.y,
+            this._position.z,
+            bounds.depth - this._position.z
         );
         // wallPenalty = 1.0 when far from walls (no penalty),
         // drops to 0.5 when right at the wall.
         // The curve is linear within the margin: penalty = 0.5 + 0.5*(dist/margin)
-        const wallPenalty = nearestWall >= wallMargin
-            ? 1.0
-            : 0.5 + 0.5 * (nearestWall / wallMargin);
+        const wallPenalty = nearestWall >= wallMargin ? 1.0 : 0.5 + 0.5 * (nearestWall / wallMargin);
 
         // Weighted sum — the four SimConfig.fitness* weights control
         // which behavior the evolutionary process selects for.
         // The wall penalty multiplier reduces total fitness near boundaries
         // without needing an extra UI slider (it's always active).
-        const frameFitness = (
-            cohesionScore * SimConfig.fitnessCohesion +
-            alignmentScore * SimConfig.fitnessAlignment +
-            separationScore * SimConfig.fitnessSeparation +
-            movementScore * SimConfig.fitnessMovement
-        ) * wallPenalty;
+        const frameFitness =
+            (cohesionScore * SimConfig.fitnessCohesion +
+                alignmentScore * SimConfig.fitnessAlignment +
+                separationScore * SimConfig.fitnessSeparation +
+                movementScore * SimConfig.fitnessMovement) *
+            wallPenalty;
 
         // Running average: accumulate total fitness, divide by age.
         // This smooths out frame-to-frame noise and gives a stable
@@ -320,26 +317,46 @@ export class Creature {
         const margin = SimConfig.wallMargin;
 
         // Distance to each of the 6 faces
-        const dLeft = pos.x;                  // distance to x=0 face
-        const dRight = bounds.width - pos.x;  // distance to x=width face
-        const dFront = pos.y;                 // distance to y=0 face
-        const dBack = bounds.height - pos.y;  // distance to y=height face
-        const dBottom = pos.z;                // distance to z=0 face
-        const dTop = bounds.depth - pos.z;    // distance to z=depth face
+        const dLeft = pos.x; // distance to x=0 face
+        const dRight = bounds.width - pos.x; // distance to x=width face
+        const dFront = pos.y; // distance to y=0 face
+        const dBack = bounds.height - pos.y; // distance to y=height face
+        const dBottom = pos.z; // distance to z=0 face
+        const dTop = bounds.depth - pos.z; // distance to z=depth face
 
         // Accumulate repulsion vector — points away from nearby walls.
         // Uses QUADRATIC ramp: force = (1 − d/margin)² so it's gentle at the
         // margin boundary but overwhelming near the wall.
         // Example: dLeft=10, margin=35 → t = 1−(10/35) = 0.71 → force = 0.71² = 0.51
         // Example: dLeft=5, margin=35  → t = 1−(5/35)  = 0.86 → force = 0.86² = 0.73
-        let steerX = 0, steerY = 0, steerZ = 0;
+        let steerX = 0,
+            steerY = 0,
+            steerZ = 0;
 
-        if (dLeft < margin)   { const t = 1 - dLeft / margin;   steerX += t * t; }  // push toward +x
-        if (dRight < margin)  { const t = 1 - dRight / margin;  steerX -= t * t; }  // push toward −x
-        if (dFront < margin)  { const t = 1 - dFront / margin;  steerY += t * t; }  // push toward +y
-        if (dBack < margin)   { const t = 1 - dBack / margin;   steerY -= t * t; }  // push toward −y
-        if (dBottom < margin) { const t = 1 - dBottom / margin;  steerZ += t * t; } // push toward +z
-        if (dTop < margin)    { const t = 1 - dTop / margin;    steerZ -= t * t; }  // push toward −z
+        if (dLeft < margin) {
+            const t = 1 - dLeft / margin;
+            steerX += t * t;
+        } // push toward +x
+        if (dRight < margin) {
+            const t = 1 - dRight / margin;
+            steerX -= t * t;
+        } // push toward −x
+        if (dFront < margin) {
+            const t = 1 - dFront / margin;
+            steerY += t * t;
+        } // push toward +y
+        if (dBack < margin) {
+            const t = 1 - dBack / margin;
+            steerY -= t * t;
+        } // push toward −y
+        if (dBottom < margin) {
+            const t = 1 - dBottom / margin;
+            steerZ += t * t;
+        } // push toward +z
+        if (dTop < margin) {
+            const t = 1 - dTop / margin;
+            steerZ -= t * t;
+        } // push toward −z
 
         const steerLen = Math.sqrt(steerX * steerX + steerY * steerY + steerZ * steerZ);
         if (steerLen < 0.001) return; // not near any wall — no correction needed
