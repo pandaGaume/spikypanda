@@ -7,7 +7,8 @@
         "project": [
             "./packages/dev/core/tsconfig.build.json",
             "./packages/dev/bestioles/tsconfig.build.json",
-            "./packages/dev/babylonjs/tsconfig.build.json"
+            "./packages/dev/babylonjs/tsconfig.build.json",
+            "./packages/tests/tsconfig.json"
         ]
     },
     "plugins": ["@typescript-eslint", "prettier"],

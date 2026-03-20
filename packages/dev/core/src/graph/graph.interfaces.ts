@@ -6,7 +6,7 @@ export const CloneMetadataKey = Symbol("cloneable");
 /// <summary>
 /// Marks a property as cloneable for automatic deep copying
 /// </summary>
-export function cloneable(target: Object, propertyKey: string | symbol): void {
+export function cloneable(target: object, propertyKey: string | symbol): void {
     const proto = target.constructor.prototype;
     const existingProps: string[] = Reflect.getMetadata(CloneMetadataKey, proto) || [];
     Reflect.defineMetadata(CloneMetadataKey, [...existingProps, propertyKey], proto);
@@ -22,8 +22,8 @@ export interface ICloneable<T = any> {
 /// <summary>
 /// Type guard to check if an object implements ICloneable
 /// </summary>
-export function IsCloneable<T = any>(obj: unknown): obj is ICloneable<T> {
-    return typeof obj === "object" && obj !== null && typeof (obj as any).clone === "function";
+export function IsCloneable<T>(obj: any): obj is ICloneable<T> {
+    return typeof obj === "object" && obj !== null && typeof obj.clone === "function";
 }
 
 export interface IDisposable {
@@ -35,8 +35,8 @@ export interface ITaggable {
     tag?: string;
 }
 
-export interface IIDentifiable{
-    id?:any;
+export interface IIDentifiable {
+    id?: any;
 }
 
 export interface IHasBag {

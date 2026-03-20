@@ -21,9 +21,9 @@
         "compile": "npm run compile:source",
         "compile:source": "tsc -b tsconfig.build.json",
         "watch:source": "tsc -b tsconfig.build.json -w",
-        "bundle": "webpack --mode production",
-        "bundle:dev": "webpack --mode development",
-        "bundle:watch": "webpack --mode development --watch",
+        "bundle": "webpack --config webpack.config.cjs --mode production",
+        "bundle:dev": "webpack --config webpack.config.cjs --mode development",
+        "bundle:watch": "webpack --config webpack.config.cjs --mode development --watch",
         "prepublishOnly": "npm run build"
     },
     "keywords": ["spikypanda", "geometry", "graph", "neural-network", "spiking-neural-network"],

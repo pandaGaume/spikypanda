@@ -1,0 +1,15 @@
+{
+    "extends": "../../tsconfig.build.json",
+    "compilerOptions": {
+        "baseUrl": "..",
+        "noEmit": true,
+        "declaration": false,
+        "sourceMap": false,
+        "inlineSources": false,
+        "paths": {
+            "spikypanda-core": ["dev/core/src/index.ts"],
+            "spikypanda-core/*": ["dev/core/src/*"]
+        }
+    },
+    "include": ["**/*.ts"]
+}

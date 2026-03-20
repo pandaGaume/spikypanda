@@ -20,8 +20,8 @@ describe("3-bit parity trained", () => {
     it("should learn parity with MLP 3-4-1", () => {
         const graph = createParityGraph();
         const runtime = new MLPInferenceRuntime(graph);
-        const optimizer = Optimizers.SGD();
-        const trainer = new MLPTrainingRuntime(graph, runtime, LossFunctions.CrossEntropy, 0.5, optimizer);
+        const optimizer = Optimizers.Adam();
+        const trainer = new MLPTrainingRuntime(graph, runtime, LossFunctions.CrossEntropy, 0.01, optimizer);
 
         const EPOCHS = 15000;
         for (let epoch = 0; epoch < EPOCHS; epoch++) {

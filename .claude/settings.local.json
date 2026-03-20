@@ -14,7 +14,9 @@
       "Bash(copy \"C:\\\\Users\\\\GuillaumePelletier\\\\Documents\\\\GitHub\\\\spikypanda\\\\packages\\\\dev\\\\bestioles\\\\bundle\\\\bestioles.js\" \"C:\\\\Users\\\\GuillaumePelletier\\\\Documents\\\\GitHub\\\\spikypanda\\\\packages\\\\host\\\\www\\\\bundle\\\\bestioles.js\" /Y)",
       "Bash(npm run:*)",
       "Bash(npm pack:*)",
-      "Bash(npm publish:*)"
+      "Bash(npm publish:*)",
+      "Bash(npx jest:*)",
+      "Bash(npm ls:*)"
     ]
   }
 }

@@ -41,7 +41,7 @@
             "spikypanda-core/*": ["dev/core/src/*"]
         },
 
-        "types": ["reflect-metadata", "jest"]
+        "types": ["reflect-metadata", "jest", "node"]
     },
     "exclude": ["**/node_modules", "**/dist"]
 }

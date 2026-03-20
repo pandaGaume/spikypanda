@@ -3,6 +3,7 @@
     "references": [
         { "path": "packages/dev/core/tsconfig.build.json" },
         { "path": "packages/dev/bestioles/tsconfig.build.json" },
-        { "path": "packages/dev/babylonjs/tsconfig.build.json" }
+        { "path": "packages/dev/babylonjs/tsconfig.build.json" },
+        { "path": "packages/tests/tsconfig.json" }
     ]
 }

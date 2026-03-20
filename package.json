@@ -17,8 +17,8 @@
         "format:check": "prettier --check packages/**/src/**/*.{ts,tsx,js,json,scss,css}",
         "format:fix": "prettier --write packages/**/src/**/*.{ts,tsx,js,json,scss,css}",
 
-        "bundle": "npm run bundle --workspace=@spikypanda/core",
-        "bundle:dev": "npm run bundle:dev --workspace=@spikypanda/core",
+        "bundle": "npm run bundle --workspace=@spiky-panda/core",
+        "bundle:dev": "npm run bundle:dev --workspace=@spiky-panda/core",
 
         "deploy:bundles": "node scripts/deploy-bundles.mjs",
 

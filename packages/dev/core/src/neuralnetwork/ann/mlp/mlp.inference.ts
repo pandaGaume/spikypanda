@@ -3,7 +3,10 @@ import { IMlpGraph, IMlpNeuron, IMlpSynapse, IInferenceNeuronContext, IActivatio
 import { MLPRuntimeUtils } from "./mlp.runtime.utils";
 
 export class MLPInferenceRuntime {
-    public constructor(public readonly graph: IMlpGraph, public mainActivation: IActivationFunction = ActivationFunctions.relu) {}
+    public constructor(
+        public readonly graph: IMlpGraph,
+        public mainActivation: IActivationFunction = ActivationFunctions.relu
+    ) {}
 
     /**
      * Runs inference on the MLP graph given an array of input values.

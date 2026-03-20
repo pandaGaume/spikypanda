@@ -1,4 +1,5 @@
 export * from "./ann";
+export * from "./cnn";
 export * from "./snn";
 export * from "./nn.weights";
 export * from "./nn.interfaces";

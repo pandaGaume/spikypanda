@@ -1,0 +1,369 @@
+import { ActivationFunctions } from "../ann/mlp/mlp.activation";
+import { IWeightInitializer, He, Uniform } from "../nn.weights";
+import {
+    CnnLayerType,
+    IActivationFunction,
+    ICnnGraph,
+    ICnnLayerDescriptor,
+    ICnnNeuron,
+    ICnnSynapse,
+    IKernel,
+    PaddingType,
+    PoolingType,
+} from "./cnn.interfaces";
+import { CnnGraph } from "./cnn.graph";
+import { CnnNeuron } from "./cnn.neuron";
+import { CnnSynapse } from "./cnn.synapse";
+import { Kernel } from "./cnn.kernel";
+
+export interface ConvLayerConfig {
+    filters: number;
+    kernelSize: number | [number, number];
+    stride?: number | [number, number];
+    padding?: PaddingType;
+    activation?: IActivationFunction;
+    weightInitializer?: IWeightInitializer;
+    biasInit?: number;
+}
+
+export interface PoolLayerConfig {
+    type: PoolingType;
+    size: number | [number, number];
+    stride?: number | [number, number];
+}
+
+export interface DenseLayerConfig {
+    units: number;
+    activation?: IActivationFunction;
+    weightInitializer?: IWeightInitializer;
+    biasInit?: number;
+}
+
+interface LayerSpec {
+    type: CnnLayerType;
+    config: ConvLayerConfig | PoolLayerConfig | DenseLayerConfig | null;
+}
+
+function toTuple(v: number | [number, number]): [number, number] {
+    return typeof v === "number" ? [v, v] : v;
+}
+
+function computeOutputSize(inputSize: number, kernelSize: number, stride: number, padding: PaddingType): number {
+    if (padding === PaddingType.Same) {
+        return Math.ceil(inputSize / stride);
+    }
+    return Math.floor((inputSize - kernelSize) / stride) + 1;
+}
+
+function computePadding(inputSize: number, kernelSize: number, stride: number, padding: PaddingType): number {
+    if (padding === PaddingType.Same) {
+        const outSize = Math.ceil(inputSize / stride);
+        const totalPad = Math.max((outSize - 1) * stride + kernelSize - inputSize, 0);
+        return Math.floor(totalPad / 2);
+    }
+    return 0;
+}
+
+/// <summary>
+/// Declarative builder for CNN graphs.
+/// Constructs the full graph of neurons and synapses, including kernels with shared weights.
+/// </summary>
+export class CnnBuilder {
+    private _inputWidth: number = 0;
+    private _inputHeight: number = 0;
+    private _inputChannels: number = 0;
+    private _layers: LayerSpec[] = [];
+
+    public addInputLayer(width: number, height: number, channels: number): CnnBuilder {
+        this._inputWidth = width;
+        this._inputHeight = height;
+        this._inputChannels = channels;
+        this._layers.push({ type: CnnLayerType.Input, config: null });
+        return this;
+    }
+
+    public addConvLayer(config: ConvLayerConfig): CnnBuilder {
+        this._layers.push({ type: CnnLayerType.Conv, config });
+        return this;
+    }
+
+    public addPoolLayer(config: PoolLayerConfig): CnnBuilder {
+        this._layers.push({ type: CnnLayerType.Pool, config });
+        return this;
+    }
+
+    public addFlattenLayer(): CnnBuilder {
+        this._layers.push({ type: CnnLayerType.Flatten, config: null });
+        return this;
+    }
+
+    public addDenseLayer(config: DenseLayerConfig): CnnBuilder {
+        this._layers.push({ type: CnnLayerType.Dense, config });
+        return this;
+    }
+
+    public build(): ICnnGraph {
+        if (this._layers.length === 0 || this._layers[0].type !== CnnLayerType.Input) {
+            throw new Error("First layer must be an input layer.");
+        }
+
+        const allNeurons: ICnnNeuron[] = [];
+        const allSynapses: ICnnSynapse[] = [];
+        const allKernels: IKernel[] = [];
+        const layerDescriptors: ICnnLayerDescriptor[] = [];
+
+        let prevDescriptor: ICnnLayerDescriptor | null = null;
+
+        for (const spec of this._layers) {
+            switch (spec.type) {
+                case CnnLayerType.Input:
+                    prevDescriptor = this._buildInputLayer(allNeurons, layerDescriptors);
+                    break;
+                case CnnLayerType.Conv:
+                    prevDescriptor = this._buildConvLayer(spec.config as ConvLayerConfig, prevDescriptor!, allNeurons, allSynapses, allKernels, layerDescriptors);
+                    break;
+                case CnnLayerType.Pool:
+                    prevDescriptor = this._buildPoolLayer(spec.config as PoolLayerConfig, prevDescriptor!, allNeurons, allSynapses, layerDescriptors);
+                    break;
+                case CnnLayerType.Flatten:
+                    prevDescriptor = this._buildFlattenLayer(prevDescriptor!, allNeurons, allSynapses, layerDescriptors);
+                    break;
+                case CnnLayerType.Dense:
+                    prevDescriptor = this._buildDenseLayer(spec.config as DenseLayerConfig, prevDescriptor!, allNeurons, allSynapses, layerDescriptors);
+                    break;
+            }
+        }
+
+        const inputDesc = layerDescriptors[0];
+        const outputDesc = layerDescriptors[layerDescriptors.length - 1];
+        const inputNeurons = inputDesc.neurons;
+        const outputNeurons = outputDesc.neurons;
+        const hiddenNeurons = allNeurons.filter((n) => !inputNeurons.includes(n) && !outputNeurons.includes(n));
+
+        return new CnnGraph(allNeurons, allSynapses, inputNeurons, outputNeurons, hiddenNeurons, allKernels, layerDescriptors);
+    }
+
+    private _buildInputLayer(allNeurons: ICnnNeuron[], layerDescriptors: ICnnLayerDescriptor[]): ICnnLayerDescriptor {
+        const neurons: ICnnNeuron[] = [];
+        for (let c = 0; c < this._inputChannels; c++) {
+            for (let r = 0; r < this._inputHeight; r++) {
+                for (let col = 0; col < this._inputWidth; col++) {
+                    const neuron = new CnnNeuron(CnnLayerType.Input, r, col, c);
+                    neurons.push(neuron);
+                    allNeurons.push(neuron);
+                }
+            }
+        }
+
+        const desc: ICnnLayerDescriptor = {
+            type: CnnLayerType.Input,
+            width: this._inputWidth,
+            height: this._inputHeight,
+            channels: this._inputChannels,
+            neurons,
+        };
+        layerDescriptors.push(desc);
+        return desc;
+    }
+
+    private _buildConvLayer(
+        config: ConvLayerConfig,
+        prev: ICnnLayerDescriptor,
+        allNeurons: ICnnNeuron[],
+        allSynapses: ICnnSynapse[],
+        allKernels: IKernel[],
+        layerDescriptors: ICnnLayerDescriptor[]
+    ): ICnnLayerDescriptor {
+        const [kH, kW] = toTuple(config.kernelSize);
+        const [sH, sW] = toTuple(config.stride ?? 1);
+        const padding = config.padding ?? PaddingType.Valid;
+        const activation = config.activation ?? ActivationFunctions.relu;
+        const biasInit = config.biasInit ?? 0;
+
+        const outH = computeOutputSize(prev.height, kH, sH, padding);
+        const outW = computeOutputSize(prev.width, kW, sW, padding);
+        const padH = computePadding(prev.height, kH, sH, padding);
+        const padW = computePadding(prev.width, kW, sW, padding);
+
+        const neurons: ICnnNeuron[] = [];
+
+        // Create one kernel per output filter — each kernel has shape (kH × kW × inputChannels)
+        const kernels: Kernel[] = [];
+        for (let f = 0; f < config.filters; f++) {
+            const fanIn = kH * kW * prev.channels;
+            const initializer = config.weightInitializer ?? new He(fanIn);
+            const kernel = new Kernel(kH, kW, prev.channels, initializer, biasInit);
+            kernels.push(kernel);
+            allKernels.push(kernel);
+        }
+
+        // Create neurons and synapses
+        for (let f = 0; f < config.filters; f++) {
+            const kernel = kernels[f];
+            for (let r = 0; r < outH; r++) {
+                for (let col = 0; col < outW; col++) {
+                    const neuron = new CnnNeuron(CnnLayerType.Conv, r, col, f, kernel.bias, activation);
+                    neurons.push(neuron);
+                    allNeurons.push(neuron);
+
+                    // Connect to receptive field in previous layer
+                    for (let ic = 0; ic < prev.channels; ic++) {
+                        for (let kr = 0; kr < kH; kr++) {
+                            for (let kc = 0; kc < kW; kc++) {
+                                const srcRow = r * sH + kr - padH;
+                                const srcCol = col * sW + kc - padW;
+
+                                // Skip out-of-bounds positions (padding with zeros — no synapse needed)
+                                if (srcRow < 0 || srcRow >= prev.height || srcCol < 0 || srcCol >= prev.width) {
+                                    continue;
+                                }
+
+                                const srcNeuron = this._getNeuronAt(prev, srcRow, srcCol, ic);
+                                const kernelIndex = ic * kH * kW + kr * kW + kc;
+                                const synapse = new CnnSynapse(srcNeuron, neuron, kernel, kernelIndex);
+                                allSynapses.push(synapse);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        const desc: ICnnLayerDescriptor = {
+            type: CnnLayerType.Conv,
+            width: outW,
+            height: outH,
+            channels: config.filters,
+            neurons,
+        };
+        layerDescriptors.push(desc);
+        return desc;
+    }
+
+    private _buildPoolLayer(
+        config: PoolLayerConfig,
+        prev: ICnnLayerDescriptor,
+        allNeurons: ICnnNeuron[],
+        allSynapses: ICnnSynapse[],
+        layerDescriptors: ICnnLayerDescriptor[]
+    ): ICnnLayerDescriptor {
+        const [pH, pW] = toTuple(config.size);
+        const [sH, sW] = toTuple(config.stride ?? config.size);
+
+        const outH = Math.floor((prev.height - pH) / sH) + 1;
+        const outW = Math.floor((prev.width - pW) / sW) + 1;
+
+        const neurons: ICnnNeuron[] = [];
+
+        for (let c = 0; c < prev.channels; c++) {
+            for (let r = 0; r < outH; r++) {
+                for (let col = 0; col < outW; col++) {
+                    const neuron = new CnnNeuron(CnnLayerType.Pool, r, col, c, 0, undefined, config.type);
+                    neurons.push(neuron);
+                    allNeurons.push(neuron);
+
+                    // Connect to pool region in same channel of previous layer
+                    for (let pr = 0; pr < pH; pr++) {
+                        for (let pc = 0; pc < pW; pc++) {
+                            const srcRow = r * sH + pr;
+                            const srcCol = col * sW + pc;
+                            if (srcRow < prev.height && srcCol < prev.width) {
+                                const srcNeuron = this._getNeuronAt(prev, srcRow, srcCol, c);
+                                const synapse = new CnnSynapse(srcNeuron, neuron, null, -1, 1);
+                                allSynapses.push(synapse);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        const desc: ICnnLayerDescriptor = {
+            type: CnnLayerType.Pool,
+            width: outW,
+            height: outH,
+            channels: prev.channels,
+            neurons,
+        };
+        layerDescriptors.push(desc);
+        return desc;
+    }
+
+    private _buildFlattenLayer(
+        prev: ICnnLayerDescriptor,
+        allNeurons: ICnnNeuron[],
+        allSynapses: ICnnSynapse[],
+        layerDescriptors: ICnnLayerDescriptor[]
+    ): ICnnLayerDescriptor {
+        const totalUnits = prev.width * prev.height * prev.channels;
+        const neurons: ICnnNeuron[] = [];
+
+        let idx = 0;
+        for (let c = 0; c < prev.channels; c++) {
+            for (let r = 0; r < prev.height; r++) {
+                for (let col = 0; col < prev.width; col++) {
+                    const neuron = new CnnNeuron(CnnLayerType.Flatten, 0, idx, 0);
+                    neurons.push(neuron);
+                    allNeurons.push(neuron);
+
+                    const srcNeuron = this._getNeuronAt(prev, r, col, c);
+                    const synapse = new CnnSynapse(srcNeuron, neuron, null, -1, 1);
+                    allSynapses.push(synapse);
+                    idx++;
+                }
+            }
+        }
+
+        const desc: ICnnLayerDescriptor = {
+            type: CnnLayerType.Flatten,
+            width: totalUnits,
+            height: 1,
+            channels: 1,
+            neurons,
+        };
+        layerDescriptors.push(desc);
+        return desc;
+    }
+
+    private _buildDenseLayer(
+        config: DenseLayerConfig,
+        prev: ICnnLayerDescriptor,
+        allNeurons: ICnnNeuron[],
+        allSynapses: ICnnSynapse[],
+        layerDescriptors: ICnnLayerDescriptor[]
+    ): ICnnLayerDescriptor {
+        const activation = config.activation ?? ActivationFunctions.relu;
+        const biasInit = config.biasInit ?? 0;
+        const initializer = config.weightInitializer ?? new Uniform(-1, 1);
+
+        const neurons: ICnnNeuron[] = [];
+
+        for (let i = 0; i < config.units; i++) {
+            const neuron = new CnnNeuron(CnnLayerType.Dense, 0, i, 0, biasInit, activation);
+            neurons.push(neuron);
+            allNeurons.push(neuron);
+
+            // Fully connected to all neurons in previous layer
+            for (const srcNeuron of prev.neurons) {
+                const synapse = new CnnSynapse(srcNeuron, neuron, null, -1, initializer.next());
+                allSynapses.push(synapse);
+            }
+        }
+
+        const desc: ICnnLayerDescriptor = {
+            type: CnnLayerType.Dense,
+            width: config.units,
+            height: 1,
+            channels: 1,
+            neurons,
+        };
+        layerDescriptors.push(desc);
+        return desc;
+    }
+
+    private _getNeuronAt(desc: ICnnLayerDescriptor, row: number, col: number, channel: number): ICnnNeuron {
+        // Neurons are stored in channel-major, then row, then col order
+        const index = channel * desc.height * desc.width + row * desc.width + col;
+        return desc.neurons[index];
+    }
+}
