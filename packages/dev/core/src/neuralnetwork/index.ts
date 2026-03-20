@@ -7,3 +7,6 @@ export * from "./nn.interfaces.builder";
 export * from "./nn.synapse";
 export * from "./nn.neuron";
 export * from "./nn.builders";
+export * from "./nn.training";
+export * from "./nn.optimizers";
+export * from "./nn.loss";

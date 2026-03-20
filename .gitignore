@@ -36,6 +36,9 @@ yarn-error.log*
 .cache/
 .gpu_cache/
 
+# Ignore downloaded datasets
+data/
+
 # Ignore test coverage
 coverage/
 

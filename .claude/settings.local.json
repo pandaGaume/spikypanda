@@ -16,7 +16,10 @@
       "Bash(npm pack:*)",
       "Bash(npm publish:*)",
       "Bash(npx jest:*)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(grep -r \"script src\" /c/Users/GuillaumePelletier/Documents/GitHub/spikypanda/packages/host/www/*.html)",
+      "Bash(node scripts/deploy-bundles.mjs)",
+      "Bash(node scripts/prepare-mnist.mjs)"
     ]
   }
 }

@@ -1,16 +1,7 @@
+import { Cartesian3 } from "../../geometry";
 import { ActivationFunctions } from "../ann/mlp/mlp.activation";
 import { IWeightInitializer, He, Uniform } from "../nn.weights";
-import {
-    CnnLayerType,
-    IActivationFunction,
-    ICnnGraph,
-    ICnnLayerDescriptor,
-    ICnnNeuron,
-    ICnnSynapse,
-    IKernel,
-    PaddingType,
-    PoolingType,
-} from "./cnn.interfaces";
+import { CnnLayerType, IActivationFunction, ICnnGraph, ICnnLayerDescriptor, ICnnNeuron, ICnnSynapse, IKernel, PaddingType, PoolingType } from "./cnn.interfaces";
 import { CnnGraph } from "./cnn.graph";
 import { CnnNeuron } from "./cnn.neuron";
 import { CnnSynapse } from "./cnn.synapse";
@@ -113,25 +104,27 @@ export class CnnBuilder {
         const layerDescriptors: ICnnLayerDescriptor[] = [];
 
         let prevDescriptor: ICnnLayerDescriptor | null = null;
+        let layerDepth = 0;
 
         for (const spec of this._layers) {
             switch (spec.type) {
                 case CnnLayerType.Input:
-                    prevDescriptor = this._buildInputLayer(allNeurons, layerDescriptors);
+                    prevDescriptor = this._buildInputLayer(allNeurons, layerDescriptors, layerDepth);
                     break;
                 case CnnLayerType.Conv:
-                    prevDescriptor = this._buildConvLayer(spec.config as ConvLayerConfig, prevDescriptor!, allNeurons, allSynapses, allKernels, layerDescriptors);
+                    prevDescriptor = this._buildConvLayer(spec.config as ConvLayerConfig, prevDescriptor!, allNeurons, allSynapses, allKernels, layerDescriptors, layerDepth);
                     break;
                 case CnnLayerType.Pool:
-                    prevDescriptor = this._buildPoolLayer(spec.config as PoolLayerConfig, prevDescriptor!, allNeurons, allSynapses, layerDescriptors);
+                    prevDescriptor = this._buildPoolLayer(spec.config as PoolLayerConfig, prevDescriptor!, allNeurons, allSynapses, layerDescriptors, layerDepth);
                     break;
                 case CnnLayerType.Flatten:
-                    prevDescriptor = this._buildFlattenLayer(prevDescriptor!, allNeurons, allSynapses, layerDescriptors);
+                    prevDescriptor = this._buildFlattenLayer(prevDescriptor!, allNeurons, allSynapses, layerDescriptors, layerDepth);
                     break;
                 case CnnLayerType.Dense:
-                    prevDescriptor = this._buildDenseLayer(spec.config as DenseLayerConfig, prevDescriptor!, allNeurons, allSynapses, layerDescriptors);
+                    prevDescriptor = this._buildDenseLayer(spec.config as DenseLayerConfig, prevDescriptor!, allNeurons, allSynapses, layerDescriptors, layerDepth);
                     break;
             }
+            layerDepth++;
         }
 
         const inputDesc = layerDescriptors[0];
@@ -143,12 +136,12 @@ export class CnnBuilder {
         return new CnnGraph(allNeurons, allSynapses, inputNeurons, outputNeurons, hiddenNeurons, allKernels, layerDescriptors);
     }
 
-    private _buildInputLayer(allNeurons: ICnnNeuron[], layerDescriptors: ICnnLayerDescriptor[]): ICnnLayerDescriptor {
+    private _buildInputLayer(allNeurons: ICnnNeuron[], layerDescriptors: ICnnLayerDescriptor[], layerDepth: number): ICnnLayerDescriptor {
         const neurons: ICnnNeuron[] = [];
         for (let c = 0; c < this._inputChannels; c++) {
             for (let r = 0; r < this._inputHeight; r++) {
                 for (let col = 0; col < this._inputWidth; col++) {
-                    const neuron = new CnnNeuron(CnnLayerType.Input, r, col, c);
+                    const neuron = new CnnNeuron(CnnLayerType.Input, r, col, c, 0, undefined, undefined, null, null, new Cartesian3(col, r, layerDepth));
                     neurons.push(neuron);
                     allNeurons.push(neuron);
                 }
@@ -172,7 +165,8 @@ export class CnnBuilder {
         allNeurons: ICnnNeuron[],
         allSynapses: ICnnSynapse[],
         allKernels: IKernel[],
-        layerDescriptors: ICnnLayerDescriptor[]
+        layerDescriptors: ICnnLayerDescriptor[],
+        layerDepth: number
     ): ICnnLayerDescriptor {
         const [kH, kW] = toTuple(config.kernelSize);
         const [sH, sW] = toTuple(config.stride ?? 1);
@@ -202,7 +196,7 @@ export class CnnBuilder {
             const kernel = kernels[f];
             for (let r = 0; r < outH; r++) {
                 for (let col = 0; col < outW; col++) {
-                    const neuron = new CnnNeuron(CnnLayerType.Conv, r, col, f, kernel.bias, activation);
+                    const neuron = new CnnNeuron(CnnLayerType.Conv, r, col, f, kernel.bias, activation, undefined, null, null, new Cartesian3(col, r, layerDepth));
                     neurons.push(neuron);
                     allNeurons.push(neuron);
 
@@ -245,7 +239,8 @@ export class CnnBuilder {
         prev: ICnnLayerDescriptor,
         allNeurons: ICnnNeuron[],
         allSynapses: ICnnSynapse[],
-        layerDescriptors: ICnnLayerDescriptor[]
+        layerDescriptors: ICnnLayerDescriptor[],
+        layerDepth: number
     ): ICnnLayerDescriptor {
         const [pH, pW] = toTuple(config.size);
         const [sH, sW] = toTuple(config.stride ?? config.size);
@@ -258,7 +253,7 @@ export class CnnBuilder {
         for (let c = 0; c < prev.channels; c++) {
             for (let r = 0; r < outH; r++) {
                 for (let col = 0; col < outW; col++) {
-                    const neuron = new CnnNeuron(CnnLayerType.Pool, r, col, c, 0, undefined, config.type);
+                    const neuron = new CnnNeuron(CnnLayerType.Pool, r, col, c, 0, undefined, config.type, null, null, new Cartesian3(col, r, layerDepth));
                     neurons.push(neuron);
                     allNeurons.push(neuron);
 
@@ -293,7 +288,8 @@ export class CnnBuilder {
         prev: ICnnLayerDescriptor,
         allNeurons: ICnnNeuron[],
         allSynapses: ICnnSynapse[],
-        layerDescriptors: ICnnLayerDescriptor[]
+        layerDescriptors: ICnnLayerDescriptor[],
+        layerDepth: number
     ): ICnnLayerDescriptor {
         const totalUnits = prev.width * prev.height * prev.channels;
         const neurons: ICnnNeuron[] = [];
@@ -302,7 +298,7 @@ export class CnnBuilder {
         for (let c = 0; c < prev.channels; c++) {
             for (let r = 0; r < prev.height; r++) {
                 for (let col = 0; col < prev.width; col++) {
-                    const neuron = new CnnNeuron(CnnLayerType.Flatten, 0, idx, 0);
+                    const neuron = new CnnNeuron(CnnLayerType.Flatten, 0, idx, 0, 0, undefined, undefined, null, null, new Cartesian3(idx, 0, layerDepth));
                     neurons.push(neuron);
                     allNeurons.push(neuron);
 
@@ -330,7 +326,8 @@ export class CnnBuilder {
         prev: ICnnLayerDescriptor,
         allNeurons: ICnnNeuron[],
         allSynapses: ICnnSynapse[],
-        layerDescriptors: ICnnLayerDescriptor[]
+        layerDescriptors: ICnnLayerDescriptor[],
+        layerDepth: number
     ): ICnnLayerDescriptor {
         const activation = config.activation ?? ActivationFunctions.relu;
         const biasInit = config.biasInit ?? 0;
@@ -339,7 +336,7 @@ export class CnnBuilder {
         const neurons: ICnnNeuron[] = [];
 
         for (let i = 0; i < config.units; i++) {
-            const neuron = new CnnNeuron(CnnLayerType.Dense, 0, i, 0, biasInit, activation);
+            const neuron = new CnnNeuron(CnnLayerType.Dense, 0, i, 0, biasInit, activation, undefined, null, null, new Cartesian3(i, 0, layerDepth));
             neurons.push(neuron);
             allNeurons.push(neuron);
 

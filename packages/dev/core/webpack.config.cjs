@@ -15,6 +15,12 @@ module.exports = (env, argv) => {
         devtool: isProd ? "source-map" : "inline-source-map",
         resolve: {
             extensions: [".ts", ".tsx", ".js"],
+            fallback: {
+                fs: false,
+                path: false,
+                zlib: false,
+                https: false,
+            },
         },
         module: {
             rules: [
@@ -22,7 +28,14 @@ module.exports = (env, argv) => {
                     test: /\.tsx?$/,
                     loader: "ts-loader",
                     exclude: /node_modules/,
-                    options: { transpileOnly: true },
+                    options: {
+                        transpileOnly: true,
+                        configFile: "tsconfig.build.json",
+                        compilerOptions: {
+                            experimentalDecorators: true,
+                            emitDecoratorMetadata: true,
+                        },
+                    },
                 },
             ],
         },

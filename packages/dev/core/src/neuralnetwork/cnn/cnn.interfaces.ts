@@ -1,7 +1,7 @@
 import { IGraph } from "../../graph";
 import { INeuron, ISynapse } from "../nn.interfaces";
 import { IActivationFunction } from "../ann/mlp/mlp.interfaces";
-export { IActivationFunction } from "../ann/mlp/mlp.interfaces";
+export type { IActivationFunction } from "../ann/mlp/mlp.interfaces";
 
 /// <summary>
 /// Discriminates the type of layer a CNN neuron belongs to.
