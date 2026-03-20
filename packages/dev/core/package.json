@@ -1,6 +1,6 @@
 {
     "name": "@spiky-panda/core",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "Core library for Spikypanda - geometry, graph, and neural network primitives",
     "type": "module",
     "main": "dist/index.js",
@@ -13,7 +13,9 @@
             "default": "./dist/index.js"
         }
     },
-    "files": ["dist"],
+    "files": [
+        "dist"
+    ],
     "sideEffects": false,
     "scripts": {
         "build": "npm run clean && npm run compile",
@@ -26,7 +28,13 @@
         "bundle:watch": "webpack --config webpack.config.cjs --mode development --watch",
         "prepublishOnly": "npm run build"
     },
-    "keywords": ["spikypanda", "geometry", "graph", "neural-network", "spiking-neural-network"],
+    "keywords": [
+        "spikypanda",
+        "geometry",
+        "graph",
+        "neural-network",
+        "spiking-neural-network"
+    ],
     "license": "MIT",
     "repository": {
         "type": "git",

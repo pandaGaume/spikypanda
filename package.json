@@ -22,6 +22,7 @@
 
         "deploy:bundles": "node scripts/deploy-bundles.mjs",
         "prepare:mnist": "node scripts/prepare-mnist.mjs",
+        "publish:npm:core": "node scripts/publish.mjs",
 
         "build:all": "npm run build:dev && npm run bundle && npm run deploy:bundles",
         "build:all:dev": "npm run build:dev && npm run bundle:dev && npm run deploy:bundles",

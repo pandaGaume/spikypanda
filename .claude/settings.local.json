@@ -19,7 +19,10 @@
       "Bash(npm ls:*)",
       "Bash(grep -r \"script src\" /c/Users/GuillaumePelletier/Documents/GitHub/spikypanda/packages/host/www/*.html)",
       "Bash(node scripts/deploy-bundles.mjs)",
-      "Bash(node scripts/prepare-mnist.mjs)"
+      "Bash(node scripts/prepare-mnist.mjs)",
+      "Bash(npm whoami:*)",
+      "Bash(node -e \"console.log\\(require\\(''./package.json''\\).name, require\\(''./package.json''\\).version\\)\")",
+      "Bash(npm version:*)"
     ]
   }
 }
