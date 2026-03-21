@@ -1,0 +1,35 @@
+/* MNIST-specific styles */
+.grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.digit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--input-bg);
+    border-radius: 4px;
+    padding: 4px;
+    width: 60px;
+}
+
+.digit canvas {
+    image-rendering: pixelated;
+    border-radius: 2px;
+}
+
+.digit .pred {
+    font-size: 0.7em;
+    margin-top: 2px;
+}
+
+.digit .pred.correct {
+    color: var(--success);
+}
+
+.digit .pred.wrong {
+    color: var(--error);
+}

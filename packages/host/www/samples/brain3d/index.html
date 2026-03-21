@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda - Brain 3D Visualizer</title>
+    <link rel="stylesheet" href="../../css/common.css" />
+    <link rel="stylesheet" href="brain3d.css" />
+</head>
+<body>
+    <div class="sample-hero" style="background-image: url('../../images/spikyPanda.png');">
+        <a href="../../images/spikyPanda.png" download="spikypanda-wallpaper.png" class="wallpaper-btn">Download wallpaper</a>
+        <div class="sample-hero-overlay">
+            <nav class="nav-bar" style="margin:0; background:none; border:none; padding:10px 0;">
+                <a href="../../index.html" class="nav-logo">SpikyPanda</a>
+                <div class="nav-links">
+                    <a href="../../index.html">Home</a>
+                    <a href="../mnist/">MNIST CNN</a>
+                    <a href="../lidar/">LiDAR Autoencoder</a>
+                </div>
+            </nav>
+            <h1>Brain 3D</h1>
+            <p class="subtitle">Visualize neural network graphs as interactive 3D structures</p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the use case</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Why 3D visualization?</strong> - SpikyPanda represents neural networks as explicit graphs where every neuron is a node and every synapse is a directed link. Unlike tensor frameworks that hide the topology inside matrix operations, this graph structure can be traversed, inspected, and rendered. 3D visualization makes the "brain" tangible - you can see how information flows through the network.</p>
+                <p><strong>Tetrahedrons</strong> - Each neuron is rendered as a tetrahedron (4 faces, 4 vertices) - the simplest possible 3D solid. This minimizes GPU load: a tetrahedron has 4 triangles vs 12 for a cube or 80+ for a sphere. Using BabylonJS thin instances, thousands of neurons are rendered in a single draw call.</p>
+                <p><strong>Thin instances</strong> - Instead of creating one mesh per neuron (which would mean one draw call per neuron), we create a single tetrahedron mesh and stamp it at different positions using thin instances. The GPU renders all neurons in one batch. This scales to thousands of neurons without frame rate issues.</p>
+                <p><strong>Color encoding</strong> - Neuron colors encode activation values: cyan/green for positive activations, red for negative, dark for zero. Synapse colors encode weights: blue/cyan for positive weights, red/orange for negative. After training, you can visually read the network's learned structure.</p>
+                <p><strong>XOR as a starting point</strong> - The XOR problem (exclusive OR) is the simplest non-linear classification task. It requires a hidden layer to solve, making it the perfect minimal test case: 2 inputs, 2 hidden neurons, 1 output = 5 tetrahedrons and 6 lines. Once this works, the same architecture scales to CNNs with thousands of neurons.</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Controls</h2>
+            <div class="controls">
+                <div class="input-toggles">
+                    <div class="toggle-group">
+                        <label>Input 0:</label>
+                        <button class="toggle-btn" id="toggle0"></button>
+                    </div>
+                    <div class="toggle-group">
+                        <label>Input 1:</label>
+                        <button class="toggle-btn" id="toggle1"></button>
+                    </div>
+                    <div class="toggle-group">
+                        <label>Output:</label>
+                        <div class="output-value" id="outputValue">-</div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button id="btnTrain">Train (5000 epochs)</button>
+                    <button id="btnRun">Run Inference</button>
+                </div>
+            </div>
+            <div class="legend">
+                <div class="legend-item"><span class="legend-swatch" style="background:#0ad"></span> Positive activation</div>
+                <div class="legend-item"><span class="legend-swatch" style="background:#d22"></span> Negative activation</div>
+                <div class="legend-item"><span class="legend-swatch" style="background:#0ac"></span> Positive weight</div>
+                <div class="legend-item"><span class="legend-swatch" style="background:#c40"></span> Negative weight</div>
+            </div>
+        </div>
+
+        <div class="canvas-panel">
+            <canvas id="renderCanvas"></canvas>
+        </div>
+
+        <div class="panel">
+            <h2>Neuron Info</h2>
+            <div class="info-panel" id="infoPanel">Click a neuron in the 3D view to see its details.</div>
+        </div>
+
+        <div class="panel">
+            <h2>Log</h2>
+            <div class="log" id="log">Initializing...
+</div>
+        </div>
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the results</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>XOR truth table</strong> - XOR(0,0)=0, XOR(0,1)=1, XOR(1,0)=1, XOR(1,1)=0. After training, the output neuron should produce values close to these targets. An output > 0.5 is interpreted as 1 (green), &lt; 0.5 as 0 (red).</p>
+                <p><strong>Weight visualization</strong> - After training, the synapse colors reveal the learned solution. A typical XOR solution has symmetric positive/negative weight patterns: both inputs excite one hidden neuron and inhibit the other, creating the non-linear decision boundary.</p>
+                <p><strong>Training convergence</strong> - XOR typically converges in 2000-5000 epochs with Adam optimizer. The loss should drop below 0.001. If it doesn't converge, the random initial weights may have landed in a bad local minimum - click Train again to restart with new random weights.</p>
+                <p><strong>Scaling up</strong> - This same thin-instance architecture can render CNN graphs. A CNN Tiny (16x16x6) has ~9000 neurons - still very manageable with thin instances. The main challenge for larger networks is layout: arranging thousands of neurons in 3D so the structure is readable.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="../../bundle/spikypanda-core.js"></script>
+    <script src="../../js/common.js"></script>
+    <script src="brain3d.js"></script>
+</body>
+</html>

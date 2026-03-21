@@ -88,12 +88,14 @@ export class CnnTrainingRuntime {
         }
 
         // STEP 1 — Output layer: compute loss and gradient
+        const hasChannelWeights = typeof (this.lossFn as any).setCurrentIndex === "function";
         for (let i = 0; i < this.graph.outputs.length; i++) {
             const neuron = this.graph.outputs[i];
             const bag = neuron.bag as ICnnBackpropNeuronContext;
             const o = bag.activation;
             const y = expected[i];
 
+            if (hasChannelWeights) (this.lossFn as any).setCurrentIndex(i);
             totalLoss += this.lossFn.loss(o, y);
 
             const dLoss = this.lossFn.dLoss(o, y);

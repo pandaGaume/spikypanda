@@ -215,6 +215,135 @@ button:disabled {
     color: var(--primary);
 }
 
+/* Sample hero banner — image background with gradient overlay */
+.sample-hero {
+    position: relative;
+    min-height: 400px;
+    background: var(--bg);
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    display: flex;
+    align-items: flex-end;
+    margin: -20px -20px 20px -20px;
+}
+
+.sample-hero-overlay {
+    width: 100%;
+    padding: 2rem 2rem 1.5rem;
+    background: linear-gradient(transparent, rgba(26, 26, 46, 0.85) 35%, var(--bg));
+    text-align: center;
+}
+
+.sample-hero-overlay h1 {
+    font-size: 1.8rem;
+    margin-bottom: 4px;
+}
+
+.sample-hero-overlay .subtitle {
+    margin-bottom: 0;
+}
+
+.wallpaper-btn {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    background: rgba(0, 212, 255, 0.15);
+    border: 1px solid rgba(0, 212, 255, 0.4);
+    color: var(--primary);
+    font-size: 0.75em;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.wallpaper-btn:hover {
+    background: rgba(0, 212, 255, 0.3);
+}
+
+/* Collapsible panels */
+.collapsible-header {
+    cursor: pointer;
+    user-select: none;
+}
+
+.collapsible-header h2 {
+    margin-bottom: 0;
+    display: inline;
+}
+
+.collapsible-arrow {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 0.7em;
+    color: var(--text-muted);
+    transition: transform 0.3s ease;
+}
+
+.collapsible-header.open .collapsible-arrow {
+    transform: rotate(180deg);
+}
+
+.collapsible-body {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+    margin-top: 0;
+}
+
+.collapsible-body.open {
+    max-height: 2000px;
+    opacity: 1;
+    margin-top: 10px;
+}
+
+/* Code block with copy button */
+.code-block {
+    position: relative;
+    background: var(--log-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 16px 48px 16px 16px;
+    margin-top: 10px;
+    overflow-x: auto;
+}
+
+.code-block pre {
+    margin: 0;
+    font-family: 'Cascadia Code', Consolas, monospace;
+    font-size: 0.82em;
+    line-height: 1.6;
+    color: var(--log-text);
+    white-space: pre;
+}
+
+.code-block .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0, 212, 255, 0.1);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    color: var(--text-muted);
+    font-size: 0.75em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: color 0.2s, background 0.2s;
+}
+
+.code-block .copy-btn:hover {
+    color: var(--primary);
+    background: rgba(0, 212, 255, 0.2);
+}
+
+.code-block .copy-btn.copied {
+    color: var(--success);
+    border-color: var(--success);
+}
+
 /* Sample navigation / breadcrumb */
 .sample-nav {
     display: flex;

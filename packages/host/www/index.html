@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda — Graph-based Neural Network Runtime</title>
+    <link rel="stylesheet" href="css/common.css" />
+    <style>
+        body { padding: 0; }
+
+        /* Hero — background image with gradient overlay */
+        .hero {
+            position: relative;
+            min-height: 60vh;
+            background: url("images/spikyPanda.png") center center / cover no-repeat;
+            display: flex;
+            align-items: flex-end;
+        }
+        .hero-overlay {
+            width: 100%;
+            padding: 3rem 2rem 2.5rem;
+            background: linear-gradient(transparent, rgba(26, 26, 46, 0.85) 40%, var(--bg));
+            text-align: center;
+        }
+        .hero-overlay h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.25rem;
+        }
+        .hero-overlay .tagline {
+            font-size: 1.3rem;
+            color: var(--text);
+            margin-bottom: 0.25rem;
+        }
+        .hero-overlay .sub {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+        .hero-description {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 30px 0;
+            text-align: center;
+            color: var(--text);
+            font-size: 0.95em;
+            line-height: 1.8;
+        }
+        .hero-description p {
+            margin-bottom: 12px;
+        }
+        .hero-description em {
+            color: var(--primary);
+            font-style: normal;
+        }
+
+        /* Section titles */
+        .section {
+            padding: 40px 20px;
+        }
+        .section-title {
+            text-align: center;
+            font-size: 1.5em;
+            color: var(--primary);
+            margin-bottom: 30px;
+        }
+
+        /* Cards grid */
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            padding: 24px;
+            transition: border-color 0.3s, transform 0.2s;
+        }
+        .card:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+        .card h3 {
+            color: var(--primary);
+            font-size: 1.15em;
+            margin-bottom: 10px;
+        }
+        .card p {
+            color: var(--text-label);
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        /* Clickable sample cards */
+        a.card {
+            text-decoration: none;
+            display: block;
+        }
+        a.card .card-arrow {
+            display: inline-block;
+            margin-top: 12px;
+            color: var(--primary);
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        /* Install section */
+        .install {
+            text-align: center;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .install-code {
+            background: var(--log-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            padding: 16px 24px;
+            font-family: 'Cascadia Code', monospace;
+            font-size: 1em;
+            color: var(--log-text);
+            margin-top: 16px;
+            display: inline-block;
+        }
+
+        /* Publications */
+        .publications {
+            text-align: center;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        .publications a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .publications a:hover {
+            text-decoration: underline;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            font-size: 0.85em;
+            border-top: 1px solid var(--panel-border);
+            margin-top: 40px;
+        }
+        .footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .hero-overlay h1 { font-size: 2.2rem; }
+            .hero-overlay .tagline { font-size: 1rem; }
+            .cards { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Hero -->
+    <header class="hero">
+        <a href="images/spikyPanda.png" download="spikypanda-wallpaper.png" class="wallpaper-btn">Download wallpaper</a>
+        <div class="hero-overlay">
+            <h1>SpikyPanda</h1>
+            <p class="tagline">Graph-based Neural Network Runtime</p>
+            <p class="sub">MLP &bull; CNN &bull; Autoencoder &bull; SNN &bull; Neuroevolution</p>
+        </div>
+    </header>
+
+    <!-- Vision -->
+    <div class="container">
+        <div class="hero-description">
+            <p>
+                SpikyPanda reimplements neural network architectures in TypeScript
+                using a <em>graph-based approach</em>. Every neuron is a node, every synapse is a link
+                &mdash; an explicit, traversable graph that you can inspect, serialize, and manipulate.
+            </p>
+            <p>
+                The goal is to expose these graphs to <em>3D representation</em> for visualization
+                and spatial interaction, ultimately moving toward <em>Spiking Neural Networks</em>
+                with biologically-inspired learning rules.
+            </p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <!-- Architecture -->
+        <div class="section">
+            <h2 class="section-title">Architecture</h2>
+            <div class="cards">
+                <div class="card">
+                    <h3>Graph Model</h3>
+                    <p>
+                        Nodes represent neurons, links represent synapses. A bag model holds
+                        runtime state &mdash; activations, gradients, and biases live alongside
+                        the topology, making the network fully introspectable.
+                    </p>
+                </div>
+                <div class="card">
+                    <h3>Training</h3>
+                    <p>
+                        Supports backpropagation for CNNs and MLPs with Adam optimizer,
+                        as well as neuroevolution for the bestioles ecosystem simulation.
+                        All training operates directly on the graph structure.
+                    </p>
+                </div>
+                <div class="card">
+                    <h3>Toward SNN</h3>
+                    <p>
+                        Leaky Integrate-and-Fire (LIF) neurons, Spike-Timing-Dependent Plasticity
+                        (STDP) learning, and temporal dynamics. Moving from rate-coded to
+                        event-driven computation with biologically plausible learning.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Samples -->
+        <div class="section">
+            <h2 class="section-title">Interactive Samples</h2>
+            <div class="cards" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+                <a href="samples/mnist/" class="card">
+                    <h3>MNIST CNN</h3>
+                    <p>Train a convolutional neural network on handwritten digits. Choose from fast, balanced, and accuracy presets, then evaluate on the test set with a visual prediction grid.</p>
+                    <span class="card-arrow">Open demo &rarr;</span>
+                </a>
+                <a href="samples/lidar/" class="card">
+                    <h3>LiDAR Autoencoder</h3>
+                    <p>Compress 6-channel synthetic LiDAR grids with a convolutional autoencoder. Visualize per-channel reconstructions, latent vectors, and training loss curves.</p>
+                    <span class="card-arrow">Open demo &rarr;</span>
+                </a>
+                <a href="samples/brain3d/" class="card">
+                    <h3>Brain 3D</h3>
+                    <p>Visualize neural network graphs in 3D with BabylonJS. Neurons as tetrahedrons, synapses as colored lines. Train XOR and watch the network learn live.</p>
+                    <span class="card-arrow">Open demo &rarr;</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Install -->
+        <div class="section">
+            <h2 class="section-title">Install</h2>
+            <div class="install">
+                <p style="color: var(--text-label);">Add the core runtime to your project:</p>
+                <div class="install-code">npm install @spiky-panda/core</div>
+            </div>
+        </div>
+
+
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>
+            SpikyPanda &mdash;
+            <a href="https://github.com/GuillaumePelletier/spikypanda" target="_blank" rel="noopener">GitHub</a>
+        </p>
+    </div>
+
+</body>
+</html>

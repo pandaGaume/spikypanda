@@ -46,3 +46,6 @@ coverage/
 .env
 .env.local
 .env.*.local
+
+#Ignore internal doc and data
+internals/

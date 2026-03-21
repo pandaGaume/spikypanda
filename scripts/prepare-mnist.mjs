@@ -16,7 +16,7 @@ const FILES = {
 };
 
 const cacheDir = join(root, "data", "mnist");
-const outputDir = join(root, "packages", "host", "www", "data", "mnist");
+const outputDir = join(root, "packages", "host", "www", "samples", "mnist", "data");
 
 // Parse CLI args
 const args = process.argv.slice(2);
