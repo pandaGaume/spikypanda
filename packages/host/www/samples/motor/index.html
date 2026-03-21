@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda - Motor Vibration RNN</title>
+    <link rel="stylesheet" href="../../css/common.css" />
+    <link rel="stylesheet" href="motor.css" />
+</head>
+<body>
+    <div class="sample-hero" style="background-image: url('hero.png');">
+        <a href="hero.png" download="spikypanda-motor-wallpaper.png" class="wallpaper-btn">Download wallpaper</a>
+        <div class="sample-hero-overlay">
+            <nav class="nav-bar" style="margin:0; background:none; border:none; padding:10px 0;">
+                <a href="../../index.html" class="nav-logo">SpikyPanda</a>
+                <div class="nav-links">
+                    <a href="../../index.html">Home</a>
+                    <a href="../mnist/">MNIST CNN</a>
+                    <a href="../lidar/">LiDAR</a>
+                    <a href="../brain3d/">Brain 3D</a>
+                </div>
+            </nav>
+            <h1>Motor Vibration</h1>
+            <p class="subtitle">Classify electric motor faults using LSTM/GRU on triaxial vibration sequences</p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the use case</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Predictive maintenance</strong> - Electric motors are the workhorses of industrial automation. Unplanned motor failures cause costly downtime, sometimes hundreds of thousands of dollars per hour in manufacturing. Predictive maintenance uses vibration sensors to detect faults early, before they cause catastrophic failure, allowing maintenance to be scheduled during planned shutdowns.</p>
+                <p><strong>Why vibration analysis?</strong> - A healthy motor produces smooth, periodic vibrations at its rotation frequency. Each fault type introduces a characteristic signature: imbalance adds harmonics, bearing defects create periodic impulses, and misalignment modulates the amplitude. These patterns are detectable in the time domain and are well-suited for sequence classification with recurrent neural networks.</p>
+                <p><strong>Industry 4.0 and edge inference</strong> - In a smart factory, triaxial accelerometers mounted on motor housings stream vibration data continuously. An RNN running on an edge device (MCU or small SoC) classifies windows of vibration data in real-time, flagging anomalies for the maintenance team. The model must be small enough to run on constrained hardware, making compact LSTM/GRU architectures ideal.</p>
+                <p><strong>Why RNN?</strong> - Vibration signals are inherently sequential. An RNN processes the signal timestep by timestep, building up an internal representation of the temporal pattern. LSTM and GRU cells have gating mechanisms that allow them to remember relevant features over many timesteps while ignoring noise, making them well-suited for this task.</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the data</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Triaxial accelerometer</strong> - Each sample consists of three channels (X, Y, Z) captured simultaneously from a 3-axis accelerometer mounted on the motor housing. The X-axis is typically aligned with the motor shaft, Y is radial horizontal, and Z is radial vertical. Different fault types produce different patterns across the three axes.</p>
+                <p><strong>Four fault types</strong> - The classifier distinguishes four conditions: (0) <em>Normal</em> - clean sinusoidal vibration at rotation frequency with minimal noise; (1) <em>Imbalance</em> - mass imbalance on the rotor adds a 2nd harmonic component; (2) <em>Bearing fault</em> - damaged bearing races produce periodic high-amplitude impulses; (3) <em>Misalignment</em> - shaft misalignment causes amplitude modulation of the base vibration.</p>
+                <p><strong>Sliding windows</strong> - Continuous vibration data is segmented into fixed-size windows (32 or 64 timesteps). Each window becomes one training/test sample. The window size must be large enough to capture at least one full period of the fault signature. At 1 kHz sampling and 50 Hz rotation, 64 timesteps captures about 3 full rotations.</p>
+                <p><strong>Normalization</strong> - Raw vibration values (typically in the range [-1.5, 1.5]) are normalized to [0, 1] using the transform <code>(signal + 1.5) / 3.0</code>, clamped to the unit interval. This ensures all inputs to the RNN are in a consistent range, which improves training stability.</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the configuration</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>LSTM vs GRU</strong> - LSTM (Long Short-Term Memory) uses 4 gates (forget, input, candidate, output) and maintains a separate cell state for long-term memory. GRU (Gated Recurrent Unit) uses 3 gates (reset, update, candidate) and merges the cell state into the hidden state, making it simpler and faster. For short sequences like vibration windows, GRU often performs comparably to LSTM with fewer parameters.</p>
+                <p><strong>Hidden size</strong> - The number of recurrent units in the hidden layer. More units provide greater capacity to learn complex patterns but increase training time quadratically (due to hidden-to-hidden connections). For 4-class vibration classification, 16 units is often sufficient. Use 32 if accuracy is too low, or 8 for faster experiments.</p>
+                <p><strong>Learning rate</strong> - Controls the step size during gradient updates. RNNs are sensitive to learning rate: too high causes exploding gradients and unstable training (loss jumps around), too low causes slow convergence. The default of 0.003 works well with Adam optimizer for this task. If training is unstable, try 0.001.</p>
+                <p><strong>Window size</strong> - The number of timesteps in each vibration sample. Longer windows capture more temporal context but increase training time linearly (the RNN must process more steps per sample). 64 timesteps at 1 kHz sampling covers about 3 full motor rotations, which is enough for all four fault types.</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the results</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Accuracy</strong> - The percentage of test samples correctly classified. For a 4-class problem, random guessing gives 25%. A well-trained model should reach 70-90%+ depending on hidden size and epochs. If accuracy is near 25%, the model has not learned - try more epochs or a higher learning rate.</p>
+                <p><strong>Confusion matrix</strong> - Shows the distribution of predictions for each actual fault type. The diagonal cells (green) are correct predictions; off-diagonal cells (red) are misclassifications. Common confusion patterns: Normal and Misalignment may be confused because misalignment with weak modulation looks similar to normal vibration. Bearing faults are usually the easiest to classify due to their distinctive impulse pattern.</p>
+                <p><strong>Loss curve</strong> - Shows the average training loss per epoch. A healthy curve decreases rapidly in the first few epochs and then gradually levels off. If the loss oscillates wildly, reduce the learning rate. If it plateaus high, the model may need more hidden units or more training samples.</p>
+                <p><strong>Inference time</strong> - Total time to classify all test samples. This includes resetting state and running the full sequence through the RNN for each sample. Divide by the number of test samples to get per-sample latency, which is the relevant metric for real-time edge deployment.</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Configuration</h2>
+            <div class="controls">
+                <div>
+                    <label for="cellType">Cell type:</label><br>
+                    <select id="cellType">
+                        <option value="lstm" selected>LSTM</option>
+                        <option value="gru">GRU</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="hiddenSize">Hidden size:</label><br>
+                    <select id="hiddenSize">
+                        <option value="8">8</option>
+                        <option value="16" selected>16</option>
+                        <option value="32">32</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="epochs">Epochs:</label><br>
+                    <input type="number" id="epochs" value="25" min="1" max="100" style="width:70px" />
+                </div>
+                <div>
+                    <label for="lr">Learning rate:</label><br>
+                    <input type="number" id="lr" value="0.003" step="0.001" min="0.0001" style="width:90px" />
+                </div>
+                <div>
+                    <label for="numSamples">Samples:</label><br>
+                    <input type="number" id="numSamples" value="200" min="20" max="1000" step="10" style="width:80px" />
+                </div>
+                <div>
+                    <label for="windowSize">Window size:</label><br>
+                    <select id="windowSize">
+                        <option value="32">32</option>
+                        <option value="64" selected>64</option>
+                    </select>
+                </div>
+            </div>
+            <div class="controls" style="margin-top:10px;">
+                <div style="display:flex; gap:8px; align-self:flex-end;">
+                    <button id="btnLoad">Load / Generate Data</button>
+                    <button id="btnTrain" disabled>Train</button>
+                    <button id="btnTest" disabled>Test</button>
+                </div>
+            </div>
+            <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+            <div id="status">Load or generate data to begin.</div>
+        </div>
+
+        <div class="panel">
+            <h2>Training Log</h2>
+            <div class="log" id="log">Ready.
+</div>
+            <canvas class="loss-canvas" id="lossCanvas"></canvas>
+        </div>
+
+        <div class="panel" id="resultsPanel" style="display:none">
+            <h2>Results</h2>
+            <div class="stats">
+                <div class="stat"><div class="value" id="accuracy">-</div><div class="label">Accuracy</div></div>
+                <div class="stat"><div class="value" id="finalLoss">-</div><div class="label">Final Loss</div></div>
+                <div class="stat"><div class="value" id="inferenceTime">-</div><div class="label">Inference Time</div></div>
+                <div class="stat"><div class="value" id="testCount">-</div><div class="label">Test Samples</div></div>
+            </div>
+            <div class="results-grid">
+                <div class="result-section">
+                    <h3>Signal Visualization</h3>
+                    <canvas class="signal-canvas" id="signalCanvas"></canvas>
+                </div>
+                <div class="result-section">
+                    <h3>Confusion Matrix</h3>
+                    <div id="confusionMatrix"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Code</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body">
+                <p style="font-size:0.85em; color:#bbb; margin-bottom:10px;">Build and train the RNN classifier using <code style="color:var(--log-text);">@spiky-panda/core</code>:</p>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent).then(() => { this.textContent='Copied!'; this.classList.add('copied'); setTimeout(() => { this.textContent='Copy'; this.classList.remove('copied'); }, 2000); })">Copy</button>
+<pre>import {
+  RnnBuilder,
+  RnnCellType,
+  RnnInferenceRuntime,
+  RnnTrainingRuntime,
+  ActivationFunctions,
+  LossFunctions,
+  Optimizers,
+} from "@spiky-panda/core";
+
+// 1. Build the RNN
+const graph = new RnnBuilder()
+    .withInputSize(3)          // triaxial: X, Y, Z
+    .withHiddenSize(16)        // 16 recurrent units
+    .withOutputSize(4)         // 4 fault classes
+    .withCellType(RnnCellType.LSTM)
+    .withOutputActivation(ActivationFunctions.sigmoid)
+    .build();
+
+// 2. Create runtime and trainer
+const runtime = new RnnInferenceRuntime(graph);
+const trainer = new RnnTrainingRuntime(
+    graph,
+    runtime,
+    LossFunctions.MSE,
+    0.003,                     // learning rate
+    Optimizers.Adam()
+);
+
+// 3. Training loop
+for (let epoch = 0; epoch &lt; 25; epoch++) {
+    let totalLoss = 0;
+    for (const sample of trainData) {
+        runtime.resetState();
+        // Repeat one-hot target for each timestep
+        const targets = sample.sequence.map(() =&gt;
+            oneHot(sample.label, 4)
+        );
+        totalLoss += trainer.trainStep(
+            sample.sequence, targets
+        );
+    }
+    console.log(`Epoch ${epoch + 1} - Loss: ${
+        (totalLoss / trainData.length).toFixed(6)
+    }`);
+}
+
+// 4. Inference
+runtime.resetState();
+const outputs = runtime.run(testSample.sequence);
+const predicted = argmax(outputs[outputs.length - 1]);
+console.log("Predicted fault:", predicted);</pre>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="../../bundle/spikypanda-core.js"></script>
+    <script src="../../js/common.js"></script>
+    <script src="motor.js"></script>
+</body>
+</html>

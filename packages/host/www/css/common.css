@@ -263,6 +263,19 @@ button:disabled {
     background: rgba(0, 212, 255, 0.3);
 }
 
+/* GitHub link icon */
+.github-link {
+    position: absolute;
+    top: 12px;
+    right: 200px;
+    color: rgba(255, 255, 255, 0.6);
+    transition: color 0.2s;
+    z-index: 10;
+}
+.github-link:hover {
+    color: #fff;
+}
+
 /* Collapsible panels */
 .collapsible-header {
     cursor: pointer;
