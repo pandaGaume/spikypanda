@@ -1,11 +1,7 @@
 import { IActivationFunction } from "../ann/mlp/mlp.interfaces";
 import { ActivationFunctions } from "../ann/mlp/mlp.activation";
 import { Synapse } from "../nn.synapse";
-import {
-    IRnnGraph, IRnnNeuron,
-    ILstmNeuron, IGruNeuron,
-    ILstmInferenceContext, IGruInferenceContext,
-} from "./rnn.interfaces";
+import { IRnnGraph, IRnnNeuron, ILstmNeuron, IGruNeuron, ILstmInferenceContext, IGruInferenceContext } from "./rnn.interfaces";
 import { RnnSynapse } from "./rnn.synapse";
 import { RnnRuntimeUtils } from "./rnn.runtime.utils";
 
@@ -59,7 +55,7 @@ export class RnnInferenceRuntime {
 
         // Detect cell type from first hidden neuron
         const firstHidden = this._hiddenNeurons[0];
-        if ('cellState' in firstHidden) {
+        if ("cellState" in firstHidden) {
             return this._stepLstm(inputValues);
         } else {
             return this._stepGru(inputValues);
@@ -121,7 +117,7 @@ export class RnnInferenceRuntime {
             for (const syn of outSynapses) {
                 if (!(syn instanceof RnnSynapse)) continue;
                 const target = syn.ofin as ILstmNeuron;
-                if (!('cellState' in target)) continue;
+                if (!("cellState" in target)) continue;
                 const ctx = target.bag as ILstmInferenceContext;
                 ctx.sum_f += inputAct * syn.weights[0];
                 ctx.sum_i += inputAct * syn.weights[1];
@@ -137,7 +133,7 @@ export class RnnInferenceRuntime {
             for (const syn of outSynapses) {
                 if (!(syn instanceof RnnSynapse)) continue;
                 const target = syn.ofin as ILstmNeuron;
-                if (!('cellState' in target)) continue;
+                if (!("cellState" in target)) continue;
                 const ctx = target.bag as ILstmInferenceContext;
                 ctx.sum_f += hPrev * syn.weights[0];
                 ctx.sum_i += hPrev * syn.weights[1];
@@ -193,7 +189,7 @@ export class RnnInferenceRuntime {
             for (const syn of outSynapses) {
                 if (!(syn instanceof RnnSynapse)) continue;
                 const target = syn.ofin as IGruNeuron;
-                if (!('biasReset' in target)) continue;
+                if (!("biasReset" in target)) continue;
                 const ctx = target.bag as IGruInferenceContext;
                 ctx.sum_r += inputAct * syn.weights[0];
                 ctx.sum_z += inputAct * syn.weights[1];
@@ -208,7 +204,7 @@ export class RnnInferenceRuntime {
             for (const syn of outSynapses) {
                 if (!(syn instanceof RnnSynapse)) continue;
                 const target = syn.ofin as IGruNeuron;
-                if (!('biasReset' in target)) continue;
+                if (!("biasReset" in target)) continue;
                 const ctx = target.bag as IGruInferenceContext;
                 ctx.sum_r += hPrev * syn.weights[0];
                 ctx.sum_z += hPrev * syn.weights[1];
@@ -230,10 +226,10 @@ export class RnnInferenceRuntime {
             for (const syn of outSynapses) {
                 if (!(syn instanceof RnnSynapse)) continue;
                 const target = syn.ofin as IGruNeuron;
-                if (!('biasReset' in target)) continue;
+                if (!("biasReset" in target)) continue;
                 const tCtx = target.bag as IGruInferenceContext;
                 // candidate uses reset-gated hidden: r * h(t-1)
-                tCtx.sum_h += (tCtx.resetGate * hPrev) * syn.weights[2];
+                tCtx.sum_h += tCtx.resetGate * hPrev * syn.weights[2];
             }
         }
 

@@ -19,16 +19,12 @@ export class LstmNeuron extends Neuron implements ILstmNeuron {
     @cloneable public cellType: RnnCellType = RnnCellType.LSTM;
     @cloneable public hiddenState: number = 0;
     @cloneable public cellState: number = 0;
-    @cloneable public biasForget: number = 1.0;    // Initialize forget bias > 0 to encourage remembering early on
+    @cloneable public biasForget: number = 1.0; // Initialize forget bias > 0 to encourage remembering early on
     @cloneable public biasInput: number = 0;
     @cloneable public biasCandidate: number = 0;
     @cloneable public biasOutput: number = 0;
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian
-    ) {
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
     }
 
@@ -62,11 +58,7 @@ export class GruNeuron extends Neuron implements IGruNeuron {
     @cloneable public biasUpdate: number = 0;
     @cloneable public biasCandidate: number = 0;
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian
-    ) {
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
     }
 
