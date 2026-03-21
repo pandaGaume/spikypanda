@@ -7,4 +7,6 @@ export * from "./cnn.builder";
 export * from "./cnn.inference";
 export * from "./cnn.runtime.utils";
 export * from "./cnn.presets";
+export * from "./cnn.autoencoder.builder";
+export * from "./cnn.autoencoder.presets";
 export * from "./training";

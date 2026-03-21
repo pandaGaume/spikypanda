@@ -73,6 +73,8 @@ export class CnnInferenceRuntime {
 
                     case CnnLayerType.Flatten:
                     case CnnLayerType.Input:
+                    case CnnLayerType.Upsample:
+                    case CnnLayerType.Reshape:
                         // Pass-through
                         targetCtx.sum = sourceCtx.activation;
                         break;
@@ -101,7 +103,9 @@ export class CnnInferenceRuntime {
                             break;
                         }
                         case CnnLayerType.Flatten:
-                        case CnnLayerType.Input: {
+                        case CnnLayerType.Input:
+                        case CnnLayerType.Upsample:
+                        case CnnLayerType.Reshape: {
                             targetCtx.activation = targetCtx.sum;
                             break;
                         }

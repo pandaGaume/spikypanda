@@ -113,6 +113,8 @@ export class CnnTrainingRuntime {
                     this._backpropActivationLayer(desc.neurons);
                     break;
                 case CnnLayerType.Flatten:
+                case CnnLayerType.Upsample:
+                case CnnLayerType.Reshape:
                     this._backpropFlatten(desc.neurons);
                     break;
                 case CnnLayerType.Pool:

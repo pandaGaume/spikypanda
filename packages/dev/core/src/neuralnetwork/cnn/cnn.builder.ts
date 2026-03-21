@@ -30,9 +30,19 @@ export interface DenseLayerConfig {
     biasInit?: number;
 }
 
+export interface UpsampleLayerConfig {
+    factor: number | [number, number];
+}
+
+export interface ReshapeLayerConfig {
+    width: number;
+    height: number;
+    channels: number;
+}
+
 interface LayerSpec {
     type: CnnLayerType;
-    config: ConvLayerConfig | PoolLayerConfig | DenseLayerConfig | null;
+    config: ConvLayerConfig | PoolLayerConfig | DenseLayerConfig | UpsampleLayerConfig | ReshapeLayerConfig | null;
 }
 
 function toTuple(v: number | [number, number]): [number, number] {
@@ -93,6 +103,16 @@ export class CnnBuilder {
         return this;
     }
 
+    public addUpsampleLayer(config: UpsampleLayerConfig): CnnBuilder {
+        this._layers.push({ type: CnnLayerType.Upsample, config });
+        return this;
+    }
+
+    public addReshapeLayer(config: ReshapeLayerConfig): CnnBuilder {
+        this._layers.push({ type: CnnLayerType.Reshape, config });
+        return this;
+    }
+
     public build(): ICnnGraph {
         if (this._layers.length === 0 || this._layers[0].type !== CnnLayerType.Input) {
             throw new Error("First layer must be an input layer.");
@@ -122,6 +142,12 @@ export class CnnBuilder {
                     break;
                 case CnnLayerType.Dense:
                     prevDescriptor = this._buildDenseLayer(spec.config as DenseLayerConfig, prevDescriptor!, allNeurons, allSynapses, layerDescriptors, layerDepth);
+                    break;
+                case CnnLayerType.Upsample:
+                    prevDescriptor = this._buildUpsampleLayer(spec.config as UpsampleLayerConfig, prevDescriptor!, allNeurons, allSynapses, layerDescriptors, layerDepth);
+                    break;
+                case CnnLayerType.Reshape:
+                    prevDescriptor = this._buildReshapeLayer(spec.config as ReshapeLayerConfig, prevDescriptor!, allNeurons, allSynapses, layerDescriptors, layerDepth);
                     break;
             }
             layerDepth++;
@@ -352,6 +378,92 @@ export class CnnBuilder {
             width: config.units,
             height: 1,
             channels: 1,
+            neurons,
+        };
+        layerDescriptors.push(desc);
+        return desc;
+    }
+
+    private _buildUpsampleLayer(
+        config: UpsampleLayerConfig,
+        prev: ICnnLayerDescriptor,
+        allNeurons: ICnnNeuron[],
+        allSynapses: ICnnSynapse[],
+        layerDescriptors: ICnnLayerDescriptor[],
+        layerDepth: number
+    ): ICnnLayerDescriptor {
+        const [fH, fW] = toTuple(config.factor);
+        const outH = prev.height * fH;
+        const outW = prev.width * fW;
+
+        const neurons: ICnnNeuron[] = [];
+
+        for (let c = 0; c < prev.channels; c++) {
+            for (let r = 0; r < outH; r++) {
+                for (let col = 0; col < outW; col++) {
+                    const neuron = new CnnNeuron(CnnLayerType.Upsample, r, col, c, 0, undefined, undefined, null, null, new Cartesian3(col, r, layerDepth));
+                    neurons.push(neuron);
+                    allNeurons.push(neuron);
+
+                    // Connect to the source neuron via nearest-neighbor: each output maps to one input
+                    const srcRow = Math.floor(r / fH);
+                    const srcCol = Math.floor(col / fW);
+                    const srcNeuron = this._getNeuronAt(prev, srcRow, srcCol, c);
+                    const synapse = new CnnSynapse(srcNeuron, neuron, null, -1, 1);
+                    allSynapses.push(synapse);
+                }
+            }
+        }
+
+        const desc: ICnnLayerDescriptor = {
+            type: CnnLayerType.Upsample,
+            width: outW,
+            height: outH,
+            channels: prev.channels,
+            neurons,
+        };
+        layerDescriptors.push(desc);
+        return desc;
+    }
+
+    private _buildReshapeLayer(
+        config: ReshapeLayerConfig,
+        prev: ICnnLayerDescriptor,
+        allNeurons: ICnnNeuron[],
+        allSynapses: ICnnSynapse[],
+        layerDescriptors: ICnnLayerDescriptor[],
+        layerDepth: number
+    ): ICnnLayerDescriptor {
+        const expectedSize = config.width * config.height * config.channels;
+        const prevSize = prev.width * prev.height * prev.channels;
+        if (expectedSize !== prevSize) {
+            throw new Error(`Reshape size mismatch: previous layer has ${prevSize} units, reshape expects ${expectedSize}`);
+        }
+
+        const neurons: ICnnNeuron[] = [];
+        let idx = 0;
+
+        for (let c = 0; c < config.channels; c++) {
+            for (let r = 0; r < config.height; r++) {
+                for (let col = 0; col < config.width; col++) {
+                    const neuron = new CnnNeuron(CnnLayerType.Reshape, r, col, c, 0, undefined, undefined, null, null, new Cartesian3(col, r, layerDepth));
+                    neurons.push(neuron);
+                    allNeurons.push(neuron);
+
+                    // 1-to-1 connection from flat layout
+                    const srcNeuron = prev.neurons[idx];
+                    const synapse = new CnnSynapse(srcNeuron, neuron, null, -1, 1);
+                    allSynapses.push(synapse);
+                    idx++;
+                }
+            }
+        }
+
+        const desc: ICnnLayerDescriptor = {
+            type: CnnLayerType.Reshape,
+            width: config.width,
+            height: config.height,
+            channels: config.channels,
             neurons,
         };
         layerDescriptors.push(desc);

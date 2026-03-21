@@ -1,14 +1,4 @@
-import {
-    CnnBuilder,
-    CnnInferenceRuntime,
-    CnnTrainingRuntime,
-    CnnLayerType,
-    PoolingType,
-    ActivationFunctions,
-    LossFunctions,
-    Optimizers,
-    ICnnNeuron,
-} from "spikypanda-core";
+import { CnnBuilder, CnnInferenceRuntime, CnnTrainingRuntime, CnnLayerType, PoolingType, ActivationFunctions, LossFunctions, Optimizers, ICnnNeuron } from "spikypanda-core";
 
 function log(message: string) {
     process.stdout.write(message + "\n");
@@ -17,10 +7,7 @@ function log(message: string) {
 describe("CnnTrainingRuntime", () => {
     test("kernel weights change after a training step", () => {
         // 2×2×1 → Conv(1, 2×2, linear) → 1×1×1
-        const graph = new CnnBuilder()
-            .addInputLayer(2, 2, 1)
-            .addConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.sigmoid })
-            .build();
+        const graph = new CnnBuilder().addInputLayer(2, 2, 1).addConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.sigmoid }).build();
 
         const runtime = new CnnInferenceRuntime(graph);
         const trainer = new CnnTrainingRuntime(graph, runtime, LossFunctions.MSE, 0.1, Optimizers.SGD());
@@ -43,10 +30,7 @@ describe("CnnTrainingRuntime", () => {
 
     test("loss decreases over training steps", () => {
         // 2×2×1 → Conv(1, 2×2, sigmoid) → 1×1×1
-        const graph = new CnnBuilder()
-            .addInputLayer(2, 2, 1)
-            .addConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.sigmoid, biasInit: 0 })
-            .build();
+        const graph = new CnnBuilder().addInputLayer(2, 2, 1).addConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.sigmoid, biasInit: 0 }).build();
 
         const runtime = new CnnInferenceRuntime(graph);
         const trainer = new CnnTrainingRuntime(graph, runtime, LossFunctions.MSE, 0.5, Optimizers.Adam());
@@ -137,18 +121,8 @@ describe("CnnTrainingRuntime", () => {
 
         // Pattern: bright top-left (1s in top-left 2×2, 0s elsewhere) → 1
         //          dark top-left (0s in top-left 2×2, 1s elsewhere) → 0
-        const brightTopLeft = [
-            1, 1, 0, 0,
-            1, 1, 0, 0,
-            0, 0, 0, 0,
-            0, 0, 0, 0,
-        ];
-        const darkTopLeft = [
-            0, 0, 1, 1,
-            0, 0, 1, 1,
-            1, 1, 1, 1,
-            1, 1, 1, 1,
-        ];
+        const brightTopLeft = [1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        const darkTopLeft = [0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
 
         const epochs = 3000;
         for (let epoch = 0; epoch < epochs; epoch++) {
@@ -178,11 +152,7 @@ describe("CnnTrainingRuntime", () => {
 
     test("dense-only CNN behaves like MLP", () => {
         // 1×2×1 → Flatten → Dense(1, sigmoid) — should learn simple weighted sum
-        const graph = new CnnBuilder()
-            .addInputLayer(2, 1, 1)
-            .addFlattenLayer()
-            .addDenseLayer({ units: 1, activation: ActivationFunctions.sigmoid, biasInit: 0 })
-            .build();
+        const graph = new CnnBuilder().addInputLayer(2, 1, 1).addFlattenLayer().addDenseLayer({ units: 1, activation: ActivationFunctions.sigmoid, biasInit: 0 }).build();
 
         const runtime = new CnnInferenceRuntime(graph);
         const trainer = new CnnTrainingRuntime(graph, runtime, LossFunctions.CrossEntropy, 0.01, Optimizers.Adam());

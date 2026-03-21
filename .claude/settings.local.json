@@ -22,7 +22,18 @@
       "Bash(node scripts/prepare-mnist.mjs)",
       "Bash(npm whoami:*)",
       "Bash(node -e \"console.log\\(require\\(''./package.json''\\).name, require\\(''./package.json''\\).version\\)\")",
-      "Bash(npm version:*)"
+      "Bash(npm version:*)",
+      "Bash(node -e \":*)",
+      "Bash(node --input-type=module -e \":*)",
+      "Bash(node -e \"const S=require\\(''''./bundle/spikypanda-core.js''''\\); console.log\\(''''Exports:'''', Object.keys\\(S\\).length\\);\")",
+      "Bash(node -e \"const S=require\\(''''./bundle/spikypanda-core.js''''\\); console.log\\(''''Exports:'''', Object.keys\\(S\\).length\\); if\\(Object.keys\\(S\\).length>0\\) console.log\\(''''Sample:'''', Object.keys\\(S\\).slice\\(0,5\\)\\);\")",
+      "Bash(node benchmark_lidar.cjs)",
+      "Bash(pip install:*)",
+      "Bash(python generate_paper.py)",
+      "Bash(mv mnist.html legacy/)",
+      "Bash(mv lidar.html legacy/)",
+      "Bash(mv bestioles.html legacy/)",
+      "Bash(mv bestioles3d.html legacy/)"
     ]
   }
 }

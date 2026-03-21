@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>SpikyPanda-LiDAR Autoencoder</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; }
+        h1 { text-align: center; margin-bottom: 4px; font-size: 1.6em; color: #00d4ff; }
+        .subtitle { text-align: center; color: #888; font-size: 0.85em; margin-bottom: 20px; }
+        .container { max-width: 1100px; margin: 0 auto; }
+        .panel { background: #16213e; border-radius: 8px; padding: 16px; margin-bottom: 16px; border: 1px solid #0f3460; }
+        .panel h2 { font-size: 1.1em; margin-bottom: 10px; color: #00d4ff; }
+        .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        label { font-size: 0.9em; color: #aaa; }
+        select, input[type=number] { background: #0f3460; color: #e0e0e0; border: 1px solid #1a4a8a; border-radius: 4px; padding: 6px 10px; font-size: 0.9em; }
+        button { background: #00d4ff; color: #1a1a2e; border: none; border-radius: 4px; padding: 8px 20px; font-size: 0.9em; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+        button:hover { opacity: 0.85; }
+        button:disabled { background: #555; color: #999; cursor: not-allowed; }
+        .log { background: #0a0a1a; border-radius: 4px; padding: 10px; font-family: 'Cascadia Code', monospace; font-size: 0.8em; max-height: 200px; overflow-y: auto; line-height: 1.6; color: #8f8; white-space: pre-wrap; }
+        .stats { display: flex; gap: 20px; margin-top: 10px; flex-wrap: wrap; }
+        .stat { text-align: center; }
+        .stat .value { font-size: 2em; font-weight: bold; color: #00d4ff; }
+        .stat .label { font-size: 0.8em; color: #888; }
+        .progress-bar { background: #0a0a1a; border-radius: 4px; height: 6px; margin-top: 8px; overflow: hidden; }
+        .progress-bar .fill { height: 100%; background: #00d4ff; transition: width 0.1s; width: 0%; }
+        #status { color: #aaa; font-size: 0.85em; margin-top: 6px; }
+        .grid-row { display: flex; gap: 8px; margin-top: 10px; align-items: flex-start; flex-wrap: wrap; }
+        .grid-item { display: flex; flex-direction: column; align-items: center; background: #0f3460; border-radius: 4px; padding: 6px; }
+        .grid-item .ch-label { font-size: 0.65em; color: #888; margin-top: 2px; }
+        .grid-item canvas { image-rendering: pixelated; border-radius: 2px; }
+        .sample-pair { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 8px; background: #0a0a1a; border-radius: 4px; }
+        .sample-pair .pair-label { font-size: 0.75em; color: #aaa; margin-bottom: 4px; text-align: center; }
+        .latent-bar { display: flex; gap: 1px; margin-top: 6px; align-items: flex-end; height: 40px; }
+        .latent-bar .bar { width: 4px; background: #00d4ff; border-radius: 1px 1px 0 0; }
+        .loss-canvas { width: 100%; height: 120px; background: #0a0a1a; border-radius: 4px; margin-top: 8px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SpikyPanda-LiDAR Autoencoder</h1>
+        <p class="subtitle">Train a convolutional autoencoder on synthetic LiDAR grids (6 channels)</p>
+
+        <div class="panel">
+            <h2>Configuration</h2>
+            <div class="controls">
+                <div>
+                    <label for="resolution">Resolution:</label><br>
+                    <select id="resolution">
+                        <option value="16">16 x 16 (fast)</option>
+                        <option value="32">32 x 32 (moderate)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="preset">Preset:</label><br>
+                    <select id="preset">
+                        <option value="tiny">Tiny</option>
+                        <option value="small">Small</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="latentDim">Latent dim:</label><br>
+                    <select id="latentDim">
+                        <option value="32">32</option>
+                        <option value="64" selected>64</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="epochs">Epochs:</label><br>
+                    <input type="number" id="epochs" value="5" min="1" max="50" style="width:70px" />
+                </div>
+                <div>
+                    <label for="lr">Learning rate:</label><br>
+                    <input type="number" id="lr" value="0.003" step="0.001" min="0.0001" style="width:90px" />
+                </div>
+                <div>
+                    <label for="numSamples">Samples:</label><br>
+                    <input type="number" id="numSamples" value="100" min="10" max="500" step="10" style="width:80px" />
+                </div>
+                <div style="display:flex; gap:8px; align-self:flex-end;">
+                    <button id="btnGenerate">Generate Data</button>
+                    <button id="btnTrain" disabled>Train</button>
+                    <button id="btnTest" disabled>Test</button>
+                    <button id="btnExport" disabled>Export Encoder</button>
+                </div>
+            </div>
+            <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+            <div id="status">Generate data to begin.</div>
+        </div>
+
+        <div class="panel">
+            <h2>Training Log</h2>
+            <div class="log" id="log">Ready.
+</div>
+            <canvas class="loss-canvas" id="lossCanvas"></canvas>
+        </div>
+
+        <div class="panel" id="resultsPanel" style="display:none">
+            <h2>Reconstruction Results</h2>
+            <div class="stats">
+                <div class="stat"><div class="value" id="mse">—</div><div class="label">MSE</div></div>
+                <div class="stat"><div class="value" id="rmse">—</div><div class="label">RMSE</div></div>
+                <div class="stat"><div class="value" id="duration">—</div><div class="label">Inference Time</div></div>
+                <div class="stat"><div class="value" id="samplesCount">—</div><div class="label">Test Samples</div></div>
+            </div>
+            <div id="reconstructions"></div>
+        </div>
+
+        <div class="panel">
+            <h2>Understanding the metrics</h2>
+            <div style="font-size:0.85em; line-height:1.7; color:#bbb;">
+                <p><strong style="color:#00d4ff;">MSE (Mean Squared Error)</strong>-Measures how different the reconstructed output is from the original input. It is the average of squared differences across all pixels and channels: <code style="color:#8f8;">MSE = (1/N) &times; &sum;(input[i] - output[i])&sup2;</code>. Because differences are squared, larger errors are penalized more heavily. A value of <strong>0</strong> means perfect reconstruction. Typical good values are below <strong>0.01</strong>.</p>
+                <p style="margin-top:8px;"><strong style="color:#00d4ff;">RMSE (Root Mean Squared Error)</strong>-The square root of MSE: <code style="color:#8f8;">RMSE = &radic;MSE</code>. Since pixel values are normalized to [0, 1], RMSE can be interpreted as the average error per pixel on that scale. For example, RMSE = 0.09 means each pixel is off by about 9% on average.</p>
+                <p style="margin-top:8px;"><strong style="color:#00d4ff;">Inference Time</strong>-Total time to run the forward pass on all test samples. This includes both the encoder (input &rarr; latent vector) and the decoder (latent &rarr; reconstructed output). In production, only the encoder is used, so real inference time would be roughly half.</p>
+                <p style="margin-top:8px;"><strong style="color:#00d4ff;">Latent vector</strong>-The compressed representation of each input grid. Each bar shows one dimension of the latent space. Blue bars are positive values, red bars are negative. Different scene types (road, intersection, obstacles...) should produce visibly different latent patterns-this is what the encoder learns.</p>
+                <p style="margin-top:8px;"><strong style="color:#00d4ff;">Loss curve</strong>-Shows MSE per epoch during training. A healthy training curve decreases rapidly at first, then flattens. If the loss oscillates or increases, try lowering the learning rate. If it plateaus too high, the model may need more capacity (try a larger preset or more epochs).</p>
+                <p style="margin-top:8px;"><strong style="color:#00d4ff;">6 Channels</strong>-Each LiDAR grid has 6 data layers: <em>C0</em> point density, <em>C1</em> max height, <em>C2</em> min height, <em>C3</em> height variance (distinguishes vegetation from walls), <em>C4</em> surface reflectivity, <em>C5</em> velocity/dynamic flag. The autoencoder must learn to compress and reconstruct all 6 simultaneously.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="./bundle/spikypanda-core.js"></script>
+    <script>
+        const S = SpikypandaCore;
+
+        const logEl = document.getElementById("log");
+        const statusEl = document.getElementById("status");
+        const progressFill = document.getElementById("progressFill");
+        const btnGenerate = document.getElementById("btnGenerate");
+        const btnTrain = document.getElementById("btnTrain");
+        const btnTest = document.getElementById("btnTest");
+        const btnExport = document.getElementById("btnExport");
+        const resultsPanel = document.getElementById("resultsPanel");
+        const lossCanvas = document.getElementById("lossCanvas");
+
+        let dataset = null;
+        let testSet = null;
+        let aeResult = null;
+        let aeRuntime = null;
+        let aeTrainer = null;
+        let encRuntime = null;
+        const lossHistory = [];
+
+        const CHANNELS = 6;
+        const CH_NAMES = ["Density", "Z max", "Z min", "Std(z)", "Reflectivity", "Velocity"];
+        const CH_COLORS = [
+            [0, 200, 255],   // cyan
+            [255, 100, 0],   // orange
+            [0, 255, 100],   // green
+            [255, 255, 0],   // yellow
+            [180, 180, 180], // gray
+            [255, 50, 50],   // red
+        ];
+
+        function log(msg) {
+            logEl.textContent += msg + "\n";
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+        function setStatus(msg) { statusEl.textContent = msg; }
+        function setProgress(pct) { progressFill.style.width = pct + "%"; }
+
+        // ====================== SYNTHETIC LIDAR GENERATOR ======================
+
+        function gaussianNoise(sigma) {
+            const u = 1 - Math.random();
+            const v = 1 - Math.random();
+            return sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        }
+
+        function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
+
+        function generateLidarGrid(size, sceneType) {
+            // CHW order: channel-major
+            const pixels = new Array(CHANNELS * size * size).fill(0);
+
+            function set(ch, r, c, val) {
+                pixels[ch * size * size + r * size + c] = clamp(val, 0, 1);
+            }
+            function get(ch, r, c) {
+                return pixels[ch * size * size + r * size + c];
+            }
+
+            const cx = size / 2, cy = size / 2;
+            const noise = () => gaussianNoise(0.03);
+
+            switch (sceneType) {
+                case "straight": {
+                    // Central road band (width ~40% of grid)
+                    const roadW = size * 0.4;
+                    const roadL = cx - roadW / 2, roadR = cx + roadW / 2;
+                    for (let r = 0; r < size; r++) {
+                        for (let c = 0; c < size; c++) {
+                            if (c >= roadL && c <= roadR) {
+                                // Road surface
+                                set(0, r, c, 0.8 + noise());  // density
+                                set(1, r, c, 0.05 + noise());  // z_max
+                                set(2, r, c, 0.0 + noise());   // z_min
+                                set(3, r, c, 0.02 + noise());  // std_z
+                                set(4, r, c, 0.7 + noise());   // reflectivity (asphalt)
+                                set(5, r, c, 0.0);             // velocity
+                            } else {
+                                // Vegetation on sides
+                                set(0, r, c, 0.5 + noise());
+                                set(1, r, c, 0.3 + 0.2 * Math.random() + noise());
+                                set(2, r, c, 0.0 + noise());
+                                set(3, r, c, 0.3 + 0.2 * Math.random()); // high variance
+                                set(4, r, c, 0.3 + noise());
+                                set(5, r, c, 0.0);
+                            }
+                        }
+                    }
+                    break;
+                }
+                case "curved": {
+                    const roadW = size * 0.35;
+                    const curveAmp = size * 0.2;
+                    for (let r = 0; r < size; r++) {
+                        const offset = Math.sin(r / size * Math.PI) * curveAmp;
+                        const roadC = cx + offset;
+                        for (let c = 0; c < size; c++) {
+                            const dist = Math.abs(c - roadC);
+                            if (dist <= roadW / 2) {
+                                set(0, r, c, 0.8 + noise());
+                                set(1, r, c, 0.05 + noise());
+                                set(2, r, c, 0.0 + noise());
+                                set(3, r, c, 0.02 + noise());
+                                set(4, r, c, 0.7 + noise());
+                                set(5, r, c, 0.0);
+                            } else {
+                                set(0, r, c, 0.4 + noise());
+                                set(1, r, c, 0.25 + 0.2 * Math.random());
+                                set(2, r, c, 0.0 + noise());
+                                set(3, r, c, 0.3 + 0.15 * Math.random());
+                                set(4, r, c, 0.3 + noise());
+                                set(5, r, c, 0.0);
+                            }
+                        }
+                    }
+                    break;
+                }
+                case "intersection": {
+                    const roadW = size * 0.3;
+                    for (let r = 0; r < size; r++) {
+                        for (let c = 0; c < size; c++) {
+                            const inHRoad = Math.abs(r - cy) <= roadW / 2;
+                            const inVRoad = Math.abs(c - cx) <= roadW / 2;
+                            if (inHRoad || inVRoad) {
+                                set(0, r, c, 0.85 + noise());
+                                set(1, r, c, 0.05 + noise());
+                                set(2, r, c, 0.0 + noise());
+                                set(3, r, c, 0.02 + noise());
+                                set(4, r, c, 0.7 + noise());
+                                set(5, r, c, 0.0);
+                            } else {
+                                set(0, r, c, 0.5 + noise());
+                                set(1, r, c, 0.35 + 0.15 * Math.random());
+                                set(2, r, c, 0.0 + noise());
+                                set(3, r, c, 0.25 + 0.15 * Math.random());
+                                set(4, r, c, 0.3 + noise());
+                                set(5, r, c, 0.0);
+                            }
+                        }
+                    }
+                    break;
+                }
+                case "obstacles": {
+                    // Road with random obstacles
+                    const roadW = size * 0.5;
+                    const roadL = cx - roadW / 2, roadR = cx + roadW / 2;
+                    for (let r = 0; r < size; r++) {
+                        for (let c = 0; c < size; c++) {
+                            if (c >= roadL && c <= roadR) {
+                                set(0, r, c, 0.8 + noise());
+                                set(1, r, c, 0.05 + noise());
+                                set(2, r, c, 0.0 + noise());
+                                set(3, r, c, 0.02 + noise());
+                                set(4, r, c, 0.7 + noise());
+                                set(5, r, c, 0.0);
+                            } else {
+                                set(0, r, c, 0.3 + noise());
+                                set(1, r, c, 0.2 + 0.1 * Math.random());
+                                set(2, r, c, 0.0 + noise());
+                                set(3, r, c, 0.2 + 0.1 * Math.random());
+                                set(4, r, c, 0.3 + noise());
+                                set(5, r, c, 0.0);
+                            }
+                        }
+                    }
+                    // Add 2-4 random rectangular obstacles on the road
+                    const numObs = 2 + Math.floor(Math.random() * 3);
+                    for (let o = 0; o < numObs; o++) {
+                        const or = Math.floor(Math.random() * (size - 4));
+                        const oc = Math.floor(roadL + Math.random() * roadW);
+                        const oh = 2 + Math.floor(Math.random() * 3);
+                        const ow = 2 + Math.floor(Math.random() * 3);
+                        const isMoving = Math.random() > 0.5;
+                        for (let dr = 0; dr < oh && or + dr < size; dr++) {
+                            for (let dc = 0; dc < ow && oc + dc < size; dc++) {
+                                set(0, or + dr, oc + dc, 0.9);
+                                set(1, or + dr, oc + dc, 0.5 + 0.3 * Math.random()); // tall
+                                set(2, or + dr, oc + dc, 0.05);
+                                set(3, or + dr, oc + dc, 0.05);   // low variance (solid)
+                                set(4, or + dr, oc + dc, 0.5 + 0.3 * Math.random());
+                                set(5, or + dr, oc + dc, isMoving ? 0.5 + 0.5 * Math.random() : 0);
+                            }
+                        }
+                    }
+                    break;
+                }
+                case "empty": {
+                    // Open field with sparse returns
+                    for (let r = 0; r < size; r++) {
+                        for (let c = 0; c < size; c++) {
+                            set(0, r, c, 0.2 + 0.1 * Math.random() + noise());
+                            set(1, r, c, 0.05 + noise());
+                            set(2, r, c, 0.0 + noise());
+                            set(3, r, c, 0.03 + noise());
+                            set(4, r, c, 0.25 + 0.1 * Math.random());
+                            set(5, r, c, 0.0);
+                        }
+                    }
+                    break;
+                }
+            }
+
+            // Clamp all values to [0,1]
+            for (let i = 0; i < pixels.length; i++) {
+                pixels[i] = clamp(pixels[i], 0, 1);
+            }
+
+            return pixels;
+        }
+
+        function generateDataset(count, size) {
+            const sceneTypes = ["straight", "curved", "intersection", "obstacles", "empty"];
+            const samples = [];
+            for (let i = 0; i < count; i++) {
+                const type = sceneTypes[i % sceneTypes.length];
+                const pixels = generateLidarGrid(size, type);
+                samples.push({ label: sceneTypes.indexOf(type), pixels });
+            }
+            return { count, width: size, height: size, channels: CHANNELS, format: "CHW", samples };
+        }
+
+        // ====================== VISUALIZATION ======================
+
+        function drawChannel(pixels, ch, w, h, canvas, colorTint) {
+            canvas.width = w;
+            canvas.height = h;
+            canvas.style.width = (w * 3) + "px";
+            canvas.style.height = (h * 3) + "px";
+            const ctx = canvas.getContext("2d");
+            const imgData = ctx.createImageData(w, h);
+            for (let r = 0; r < h; r++) {
+                for (let c = 0; c < w; c++) {
+                    const val = pixels[ch * w * h + r * w + c];
+                    const idx = (r * w + c) * 4;
+                    imgData.data[idx] = Math.round(val * colorTint[0]);
+                    imgData.data[idx + 1] = Math.round(val * colorTint[1]);
+                    imgData.data[idx + 2] = Math.round(val * colorTint[2]);
+                    imgData.data[idx + 3] = 255;
+                }
+            }
+            ctx.putImageData(imgData, 0, 0);
+        }
+
+        function drawChannelRow(pixels, w, h, container) {
+            const row = document.createElement("div");
+            row.className = "grid-row";
+            for (let ch = 0; ch < CHANNELS; ch++) {
+                const item = document.createElement("div");
+                item.className = "grid-item";
+                const canvas = document.createElement("canvas");
+                drawChannel(pixels, ch, w, h, canvas, CH_COLORS[ch]);
+                item.appendChild(canvas);
+                const label = document.createElement("div");
+                label.className = "ch-label";
+                label.textContent = CH_NAMES[ch];
+                item.appendChild(label);
+                row.appendChild(item);
+            }
+            container.appendChild(row);
+        }
+
+        function drawLatentVector(values, container) {
+            const bar = document.createElement("div");
+            bar.className = "latent-bar";
+            const maxVal = Math.max(...values.map(Math.abs), 0.01);
+            for (const v of values) {
+                const div = document.createElement("div");
+                div.className = "bar";
+                const h = Math.round(Math.abs(v) / maxVal * 36) + 2;
+                div.style.height = h + "px";
+                div.style.background = v >= 0 ? "#00d4ff" : "#ff4444";
+                bar.appendChild(div);
+            }
+            container.appendChild(bar);
+        }
+
+        function drawLossChart() {
+            const canvas = lossCanvas;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            const ctx = canvas.getContext("2d");
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            const W = rect.width, H = rect.height;
+
+            ctx.fillStyle = "#0a0a1a";
+            ctx.fillRect(0, 0, W, H);
+
+            if (lossHistory.length < 2) return;
+
+            const maxLoss = Math.max(...lossHistory);
+            const minLoss = Math.min(...lossHistory);
+            const range = maxLoss - minLoss || 1;
+
+            ctx.strokeStyle = "#00d4ff";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            for (let i = 0; i < lossHistory.length; i++) {
+                const x = (i / (lossHistory.length - 1)) * (W - 20) + 10;
+                const y = H - 10 - ((lossHistory[i] - minLoss) / range) * (H - 20);
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            ctx.fillStyle = "#888";
+            ctx.font = "10px sans-serif";
+            ctx.fillText(maxLoss.toFixed(4), 2, 12);
+            ctx.fillText(minLoss.toFixed(4), 2, H - 2);
+        }
+
+        // ====================== ACTIONS ======================
+
+        btnGenerate.addEventListener("click", function () {
+            const size = parseInt(document.getElementById("resolution").value);
+            const count = parseInt(document.getElementById("numSamples").value);
+
+            log(`Generating ${count} synthetic LiDAR grids (${size}x${size}x${CHANNELS})...`);
+            setStatus("Generating...");
+
+            const testCount = Math.max(10, Math.floor(count * 0.2));
+            dataset = generateDataset(count, size);
+            testSet = generateDataset(testCount, size);
+
+            log(`Generated ${dataset.count} train + ${testSet.count} test samples`);
+            setStatus("Data ready. Click Train.");
+            btnTrain.disabled = false;
+        });
+
+        btnTrain.addEventListener("click", async function () {
+            btnTrain.disabled = true;
+            btnTest.disabled = true;
+            btnGenerate.disabled = true;
+            lossHistory.length = 0;
+
+            const presetValue = document.getElementById("preset").value;
+            const latentDim = parseInt(document.getElementById("latentDim").value);
+            const epochs = parseInt(document.getElementById("epochs").value);
+            const lr = parseFloat(document.getElementById("lr").value);
+
+            log(`Building autoencoder (${presetValue}, latent=${latentDim})...`);
+            setStatus("Building model...");
+
+            try {
+                aeResult = S.buildAutoencoderFromPreset(presetValue, {
+                    width: dataset.width,
+                    height: dataset.height,
+                    channels: dataset.channels,
+                    latentDim: latentDim,
+                });
+            } catch (e) {
+                log("ERROR building model: " + e.message);
+                setStatus("Build failed.");
+                btnTrain.disabled = false;
+                btnGenerate.disabled = false;
+                return;
+            }
+
+            const ae = aeResult.autoencoder;
+            log(`Autoencoder: ${ae.nodes.length} neurons, ${ae.links.length} synapses, ${ae.kernels.length} kernels`);
+
+            aeRuntime = new S.CnnInferenceRuntime(ae);
+            aeTrainer = new S.CnnTrainingRuntime(ae, aeRuntime, S.LossFunctions.MSE, lr, S.Optimizers.Adam());
+
+            setStatus("Training...");
+            const totalSteps = epochs * dataset.count;
+            let step = 0;
+
+            for (let epoch = 0; epoch < epochs; epoch++) {
+                let epochLoss = 0;
+
+                for (let i = 0; i < dataset.count; i++) {
+                    const sample = dataset.samples[i];
+                    // Autoencoder: expected = input
+                    const loss = aeTrainer.trainStep(sample.pixels, sample.pixels);
+                    epochLoss += loss;
+                    step++;
+
+                    if (i % 5 === 0) {
+                        setProgress((step / totalSteps) * 100);
+                        setStatus(`Epoch ${epoch + 1}/${epochs}-Sample ${i + 1}/${dataset.count}`);
+                        await new Promise(r => setTimeout(r, 0));
+                    }
+                }
+
+                const avgLoss = epochLoss / dataset.count;
+                lossHistory.push(avgLoss);
+                drawLossChart();
+                log(`Epoch ${epoch + 1}/${epochs}-Avg MSE: ${avgLoss.toFixed(6)}`);
+            }
+
+            // Sync weights to encoder
+            S.AutoencoderBuilder.syncWeights(aeResult);
+
+            // Build encoder runtime
+            encRuntime = new S.CnnInferenceRuntime(aeResult.encoder);
+
+            setProgress(100);
+            setStatus("Training complete. Click Test to evaluate.");
+            log("Training finished.");
+            btnTrain.disabled = false;
+            btnTest.disabled = false;
+            btnExport.disabled = false;
+            btnGenerate.disabled = false;
+        });
+
+        btnTest.addEventListener("click", async function () {
+            if (!aeRuntime || !testSet) return;
+            btnTest.disabled = true;
+            btnTrain.disabled = true;
+
+            setStatus("Running reconstruction test...");
+
+            // Clear contexts
+            aeRuntime.deleteContext();
+            aeTrainer.deleteContext();
+
+            let totalMse = 0;
+            const reconstructions = [];
+            const t0 = performance.now();
+
+            for (let i = 0; i < testSet.count; i++) {
+                const sample = testSet.samples[i];
+                const output = aeRuntime.run(sample.pixels);
+
+                // Compute MSE
+                let mse = 0;
+                for (let j = 0; j < sample.pixels.length; j++) {
+                    mse += Math.pow(sample.pixels[j] - output[j], 2);
+                }
+                mse /= sample.pixels.length;
+                totalMse += mse;
+
+                // Also get latent vector from encoder
+                encRuntime.deleteContext();
+                const latent = encRuntime.run(sample.pixels);
+
+                reconstructions.push({ original: sample.pixels, reconstructed: output, latent, mse });
+
+                if (i % 5 === 0) {
+                    setStatus(`Testing ${i + 1}/${testSet.count}...`);
+                    await new Promise(r => setTimeout(r, 0));
+                }
+            }
+
+            const elapsed = performance.now() - t0;
+            const avgMse = totalMse / testSet.count;
+
+            log(`Reconstruction MSE: ${avgMse.toFixed(6)}-${elapsed.toFixed(0)}ms (${testSet.count} samples)`);
+
+            // Show results
+            resultsPanel.style.display = "block";
+            document.getElementById("mse").textContent = avgMse.toFixed(4);
+            document.getElementById("rmse").textContent = Math.sqrt(avgMse).toFixed(4);
+            document.getElementById("duration").textContent = elapsed.toFixed(0) + "ms";
+            document.getElementById("samplesCount").textContent = testSet.count;
+
+            // Render first 5 reconstructions
+            const container = document.getElementById("reconstructions");
+            container.innerHTML = "";
+            const showCount = Math.min(5, reconstructions.length);
+            const sceneTypes = ["straight", "curved", "intersection", "obstacles", "empty"];
+
+            for (let i = 0; i < showCount; i++) {
+                const rec = reconstructions[i];
+                const pair = document.createElement("div");
+                pair.className = "sample-pair";
+
+                const origCol = document.createElement("div");
+                const origLabel = document.createElement("div");
+                origLabel.className = "pair-label";
+                origLabel.textContent = `Original (${sceneTypes[i % sceneTypes.length]})`;
+                origCol.appendChild(origLabel);
+                drawChannelRow(rec.original, testSet.width, testSet.height, origCol);
+                pair.appendChild(origCol);
+
+                const recCol = document.createElement("div");
+                const recLabel = document.createElement("div");
+                recLabel.className = "pair-label";
+                recLabel.textContent = `Reconstructed (MSE: ${rec.mse.toFixed(4)})`;
+                recCol.appendChild(recLabel);
+                drawChannelRow(rec.reconstructed, testSet.width, testSet.height, recCol);
+                pair.appendChild(recCol);
+
+                const latentCol = document.createElement("div");
+                const latentLabel = document.createElement("div");
+                latentLabel.className = "pair-label";
+                latentLabel.textContent = `Latent (${rec.latent.length}d)`;
+                latentCol.appendChild(latentLabel);
+                drawLatentVector(rec.latent, latentCol);
+                pair.appendChild(latentCol);
+
+                container.appendChild(pair);
+            }
+
+            setStatus(`Done-MSE: ${avgMse.toFixed(4)}-${elapsed.toFixed(0)}ms`);
+            btnTrain.disabled = false;
+            btnTest.disabled = false;
+        });
+
+        btnExport.addEventListener("click", function () {
+            if (!aeResult) return;
+
+            const enc = aeResult.encoder;
+            const data = {
+                layerDescriptors: enc.layerDescriptors.map(d => ({
+                    type: d.type, width: d.width, height: d.height, channels: d.channels,
+                })),
+                kernels: enc.kernels.map(k => ({
+                    height: k.height, width: k.width, inputChannels: k.inputChannels,
+                    weights: Array.from(k.weights), bias: k.bias,
+                })),
+                denseWeights: [],
+            };
+
+            // Export dense layer synapse weights
+            for (const desc of enc.layerDescriptors) {
+                if (desc.type === "dense") {
+                    const layerWeights = [];
+                    for (const neuron of desc.neurons) {
+                        const synapses = neuron.opsc() || [];
+                        layerWeights.push({
+                            bias: neuron.bias,
+                            weights: synapses.map(s => s.weight),
+                        });
+                    }
+                    data.denseWeights.push(layerWeights);
+                }
+            }
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "lidar-encoder-weights.json";
+            a.click();
+            URL.revokeObjectURL(url);
+            log("Encoder weights exported to lidar-encoder-weights.json");
+        });
+    </script>
+</body>
+</html>

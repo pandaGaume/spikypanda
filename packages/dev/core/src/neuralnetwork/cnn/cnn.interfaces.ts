@@ -13,6 +13,8 @@ export enum CnnLayerType {
     Pool = "pool",
     Flatten = "flatten",
     Dense = "dense",
+    Upsample = "upsample",
+    Reshape = "reshape",
 }
 
 /// <summary>

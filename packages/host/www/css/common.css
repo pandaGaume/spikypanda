@@ -1,0 +1,239 @@
+/* SpikyPanda — Shared Dark Theme */
+:root {
+    --primary: #00d4ff;
+    --bg: #1a1a2e;
+    --panel: #16213e;
+    --panel-border: #0f3460;
+    --input-bg: #0f3460;
+    --input-border: #1a4a8a;
+    --text: #e0e0e0;
+    --text-muted: #888;
+    --text-label: #aaa;
+    --log-bg: #0a0a1a;
+    --log-text: #8f8;
+    --success: #4f4;
+    --error: #f44;
+}
+
+/* Reset */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Body */
+body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px;
+    line-height: 1.5;
+}
+
+/* Typography */
+h1 {
+    text-align: center;
+    margin-bottom: 4px;
+    font-size: 1.6em;
+    color: var(--primary);
+}
+
+h2 {
+    font-size: 1.1em;
+    margin-bottom: 10px;
+    color: var(--primary);
+}
+
+.subtitle {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85em;
+    margin-bottom: 20px;
+}
+
+/* Layout */
+.container {
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+/* Panels */
+.panel {
+    background: var(--panel);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 1px solid var(--panel-border);
+}
+
+.panel h2 {
+    font-size: 1.1em;
+    margin-bottom: 10px;
+    color: var(--primary);
+}
+
+/* Controls */
+.controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+label {
+    font-size: 0.9em;
+    color: var(--text-label);
+}
+
+select,
+input[type=number] {
+    background: var(--input-bg);
+    color: var(--text);
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 0.9em;
+}
+
+button {
+    background: var(--primary);
+    color: var(--bg);
+    border: none;
+    border-radius: 4px;
+    padding: 8px 20px;
+    font-size: 0.9em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+button:hover {
+    opacity: 0.85;
+}
+
+button:disabled {
+    background: #555;
+    color: #999;
+    cursor: not-allowed;
+}
+
+/* Log */
+.log {
+    background: var(--log-bg);
+    border-radius: 4px;
+    padding: 10px;
+    font-family: 'Cascadia Code', monospace;
+    font-size: 0.8em;
+    max-height: 200px;
+    overflow-y: auto;
+    line-height: 1.6;
+    color: var(--log-text);
+    white-space: pre-wrap;
+}
+
+/* Stats */
+.stats {
+    display: flex;
+    gap: 20px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.stat {
+    text-align: center;
+}
+
+.stat .value {
+    font-size: 2em;
+    font-weight: bold;
+    color: var(--primary);
+}
+
+.stat .label {
+    font-size: 0.8em;
+    color: var(--text-muted);
+}
+
+/* Progress bar */
+.progress-bar {
+    background: var(--log-bg);
+    border-radius: 4px;
+    height: 6px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+
+.progress-bar .fill {
+    height: 100%;
+    background: var(--primary);
+    transition: width 0.1s;
+    width: 0%;
+}
+
+/* Status */
+#status {
+    color: var(--text-label);
+    font-size: 0.85em;
+    margin-top: 6px;
+}
+
+/* Navigation bar */
+.nav-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    margin: -20px -20px 20px -20px;
+    background: rgba(15, 52, 96, 0.6);
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: var(--primary);
+    font-weight: 700;
+    font-size: 1.1em;
+}
+
+.nav-logo img {
+    border-radius: 4px;
+}
+
+.nav-links {
+    display: flex;
+    gap: 20px;
+}
+
+.nav-links a {
+    color: var(--text-label);
+    text-decoration: none;
+    font-size: 0.9em;
+    transition: color 0.2s;
+}
+
+.nav-links a:hover {
+    color: var(--primary);
+}
+
+/* Sample navigation / breadcrumb */
+.sample-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+}
+
+.sample-nav a {
+    color: var(--text-label);
+    text-decoration: none;
+}
+
+.sample-nav a:hover {
+    color: var(--primary);
+}
+
+.sample-nav .sep {
+    color: var(--text-muted);
+}
