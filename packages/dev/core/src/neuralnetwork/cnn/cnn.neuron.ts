@@ -2,7 +2,8 @@ import { ICartesian } from "../../geometry";
 import { cloneable, IOlink } from "../../graph";
 import { Nullable } from "../../types";
 import { Neuron } from "../nn.neuron";
-import { CnnLayerType, ICnnNeuron, IActivationFunction, PoolingType } from "./cnn.interfaces";
+import { CnnLayerType, ICnnNeuron, PoolingType } from "./cnn.interfaces";
+import type { IActivationFunction } from "../ann/mlp/mlp.interfaces";
 
 export class CnnNeuron extends Neuron implements ICnnNeuron {
     @cloneable public layerType: CnnLayerType;

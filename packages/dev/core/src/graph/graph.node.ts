@@ -1,4 +1,4 @@
-import { ICartesian } from "../geometry";
+import type { ICartesian } from "../geometry";
 import { Nullable } from "../types";
 import { GraphItem } from "./graph.graphItem";
 import { cloneable, INode, IOlink } from "./graph.interfaces";
