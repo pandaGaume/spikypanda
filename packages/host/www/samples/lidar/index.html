@@ -77,6 +77,7 @@
                     <select id="resolution">
                         <option value="16">16 x 16 (fast)</option>
                         <option value="32">32 x 32 (moderate)</option>
+                        <option value="64">64 x 64 (slow)</option>
                     </select>
                 </div>
                 <div>
@@ -84,7 +85,10 @@
                     <select id="preset">
                         <option value="tiny">CNN Tiny</option>
                         <option value="small">CNN Small</option>
-                        <option value="vit-tiny">ViT Tiny (patch 4x4, 2 blocks)</option>
+                        <option value="vit-tiny">ViT MAE (patch 4x4, 2 blocks, full attention)</option>
+                        <option value="sat-local">SAT Local (R=1, 3x3 neighbors)</option>
+                        <option value="sat-hierarchical">SAT Hierarchical (R=1 then R=3)</option>
+                        <option value="sat-progressive">SAT Progressive (R=1 then global)</option>
                     </select>
                 </div>
                 <div>

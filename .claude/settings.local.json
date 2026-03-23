@@ -6,7 +6,9 @@
       "Bash(npx tsc:*)",
       "Bash(npx jest:*)",
       "Bash(npx webpack:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(node packages/dev/tools/benchmarks/sat-benchmark.cjs)",
+      "Bash(node packages/dev/tools/benchmarks/sat-scale-benchmark.cjs)"
     ]
   }
 }

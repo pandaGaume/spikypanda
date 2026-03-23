@@ -1,63 +1,41 @@
-import { IVitGraph } from "./vit.interfaces";
-import { softmax, gelu, layerNormForward } from "./vit.math";
+import { ISatGraph } from "./sat.interfaces";
+import { softmax, gelu, layerNormForward } from "../vit/vit.math";
 import { Profiler } from "../nn.profiler";
 
 /// <summary>
-/// Inference runtime for Vision Transformer graphs.
+/// Inference runtime for Spatial Attention Transformer (SAT).
 ///
-/// Uses weight matrices stored on the graph (not synapses) for all
-/// transformer computations. This avoids the combinatorial explosion
-/// of O(numTokens^2 * embedDim) synapses.
+/// Identical to VitInferenceRuntime except that the attention computation
+/// is restricted to spatially proximate tokens via the pre-computed
+/// neighbor map. This reduces complexity from O(N^2) to O(N*k).
 ///
-/// Processing phases:
-///   1. Patch embedding (linear projection from pixels)
-///   2. Add positional embeddings + class token
-///   3. For each transformer block:
-///      a. LayerNorm -> Multi-head self-attention -> Residual
-///      b. LayerNorm -> MLP (GELU) -> Residual
-///   4. Classification head (softmax)
+/// Class token (index 0) always attends to all tokens.
+/// Patch tokens attend only to neighbors within the configured radius.
 /// </summary>
-export class VitInferenceRuntime {
-    private _graph: IVitGraph;
+export class SatInferenceRuntime {
+    private _graph: ISatGraph;
 
-    /// <summary>When false, output raw logits instead of softmax (for autoencoder/regression)</summary>
-    public useSoftmax: boolean = true;
+    public tokens: number[][] = [];
+    public attentionPairsComputed: number = 0;
 
-    /// <summary>Profiler for performance instrumentation. Set profiler.enabled = true to activate.</summary>
+    /// <summary>Profiler for performance instrumentation.</summary>
     public profiler: Profiler = new Profiler(false);
 
-    /// <summary>Token activations: [numTokens][embedDim]</summary>
-    public tokens: number[][] = [];
-
-    /// <summary>Caches for backpropagation</summary>
-    public layerNormCache: Array<{
-        mean: number[]; invStd: number[]; normalized: number[][];
-    }> = [];
-
+    // Caches for backprop
+    public layerNormCache: Array<{ mean: number[]; invStd: number[]; normalized: number[][] }> = [];
     public attentionCache: Array<{
         Q: number[][]; K: number[][]; V: number[][];
-        scores: number[][][]; // [head][queryToken][keyToken]
-        attnOut: number[][]; // [numTokens][embedDim]
+        scores: number[][][]; // [head][queryToken][sparse neighbor scores]
+        scoreIndices: number[][]; // [queryToken] -> neighbor indices for this block
+        attnOut: number[][];
     }> = [];
+    public mlpCache: Array<{ preGelu: number[][]; hidden: number[][] }> = [];
+    public residualCache: Array<{ preAttn: number[][]; preMlp: number[][] }> = [];
 
-    public mlpCache: Array<{
-        preGelu: number[][]; // [numTokens][mlpDim] - before GELU
-        hidden: number[][]; // [numTokens][mlpDim] - after GELU
-    }> = [];
-
-    public residualCache: Array<{
-        preAttn: number[][]; preMlp: number[][];
-    }> = [];
-
-    constructor(graph: IVitGraph) {
+    constructor(graph: ISatGraph) {
         this._graph = graph;
     }
 
-    /// <summary>
-    /// Run inference on a single image.
-    /// Input: flat pixel array [H * W * C] in row-major, channel-last order.
-    /// Returns: class probabilities [numClasses].
-    /// </summary>
     public run(inputPixels: number[]): number[] {
         const g = this._graph;
         const numTokens = g.numPatches + 1;
@@ -65,21 +43,21 @@ export class VitInferenceRuntime {
         const numHeads = g.numHeads;
         const headDim = embedDim / numHeads;
         const patchSize = g.patchSize;
-        const p = this.profiler;
+        const pr = this.profiler;
 
-        // Reset caches
         this.layerNormCache = [];
         this.attentionCache = [];
         this.mlpCache = [];
         this.residualCache = [];
+        this.attentionPairsComputed = 0;
 
         // =====================================================================
-        // 1. Patch embedding: pixels -> [numPatches][embedDim]
+        // 1. Patch embedding (same as ViT)
         // =====================================================================
-        p.startPhase("patch_embedding");
+        pr.startPhase("patch_embedding");
         this.tokens = [];
 
-        // Class token (token 0)
+        // Class token
         this.tokens.push([...g.classTokenValues]);
 
         // Patch tokens
@@ -111,13 +89,10 @@ export class VitInferenceRuntime {
             this.tokens.push(tokenEmbed);
         }
 
-        // =====================================================================
-        // 2. Add positional embeddings
-        // =====================================================================
-        // FLOPS: patchEmbedding = numPatches * embedDim * patchPixels * 2 (mul + add)
-        const patchPixelsCount = patchSize * patchSize * (Math.round(inputPixels.length / (g.numPatches * patchSize * patchSize)));
-        p.addFlops("patch_embedding", g.numPatches * embedDim * patchPixelsCount * 2);
-        p.endPhase("patch_embedding");
+        // Positional embeddings
+        const imgChannelsCount = Math.round(inputPixels.length / (g.numPatches * patchSize * patchSize));
+        pr.addFlops("patch_embedding", g.numPatches * embedDim * patchSize * patchSize * imgChannelsCount * 2);
+        pr.endPhase("patch_embedding");
 
         for (let t = 0; t < numTokens; t++) {
             for (let e = 0; e < embedDim; e++) {
@@ -126,17 +101,17 @@ export class VitInferenceRuntime {
         }
 
         // =====================================================================
-        // 3. Transformer blocks
+        // 2. Transformer blocks with SPATIAL attention
         // =====================================================================
         for (let block = 0; block < g.numBlocks; block++) {
             const bw = g.blockWeights[block];
             const lnIdx = block * 2;
+            const neighbors = g.neighborMaps[block];
 
-            // Save pre-attention for residual
-            p.startPhase("layernorm");
+            pr.startPhase("layernorm");
             const preAttn = this.tokens.map(t => [...t]);
 
-            // ----- LayerNorm 1 -----
+            // LayerNorm 1
             const ln1 = g.layerNorms[lnIdx];
             const ln1Cache = { mean: [] as number[], invStd: [] as number[], normalized: [] as number[][] };
             for (let t = 0; t < numTokens; t++) {
@@ -147,12 +122,11 @@ export class VitInferenceRuntime {
                 ln1Cache.normalized.push(r.normalized);
             }
             this.layerNormCache.push(ln1Cache);
-            p.addFlops("layernorm", numTokens * embedDim * 5); // mean, var, normalize, scale, shift
-            p.endPhase("layernorm");
+            pr.addFlops("layernorm", numTokens * embedDim * 5);
+            pr.endPhase("layernorm");
 
-            // ----- Multi-head self-attention -----
-            p.startPhase("attention_qkv");
-            // Compute Q, K, V for all tokens: [numTokens][embedDim]
+            // Compute Q, K, V for all tokens
+            pr.startPhase("attention_qkv");
             const Q: number[][] = [];
             const K: number[][] = [];
             const V: number[][] = [];
@@ -173,13 +147,12 @@ export class VitInferenceRuntime {
                 }
                 Q.push(q); K.push(k); V.push(v);
             }
-            // FLOPS QKV: 3 projections * numTokens * embedDim * embedDim * 2
-            p.addFlops("attention_qkv", 3 * numTokens * embedDim * embedDim * 2);
-            p.endPhase("attention_qkv");
+            pr.addFlops("attention_qkv", 3 * numTokens * embedDim * embedDim * 2);
+            pr.endPhase("attention_qkv");
 
-            // Attention per head
-            p.startPhase("attention_scores");
-            const allScores: number[][][] = []; // [head][query][key]
+            // *** SPATIAL ATTENTION: only attend to neighbors ***
+            pr.startPhase("attention_scores");
+            const allScores: number[][][] = [];
             const attnOut: number[][] = new Array(numTokens).fill(null).map(() => new Array(embedDim).fill(0));
 
             for (let h = 0; h < numHeads; h++) {
@@ -188,22 +161,29 @@ export class VitInferenceRuntime {
                 const headScores: number[][] = [];
 
                 for (let tq = 0; tq < numTokens; tq++) {
-                    const logits = new Array(numTokens);
-                    for (let tk = 0; tk < numTokens; tk++) {
+                    const tokenNeighbors = neighbors[tq]; // SPARSE: only these tokens
+                    const numNeighbors = tokenNeighbors.length;
+
+                    // Compute attention logits only for neighbors
+                    const logits = new Array(numNeighbors);
+                    for (let ni = 0; ni < numNeighbors; ni++) {
+                        const tk = tokenNeighbors[ni];
                         let dot = 0;
                         for (let d = 0; d < headDim; d++) {
                             dot += Q[tq][offset + d] * K[tk][offset + d];
                         }
-                        logits[tk] = dot / scale;
+                        logits[ni] = dot / scale;
                     }
+
                     const scores = softmax(logits);
                     headScores.push(scores);
+                    this.attentionPairsComputed += numNeighbors;
 
-                    // Weighted sum of V
+                    // Weighted sum of V (only neighbors)
                     for (let d = 0; d < headDim; d++) {
                         let val = 0;
-                        for (let tk = 0; tk < numTokens; tk++) {
-                            val += scores[tk] * V[tk][offset + d];
+                        for (let ni = 0; ni < numNeighbors; ni++) {
+                            val += scores[ni] * V[tokenNeighbors[ni]][offset + d];
                         }
                         attnOut[tq][offset + d] = val;
                     }
@@ -211,14 +191,19 @@ export class VitInferenceRuntime {
                 allScores.push(headScores);
             }
 
-            this.attentionCache.push({ Q, K, V, scores: allScores, attnOut: attnOut.map(t => [...t]) });
-            // FLOPS scores: numHeads * numTokens * numTokens * headDim * 2 (dot product) + numTokens * numTokens * headDim * 2 (weighted V sum)
-            p.addFlops("attention_scores", numHeads * numTokens * numTokens * headDim * 2 + numHeads * numTokens * numTokens * headDim * 2);
-            p.addAttentionPairs("attention_scores", numHeads * numTokens * numTokens);
-            p.endPhase("attention_scores");
+            this.attentionCache.push({
+                Q, K, V,
+                scores: allScores,
+                scoreIndices: neighbors,
+                attnOut: attnOut.map(t => [...t]),
+            });
+            // FLOPS: sparse attention - sum actual pairs computed
+            pr.addFlops("attention_scores", this.attentionPairsComputed * headDim * 4); // dot + weighted V
+            pr.addAttentionPairs("attention_scores", this.attentionPairsComputed);
+            pr.endPhase("attention_scores");
 
             // Output projection
-            p.startPhase("attention_proj");
+            pr.startPhase("attention_proj");
             const projected: number[][] = [];
             for (let t = 0; t < numTokens; t++) {
                 const proj = new Array(embedDim).fill(0);
@@ -231,21 +216,20 @@ export class VitInferenceRuntime {
                 projected.push(proj);
             }
 
-            p.addFlops("attention_proj", numTokens * embedDim * embedDim * 2);
-            p.endPhase("attention_proj");
+            pr.addFlops("attention_proj", numTokens * embedDim * embedDim * 2);
+            pr.endPhase("attention_proj");
 
-            // Residual 1: add pre-attention input
+            // Residual 1
             for (let t = 0; t < numTokens; t++) {
                 for (let e = 0; e < embedDim; e++) {
                     this.tokens[t][e] = preAttn[t][e] + projected[t][e];
                 }
             }
 
-            // Save pre-MLP for residual
             const preMlp = this.tokens.map(t => [...t]);
 
-            // ----- LayerNorm 2 -----
-            p.startPhase("layernorm");
+            // LayerNorm 2
+            pr.startPhase("layernorm");
             const ln2 = g.layerNorms[lnIdx + 1];
             const ln2Cache = { mean: [] as number[], invStd: [] as number[], normalized: [] as number[][] };
             for (let t = 0; t < numTokens; t++) {
@@ -256,18 +240,17 @@ export class VitInferenceRuntime {
                 ln2Cache.normalized.push(r.normalized);
             }
             this.layerNormCache.push(ln2Cache);
-            p.addFlops("layernorm", numTokens * embedDim * 5);
-            p.endPhase("layernorm");
+            pr.addFlops("layernorm", numTokens * embedDim * 5);
+            pr.endPhase("layernorm");
 
-            // ----- MLP: embedDim -> mlpDim (GELU) -> embedDim -----
-            p.startPhase("mlp");
+            // MLP
+            pr.startPhase("mlp");
             const mlpDim = embedDim * g.mlpRatio;
             const preGeluAll: number[][] = [];
             const hiddenAll: number[][] = [];
             const mlpOut: number[][] = [];
 
             for (let t = 0; t < numTokens; t++) {
-                // Hidden layer
                 const preGelu = new Array(mlpDim);
                 const hidden = new Array(mlpDim);
                 for (let m = 0; m < mlpDim; m++) {
@@ -281,7 +264,6 @@ export class VitInferenceRuntime {
                 preGeluAll.push(preGelu);
                 hiddenAll.push(hidden);
 
-                // Output layer
                 const out = new Array(embedDim);
                 for (let e = 0; e < embedDim; e++) {
                     let sum = bw.mlp2Bias[e];
@@ -294,11 +276,10 @@ export class VitInferenceRuntime {
             }
 
             this.mlpCache.push({ preGelu: preGeluAll, hidden: hiddenAll });
-            // FLOPS MLP: layer1 = numTokens * embedDim * mlpDim * 2, layer2 = numTokens * mlpDim * embedDim * 2
-            p.addFlops("mlp", numTokens * embedDim * mlpDim * 2 + numTokens * mlpDim * embedDim * 2);
-            p.endPhase("mlp");
+            pr.addFlops("mlp", numTokens * embedDim * mlpDim * 2 + numTokens * mlpDim * embedDim * 2);
+            pr.endPhase("mlp");
 
-            // Residual 2: add pre-MLP input
+            // Residual 2
             for (let t = 0; t < numTokens; t++) {
                 for (let e = 0; e < embedDim; e++) {
                     this.tokens[t][e] = preMlp[t][e] + mlpOut[t][e];
@@ -308,51 +289,40 @@ export class VitInferenceRuntime {
             this.residualCache.push({ preAttn, preMlp });
         }
 
-        // =====================================================================
-        // 4. Classification head: class token -> softmax
-        p.startPhase("head");
-        // =====================================================================
+        // Classification head (if not MAE mode)
+        pr.startPhase("head");
         const classToken = this.tokens[0];
-        const logits = new Array(g.numClasses);
-        for (let cls = 0; cls < g.numClasses; cls++) {
-            let sum = g.headBias[cls];
-            for (let e = 0; e < embedDim; e++) {
-                sum += classToken[e] * g.headWeights[e * g.numClasses + cls];
+        if (g.numClasses > 0) {
+            const logits = new Array(g.numClasses);
+            for (let cls = 0; cls < g.numClasses; cls++) {
+                let sum = g.headBias[cls];
+                for (let e = 0; e < embedDim; e++) {
+                    sum += classToken[e] * g.headWeights[e * g.numClasses + cls];
+                }
+                logits[cls] = sum;
             }
-            logits[cls] = sum;
-        }
-        this.lastLogits = logits;
-        p.addFlops("head", embedDim * g.numClasses * 2);
-        p.endPhase("head");
-
-        if (this.useSoftmax) {
+            pr.addFlops("head", embedDim * g.numClasses * 2);
+            pr.endPhase("head");
             return softmax(logits);
         }
-        // Sigmoid for autoencoder (output in [0,1] range)
-        return logits.map(v => 1 / (1 + Math.exp(-v)));
+
+        pr.endPhase("head");
+        return classToken; // MAE mode returns class token embedding
     }
 
     /// <summary>
-    /// Get raw logits before activation (for backprop).
-    /// </summary>
-    public lastLogits: number[] = [];
-
-    /// <summary>
-    /// MAE-style reconstruction: each patch token reconstructs its own patch.
-    /// Returns flat pixel array [H * W * C].
-    /// Must be called after run() which populates the tokens.
+    /// MAE-style per-patch reconstruction using spatial attention.
     /// </summary>
     public reconstructPatches(inputPixels: number[]): number[] {
         const g = this._graph;
         if (!g.patchDecoderWeights || !g.patchDecoderBias) {
-            throw new Error("patchDecoderWeights not initialized. Rebuild the graph.");
+            throw new Error("patchDecoderWeights not initialized");
         }
 
-        // Run encoder first
         this.run(inputPixels);
 
-        const p = this.profiler;
-        p.startPhase("patch_decoder");
+        const pr = this.profiler;
+        pr.startPhase("patch_decoder");
         const embedDim = g.embedDim;
         const patchSize = g.patchSize;
         const imgChannels = Math.round(inputPixels.length / (g.numPatches * patchSize * patchSize));
@@ -360,29 +330,22 @@ export class VitInferenceRuntime {
         const patchesX = imgWidth / patchSize;
         const patchPixels = patchSize * patchSize * imgChannels;
 
-        // Output buffer
         const output = new Array(inputPixels.length).fill(0);
 
-        // Each patch token (index 1..numPatches, skipping class token at 0)
-        // reconstructs its own patch region
         for (let p = 0; p < g.numPatches; p++) {
-            const token = this.tokens[p + 1]; // +1 to skip class token
+            const token = this.tokens[p + 1];
             const patchRow = Math.floor(p / patchesX);
             const patchCol = p % patchesX;
 
-            // Linear decoder: token (embedDim) -> patch pixels (patchPixels)
             for (let px = 0; px < patchPixels; px++) {
                 let sum = g.patchDecoderBias[px];
                 for (let e = 0; e < embedDim; e++) {
                     sum += token[e] * g.patchDecoderWeights[e * patchPixels + px];
                 }
-                // Sigmoid to keep output in [0,1]
-                sum = 1 / (1 + Math.exp(-sum));
+                sum = 1 / (1 + Math.exp(-sum)); // sigmoid
 
-                // Map patch pixel index back to image position
-                const localPixel = px;
-                const ch = localPixel % imgChannels;
-                const spatialIdx = Math.floor(localPixel / imgChannels);
+                const ch = px % imgChannels;
+                const spatialIdx = Math.floor(px / imgChannels);
                 const localY = Math.floor(spatialIdx / patchSize);
                 const localX = spatialIdx % patchSize;
                 const imgY = patchRow * patchSize + localY;
@@ -392,14 +355,10 @@ export class VitInferenceRuntime {
             }
         }
 
-        p.addFlops("patch_decoder", g.numPatches * embedDim * patchPixels * 2);
-        p.endPhase("patch_decoder");
+        pr.addFlops("patch_decoder", g.numPatches * embedDim * patchPixels * 2);
+        pr.endPhase("patch_decoder");
 
         return output;
-    }
-
-    public getTokens(): number[][] {
-        return this.tokens;
     }
 
     public clearContext(): void {
@@ -408,5 +367,6 @@ export class VitInferenceRuntime {
         this.attentionCache = [];
         this.mlpCache = [];
         this.residualCache = [];
+        this.attentionPairsComputed = 0;
     }
 }

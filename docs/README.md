@@ -57,6 +57,8 @@ Source: [github.com/pandaGaume/spikypanda](https://github.com/pandaGaume/spikypa
 | [Vision Transformers and Graph-Based Attention](vision-transformers-spikypanda.md) | ViT/VLA concepts mapped to graph architecture, attention as emergent graph property, roadmap toward world models |
 | [ViT Benchmark Results](vit-benchmark-results.md) | CNN vs ViT comparison on MNIST - experimental setup, results, analysis, scientific conclusions |
 | [MAE LiDAR Results](mae-lidar-results.md) | Per-patch ViT autoencoder vs CNN for sparse feature reconstruction on LiDAR grids - Z max and Velocity preservation |
+| [SAT LiDAR Results](sat-lidar-results.md) | Spatial Attention Transformer - local attention outperforms global attention, multi-scale profiling analysis |
+| [SAT Research Review Package](sat-research-review-package.md) | Complete package for academic review - methodology, results, reproduction steps, open questions |
 | [Bottlenecks and Opportunities](bottlenecks-and-opportunities.md) | Performance limits at scale, and three research directions where graph-native mechanisms could surpass standard architectures |
 
 ---
