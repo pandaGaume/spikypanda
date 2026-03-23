@@ -24,6 +24,17 @@
 - Mutations structurelles : ajouter/supprimer neurones et synapses dans le graph
 - Comparaison avec backprop sur les memes taches
 
+### LiDAR Simulator - Sensor Noise Model
+- Appliquer le bruit capteur dans BabylonJS via post-process shader sur le depth render target
+- Types de bruit a simuler :
+  - Gaussien proportionnel a la distance : sigma = k * depth
+  - Dropout aleatoire (~5%) : surfaces absorbantes, hors portee
+  - Edge noise : bruit accru sur les contours (gradient de depth eleve)
+  - Quantification : resolution limitee du capteur
+- Le bruit appartient au capteur (simulateur), pas au post-processing
+- Camera depth buffer (pas ray-tracing) - FOV max 180, multi-camera ou cubemap pour 360
+- A appliquer avant la projection en grille 64x64x6
+
 ### 3D Brain Visualization
 - Etendre Brain3D au-dela de XOR : visualiser CNN et RNN
 - Thin instances pour les reseaux larges (milliers de neurones)
