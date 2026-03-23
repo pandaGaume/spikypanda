@@ -2,6 +2,7 @@ export * from "./ann";
 export * from "./cnn";
 export * from "./rnn";
 export * from "./snn";
+export * from "./vit";
 export * from "./nn.weights";
 export * from "./nn.interfaces";
 export * from "./nn.interfaces.builder";

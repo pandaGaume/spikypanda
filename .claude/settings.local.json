@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:amilabs.xyz)",
-      "WebFetch(domain:www.vizuaranewsletter.com)"
+      "WebFetch(domain:www.vizuaranewsletter.com)",
+      "Bash(npx tsc:*)",
+      "Bash(npx jest:*)",
+      "Bash(npx webpack:*)"
     ]
   }
 }

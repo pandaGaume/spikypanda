@@ -44,7 +44,8 @@
                 <h2>Understanding the configuration</h2><span class="collapsible-arrow">&#9660;</span>
             </div>
             <div class="collapsible-body metrics-help">
-                <p><strong>Architecture</strong> - Three presets are available. <em>Fast</em> uses a single Conv(4, 3x3) layer - minimal but quick, typically reaching ~85-92% accuracy. <em>Balanced</em> uses Conv(8, 5x5) with larger filters that capture more context, typically ~92-96%. <em>Accuracy</em> uses two conv layers (16 + 32 filters) for the best results (~96-99%) but creates 20K+ neurons and trains much slower in the browser.</p>
+                <p><strong>CNN Architecture</strong> - Three CNN presets are available. <em>Fast</em> uses a single Conv(4, 3x3) layer - minimal but quick, typically reaching ~85-92% accuracy. <em>Balanced</em> uses Conv(8, 5x5) with larger filters that capture more context, typically ~92-96%. <em>Accuracy</em> uses two conv layers (16 + 32 filters) for the best results (~96-99%) but creates 20K+ neurons and trains much slower in the browser.</p>
+                <p><strong>ViT Architecture</strong> - Two Vision Transformer presets reproduce the state-of-the-art ViT architecture in a graph-based framework. The image is split into 7x7 patches (16 tokens for 28x28), each projected into an embedding space. Self-attention allows every patch to relate to every other patch from the first layer. <em>ViT Tiny</em> uses embed=64, 4 heads, 2 blocks. <em>ViT Small</em> uses embed=128, 4 heads, 4 blocks. Note: ViTs typically require more data than CNNs - accuracy may be lower on MNIST with only 500 training samples.</p>
                 <p><strong>Epochs</strong> - Number of full passes through the training data. More epochs generally improve accuracy but with diminishing returns. 3-5 epochs is usually sufficient for MNIST with these architectures.</p>
                 <p><strong>Learning rate</strong> - Controls step size during weight updates. The default 0.005 works well with Adam. If accuracy plateaus at a low value, try reducing it. If training is too slow, try increasing it slightly.</p>
             </div>
@@ -56,9 +57,11 @@
                 <div>
                     <label for="preset">Architecture:</label><br>
                     <select id="preset">
-                        <option value="fast">Fast — Conv(4,3x3) → Pool → Dense</option>
-                        <option value="balanced">Balanced — Conv(8,5x5) → Pool → Dense</option>
-                        <option value="accuracy">Accuracy — Conv(16,5x5) → Pool → Conv(32,5x5) → Pool → Dense</option>
+                        <option value="fast">CNN Fast - Conv(4,3x3) -> Pool -> Dense</option>
+                        <option value="balanced">CNN Balanced - Conv(8,5x5) -> Pool -> Dense</option>
+                        <option value="accuracy">CNN Accuracy - Conv(16,5x5) -> Pool -> Conv(32,5x5) -> Pool -> Dense</option>
+                        <option value="vit-tiny">ViT Tiny - Patch 7x7, 4 heads, 2 blocks, embed=64</option>
+                        <option value="vit-small">ViT Small - Patch 7x7, 4 heads, 4 blocks, embed=128</option>
                     </select>
                 </div>
                 <div>
