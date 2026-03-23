@@ -8,7 +8,11 @@
       "Bash(npx webpack:*)",
       "WebSearch",
       "Bash(node packages/dev/tools/benchmarks/sat-benchmark.cjs)",
-      "Bash(node packages/dev/tools/benchmarks/sat-scale-benchmark.cjs)"
+      "Bash(node packages/dev/tools/benchmarks/sat-scale-benchmark.cjs)",
+      "Bash(python3 \"C:/Users/GuillaumePelletier/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/2a7f74a8-55fa-4803-9580-715dc9d02c08/20b92b7a-cff9-4c0f-b949-b37770968e1e/skills/cir-fiche-scientifique/scripts/generate_pdf.py\" --data docs/internals/cir-fiche-data.json --output docs/internals/cir-fiche-scientifique-cnn-vit-sat.pdf)",
+      "Bash(where python:*)",
+      "Bash(where py:*)",
+      "Bash(C:/Python312/python.exe \"C:/Users/GuillaumePelletier/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/2a7f74a8-55fa-4803-9580-715dc9d02c08/20b92b7a-cff9-4c0f-b949-b37770968e1e/skills/cir-fiche-scientifique/scripts/generate_pdf.py\" --data docs/internals/cir-fiche-data.json --output docs/internals/cir-fiche-scientifique-cnn-vit-sat.pdf)"
     ]
   }
 }
