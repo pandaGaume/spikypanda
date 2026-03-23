@@ -56,6 +56,8 @@ Source: [github.com/pandaGaume/spikypanda](https://github.com/pandaGaume/spikypa
 | [LiDAR Autoencoder](lidar-autoencoder.md) | Convolutional autoencoder for LiDAR grid compression - architecture, 6-channel design, known limitations |
 | [Vision Transformers and Graph-Based Attention](vision-transformers-spikypanda.md) | ViT/VLA concepts mapped to graph architecture, attention as emergent graph property, roadmap toward world models |
 | [ViT Benchmark Results](vit-benchmark-results.md) | CNN vs ViT comparison on MNIST - experimental setup, results, analysis, scientific conclusions |
+| [MAE LiDAR Results](mae-lidar-results.md) | Per-patch ViT autoencoder vs CNN for sparse feature reconstruction on LiDAR grids - Z max and Velocity preservation |
+| [Bottlenecks and Opportunities](bottlenecks-and-opportunities.md) | Performance limits at scale, and three research directions where graph-native mechanisms could surpass standard architectures |
 
 ---
 

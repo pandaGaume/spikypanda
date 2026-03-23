@@ -101,8 +101,71 @@ The ViT shows continued improvement from epoch 3 to epoch 10 (56% to 74%), which
 
 5. **Scientific positioning.** This experiment reproduces well-established results from the literature. The original contribution lies not in the ViT architecture itself, but in its implementation within a graph-based, mutable neural architecture framework -- a stepping stone toward hybrid attention mechanisms that leverage spatial topology (see `vision-transformers-spikypanda.md`).
 
+## 6. ViT as Autoencoder - Reconstruction Limitations
+
+### Experiment
+
+We tested the ViT as a convolutional autoencoder replacement on the LiDAR grid reconstruction task (16x16x6 channels). The ViT classifier architecture was adapted for reconstruction:
+- Output activation changed from softmax to sigmoid (values in [0,1])
+- Loss changed from cross-entropy to MSE
+- numClasses set to output size (width x height x channels = 1536)
+- Full backpropagation through all transformer blocks
+
+### Observation
+
+The ViT autoencoder did not improve reconstruction quality compared to the CNN autoencoder, particularly for the sparse channels (Z max, Velocity) that motivated this experiment. Training speed was comparable to CNN but reconstruction quality remained poor.
+
+### Analysis - Why the ViT classifier architecture fails for reconstruction
+
+The fundamental issue is **architectural**: the standard ViT compresses all spatial information into a **single class token** through self-attention, then maps this token to the output via a linear head.
+
+```
+CNN Autoencoder:
+  Input (16x16x6) -> Conv -> Pool -> Latent (64d) -> Upsample -> Conv -> Output (16x16x6)
+  Spatial information preserved through feature maps at each layer
+
+ViT Classifier as Autoencoder:
+  Input (16x16x6) -> Patches (16 tokens) -> Attention -> Class Token (64d) -> Linear -> Output (1536)
+  ALL spatial information collapsed into ONE token, then linearly expanded
+```
+
+The class token is designed to **summarize** the image for classification (one label), not to **preserve** spatial detail for reconstruction (every pixel). A single 64-dimensional vector cannot faithfully encode the position and value of every pixel in a 16x16x6 grid.
+
+This is fundamentally different from a CNN autoencoder where:
+- The encoder preserves spatial structure through feature maps (Conv layers maintain 2D layout)
+- The decoder uses upsampling to reconstruct spatial positions progressively
+- Skip connections (in U-Net variants) can pass high-frequency details directly
+
+### The correct approach - Per-patch reconstruction (MAE-style)
+
+The Masked Autoencoder (MAE, He et al., 2022) solves this by using **all tokens** for reconstruction, not just the class token. Each patch token reconstructs its own local region:
+
+```
+MAE-style ViT Autoencoder:
+  Input (16x16x6) -> Patches (16 tokens) -> Encoder (attention) -> 16 token embeddings
+                                                                         |
+  Each token -> Linear -> Reconstruct own patch (4x4x6 = 96 values)
+                                                                         |
+  Reassemble patches -> Output (16x16x6)
+```
+
+This preserves spatial information because:
+- Each token only needs to reconstruct its own local patch (96 values from 64 dims - feasible)
+- Self-attention allows each token to borrow context from other patches (global receptive field)
+- Sparse features (obstacles in Z max) are localized to specific patches - the responsible token can focus on them
+
+This is the approach implemented in phase 2 of this experiment.
+
+### Scientific value
+
+This negative result is itself informative:
+1. It confirms that ViT classification architecture and autoencoder architecture serve fundamentally different purposes
+2. It highlights the importance of spatial preservation in reconstruction tasks
+3. It motivates the per-patch approach which leverages attention for context while maintaining spatial locality - a property that naturally maps to the graph-based architecture
+
 ## References
 
 - Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., Uszkoreit, J., & Houlsby, N. (2021). An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale. *ICLR 2021*.
 - Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, L., & Polosukhin, I. (2017). Attention Is All You Need. *Advances in Neural Information Processing Systems (NeurIPS)*.
+- He, K., Chen, X., Xie, S., Li, Y., Dollar, P., & Girshick, R. (2022). Masked Autoencoders Are Scalable Vision Learners. *CVPR 2022*.
 - SpikyPanda ViT implementation: `packages/dev/core/src/neuralnetwork/vit/`

@@ -19,6 +19,9 @@ import { softmax, gelu, layerNormForward } from "./vit.math";
 export class VitInferenceRuntime {
     private _graph: IVitGraph;
 
+    /// <summary>When false, output raw logits instead of softmax (for autoencoder/regression)</summary>
+    public useSoftmax: boolean = true;
+
     /// <summary>Token activations: [numTokens][embedDim]</summary>
     public tokens: number[][] = [];
 
@@ -282,8 +285,74 @@ export class VitInferenceRuntime {
             }
             logits[cls] = sum;
         }
+        this.lastLogits = logits;
 
-        return softmax(logits);
+        if (this.useSoftmax) {
+            return softmax(logits);
+        }
+        // Sigmoid for autoencoder (output in [0,1] range)
+        return logits.map(v => 1 / (1 + Math.exp(-v)));
+    }
+
+    /// <summary>
+    /// Get raw logits before activation (for backprop).
+    /// </summary>
+    public lastLogits: number[] = [];
+
+    /// <summary>
+    /// MAE-style reconstruction: each patch token reconstructs its own patch.
+    /// Returns flat pixel array [H * W * C].
+    /// Must be called after run() which populates the tokens.
+    /// </summary>
+    public reconstructPatches(inputPixels: number[]): number[] {
+        const g = this._graph;
+        if (!g.patchDecoderWeights || !g.patchDecoderBias) {
+            throw new Error("patchDecoderWeights not initialized. Rebuild the graph.");
+        }
+
+        // Run encoder first
+        this.run(inputPixels);
+
+        const embedDim = g.embedDim;
+        const patchSize = g.patchSize;
+        const imgChannels = Math.round(inputPixels.length / (g.numPatches * patchSize * patchSize));
+        const imgWidth = Math.round(Math.sqrt(inputPixels.length / imgChannels));
+        const patchesX = imgWidth / patchSize;
+        const patchPixels = patchSize * patchSize * imgChannels;
+
+        // Output buffer
+        const output = new Array(inputPixels.length).fill(0);
+
+        // Each patch token (index 1..numPatches, skipping class token at 0)
+        // reconstructs its own patch region
+        for (let p = 0; p < g.numPatches; p++) {
+            const token = this.tokens[p + 1]; // +1 to skip class token
+            const patchRow = Math.floor(p / patchesX);
+            const patchCol = p % patchesX;
+
+            // Linear decoder: token (embedDim) -> patch pixels (patchPixels)
+            for (let px = 0; px < patchPixels; px++) {
+                let sum = g.patchDecoderBias[px];
+                for (let e = 0; e < embedDim; e++) {
+                    sum += token[e] * g.patchDecoderWeights[e * patchPixels + px];
+                }
+                // Sigmoid to keep output in [0,1]
+                sum = 1 / (1 + Math.exp(-sum));
+
+                // Map patch pixel index back to image position
+                const localPixel = px;
+                const ch = localPixel % imgChannels;
+                const spatialIdx = Math.floor(localPixel / imgChannels);
+                const localY = Math.floor(spatialIdx / patchSize);
+                const localX = spatialIdx % patchSize;
+                const imgY = patchRow * patchSize + localY;
+                const imgX = patchCol * patchSize + localX;
+                const flatIdx = (imgY * imgWidth + imgX) * imgChannels + ch;
+                output[flatIdx] = sum;
+            }
+        }
+
+        return output;
     }
 
     public getTokens(): number[][] {

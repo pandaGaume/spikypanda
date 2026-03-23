@@ -179,6 +179,16 @@ export class VitBuilder {
         (graph as any).headWeights = headWeights;
         (graph as any).headBias = headBias;
 
+        // Per-patch decoder (MAE-style autoencoder)
+        // Each patch token (embedDim) -> reconstructs its own patch (patchPixels)
+        const patchDecoderWeights = new Array(c.embedDim * patchPixels);
+        for (let i = 0; i < patchDecoderWeights.length; i++) {
+            patchDecoderWeights[i] = WeightInit.Glorot(c.embedDim, patchPixels);
+        }
+        const patchDecoderBias = new Array(patchPixels).fill(0);
+        (graph as any).patchDecoderWeights = patchDecoderWeights;
+        (graph as any).patchDecoderBias = patchDecoderBias;
+
         return graph;
     }
 

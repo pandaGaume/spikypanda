@@ -5,7 +5,8 @@
       "WebFetch(domain:www.vizuaranewsletter.com)",
       "Bash(npx tsc:*)",
       "Bash(npx jest:*)",
-      "Bash(npx webpack:*)"
+      "Bash(npx webpack:*)",
+      "WebSearch"
     ]
   }
 }

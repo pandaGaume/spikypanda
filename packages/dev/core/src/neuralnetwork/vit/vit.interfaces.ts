@@ -152,6 +152,10 @@ export interface IVitGraph extends IGraph<IVitNeuron, IVitSynapse> {
     headWeights: number[];
     /// <summary>Classification head bias: [numClasses]</summary>
     headBias: number[];
+    /// <summary>Per-patch decoder weights: [embedDim * patchPixels] (MAE mode)</summary>
+    patchDecoderWeights?: number[];
+    /// <summary>Per-patch decoder bias: [patchPixels] (MAE mode)</summary>
+    patchDecoderBias?: number[];
 }
 
 // ---------------------------------------------------------------------------
