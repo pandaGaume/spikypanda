@@ -80,3 +80,39 @@
 .metrics-help code {
     color: var(--log-text);
 }
+
+/* Sparse Metrics Table */
+.metrics-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85em;
+}
+.metrics-table th {
+    background: rgba(0, 255, 255, 0.15);
+    color: #0ff;
+    padding: 6px 8px;
+    text-align: center;
+    border-bottom: 1px solid rgba(0, 255, 255, 0.3);
+}
+.metrics-table td {
+    padding: 4px 8px;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.metrics-table tr:hover {
+    background: rgba(0, 255, 255, 0.05);
+}
+.metrics-table .sparse-row {
+    color: #0ff;
+    font-weight: bold;
+}
+.metrics-table .dense-row {
+    color: #8aa;
+}
+.metrics-table .type-sparse {
+    color: #f80;
+    font-weight: bold;
+}
+.metrics-table .type-dense {
+    color: #8aa;
+}

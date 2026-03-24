@@ -49,3 +49,4 @@ coverage/
 
 #Ignore internal doc and data
 internals/
+.claude/

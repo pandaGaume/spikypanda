@@ -158,6 +158,37 @@
 
         <div class="panel">
             <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the sparse metrics</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p>Standard MSE treats all pixels equally. In a 16x16 grid with 6 channels, that is 1,536 pixels. If only 20 of them contain obstacle data (Z max, Velocity), those 20 pixels represent just 1.3% of the total. A model that reconstructs the 1,516 empty pixels perfectly but misses every obstacle would still report an excellent MSE. These sparse metrics expose what MSE hides.</p>
+
+                <p><strong>Sparse Recall</strong> - Of all real obstacle pixels (ground truth above threshold), what fraction did the model reconstruct above threshold? A recall of 0.80 means 80% of obstacles were detected. Low recall means the model is missing obstacles - critical for navigation safety. Formula: <code>Recall = TruePositive / TotalSparseGT</code><br/>
+                <span style="color:#0f0;">&#9650; Higher is better.</span> Range [0, 1]. Target: > 0.7. Below 0.5 means most obstacles are lost.</p>
+
+                <p><strong>Sparse Precision</strong> - Of all pixels the model predicted as obstacles, what fraction were real? A precision of 0.90 means 90% of predicted obstacles exist in reality. Low precision means the model is hallucinating obstacles - causes unnecessary avoidance maneuvers. Formula: <code>Precision = TruePositive / TotalPredicted</code><br/>
+                <span style="color:#0f0;">&#9650; Higher is better.</span> Range [0, 1]. Target: > 0.7. Below 0.5 means more than half of predicted obstacles are false alarms.</p>
+
+                <p><strong>Sparse F1</strong> - The harmonic mean of Recall and Precision. This is the <em>headline metric</em> for sparse channel quality. F1 penalizes models that sacrifice either detection (recall) or accuracy (precision). A model must both find real obstacles AND avoid false alarms. Formula: <code>F1 = 2 * Recall * Precision / (Recall + Precision)</code><br/>
+                <span style="color:#0f0;">&#9650; Higher is better.</span> Range [0, 1]. Target: > 0.6. A value of 0 means complete failure. Above 0.8 is excellent.</p>
+
+                <p><strong>Sparse MSE</strong> - MSE computed only on pixels where the ground truth is above threshold. This removes the "empty space bias" where thousands of zero-valued pixels dominate the error. A global MSE of 0.005 might hide a sparse MSE of 0.15 on obstacle pixels.<br/>
+                <span style="color:#f44;">&#9660; Lower is better.</span> Range [0, +inf]. Compare relative to global MSE: if sparse MSE >> global MSE, the model is failing on obstacles specifically.</p>
+
+                <p><strong>Energy Retention Ratio (ERR)</strong> - Measures how much signal amplitude the model preserves on obstacle pixels. Formula: <code>ERR = sum(pred^2 * mask) / sum(gt^2 * mask)</code>. An ERR of 1.0 means the energy is perfectly preserved. An ERR of 0.3 means 70% of the obstacle signal energy was lost - the model is flattening obstacle peaks. CNN autoencoders typically show low ERR because convolution + pooling smooths out sharp features.<br/>
+                <span style="color:#0f0;">&#9650; Closer to 1.0 is better.</span> Range [0, +inf]. Target: 0.7 - 1.3. Below 0.5 means severe signal loss. Above 1.5 means the model is amplifying noise.</p>
+
+                <p><strong>Top-K Hit Rate</strong> - Takes the K highest-value pixels in the ground truth (the most prominent obstacles) and checks if they are also among the K highest in the reconstruction. This is the most intuitive metric: "did the model find the biggest obstacles?" A hit rate of 0.90 means 90% of the most important pixels were correctly identified as important.<br/>
+                <span style="color:#0f0;">&#9650; Higher is better.</span> Range [0, 1]. Target: > 0.6. A random model would score ~K/N (near 0). Above 0.8 means the model reliably identifies the most critical pixels.</p>
+
+                <p><strong>Channel classification</strong> - Channels are automatically classified as <span style="color:#f80;font-weight:bold;">SPARSE</span> (enough above-threshold pixels) or <span style="color:#8aa;">DENSE</span> (mostly uniform values). Sparse metrics are only computed for sparse channels. Typically Z max (C1) and Velocity (C5) are sparse; Density (C0), Z min (C2), Std(z) (C3), and Reflectivity (C4) are dense.</p>
+
+                <p><strong>Interpreting the comparison</strong> - When comparing architectures (CNN vs ViT vs SAT), look at Sparse F1 and ERR, not global MSE. Two models can have similar MSE but very different sparse F1. The model with higher sparse F1 preserves obstacle information better, which is what matters for navigation. This is why attention-based architectures (ViT MAE, SAT) outperform CNN on these metrics despite comparable or even higher global MSE.</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
                 <h2>Known limitations</h2><span class="collapsible-arrow">&#9660;</span>
             </div>
             <div class="collapsible-body metrics-help">
@@ -258,6 +289,36 @@ const latent = encRuntime.run(inputPixels);
                 <div class="stat"><div class="value" id="duration">-</div><div class="label">Inference Time</div></div>
                 <div class="stat"><div class="value" id="samplesCount">-</div><div class="label">Test Samples</div></div>
             </div>
+
+            <!-- Sparse Metrics Table -->
+            <div id="sparseMetricsPanel" style="display:none; margin-top: 16px;">
+                <h3 class="collapsible-title" onclick="this.classList.toggle('open'); this.nextElementSibling.style.display = this.classList.contains('open') ? 'block' : 'none';" title="Click to expand">
+                    Sparse Reconstruction Metrics <span class="arrow">&#9654;</span>
+                </h3>
+                <div style="display:none">
+                    <p style="color: #8aa; font-size: 0.85em; margin-bottom: 8px;">
+                        These metrics isolate reconstruction quality on sparse channels (Z max, Velocity) where standard MSE is misleading.
+                        Recall = fraction of real obstacles detected. F1 = balance between detection and false alarms. ERR = signal energy preserved.
+                    </p>
+                    <table id="sparseMetricsTable" class="metrics-table">
+                        <thead>
+                            <tr>
+                                <th>Channel</th>
+                                <th>MSE</th>
+                                <th>Recall</th>
+                                <th>Precision</th>
+                                <th>F1</th>
+                                <th>ERR</th>
+                                <th>Top-K</th>
+                                <th>Type</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <div id="sparseMetricsSummary" style="margin-top: 8px; color: #0ff; font-size: 0.9em;"></div>
+                </div>
+            </div>
+
             <div id="reconstructions"></div>
         </div>
     </div>
