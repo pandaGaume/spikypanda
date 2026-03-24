@@ -1,0 +1,914 @@
+[
+  {
+    "architecture": "ViT_MAE",
+    "gridSize": 16,
+    "latentDim": 64,
+    "profile": {
+      "totalTimeMs": 54.62090000000899,
+      "totalFlops": 2987776,
+      "totalAttentionPairs": 2312,
+      "phases": [
+        {
+          "name": "patch_embedding",
+          "timeMs": 0.4282999999995809,
+          "timePct": 0.7841320813086391,
+          "flops": 196608,
+          "flopsPct": 6.580412989461057,
+          "attentionPairs": 0
+        },
+        {
+          "name": "layernorm",
+          "timeMs": 0.056999999993422534,
+          "timePct": 0.10435565871930554,
+          "flops": 21760,
+          "flopsPct": 0.7283009168023306,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_qkv",
+          "timeMs": 19.307400000005146,
+          "timePct": 35.3480078138624,
+          "flops": 835584,
+          "flopsPct": 27.96675520520949,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_scores",
+          "timeMs": 4.947499999994761,
+          "timePct": 9.057888097768341,
+          "flops": 147968,
+          "flopsPct": 4.952446234255848,
+          "attentionPairs": 2312
+        },
+        {
+          "name": "attention_proj",
+          "timeMs": 13.066800000007788,
+          "timePct": 23.92271090371202,
+          "flops": 278528,
+          "flopsPct": 9.32225173506983,
+          "attentionPairs": 0
+        },
+        {
+          "name": "mlp",
+          "timeMs": 12.762700000006589,
+          "timePct": 23.365964310372934,
+          "flops": 1114112,
+          "flopsPct": 37.28900694027932,
+          "attentionPairs": 0
+        },
+        {
+          "name": "head",
+          "timeMs": 2.036599999999453,
+          "timePct": 3.7286093784597427,
+          "flops": 196608,
+          "flopsPct": 6.580412989461057,
+          "attentionPairs": 0
+        },
+        {
+          "name": "patch_decoder",
+          "timeMs": 2.014600000002247,
+          "timePct": 3.6883317557966184,
+          "flops": 196608,
+          "flopsPct": 6.580412989461057,
+          "attentionPairs": 0
+        }
+      ]
+    }
+  },
+  {
+    "architecture": "SAT_Local",
+    "gridSize": 16,
+    "latentDim": 64,
+    "profile": {
+      "totalTimeMs": 3.3843999999808148,
+      "totalFlops": 2745344,
+      "totalAttentionPairs": 1596,
+      "phases": [
+        {
+          "name": "patch_embedding",
+          "timeMs": 0.12059999999473803,
+          "timePct": 3.5634085804107576,
+          "flops": 196608,
+          "flopsPct": 7.161506900410294,
+          "attentionPairs": 0
+        },
+        {
+          "name": "layernorm",
+          "timeMs": 0.022499999991850927,
+          "timePct": 0.6648150334469469,
+          "flops": 21760,
+          "flopsPct": 0.7926146960089518,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_qkv",
+          "timeMs": 0.44359999999869615,
+          "timePct": 13.10719773080046,
+          "flops": 835584,
+          "flopsPct": 30.436404326743755,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_scores",
+          "timeMs": 0.08279999998921994,
+          "timePct": 2.4465193236523257,
+          "flops": 102144,
+          "flopsPct": 3.720626631853786,
+          "attentionPairs": 1596
+        },
+        {
+          "name": "attention_proj",
+          "timeMs": 0.32450000001699664,
+          "timePct": 9.588110153020805,
+          "flops": 278528,
+          "flopsPct": 10.145468108914583,
+          "attentionPairs": 0
+        },
+        {
+          "name": "mlp",
+          "timeMs": 0.5488999999943189,
+          "timePct": 16.218532088329702,
+          "flops": 1114112,
+          "flopsPct": 40.58187243565833,
+          "attentionPairs": 0
+        },
+        {
+          "name": "head",
+          "timeMs": 0.00019999999494757503,
+          "timePct": 0.005909466816827466,
+          "flops": 0,
+          "flopsPct": 0,
+          "attentionPairs": 0
+        },
+        {
+          "name": "patch_decoder",
+          "timeMs": 1.8413000000000466,
+          "timePct": 54.405507623522176,
+          "flops": 196608,
+          "flopsPct": 7.161506900410294,
+          "attentionPairs": 0
+        }
+      ]
+    }
+  },
+  {
+    "architecture": "ViT_MAE",
+    "gridSize": 16,
+    "latentDim": 128,
+    "profile": {
+      "totalTimeMs": 15.156899999972666,
+      "totalFlops": 10432000,
+      "totalAttentionPairs": 2312,
+      "phases": [
+        {
+          "name": "patch_embedding",
+          "timeMs": 0.6840000000083819,
+          "timePct": 4.512796152310931,
+          "flops": 393216,
+          "flopsPct": 3.769325153374233,
+          "attentionPairs": 0
+        },
+        {
+          "name": "layernorm",
+          "timeMs": 0.07360000000335276,
+          "timePct": 0.4855874222531355,
+          "flops": 43520,
+          "flopsPct": 0.4171779141104294,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_qkv",
+          "timeMs": 4.124699999985751,
+          "timePct": 27.213348375942243,
+          "flops": 3342336,
+          "flopsPct": 32.03926380368098,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_scores",
+          "timeMs": 0.2980000000097789,
+          "timePct": 1.9661012476846607,
+          "flops": 295936,
+          "flopsPct": 2.8368098159509203,
+          "attentionPairs": 2312
+        },
+        {
+          "name": "attention_proj",
+          "timeMs": 1.9628000000084285,
+          "timePct": 12.949877613575126,
+          "flops": 1114112,
+          "flopsPct": 10.679754601226994,
+          "attentionPairs": 0
+        },
+        {
+          "name": "mlp",
+          "timeMs": 3.752199999988079,
+          "timePct": 24.755721816432423,
+          "flops": 4456448,
+          "flopsPct": 42.71901840490798,
+          "attentionPairs": 0
+        },
+        {
+          "name": "head",
+          "timeMs": 0.5646999999880791,
+          "timePct": 3.7256958876095867,
+          "flops": 393216,
+          "flopsPct": 3.769325153374233,
+          "attentionPairs": 0
+        },
+        {
+          "name": "patch_decoder",
+          "timeMs": 3.6968999999808148,
+          "timePct": 24.390871484191898,
+          "flops": 393216,
+          "flopsPct": 3.769325153374233,
+          "attentionPairs": 0
+        }
+      ]
+    }
+  },
+  {
+    "architecture": "SAT_Local",
+    "gridSize": 16,
+    "latentDim": 128,
+    "profile": {
+      "totalTimeMs": 7.184500000032131,
+      "totalFlops": 9947136,
+      "totalAttentionPairs": 1596,
+      "phases": [
+        {
+          "name": "patch_embedding",
+          "timeMs": 0.21319999999832362,
+          "timePct": 2.967499478006405,
+          "flops": 393216,
+          "flopsPct": 3.953057442865967,
+          "attentionPairs": 0
+        },
+        {
+          "name": "layernorm",
+          "timeMs": 0.051700000010896474,
+          "timePct": 0.7196047047207914,
+          "flops": 43520,
+          "flopsPct": 0.43751286802553013,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_qkv",
+          "timeMs": 1.8824000000022352,
+          "timePct": 26.20084904995221,
+          "flops": 3342336,
+          "flopsPct": 33.600988264360716,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_scores",
+          "timeMs": 0.2141999999876134,
+          "timePct": 2.9814183309437743,
+          "flops": 204288,
+          "flopsPct": 2.0537368746139593,
+          "attentionPairs": 1596
+        },
+        {
+          "name": "attention_proj",
+          "timeMs": 2.1304000000236556,
+          "timePct": 29.65272461568833,
+          "flops": 1114112,
+          "flopsPct": 11.200329421453572,
+          "attentionPairs": 0
+        },
+        {
+          "name": "mlp",
+          "timeMs": 2.5267000000167172,
+          "timePct": 35.168766093749284,
+          "flops": 4456448,
+          "flopsPct": 44.80131768581429,
+          "attentionPairs": 0
+        },
+        {
+          "name": "head",
+          "timeMs": 0.00039999998989515007,
+          "timePct": 0.005567541093929448,
+          "flops": 0,
+          "flopsPct": 0,
+          "attentionPairs": 0
+        },
+        {
+          "name": "patch_decoder",
+          "timeMs": 0.16550000000279397,
+          "timePct": 2.3035701858452757,
+          "flops": 393216,
+          "flopsPct": 3.953057442865967,
+          "attentionPairs": 0
+        }
+      ]
+    }
+  },
+  {
+    "architecture": "ViT_MAE",
+    "gridSize": 32,
+    "latentDim": 64,
+    "profile": {
+      "totalTimeMs": 10.34899999992922,
+      "totalFlops": 13125376,
+      "totalAttentionPairs": 33800,
+      "phases": [
+        {
+          "name": "patch_embedding",
+          "timeMs": 0.40239999996265396,
+          "timePct": 3.8882983859832456,
+          "flops": 786432,
+          "flopsPct": 5.991691209455638,
+          "attentionPairs": 0
+        },
+        {
+          "name": "layernorm",
+          "timeMs": 0.08449999999720603,
+          "timePct": 0.8165040100278671,
+          "flops": 83200,
+          "flopsPct": 0.6338866025628523,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_qkv",
+          "timeMs": 1.790000000037253,
+          "timePct": 17.29635713643343,
+          "flops": 3194880,
+          "flopsPct": 24.341245538413528,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_scores",
+          "timeMs": 2.4378999999607913,
+          "timePct": 23.556865397405208,
+          "flops": 2163200,
+          "flopsPct": 16.48105166663416,
+          "attentionPairs": 33800
+        },
+        {
+          "name": "attention_proj",
+          "timeMs": 1.382900000025984,
+          "timePct": 13.362643734036544,
+          "flops": 1064960,
+          "flopsPct": 8.11374851280451,
+          "attentionPairs": 0
+        },
+        {
+          "name": "mlp",
+          "timeMs": 2.155599999940023,
+          "timePct": 20.829065609766797,
+          "flops": 4259840,
+          "flopsPct": 32.45499405121804,
+          "attentionPairs": 0
+        },
+        {
+          "name": "head",
+          "timeMs": 1.012300000002142,
+          "timePct": 9.781621412784478,
+          "flops": 786432,
+          "flopsPct": 5.991691209455638,
+          "attentionPairs": 0
+        },
+        {
+          "name": "patch_decoder",
+          "timeMs": 1.0834000000031665,
+          "timePct": 10.468644313562434,
+          "flops": 786432,
+          "flopsPct": 5.991691209455638,
+          "attentionPairs": 0
+        }
+      ]
+    }
+  },
+  {
+    "architecture": "SAT_Local",
+    "gridSize": 32,
+    "latentDim": 64,
+    "profile": {
+      "totalTimeMs": 13.611299999931362,
+      "totalFlops": 10646528,
+      "totalAttentionPairs": 7356,
+      "phases": [
+        {
+          "name": "patch_embedding",
+          "timeMs": 0.41209999995771796,
+          "timePct": 3.0276314529824195,
+          "flops": 786432,
+          "flopsPct": 7.386746176781764,
+          "attentionPairs": 0
+        },
+        {
+          "name": "layernorm",
+          "timeMs": 0.16710000002058223,
+          "timePct": 1.2276564326803823,
+          "flops": 83200,
+          "flopsPct": 0.7814754256035394,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_qkv",
+          "timeMs": 3.2305000000051223,
+          "timePct": 23.733956345252935,
+          "flops": 3194880,
+          "flopsPct": 30.008656343175915,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_scores",
+          "timeMs": 0.6662999999825843,
+          "timePct": 4.895197372667888,
+          "flops": 470784,
+          "flopsPct": 4.421948639030489,
+          "attentionPairs": 7356
+        },
+        {
+          "name": "attention_proj",
+          "timeMs": 3.117599999997765,
+          "timePct": 22.904498468283606,
+          "flops": 1064960,
+          "flopsPct": 10.002885447725305,
+          "attentionPairs": 0
+        },
+        {
+          "name": "mlp",
+          "timeMs": 4.969299999938812,
+          "timePct": 36.50863620641578,
+          "flops": 4259840,
+          "flopsPct": 40.01154179090122,
+          "attentionPairs": 0
+        },
+        {
+          "name": "head",
+          "timeMs": 0.0004000000189989805,
+          "timePct": 0.0029387348673601903,
+          "flops": 0,
+          "flopsPct": 0,
+          "attentionPairs": 0
+        },
+        {
+          "name": "patch_decoder",
+          "timeMs": 1.0480000000097789,
+          "timePct": 7.6994849868496305,
+          "flops": 786432,
+          "flopsPct": 7.386746176781764,
+          "attentionPairs": 0
+        }
+      ]
+    }
+  },
+  {
+    "architecture": "ViT_MAE",
+    "gridSize": 32,
+    "latentDim": 128,
+    "profile": {
+      "totalTimeMs": 33.8403999999864,
+      "totalFlops": 43290112,
+      "totalAttentionPairs": 33800,
+      "phases": [
+        {
+          "name": "patch_embedding",
+          "timeMs": 0.8048999999882653,
+          "timePct": 2.378517984387267,
+          "flops": 1572864,
+          "flopsPct": 3.633310073210252,
+          "attentionPairs": 0
+        },
+        {
+          "name": "layernorm",
+          "timeMs": 0.1648000000277534,
+          "timePct": 0.48699187961081913,
+          "flops": 166400,
+          "flopsPct": 0.3843833899066835,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_qkv",
+          "timeMs": 8.159400000004098,
+          "timePct": 24.111417122750844,
+          "flops": 12779520,
+          "flopsPct": 29.520644344833297,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_scores",
+          "timeMs": 6.758400000049733,
+          "timePct": 19.971395137328308,
+          "flops": 4326400,
+          "flopsPct": 9.993968137573772,
+          "attentionPairs": 33800
+        },
+        {
+          "name": "attention_proj",
+          "timeMs": 6.848400000017136,
+          "timePct": 20.237349440372714,
+          "flops": 4259840,
+          "flopsPct": 9.840214781611097,
+          "attentionPairs": 0
+        },
+        {
+          "name": "mlp",
+          "timeMs": 8.117099999915808,
+          "timePct": 23.9864186000138,
+          "flops": 17039360,
+          "flopsPct": 39.36085912644439,
+          "attentionPairs": 0
+        },
+        {
+          "name": "head",
+          "timeMs": 2.0411999999778345,
+          "timePct": 6.031843595166294,
+          "flops": 1572864,
+          "flopsPct": 3.633310073210252,
+          "attentionPairs": 0
+        },
+        {
+          "name": "patch_decoder",
+          "timeMs": 0.9462000000057742,
+          "timePct": 2.796066240369955,
+          "flops": 1572864,
+          "flopsPct": 3.633310073210252,
+          "attentionPairs": 0
+        }
+      ]
+    }
+  },
+  {
+    "architecture": "SAT_Local",
+    "gridSize": 32,
+    "latentDim": 128,
+    "profile": {
+      "totalTimeMs": 23.056799999903888,
+      "totalFlops": 38332416,
+      "totalAttentionPairs": 7356,
+      "phases": [
+        {
+          "name": "patch_embedding",
+          "timeMs": 0.9061999999685213,
+          "timePct": 3.9302938828124403,
+          "flops": 1572864,
+          "flopsPct": 4.103221670139446,
+          "attentionPairs": 0
+        },
+        {
+          "name": "layernorm",
+          "timeMs": 0.16679999988991767,
+          "timePct": 0.7234308312108054,
+          "flops": 166400,
+          "flopsPct": 0.4340973446599348,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_qkv",
+          "timeMs": 7.1928000000771135,
+          "timePct": 31.19600291500597,
+          "flops": 12779520,
+          "flopsPct": 33.33867606988299,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_scores",
+          "timeMs": 0.5950000000884756,
+          "timePct": 2.580583602628968,
+          "flops": 941568,
+          "flopsPct": 2.4563231287065235,
+          "attentionPairs": 7356
+        },
+        {
+          "name": "attention_proj",
+          "timeMs": 5.839499999885447,
+          "timePct": 25.326584781538592,
+          "flops": 4259840,
+          "flopsPct": 11.11289202329433,
+          "attentionPairs": 0
+        },
+        {
+          "name": "mlp",
+          "timeMs": 7.726299999980256,
+          "timePct": 33.50985392601083,
+          "flops": 17039360,
+          "flopsPct": 44.45156809317732,
+          "attentionPairs": 0
+        },
+        {
+          "name": "head",
+          "timeMs": 0.000800000037997961,
+          "timePct": 0.0034696924031144645,
+          "flops": 0,
+          "flopsPct": 0,
+          "attentionPairs": 0
+        },
+        {
+          "name": "patch_decoder",
+          "timeMs": 0.6293999999761581,
+          "timePct": 2.72978036838929,
+          "flops": 1572864,
+          "flopsPct": 4.103221670139446,
+          "attentionPairs": 0
+        }
+      ]
+    }
+  },
+  {
+    "architecture": "ViT_MAE",
+    "gridSize": 64,
+    "latentDim": 64,
+    "profile": {
+      "totalTimeMs": 39.198200000450015,
+      "totalFlops": 20203264,
+      "totalAttentionPairs": 33800,
+      "phases": [
+        {
+          "name": "patch_embedding",
+          "timeMs": 2.381800000090152,
+          "timePct": 6.076299422072462,
+          "flops": 3145728,
+          "flopsPct": 15.570394961922984,
+          "attentionPairs": 0
+        },
+        {
+          "name": "layernorm",
+          "timeMs": 0.10650000022724271,
+          "timePct": 0.27169614988958685,
+          "flops": 83200,
+          "flopsPct": 0.4118146453959122,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_qkv",
+          "timeMs": 7.093000000109896,
+          "timePct": 18.09521865807222,
+          "flops": 3194880,
+          "flopsPct": 15.813682383203032,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_scores",
+          "timeMs": 2.815500000026077,
+          "timePct": 7.182727778300416,
+          "flops": 2163200,
+          "flopsPct": 10.707180780293719,
+          "attentionPairs": 33800
+        },
+        {
+          "name": "attention_proj",
+          "timeMs": 2.5304000000469387,
+          "timePct": 6.455398462219919,
+          "flops": 1064960,
+          "flopsPct": 5.271227461067677,
+          "attentionPairs": 0
+        },
+        {
+          "name": "mlp",
+          "timeMs": 3.442700000014156,
+          "timePct": 8.78280125101314,
+          "flops": 4259840,
+          "flopsPct": 21.084909844270708,
+          "attentionPairs": 0
+        },
+        {
+          "name": "head",
+          "timeMs": 4.913599999854341,
+          "timePct": 12.535269476144137,
+          "flops": 3145728,
+          "flopsPct": 15.570394961922984,
+          "attentionPairs": 0
+        },
+        {
+          "name": "patch_decoder",
+          "timeMs": 15.914700000081211,
+          "timePct": 40.60058880228812,
+          "flops": 3145728,
+          "flopsPct": 15.570394961922984,
+          "attentionPairs": 0
+        }
+      ]
+    }
+  },
+  {
+    "architecture": "SAT_Local",
+    "gridSize": 64,
+    "latentDim": 64,
+    "profile": {
+      "totalTimeMs": 28.339000000385568,
+      "totalFlops": 15365120,
+      "totalAttentionPairs": 7356,
+      "phases": [
+        {
+          "name": "patch_embedding",
+          "timeMs": 2.443799999775365,
+          "timePct": 8.623451779322192,
+          "flops": 3145728,
+          "flopsPct": 20.473175608130624,
+          "attentionPairs": 0
+        },
+        {
+          "name": "layernorm",
+          "timeMs": 0.13219999987632036,
+          "timePct": 0.46649493586408025,
+          "flops": 83200,
+          "flopsPct": 0.5414861712762412,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_qkv",
+          "timeMs": 2.925200000172481,
+          "timePct": 10.322170860413854,
+          "flops": 3194880,
+          "flopsPct": 20.793068977007664,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_scores",
+          "timeMs": 0.5204000002704561,
+          "timePct": 1.8363386155593908,
+          "flops": 470784,
+          "flopsPct": 3.0639786737754084,
+          "attentionPairs": 7356
+        },
+        {
+          "name": "attention_proj",
+          "timeMs": 2.237500000046566,
+          "timePct": 7.89547972764079,
+          "flops": 1064960,
+          "flopsPct": 6.931022992335888,
+          "attentionPairs": 0
+        },
+        {
+          "name": "mlp",
+          "timeMs": 4.431400000117719,
+          "timePct": 15.637107872745784,
+          "flops": 4259840,
+          "flopsPct": 27.72409196934355,
+          "attentionPairs": 0
+        },
+        {
+          "name": "head",
+          "timeMs": 0.0010000001639127731,
+          "timePct": 0.003528706601853162,
+          "flops": 0,
+          "flopsPct": 0,
+          "attentionPairs": 0
+        },
+        {
+          "name": "patch_decoder",
+          "timeMs": 15.647499999962747,
+          "timePct": 55.215427501852055,
+          "flops": 3145728,
+          "flopsPct": 20.473175608130624,
+          "attentionPairs": 0
+        }
+      ]
+    }
+  },
+  {
+    "architecture": "ViT_MAE",
+    "gridSize": 64,
+    "latentDim": 128,
+    "profile": {
+      "totalTimeMs": 57.244699999224395,
+      "totalFlops": 57445888,
+      "totalAttentionPairs": 33800,
+      "phases": [
+        {
+          "name": "patch_embedding",
+          "timeMs": 3.9641999998129904,
+          "timePct": 6.925007904429058,
+          "flops": 6291456,
+          "flopsPct": 10.951969268888314,
+          "attentionPairs": 0
+        },
+        {
+          "name": "layernorm",
+          "timeMs": 0.16939999954774976,
+          "timePct": 0.29592259117445796,
+          "flops": 166400,
+          "flopsPct": 0.28966390074777854,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_qkv",
+          "timeMs": 12.194999999832362,
+          "timePct": 21.303282225249834,
+          "flops": 12779520,
+          "flopsPct": 22.24618757742939,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_scores",
+          "timeMs": 3.361299999989569,
+          "timePct": 5.8718099667482075,
+          "flops": 4326400,
+          "flopsPct": 7.531261419442241,
+          "attentionPairs": 33800
+        },
+        {
+          "name": "attention_proj",
+          "timeMs": 5.460899999830872,
+          "timePct": 9.539573095683725,
+          "flops": 4259840,
+          "flopsPct": 7.41539585914313,
+          "attentionPairs": 0
+        },
+        {
+          "name": "mlp",
+          "timeMs": 8.019799999892712,
+          "timePct": 14.009681245602426,
+          "flops": 17039360,
+          "flopsPct": 29.66158343657252,
+          "attentionPairs": 0
+        },
+        {
+          "name": "head",
+          "timeMs": 21.172600000165403,
+          "timePct": 36.98613146798266,
+          "flops": 6291456,
+          "flopsPct": 10.951969268888314,
+          "attentionPairs": 0
+        },
+        {
+          "name": "patch_decoder",
+          "timeMs": 2.901500000152737,
+          "timePct": 5.068591503129634,
+          "flops": 6291456,
+          "flopsPct": 10.951969268888314,
+          "attentionPairs": 0
+        }
+      ]
+    }
+  },
+  {
+    "architecture": "SAT_Local",
+    "gridSize": 64,
+    "latentDim": 128,
+    "profile": {
+      "totalTimeMs": 37.77270000008866,
+      "totalFlops": 47769600,
+      "totalAttentionPairs": 7356,
+      "phases": [
+        {
+          "name": "patch_embedding",
+          "timeMs": 9.082200000062585,
+          "timePct": 24.044349490614298,
+          "flops": 6291456,
+          "flopsPct": 13.170418006430868,
+          "attentionPairs": 0
+        },
+        {
+          "name": "layernorm",
+          "timeMs": 0.22899999981746078,
+          "timePct": 0.6062579583056633,
+          "flops": 166400,
+          "flopsPct": 0.34833869239013937,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_qkv",
+          "timeMs": 9.491400000173599,
+          "timePct": 25.12767157272665,
+          "flops": 12779520,
+          "flopsPct": 26.7524115755627,
+          "attentionPairs": 0
+        },
+        {
+          "name": "attention_scores",
+          "timeMs": 0.5591000001877546,
+          "timePct": 1.480169540928878,
+          "flops": 941568,
+          "flopsPct": 1.9710610932475885,
+          "attentionPairs": 7356
+        },
+        {
+          "name": "attention_proj",
+          "timeMs": 5.3308999999426305,
+          "timePct": 14.113102849227399,
+          "flops": 4259840,
+          "flopsPct": 8.917470525187566,
+          "attentionPairs": 0
+        },
+        {
+          "name": "mlp",
+          "timeMs": 10.278599999845028,
+          "timePct": 27.211716397877044,
+          "flops": 17039360,
+          "flopsPct": 35.669882100750264,
+          "attentionPairs": 0
+        },
+        {
+          "name": "head",
+          "timeMs": 0.0002999999560415745,
+          "timePct": 0.000794224283783977,
+          "flops": 0,
+          "flopsPct": 0,
+          "attentionPairs": 0
+        },
+        {
+          "name": "patch_decoder",
+          "timeMs": 2.801200000103563,
+          "timePct": 7.415937966036286,
+          "flops": 6291456,
+          "flopsPct": 13.170418006430868,
+          "attentionPairs": 0
+        }
+      ]
+    }
+  }
+]

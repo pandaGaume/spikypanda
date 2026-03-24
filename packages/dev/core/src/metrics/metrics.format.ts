@@ -24,10 +24,11 @@ export function formatMetrics(metrics: IReconstructionMetrics): string {
         "F1".padEnd(10) +
         "ERR".padEnd(10) +
         "TopK".padEnd(10) +
+        "Contrast".padEnd(10) +
         "Sparsity".padEnd(10) +
         "Type"
     );
-    lines.push("-".repeat(120));
+    lines.push("-".repeat(130));
 
     for (const ch of metrics.channels) {
         const isSparse = metrics.sparseChannelIndices.includes(ch.channel);
@@ -42,6 +43,7 @@ export function formatMetrics(metrics: IReconstructionMetrics): string {
             (isSparse ? ch.sparseF1.toFixed(3) : "-").padEnd(10) +
             (isSparse ? ch.energyRetention.toFixed(3) : "-").padEnd(10) +
             (isSparse ? ch.topKHitRate.toFixed(3) : "-").padEnd(10) +
+            (isSparse ? ch.contrastPreservation.toFixed(3) : "-").padEnd(10) +
             (ch.sparsity * 100).toFixed(1).padEnd(8) + "%" +
             (isSparse ? " SPARSE" : " DENSE")
         );
@@ -62,6 +64,7 @@ export function formatMetrics(metrics: IReconstructionMetrics): string {
         lines.push(`  Avg Sparse F1:          ${metrics.avgSparseF1.toFixed(3)}`);
         lines.push(`  Avg Energy Retention:   ${metrics.avgEnergyRetention.toFixed(3)}`);
         lines.push(`  Avg Top-K Hit Rate:     ${metrics.avgTopKHitRate.toFixed(3)}`);
+        lines.push(`  Avg Contrast Preserv.:  ${metrics.avgContrastPreservation.toFixed(3)}`);
     }
 
     return lines.join("\n");

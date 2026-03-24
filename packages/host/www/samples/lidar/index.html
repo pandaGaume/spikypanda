@@ -70,6 +70,40 @@
         </div>
 
         <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the data</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Synthetic data (default)</strong> - When no external dataset is loaded, the sample generates synthetic LiDAR grids procedurally. Five scene types are created: straight road, curved road, intersection, obstacles, and empty field. Each scene produces realistic channel patterns (dense road surface, sparse obstacles with Z max peaks, occasional velocity flags). This is useful for validating the architecture but does not capture the complexity of real sensor data.</p>
+
+                <p><strong>Real data (recommended for validation)</strong> - For meaningful benchmarks, use real LiDAR data. The sample automatically tries to load <code>data/lidar/train.json</code> and <code>data/lidar/test.json</code> on startup. If found, real data is used instead of synthetic. The expected JSON format is:</p>
+                <pre style="background:rgba(0,0,0,0.3); padding:8px; border-radius:4px; font-size:0.8em; overflow-x:auto;">{ "width": 64, "height": 64, "channels": 6, "count": 100,
+  "channelNames": ["Density","Z_max","Z_min","Std_z","Reflectivity","Velocity"],
+  "samples": [{ "pixels": [0.8, 0.5, ...] }] }
+// pixels: CHW flat array [C0_row0_col0, C0_row0_col1, ..., C1_row0_col0, ...]
+// values normalized to [0, 1]</pre>
+
+                <p><strong>nuScenes (with velocity)</strong> - The recommended real dataset. nuScenes mini (~4 GB, ~400 frames) is the only public dataset that provides per-object velocity annotations, which maps directly to channel C5. Use the provided projection script:</p>
+                <pre style="background:rgba(0,0,0,0.3); padding:8px; border-radius:4px; font-size:0.8em; overflow-x:auto;">pip install nuscenes-devkit numpy pyquaternion
+python packages/dev/tools/python/prepare_nuscenes.py \
+  --dataroot /path/to/nuscenes \
+  --version v1.0-mini \
+  --output packages/host/www/data/lidar \
+  --grid-size 64 --max-samples 100</pre>
+
+                <p><strong>KITTI or raw point clouds</strong> - If you have .bin (KITTI format) or .pcd files, the same script can project them directly. Note: KITTI does not provide velocity, so C5 will be zero everywhere.</p>
+                <pre style="background:rgba(0,0,0,0.3); padding:8px; border-radius:4px; font-size:0.8em; overflow-x:auto;">python packages/dev/tools/python/prepare_nuscenes.py \
+  --raw-dir /path/to/pointclouds/ \
+  --output packages/host/www/data/lidar \
+  --grid-size 64</pre>
+
+                <p><strong>Projection parameters</strong> - The script projects 3D points into a top-down (Bird's Eye View) grid. Default range is -50m to +50m in both X and Y axes, with Z filtered between -3m and +5m. Each cell accumulates point statistics to produce the 6 channels. Adjust <code>--x-range</code> and <code>--y-range</code> for your sensor's field of view.</p>
+
+                <p><strong>Grid size tradeoff</strong> - A 64x64 grid with 100m range gives ~1.56m per cell. A 128x128 grid gives ~0.78m per cell (more spatial detail but 4x more computation). For initial experiments, 64x64 is the standard in autonomous driving research.</p>
+            </div>
+        </div>
+
+        <div class="panel">
             <h2>Configuration</h2>
             <div class="controls">
                 <div>
@@ -180,6 +214,9 @@
 
                 <p><strong>Top-K Hit Rate</strong> - Takes the K highest-value pixels in the ground truth (the most prominent obstacles) and checks if they are also among the K highest in the reconstruction. This is the most intuitive metric: "did the model find the biggest obstacles?" A hit rate of 0.90 means 90% of the most important pixels were correctly identified as important.<br/>
                 <span style="color:#0f0;">&#9650; Higher is better.</span> Range [0, 1]. Target: > 0.6. A random model would score ~K/N (near 0). Above 0.8 means the model reliably identifies the most critical pixels.</p>
+
+                <p><strong>Contrast Preservation</strong> - Measures how well the model preserves the local sharpness of sparse features. For each obstacle pixel, computes the contrast (pixel value minus mean of its 8 spatial neighbors) in both the ground truth and the reconstruction. The ratio pred_contrast / gt_contrast tells if the peak stands out as sharply as in the original. A CNN that blurs a 3x3 obstacle into a 5x5 smooth bump will have low contrast (the peak is spread across neighbors). An attention-based model that reconstructs a sharp peak will score closer to 1.0. This is the key metric that distinguishes "obstacle detected" (F1) from "obstacle shape preserved" (Contrast).<br/>
+                <span style="color:#0f0;">&#9650; Closer to 1.0 is better.</span> Range [0, 2]. Target: > 0.5. Below 0.3 means severe blurring - the model detects obstacles but destroys their shape. Above 0.8 means sharp reconstruction.</p>
 
                 <p><strong>Channel classification</strong> - Channels are automatically classified as <span style="color:#f80;font-weight:bold;">SPARSE</span> (enough above-threshold pixels) or <span style="color:#8aa;">DENSE</span> (mostly uniform values). Sparse metrics are only computed for sparse channels. Typically Z max (C1) and Velocity (C5) are sparse; Density (C0), Z min (C2), Std(z) (C3), and Reflectivity (C4) are dense.</p>
 
@@ -310,6 +347,7 @@ const latent = encRuntime.run(inputPixels);
                                 <th>F1</th>
                                 <th>ERR</th>
                                 <th>Top-K</th>
+                                <th>Contrast</th>
                                 <th>Type</th>
                             </tr>
                         </thead>

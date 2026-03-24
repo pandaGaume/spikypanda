@@ -52,7 +52,7 @@ export function computeReconstructionMetrics(
         const gt = groundTruth.slice(offset, offset + pixelsPerChannel);
         const pred = prediction.slice(offset, offset + pixelsPerChannel);
 
-        const metrics = computeChannelMetrics(gt, pred, ch, threshold, topK, minSparse, config.channelNames);
+        const metrics = computeChannelMetrics(gt, pred, ch, threshold, topK, minSparse, width, height, config.channelNames);
         channelMetrics.push(metrics);
 
         // Accumulate global MSE
@@ -71,16 +71,18 @@ export function computeReconstructionMetrics(
     const globalMse = globalMseSum / totalPixels;
 
     // Average sparse metrics across sparse channels only
-    let avgF1 = 0, avgERR = 0, avgTopK = 0;
+    let avgF1 = 0, avgERR = 0, avgTopK = 0, avgContrast = 0;
     if (sparseChannelIndices.length > 0) {
         for (const idx of sparseChannelIndices) {
             avgF1 += channelMetrics[idx].sparseF1;
             avgERR += channelMetrics[idx].energyRetention;
             avgTopK += channelMetrics[idx].topKHitRate;
+            avgContrast += channelMetrics[idx].contrastPreservation;
         }
         avgF1 /= sparseChannelIndices.length;
         avgERR /= sparseChannelIndices.length;
         avgTopK /= sparseChannelIndices.length;
+        avgContrast /= sparseChannelIndices.length;
     }
 
     return {
@@ -90,6 +92,7 @@ export function computeReconstructionMetrics(
         avgSparseF1: avgF1,
         avgEnergyRetention: avgERR,
         avgTopKHitRate: avgTopK,
+        avgContrastPreservation: avgContrast,
         sparseChannelIndices,
         denseChannelIndices,
     };
@@ -105,6 +108,8 @@ function computeChannelMetrics(
     threshold: number,
     topK: number,
     minSparse: number,
+    width: number,
+    height: number,
     channelNames?: string[]
 ): IChannelMetrics {
     const n = gt.length;
@@ -130,6 +135,7 @@ function computeChannelMetrics(
     let sparseF1 = 0;
     let energyRetention = 0;
     let topKHitRate = 0;
+    let contrastPreservation = 0;
 
     if (sparseCount >= minSparse) {
         // Sparse MSE (conditional)
@@ -170,6 +176,11 @@ function computeChannelMetrics(
 
         // Top-K Hit Rate
         topKHitRate = computeTopKHitRate(gt, pred, topK);
+
+        // Contrast Preservation
+        // For each sparse pixel, measure local contrast = pixel - mean(neighbors)
+        // Then compare pred contrast to gt contrast
+        contrastPreservation = computeContrastPreservation(gt, pred, threshold, width, height);
     }
 
     return {
@@ -183,6 +194,7 @@ function computeChannelMetrics(
         sparseF1,
         energyRetention,
         topKHitRate,
+        contrastPreservation,
         sparsePixelCount: sparseCount,
         totalPixelCount: n,
         sparsity: sparseCount / n,
@@ -214,6 +226,73 @@ function computeTopKHitRate(gt: number[], pred: number[], k: number): number {
     }
 
     return hits / k;
+}
+
+/// <summary>
+/// Contrast Preservation: measures how well the model preserves the local
+/// sharpness of sparse features. A CNN that blurs an obstacle produces a
+/// smooth bump (low contrast), while attention-based models that maintain
+/// sharp peaks score closer to 1.0.
+///
+/// For each sparse pixel:
+///   gt_contrast  = gt[pixel]   - mean(gt[spatial_neighbors])
+///   pred_contrast = pred[pixel] - mean(pred[spatial_neighbors])
+///   preservation  = pred_contrast / gt_contrast  (clamped to [0, 2])
+///
+/// Returns the mean preservation across all sparse pixels.
+/// A value of 1.0 = perfect contrast match. Below 0.5 = severe blurring.
+/// </summary>
+function computeContrastPreservation(
+    gt: number[],
+    pred: number[],
+    threshold: number,
+    width: number,
+    height: number
+): number {
+    let totalPreservation = 0;
+    let count = 0;
+    const minContrast = 0.01; // Avoid division by near-zero contrast
+
+    for (let r = 0; r < height; r++) {
+        for (let c = 0; c < width; c++) {
+            const idx = r * width + c;
+            if (gt[idx] <= threshold) continue;
+
+            // Compute mean of spatial neighbors (3x3 neighborhood)
+            let gtNeighborSum = 0;
+            let predNeighborSum = 0;
+            let neighborCount = 0;
+
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    if (dr === 0 && dc === 0) continue; // Skip center pixel
+                    const nr = r + dr;
+                    const nc = c + dc;
+                    if (nr >= 0 && nr < height && nc >= 0 && nc < width) {
+                        const nIdx = nr * width + nc;
+                        gtNeighborSum += gt[nIdx];
+                        predNeighborSum += pred[nIdx];
+                        neighborCount++;
+                    }
+                }
+            }
+
+            if (neighborCount === 0) continue;
+
+            const gtContrast = gt[idx] - gtNeighborSum / neighborCount;
+            const predContrast = pred[idx] - predNeighborSum / neighborCount;
+
+            // Only measure where GT has meaningful contrast (peak stands out)
+            if (gtContrast > minContrast) {
+                // Clamp ratio to [0, 2] to avoid outliers
+                const ratio = Math.max(0, Math.min(2, predContrast / gtContrast));
+                totalPreservation += ratio;
+                count++;
+            }
+        }
+    }
+
+    return count > 0 ? totalPreservation / count : 0;
 }
 
 // ---------------------------------------------------------------------------

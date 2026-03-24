@@ -32,6 +32,16 @@ export interface IChannelMetrics {
     totalPixelCount: number;
     /** Sparsity ratio (sparsePixelCount / totalPixelCount) */
     sparsity: number;
+    /**
+     * Contrast preservation ratio on sparse pixels.
+     * Measures how well the model preserves the local contrast (peak vs neighbors)
+     * of sparse features. A CNN that blurs an obstacle into a smooth bump will have
+     * low contrast preservation, while attention-based models that maintain sharp
+     * peaks will score closer to 1.0.
+     * Formula: mean(pred_contrast / gt_contrast) for each sparse pixel,
+     * where contrast = pixel_value - mean(spatial_neighbors).
+     */
+    contrastPreservation: number;
 }
 
 /// <summary>Aggregated metrics across all channels.</summary>
@@ -48,6 +58,8 @@ export interface IReconstructionMetrics {
     avgEnergyRetention: number;
     /** Average top-K hit rate across sparse channels only */
     avgTopKHitRate: number;
+    /** Average contrast preservation across sparse channels only */
+    avgContrastPreservation: number;
     /** Indices of channels classified as sparse */
     sparseChannelIndices: number[];
     /** Indices of channels classified as dense */
