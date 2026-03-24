@@ -1,6 +1,6 @@
 import { Cartesian3 } from "../../geometry";
-import { ActivationFunctions } from "../ann/mlp/mlp.activation";
-import { He } from "../nn.weights";
+import { ActivationFunctions } from "../../neuralnetwork/ann/mlp/mlp.activation";
+import { He } from "../../neuralnetwork/nn.weights";
 import {
     CnnLayerType,
     ICnnLayerDescriptor,
@@ -8,9 +8,9 @@ import {
     ICnnSynapse,
     IKernel,
     PaddingType,
-} from "../cnn/cnn.interfaces";
-import { CnnGraph } from "../cnn/cnn.graph";
-import { Kernel } from "../cnn/cnn.kernel";
+} from "../../neuralnetwork/cnn/cnn.interfaces";
+import { CnnGraph } from "../../neuralnetwork/cnn/cnn.graph";
+import { Kernel } from "../../neuralnetwork/cnn/cnn.kernel";
 import { IStereoConfig, IStereoCnnGraph, IStereoCnnNeuron, IStereoCnnSynapse, MergeStrategy } from "./stereo.interfaces";
 import { StereoCnnNeuron } from "./stereo.neuron";
 import { StereoCnnSynapse } from "./stereo.synapse";

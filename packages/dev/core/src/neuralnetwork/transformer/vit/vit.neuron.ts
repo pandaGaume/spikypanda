@@ -1,7 +1,7 @@
-import { ICartesian } from "../../geometry";
-import { cloneable, IOlink } from "../../graph";
-import { Nullable } from "../../types";
-import { Neuron } from "../nn.neuron";
+import { ICartesian } from "../../../geometry";
+import { cloneable, IOlink } from "../../../graph";
+import { Nullable } from "../../../types";
+import { Neuron } from "../../nn.neuron";
 import { IVitNeuron, VitNeuronType } from "./vit.interfaces";
 
 /// <summary>

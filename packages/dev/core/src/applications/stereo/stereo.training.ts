@@ -1,12 +1,12 @@
-import { IBackpropSynapseContext, ILossFunction, IOptimizer, ITrainingContext } from "../nn.training";
+import { IBackpropSynapseContext, ILossFunction, IOptimizer, ITrainingContext } from "../../neuralnetwork/nn.training";
 import {
     CnnLayerType,
     ICnnNeuron,
     ICnnSynapse,
     IKernel,
     PoolingType,
-} from "../cnn/cnn.interfaces";
-import { ICnnBackpropNeuronContext, KernelWeightSlot, KernelBiasSlot } from "../cnn/training/cnn.training.interfaces";
+} from "../../neuralnetwork/cnn/cnn.interfaces";
+import { ICnnBackpropNeuronContext, KernelWeightSlot, KernelBiasSlot } from "../../neuralnetwork/cnn/training/cnn.training.interfaces";
 import { IStereoCnnGraph } from "./stereo.interfaces";
 import { StereoInferenceRuntime } from "./stereo.inference";
 

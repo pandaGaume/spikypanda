@@ -1,6 +1,6 @@
 import { IVitGraph } from "./vit.interfaces";
 import { softmax, gelu, layerNormForward } from "./vit.math";
-import { Profiler } from "../nn.profiler";
+import { Profiler } from "../../nn.profiler";
 
 /// <summary>
 /// Inference runtime for Vision Transformer graphs.

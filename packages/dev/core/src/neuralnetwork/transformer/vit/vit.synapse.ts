@@ -1,4 +1,4 @@
-import { cloneable, GraphOLink, INode } from "../../graph";
+import { cloneable, GraphOLink, INode } from "../../../graph";
 import { IVitSynapse, VitSynapseType } from "./vit.interfaces";
 
 /// <summary>

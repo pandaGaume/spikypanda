@@ -1,5 +1,5 @@
-import { GraphBuilder } from "../../graph";
-import { WeightInit } from "../nn.weights";
+import { GraphBuilder } from "../../../graph";
+import { WeightInit } from "../../nn.weights";
 import { IVitNeuron, IVitSynapse, VitNeuronType } from "../vit/vit.interfaces";
 import { VitNeuron } from "../vit/vit.neuron";
 import { createLayerNorm } from "../vit/vit.math";

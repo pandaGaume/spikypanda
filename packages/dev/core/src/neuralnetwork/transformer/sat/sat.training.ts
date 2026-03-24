@@ -1,7 +1,7 @@
 import { ISatGraph } from "./sat.interfaces";
 import { SatInferenceRuntime } from "./sat.inference";
 import { softmaxBackward, geluDerivative, layerNormBackward } from "../vit/vit.math";
-import { ILossFunction } from "../nn.training";
+import { ILossFunction } from "../../nn.training";
 
 /// <summary>
 /// Training runtime for Spatial Attention Transformer.

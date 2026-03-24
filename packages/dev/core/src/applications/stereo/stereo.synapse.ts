@@ -1,6 +1,6 @@
 import { INode } from "../../graph";
-import { CnnSynapse } from "../cnn/cnn.synapse";
-import { IKernel } from "../cnn/cnn.interfaces";
+import { CnnSynapse } from "../../neuralnetwork/cnn/cnn.synapse";
+import { IKernel } from "../../neuralnetwork/cnn/cnn.interfaces";
 import { IStereoCnnSynapse } from "./stereo.interfaces";
 
 /// <summary>

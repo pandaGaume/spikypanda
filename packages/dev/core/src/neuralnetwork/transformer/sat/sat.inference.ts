@@ -1,6 +1,6 @@
 import { ISatGraph } from "./sat.interfaces";
 import { softmax, gelu, layerNormForward } from "../vit/vit.math";
-import { Profiler } from "../nn.profiler";
+import { Profiler } from "../../nn.profiler";
 
 /// <summary>
 /// Inference runtime for Spatial Attention Transformer (SAT).

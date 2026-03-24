@@ -1,7 +1,7 @@
 import { IVitGraph } from "./vit.interfaces";
 import { VitInferenceRuntime } from "./vit.inference";
 import { softmaxBackward, geluDerivative, layerNormBackward } from "./vit.math";
-import { IOptimizer, ILossFunction } from "../nn.training";
+import { IOptimizer, ILossFunction } from "../../nn.training";
 
 /// <summary>
 /// Training runtime for Vision Transformer graphs.

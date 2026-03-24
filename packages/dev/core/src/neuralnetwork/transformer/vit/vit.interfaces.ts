@@ -1,6 +1,6 @@
-import { IGraph } from "../../graph";
-import { INeuron, ISynapse } from "../nn.interfaces";
-import type { IActivationFunction } from "../ann/mlp/mlp.interfaces";
+import { IGraph } from "../../../graph";
+import { INeuron, ISynapse } from "../../nn.interfaces";
+import type { IActivationFunction } from "../../ann/mlp/mlp.interfaces";
 
 // ---------------------------------------------------------------------------
 // Neuron types

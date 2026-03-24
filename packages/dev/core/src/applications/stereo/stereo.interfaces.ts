@@ -1,4 +1,4 @@
-import { ICnnGraph, ICnnNeuron, ICnnSynapse, IKernel, ICnnLayerDescriptor } from "../cnn/cnn.interfaces";
+import { ICnnGraph, ICnnNeuron, ICnnSynapse, IKernel, ICnnLayerDescriptor } from "../../neuralnetwork/cnn/cnn.interfaces";
 
 /// <summary>
 /// Branch identifier for stereo neurons.

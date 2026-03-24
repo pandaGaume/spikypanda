@@ -1,4 +1,4 @@
-import { ActivationFunctions } from "../ann/mlp/mlp.activation";
+import { ActivationFunctions } from "../../neuralnetwork/ann/mlp/mlp.activation";
 import {
     CnnLayerType,
     IActivationFunction,
@@ -6,7 +6,7 @@ import {
     ICnnNeuron,
     ICnnSynapse,
     PoolingType,
-} from "../cnn/cnn.interfaces";
+} from "../../neuralnetwork/cnn/cnn.interfaces";
 import { IStereoCnnGraph, IStereoCnnSynapse } from "./stereo.interfaces";
 import { StereoCnnNeuron } from "./stereo.neuron";
 

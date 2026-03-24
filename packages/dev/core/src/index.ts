@@ -4,6 +4,7 @@ export * from "./types";
 export * from "./geometry";
 export * from "./graph";
 export * from "./neuralnetwork";
+export * from "./applications";
 export * from "./utils";
 export * from "./metrics";
 
