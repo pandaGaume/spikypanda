@@ -4,6 +4,7 @@ export * from "./rnn";
 export * from "./snn";
 export * from "./vit";
 export * from "./sat";
+export * from "./stereo";
 export * from "./nn.weights";
 export * from "./nn.interfaces";
 export * from "./nn.interfaces.builder";

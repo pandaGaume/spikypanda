@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda — Stereo Depth Estimation</title>
+    <link rel="stylesheet" href="../../css/common.css" />
+    <link rel="stylesheet" href="stereo.css" />
+</head>
+<body>
+    <div class="sample-hero" style="background-image: url('hero.png');">
+        <a href="hero.png" download="spikypanda-stereo-wallpaper.png" class="wallpaper-btn">Download wallpaper</a>
+        <div class="sample-hero-overlay">
+            <nav class="nav-bar" style="margin:0; background:none; border:none; padding:10px 0;">
+                <a href="../../index.html" class="nav-logo">SpikyPanda</a>
+                <div class="nav-links">
+                    <a href="../../index.html">Home</a>
+                    <a href="../mnist/">MNIST CNN</a>
+                    <a href="../lidar/">LiDAR</a>
+                    <a href="../motor/">Motor</a>
+                    <a href="../brain3d/">Brain 3D</a>
+                </div>
+            </nav>
+            <h1>Stereo Depth Estimation</h1>
+            <p class="subtitle">Cross-synapse stereo matching via graph-based neural network</p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the use case</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Stereo vision</strong> - Two cameras separated by a known baseline capture slightly different views of the same scene. Objects closer to the cameras appear shifted more between the two images (larger disparity), while distant objects appear nearly identical. By computing this disparity for every pixel, we can reconstruct a depth map of the scene without active sensors like LiDAR.</p>
+                <p><strong>Mars rover application</strong> - On planetary exploration missions, stereo cameras are the primary depth sensor. LiDAR is heavy, power-hungry, and has mechanical parts that can fail. A stereo camera pair is lightweight, passive (no laser), and has no moving parts. The trade-off is that depth must be computed from the images, which requires a matching algorithm. A neural network can learn this matching end-to-end.</p>
+                <p><strong>Low-energy alternative to LiDAR</strong> - In terrestrial robotics, stereo depth estimation consumes a fraction of the power of a spinning LiDAR sensor. For small drones, indoor robots, and battery-constrained platforms, a stereo camera pair with on-board neural inference provides dense depth at minimal energy cost.</p>
+                <p><strong>Synthetic data</strong> - This demo generates simple 2D scenes with rectangles at known depths. The left image shows the scene directly; the right image shifts each rectangle horizontally by <code>baseline &times; focal / depth</code>. The ground truth disparity map records the exact shift per pixel, providing perfect training labels without manual annotation.</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding cross-synapses</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Dual-branch architecture</strong> - The stereo CNN has two parallel branches (left and right) that share the same convolutional kernels. This weight sharing ensures both branches extract identical features from their respective images, which is essential for meaningful comparison.</p>
+                <p><strong>Disparity-offset synapses</strong> - At designated cross-layers, neurons in the left branch are connected to neurons in the right branch at horizontally offset positions. For each left neuron at column <code>c</code>, cross-synapses connect to right neurons at columns <code>c</code>, <code>c-1</code>, <code>c-2</code>, ..., <code>c-maxDisparity</code>. These connections allow the network to compare features at different horizontal offsets, which is exactly what stereo matching requires.</p>
+                <p><strong>Bidirectional cross-connections</strong> - Cross-synapses are bidirectional: left-to-right and right-to-left. This allows both branches to benefit from the comparison. The cross-kernel learns a weight per channel that modulates how strongly the cross-branch signal influences each neuron.</p>
+                <p><strong>Merge layer</strong> - After the convolutional layers, a merge layer combines the two branches. In <em>Diff</em> mode, it computes |L - R| per feature, which directly encodes the feature disparity. In <em>Concat</em> mode, it concatenates both feature maps and lets the dense layer learn the combination. The merged representation is flattened and passed through a dense output layer that produces the disparity map.</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the configuration</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Preset</strong> - Selects the network architecture. <em>Tiny</em> uses a 16&times;16 input with one conv layer (8 filters, 3&times;3) and maxDisparity=8. The output is a 14&times;14 disparity map. <em>Small</em> uses 32&times;32 input with two conv layers (8 and 16 filters) and maxDisparity=16, producing a 28&times;28 disparity map. Larger presets have more cross-synapses and take significantly longer to train.</p>
+                <p><strong>Epochs</strong> - Number of complete passes through the training set. The stereo matching problem benefits from more epochs because the network must learn both feature extraction and cross-branch comparison simultaneously. Start with 5 and increase if the loss curve has not flattened.</p>
+                <p><strong>Learning rate</strong> - Controls weight update step size. The default of 0.003 works with the Adam optimizer. If training is unstable (loss jumping up), reduce to 0.001. The cross-synapse weights and shared conv kernels are updated together, so the learning rate affects both feature extraction and matching.</p>
+                <p><strong>Samples</strong> - Number of synthetic stereo pairs to generate. Each sample includes a left image, right image, and ground truth disparity map. 20% is held out for testing. More samples provide better coverage of depth configurations.</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the results</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Disparity map</strong> - The network outputs a 2D map where each pixel value represents the horizontal shift (in pixels) between the left and right images at that location. Higher disparity means the object is closer to the cameras. The disparity values are normalized to [0, 1] where 1 corresponds to maxDisparity pixels of shift.</p>
+                <p><strong>Good results</strong> - A well-trained network produces disparity maps where foreground objects (rectangles) appear as bright regions with sharp boundaries, and the background is uniformly dark. The predicted map should closely match the ground truth, with MSE below 0.05 and RMSE below 0.22.</p>
+                <p><strong>Bad results</strong> - Common failure modes include: (1) uniform gray output where the network ignores depth differences entirely; (2) blurred edges where object boundaries are smoothed out; (3) incorrect depth ordering where near objects appear far. These usually indicate insufficient training epochs or too few samples.</p>
+                <p><strong>MSE and RMSE</strong> - Mean Squared Error and Root Mean Squared Error between predicted and ground truth disparity maps. Since disparity values are normalized to [0, 1], RMSE can be interpreted as average per-pixel error on that scale.</p>
+                <p><strong>Inference time</strong> - Time to run the forward pass on all test samples. The stereo network processes two images simultaneously through separate branches, so inference involves roughly twice the computation of a single-branch CNN of similar depth.</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Configuration</h2>
+            <div class="controls">
+                <div>
+                    <label for="preset">Preset:</label><br>
+                    <select id="preset">
+                        <option value="tiny">Tiny (16x16, 1 conv)</option>
+                        <option value="small">Small (32x32, 2 conv)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="epochs">Epochs:</label><br>
+                    <input type="number" id="epochs" value="5" min="1" max="50" style="width:70px" />
+                </div>
+                <div>
+                    <label for="lr">Learning rate:</label><br>
+                    <input type="number" id="lr" value="0.003" step="0.001" min="0.0001" style="width:90px" />
+                </div>
+                <div>
+                    <label for="numSamples">Samples:</label><br>
+                    <input type="number" id="numSamples" value="100" min="10" max="500" step="10" style="width:80px" />
+                </div>
+                <div style="display:flex; gap:8px; align-self:flex-end;">
+                    <button id="btnGenerate">Generate Data</button>
+                    <button id="btnTrain" disabled>Train</button>
+                    <button id="btnTest" disabled>Test</button>
+                </div>
+            </div>
+            <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+            <div id="status">Generate data to begin.</div>
+        </div>
+
+        <div class="panel">
+            <h2>Training Log</h2>
+            <div class="log" id="log">Ready.
+</div>
+            <canvas class="loss-canvas" id="lossCanvas"></canvas>
+        </div>
+
+        <div class="panel" id="resultsPanel" style="display:none">
+            <h2>Disparity Estimation Results</h2>
+            <div class="stats">
+                <div class="stat"><div class="value" id="mse">-</div><div class="label">MSE</div></div>
+                <div class="stat"><div class="value" id="rmse">-</div><div class="label">RMSE</div></div>
+                <div class="stat"><div class="value" id="duration">-</div><div class="label">Inference Time</div></div>
+                <div class="stat"><div class="value" id="samplesCount">-</div><div class="label">Test Samples</div></div>
+            </div>
+            <div id="reconstructions"></div>
+        </div>
+    </div>
+
+    <script src="../../bundle/spikypanda-core.js"></script>
+    <script src="../../js/common.js"></script>
+    <script src="stereo.js"></script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+/* Stereo Depth Estimation — specific styles */
+.grid-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.grid-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--input-bg);
+    border-radius: 4px;
+    padding: 6px;
+}
+
+.grid-item .ch-label {
+    font-size: 0.65em;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.grid-item canvas {
+    image-rendering: pixelated;
+    border-radius: 2px;
+}
+
+.sample-pair {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    padding: 8px;
+    background: var(--log-bg);
+    border-radius: 4px;
+    flex-wrap: wrap;
+}
+
+.sample-pair .pair-label {
+    font-size: 0.75em;
+    color: var(--text-label);
+    margin-bottom: 4px;
+    text-align: center;
+}
+
+.loss-canvas {
+    width: 100%;
+    height: 120px;
+    background: var(--log-bg);
+    border-radius: 4px;
+    margin-top: 8px;
+}
+
+.metrics-help p {
+    font-size: 0.85em;
+    line-height: 1.7;
+    color: #bbb;
+    margin-bottom: 8px;
+}
+
+.metrics-help strong {
+    color: var(--primary);
+}
+
+.metrics-help code {
+    color: var(--log-text);
+}
