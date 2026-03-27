@@ -467,9 +467,7 @@ export class OnnxParser {
                         tensor.dims.push(v);
                     }
                     // Recompute total elements
-                    totalElements = tensor.dims.length > 0
-                        ? tensor.dims.reduce((a, b) => a * b, 1)
-                        : 0;
+                    totalElements = tensor.dims.length > 0 ? tensor.dims.reduce((a, b) => a * b, 1) : 0;
                     break;
                 }
                 case TENSOR_DATA_TYPE: {

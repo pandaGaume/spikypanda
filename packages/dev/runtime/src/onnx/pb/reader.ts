@@ -381,13 +381,13 @@ export class PBReader {
         }
 
         // Multi-byte varint
-        let result = byte0 & 0x7F;
+        let result = byte0 & 0x7f;
         let shift = 7;
         let byte: number;
         do {
             byte = this._input.readByte();
             if (byte === LB_EOF) return null;
-            result |= (byte & 0x7F) << shift;
+            result |= (byte & 0x7f) << shift;
             shift += 7;
         } while (byte & 0x80);
 
