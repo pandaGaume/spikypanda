@@ -8,6 +8,7 @@
             "./packages/dev/core/tsconfig.build.json",
             "./packages/dev/bestioles/tsconfig.build.json",
             "./packages/dev/babylonjs/tsconfig.build.json",
+            "./packages/dev/runtime/tsconfig.build.json",
             "./packages/tests/tsconfig.json"
         ]
     },
