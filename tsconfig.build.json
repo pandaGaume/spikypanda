@@ -38,7 +38,9 @@
 
         "paths": {
             "spikypanda-core": ["dev/core/src/index.ts"],
-            "spikypanda-core/*": ["dev/core/src/*"]
+            "spikypanda-core/*": ["dev/core/src/*"],
+            "spikypanda-runtime": ["dev/runtime/src/index.ts"],
+            "spikypanda-runtime/*": ["dev/runtime/src/*"]
         },
 
         "types": ["reflect-metadata", "jest", "node"]
