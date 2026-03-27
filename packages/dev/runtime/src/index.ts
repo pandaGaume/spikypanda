@@ -8,10 +8,10 @@
 //   - Edges carry typed data tensors (IDataLink)
 //   - The graph executes in topological order (Kahn's algorithm)
 //
-// Designed as a foundation for future ONNX import/export support.
-//
 // Modules:
 //   compute/  : ITensor, IComputeNode, ComputeGraph, built-in nodes
+//   onnx/     : Protobuf reader, ONNX parser (zero-dependency)
 // ═══════════════════════════════════════════════════════════════════════════
 
 export * from "./compute/index";
+export * from "./onnx/index";
