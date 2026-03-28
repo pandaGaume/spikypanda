@@ -22,24 +22,6 @@ function _getCoord(p: ICartesian, axis: number): number {
 }
 
 /**
- * Squared euclidean distance between two ICartesian points.
- * Avoids sqrt for comparison-only use cases (queryRadius, kNearest).
- */
-function _pointDistanceSquared(a: ICartesian, b: ICartesian, dim: number): number {
-    const ax = (a as ICartesian2).x,
-        bx = (b as ICartesian2).x;
-    const ay = (a as ICartesian2).y,
-        by = (b as ICartesian2).y;
-    const dx = bx - ax,
-        dy = by - ay;
-    if (dim === 2) return dx * dx + dy * dy;
-    const az = (a as ICartesian3).z ?? 0,
-        bz = (b as ICartesian3).z ?? 0;
-    const dz = bz - az;
-    return dx * dx + dy * dy + dz * dz;
-}
-
-/**
  * Minimum squared distance from a point to an axis-aligned cell.
  * Returns 0 if the point is inside the cell.
  * Used to prune entire branches during radius queries.
@@ -151,7 +133,7 @@ export class PointSpatialTree<T extends ICartesian> implements ISpatialIndex<T> 
         const candidates: T[] = [];
         this._collectAll(this._root, center, candidates);
 
-        candidates.sort((a, b) => _pointDistanceSquared(center, a, this._dim) - _pointDistanceSquared(center, b, this._dim));
+        candidates.sort((a, b) => center.distanceSquared(a) - center.distanceSquared(b));
 
         const n = Math.min(k, candidates.length);
         for (let i = 0; i < n; i++) {
@@ -245,7 +227,7 @@ export class PointSpatialTree<T extends ICartesian> implements ISpatialIndex<T> 
 
         if (node.items) {
             for (const item of node.items) {
-                if (_pointDistanceSquared(center, item, this._dim) <= rSq) {
+                if (center.distanceSquared(item) <= rSq) {
                     ref.push(item);
                 }
             }

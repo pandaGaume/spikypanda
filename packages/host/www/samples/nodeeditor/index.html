@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda - Node Editor</title>
+    <link rel="stylesheet" href="../../css/common.css" />
+    <link rel="stylesheet" href="nodeeditor.css" />
+</head>
+<body>
+    <div class="sample-hero">
+        <a href="../../images/spikyPanda.png" download="spikypanda-wallpaper.png" class="wallpaper-btn">Download wallpaper</a>
+        <div class="sample-hero-overlay">
+            <nav class="nav-bar" style="margin:0; background:none; border:none; padding:10px 0;">
+                <a href="../../index.html" class="nav-logo">SpikyPanda</a>
+                <div class="nav-links">
+                    <a href="../../index.html">Home</a>
+                    <a href="../mnist/">MNIST CNN</a>
+                    <a href="../lidar/">LiDAR</a>
+                    <a href="../motor/">Motor</a>
+                    <a href="../brain3d/">Brain 3D</a>
+                    <a href="../stereo/">Stereo Depth</a>
+                </div>
+            </nav>
+            <h1>Node Editor</h1>
+            <p class="subtitle">Visual graph editor for building and connecting computation nodes</p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>How to use</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Add nodes</strong> - Click the buttons in the toolbar to add different node types to the canvas.</p>
+                <p><strong>Move nodes</strong> - Click and drag a node to reposition it. Nodes snap to a 20px grid.</p>
+                <p><strong>Connect ports</strong> - Click and drag from an output port (right side) to an input port (left side) to create a connection.</p>
+                <p><strong>Pan</strong> - Click and drag the background to pan the view.</p>
+                <p><strong>Zoom</strong> - Use the mouse wheel to zoom in/out, centered on the cursor.</p>
+                <p><strong>Delete</strong> - Select a node (click it) and press Delete. Right-click a connection to remove it.</p>
+            </div>
+        </div>
+
+        <div class="panel" id="toolbar-panel">
+            <h2>Toolbar</h2>
+            <div class="controls" id="toolbar"></div>
+        </div>
+
+    </div>
+
+    <div id="editor-container"></div>
+
+    <script src="../../js/common.js"></script>
+    <script src="../../bundle/nodeeditor.js"></script>
+    <script src="nodeeditor.js"></script>
+</body>
+</html>

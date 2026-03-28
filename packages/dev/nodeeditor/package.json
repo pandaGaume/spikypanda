@@ -1,0 +1,24 @@
+{
+    "name": "@spikypanda/nodeeditor",
+    "version": "0.1.0",
+    "private": true,
+    "main": "dist/index",
+    "module": "dist/index",
+    "esnext": "dist/index",
+    "types": "dist/index",
+    "files": ["dist", "src"],
+    "scripts": {
+        "build": "npm run clean && npm run compile",
+        "clean": "rimraf dist && rimraf tsconfig.build.tsbuildinfo",
+        "compile": "npm run compile:source",
+        "compile:source": "tsc -b tsconfig.build.json",
+        "watch:source": "tsc -b tsconfig.build.json -w",
+        "bundle": "webpack --mode production --config webpack.config.js",
+        "bundle:dev": "webpack --mode development --config webpack.config.js"
+    },
+    "sideEffects": false,
+    "devDependencies": {
+        "rimraf": "~6.0.1",
+        "ts-loader": "^9.5.0"
+    }
+}

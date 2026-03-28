@@ -1,0 +1,310 @@
+/* ── Editor container ── */
+#editor-container {
+    width: 100%;
+    height: 70vh;
+    margin-top: 16px;
+    border-radius: 8px;
+    border: 1px solid var(--panel-border);
+    overflow: hidden;
+    position: relative;
+}
+
+/* ── 3-column layout ── */
+.ne-editor {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    overflow: hidden;
+    user-select: none;
+}
+
+.ne-panel {
+    flex-shrink: 0;
+    width: 0;
+    overflow: hidden;
+    transition: width 0.2s ease;
+    background: rgba(22, 33, 62, 0.95);
+    border-color: var(--panel-border);
+}
+
+.ne-panel-left {
+    border-right: 1px solid var(--panel-border);
+}
+
+.ne-panel-right {
+    border-left: 1px solid var(--panel-border);
+}
+
+.ne-panel-right.ne-panel-open {
+    width: 240px;
+}
+
+/* ── Canvas (center) ── */
+.ne-canvas {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    background-image:
+        radial-gradient(circle, var(--ne-grid-dot, rgba(255,255,255,0.03)) 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-color: var(--ne-bg, #111);
+    transition: background-color 0.25s;
+}
+
+.ne-viewport {
+    position: absolute;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+.ne-svg {
+    position: absolute;
+    width: 10000px;
+    height: 10000px;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.ne-svg .ne-connection {
+    pointer-events: stroke;
+    stroke-width: 2;
+    cursor: pointer;
+}
+
+.ne-svg .ne-connection:hover {
+    stroke: var(--error);
+    stroke-width: 3;
+}
+
+.ne-nodes-layer {
+    position: absolute;
+}
+
+/* ── Node ── */
+.ne-node {
+    position: absolute;
+    min-width: 140px;
+    background: var(--ne-node-body, var(--panel));
+    border: 1px solid var(--ne-node-border, var(--panel-border));
+    border-radius: 8px;
+    cursor: grab;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    transition: box-shadow 0.15s, background 0.25s, border-color 0.25s;
+}
+
+.ne-node:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+}
+
+.ne-node-selected {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 2px var(--primary), 0 4px 16px rgba(0,0,0,0.6);
+}
+
+.ne-node-header {
+    padding: 6px 10px;
+    font-size: 0.8em;
+    font-weight: 600;
+    color: #fff;
+    background: #335;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.ne-node-body {
+    padding: 6px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+}
+
+.ne-node-inputs,
+.ne-node-outputs {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ne-node-outputs {
+    align-items: flex-end;
+}
+
+/* ── Port ── */
+.ne-port {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+}
+
+.ne-port-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    cursor: crosshair;
+    border: 1.5px solid var(--ne-port-stroke, rgba(255,255,255,0.3));
+    transition: transform 0.1s, border-color 0.25s;
+}
+
+.ne-port-dot:hover {
+    transform: scale(1.4);
+    border-color: #fff;
+}
+
+.ne-port-label {
+    font-size: 0.7em;
+    color: var(--ne-port-label, var(--text-muted));
+    white-space: nowrap;
+    transition: color 0.25s;
+}
+
+/* ── Toolbar ── */
+#toolbar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+#toolbar button {
+    padding: 6px 14px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    color: var(--text);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: background 0.15s;
+}
+
+#toolbar button:hover {
+    background: var(--primary);
+    color: #000;
+}
+
+/* ── Overlay action buttons (on canvas) ── */
+.ne-overlay-actions {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    gap: 6px;
+    z-index: 10;
+}
+
+.ne-overlay-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(22, 33, 62, 0.85);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    transition: background 0.15s, color 0.15s;
+    padding: 0;
+}
+
+.ne-overlay-btn:hover {
+    background: rgba(22, 33, 62, 1);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.ne-overlay-btn-flash {
+    background: rgba(0, 212, 255, 0.25) !important;
+    color: var(--primary) !important;
+}
+
+.ne-overlay-select {
+    height: 32px;
+    padding: 0 8px;
+    background: rgba(22, 33, 62, 0.85);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 0.75em;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    outline: none;
+}
+
+.ne-overlay-select:hover {
+    border-color: var(--primary);
+    color: var(--text);
+}
+
+/* ── Property panel (inside right panel) ── */
+.ne-property-panel {
+    width: 100%;
+    font-size: 0.8em;
+    color: inherit;
+}
+
+.ne-pp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.ne-pp-title {
+    font-weight: 600;
+    color: var(--primary);
+    font-size: 0.95em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ne-pp-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+}
+
+.ne-pp-close:hover {
+    color: var(--error);
+}
+
+.ne-pp-content {
+    padding: 6px 0;
+}
+
+.ne-pp-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 12px;
+    gap: 8px;
+}
+
+.ne-pp-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.ne-pp-key {
+    color: var(--text-muted);
+    flex-shrink: 0;
+    font-size: 0.9em;
+}
+
+.ne-pp-value {
+    color: inherit;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: 'Cascadia Code', monospace;
+    font-size: 0.9em;
+}

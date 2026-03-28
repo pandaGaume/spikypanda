@@ -1,15 +1,14 @@
-
 export interface ICartesian {
     /** Euclidean distance to another point. */
-    distance(b:ICartesian) : number;
+    distance(b: ICartesian): number;
     /** Squared euclidean distance (avoids sqrt). Preferred for comparison-only use cases. */
-    distanceSquared(b:ICartesian) : number;
-    subtract(b:ICartesian) : this;
-    add(b:ICartesian) : this;
-    addInPlace(b:ICartesian) :this;
-    multiplyByScalar(n:number):this;
-    divideByScalar(n:number):this;
-    magnitude():number;
+    distanceSquared(b: ICartesian): number;
+    subtract(b: ICartesian): this;
+    add(b: ICartesian): this;
+    addInPlace(b: ICartesian): this;
+    multiplyByScalar(n: number): this;
+    divideByScalar(n: number): this;
+    magnitude(): number;
     toString(): string;
     clone(): this;
 }
