@@ -159,6 +159,16 @@
     color: var(--ne-port-label, var(--text-muted));
     white-space: nowrap;
     transition: color 0.25s;
+    cursor: ns-resize;
+}
+
+.ne-port-dragging {
+    background: rgba(0, 212, 255, 0.15);
+    border-radius: 3px;
+}
+
+.ne-port-dragging .ne-port-label {
+    color: var(--primary);
 }
 
 /* ── Toolbar ── */
@@ -307,4 +317,88 @@
     white-space: nowrap;
     font-family: 'Cascadia Code', monospace;
     font-size: 0.9em;
+}
+
+/* ── Editable inputs ── */
+.ne-pp-input {
+    flex: 1;
+    min-width: 0;
+    padding: 2px 6px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--panel-border);
+    border-radius: 3px;
+    color: inherit;
+    font-family: 'Cascadia Code', monospace;
+    font-size: 0.9em;
+    outline: none;
+}
+
+.ne-pp-input:focus {
+    border-color: var(--primary);
+}
+
+.ne-pp-input-checkbox {
+    accent-color: var(--primary);
+}
+
+/* ── Footer (Apply / Reset) ── */
+.ne-pp-footer {
+    display: flex;
+    gap: 6px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--panel-border);
+}
+
+.ne-pp-btn {
+    flex: 1;
+    padding: 4px 0;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    font-size: 0.85em;
+    cursor: pointer;
+    text-align: center;
+}
+
+.ne-pp-btn-apply {
+    background: var(--primary);
+    color: #000;
+    border-color: var(--primary);
+    font-weight: 600;
+}
+
+.ne-pp-btn-apply:hover:not(.ne-pp-btn-disabled) {
+    filter: brightness(1.1);
+}
+
+.ne-pp-btn-reset {
+    background: transparent;
+    color: var(--text-muted);
+}
+
+.ne-pp-btn-reset:hover:not(.ne-pp-btn-disabled) {
+    color: var(--text);
+    border-color: var(--text-muted);
+}
+
+.ne-pp-btn-disabled {
+    opacity: 0.3;
+    cursor: default;
+    pointer-events: none;
+}
+
+/* ── Save/Load overlay separator ── */
+.ne-overlay-sep {
+    width: 1px;
+    height: 24px;
+    background: var(--panel-border);
+    align-self: center;
+}
+
+/* ── Selection rectangle ── */
+.ne-selection-rect {
+    position: absolute;
+    border: 1.5px dashed var(--primary);
+    background: rgba(0, 212, 255, 0.08);
+    pointer-events: none;
+    z-index: 5;
 }

@@ -1,0 +1,15 @@
+{
+    "extends": "../../../tsconfig.build.json",
+    "compilerOptions": {
+        "composite": true,
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "skipLibCheck": true
+    },
+    "references": [
+        { "path": "../runtime/tsconfig.build.json" },
+        { "path": "../nodeeditor/tsconfig.build.json" }
+    ],
+    "include": ["./src/**/*.ts"],
+    "exclude": ["**/node_modules", "**/dist"]
+}

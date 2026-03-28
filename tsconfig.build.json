@@ -40,7 +40,9 @@
             "spikypanda-core": ["dev/core/src/index.ts"],
             "spikypanda-core/*": ["dev/core/src/*"],
             "spikypanda-runtime": ["dev/runtime/src/index.ts"],
-            "spikypanda-runtime/*": ["dev/runtime/src/*"]
+            "spikypanda-runtime/*": ["dev/runtime/src/*"],
+            "spikypanda-nodeeditor": ["dev/nodeeditor/src/index.ts"],
+            "spikypanda-nodeeditor/*": ["dev/nodeeditor/src/*"]
         },
 
         "types": ["reflect-metadata", "jest", "node"]

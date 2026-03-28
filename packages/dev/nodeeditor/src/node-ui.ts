@@ -10,6 +10,7 @@ export class NodeUI {
     readonly id: string;
     readonly el: HTMLDivElement;
     readonly label: string;
+    readonly color?: string;
     readonly inputs: Port[] = [];
     readonly outputs: Port[] = [];
     readonly item: UIItemBase<unknown>;
@@ -25,6 +26,7 @@ export class NodeUI {
     constructor(def: NodeDef, parent: HTMLElement) {
         this.id = `node_${nodeIdCounter++}`;
         this.label = def.label;
+        this.color = def.color;
         this.item = new UIItemBase(def.data ?? def);
 
         this.el = document.createElement("div");
@@ -84,6 +86,29 @@ export class NodeUI {
     setSelected(selected: boolean): void {
         this.selected = selected;
         this.el.classList.toggle("ne-node-selected", selected);
+        if (selected) {
+            this.el.style.setProperty("border-color", "#00d4ff", "important");
+            this.el.style.setProperty("box-shadow", "0 0 0 2px #00d4ff, 0 4px 16px rgba(0,0,0,0.6)", "important");
+        } else {
+            this.el.style.removeProperty("border-color");
+            this.el.style.removeProperty("box-shadow");
+        }
+    }
+
+    reorderInputs(order: number[] | string[]): void {
+        this.reorderPorts(this.inputs, this.inputsContainer, order);
+    }
+
+    reorderOutputs(order: number[] | string[]): void {
+        this.reorderPorts(this.outputs, this.outputsContainer, order);
+    }
+
+    moveInputPort(from: number, to: number): void {
+        this.movePort(this.inputs, this.inputsContainer, from, to);
+    }
+
+    moveOutputPort(from: number, to: number): void {
+        this.movePort(this.outputs, this.outputsContainer, from, to);
     }
 
     getAllPorts(): Port[] {
@@ -92,5 +117,35 @@ export class NodeUI {
 
     findPortByDot(dot: HTMLElement): Port | undefined {
         return this.getAllPorts().find((p) => p.dot === dot);
+    }
+
+    private reorderPorts(ports: Port[], container: HTMLDivElement, order: number[] | string[]): void {
+        const resolved: Port[] = [];
+        for (const ref of order) {
+            const port = typeof ref === "number"
+                ? ports[ref]
+                : ports.find((p) => p.name === ref);
+            if (port) resolved.push(port);
+        }
+        // Append any ports not mentioned in order (keep them at the end)
+        for (const p of ports) {
+            if (!resolved.includes(p)) resolved.push(p);
+        }
+        // Update the array in-place
+        ports.length = 0;
+        for (const p of resolved) ports.push(p);
+        // Re-append DOM in new order
+        for (const p of ports) {
+            container.appendChild(p.el);
+        }
+    }
+
+    private movePort(ports: Port[], container: HTMLDivElement, from: number, to: number): void {
+        if (from < 0 || from >= ports.length || to < 0 || to >= ports.length) return;
+        const [port] = ports.splice(from, 1);
+        ports.splice(to, 0, port);
+        for (const p of ports) {
+            container.appendChild(p.el);
+        }
     }
 }

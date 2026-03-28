@@ -1,5 +1,7 @@
+import { defaultLayout, LayoutStrategy } from "./auto-layout.js";
 import { Camera } from "./camera.js";
 import { Connection, ConnectionPreview } from "./connection.js";
+import { FileHandler, FileHandlerRegistry } from "./file-handler.js";
 import { NodeUI } from "./node-ui.js";
 import { Port } from "./port.js";
 import { PropertyPanel } from "./property-panel.js";
@@ -20,16 +22,24 @@ export class NodeEditor {
     readonly nodes: NodeUI[] = [];
     readonly connections: Connection[] = [];
     readonly propertyPanel: PropertyPanel;
+    readonly fileHandlers: FileHandlerRegistry;
 
     private currentProfile: ExportProfile = EXPORT_PROFILES["dark"];
     private currentProfileName = "dark";
-    private selectedNode: NodeUI | null = null;
+    private layoutStrategy: LayoutStrategy = defaultLayout;
+    private readonly selectedNodes = new Set<NodeUI>();
     private dragNode: NodeUI | null = null;
     private dragOffset = { x: 0, y: 0 };
+    private isDraggingSelection = false;
     private isPanning = false;
     private panStart = { x: 0, y: 0 };
     private dragPort: Port | null = null;
     private preview: ConnectionPreview | null = null;
+    private reorderPort: Port | null = null;
+    private reorderNode: NodeUI | null = null;
+    private reorderStartY = 0;
+    private selectionRect: HTMLDivElement | null = null;
+    private selRectStart = { x: 0, y: 0 };
 
     constructor(container: HTMLElement) {
         this.container = container;
@@ -63,10 +73,28 @@ export class NodeEditor {
         this.container.appendChild(this.rightPanel);
 
         this.propertyPanel = new PropertyPanel(this.rightPanel);
+        this.propertyPanel.onApply = (item, changes) => this.onPropertyApply(item, changes);
+
+        this.fileHandlers = new FileHandlerRegistry();
+        this.fileHandlers.register(this.createJsonHandler());
 
         this.bindEvents();
         this.camera.apply(this.viewport);
         this.setProfile("dark");
+    }
+
+    private onPropertyApply(item: import("./inspectable.js").UIItemBase<unknown>, changes: Map<string, unknown>): void {
+        const node = this.nodes.find((n) => n.item === item);
+        if (node) {
+            if (changes.has("label")) {
+                const headerEl = node.el.querySelector(".ne-node-header");
+                if (headerEl) headerEl.textContent = String(changes.get("label"));
+            }
+            if (changes.has("color")) {
+                const headerEl = node.el.querySelector(".ne-node-header") as HTMLElement | null;
+                if (headerEl) headerEl.style.background = String(changes.get("color"));
+            }
+        }
     }
 
     setProfile(nameOrProfile: string | ExportProfile): void {
@@ -163,9 +191,7 @@ export class NodeEditor {
         if (idx >= 0) this.nodes.splice(idx, 1);
         node.el.remove();
 
-        if (this.selectedNode === node) {
-            this.selectedNode = null;
-        }
+        this.selectedNodes.delete(node);
     }
 
     connect(from: Port, to: Port): Connection | null {
@@ -203,6 +229,7 @@ export class NodeEditor {
                 label: n.label,
                 x: n.x,
                 y: n.y,
+                color: n.color,
                 inputs: n.inputs.map((p) => ({
                     name: p.name,
                     type: p.type,
@@ -225,6 +252,235 @@ export class NodeEditor {
                 };
             }),
         };
+    }
+
+    save(): string {
+        const connSerializer = (c: Connection) => {
+            const fromNode = this.nodes.find((n) => n.outputs.includes(c.from))!;
+            const toNode = this.nodes.find((n) => n.inputs.includes(c.to))!;
+            return {
+                id: `${fromNode.id}:${c.from.name}->${toNode.id}:${c.to.name}`,
+                fromNodeId: fromNode.id,
+                fromPortIndex: fromNode.outputs.indexOf(c.from),
+                toNodeId: toNode.id,
+                toPortIndex: toNode.inputs.indexOf(c.to),
+            };
+        };
+
+        const data = {
+            version: 2,
+            layout: {
+                nodes: this.nodes.map((n) => ({
+                    id: n.id,
+                    x: n.x,
+                    y: n.y,
+                    color: n.color,
+                    inputs: n.inputs.map((p) => ({
+                        name: p.name,
+                        type: p.type,
+                        direction: p.direction,
+                    })),
+                    outputs: n.outputs.map((p) => ({
+                        name: p.name,
+                        type: p.type,
+                        direction: p.direction,
+                    })),
+                })),
+                connections: this.connections.map((c) => {
+                    const s = connSerializer(c);
+                    return { id: s.id, fromNodeId: s.fromNodeId, fromPortIndex: s.fromPortIndex, toNodeId: s.toNodeId, toPortIndex: s.toPortIndex };
+                }),
+            },
+            model: {
+                nodes: this.nodes.map((n) => ({
+                    id: n.id,
+                    label: n.label,
+                    data: n.item.serialize(),
+                })),
+                connections: this.connections.map((c) => {
+                    const fromNode = this.nodes.find((nd) => nd.outputs.includes(c.from))!;
+                    const toNode = this.nodes.find((nd) => nd.inputs.includes(c.to))!;
+                    return {
+                        id: `${fromNode.id}:${c.from.name}->${toNode.id}:${c.to.name}`,
+                        from: { node: fromNode.id, port: c.from.name },
+                        to: { node: toNode.id, port: c.to.name },
+                    };
+                }),
+            },
+        };
+        return JSON.stringify(data, null, 2);
+    }
+
+    load(json: string): void {
+        const data = JSON.parse(json);
+        this.clear();
+
+        // Support both v1 (flat) and v2 (layout+model) formats
+        const layout = data.layout ?? data;
+        const model = data.model;
+        const layoutNodes = layout.nodes ?? [];
+        const layoutConns = layout.connections ?? [];
+        const modelNodes = model?.nodes;
+
+        const nodeMap = new Map<string, NodeUI>();
+        for (const sn of layoutNodes) {
+            // Merge label from model if available
+            const mn = modelNodes?.find((m: { id: string }) => m.id === sn.id);
+            const label = mn?.label ?? sn.label ?? "Node";
+
+            const def: NodeDef = {
+                label,
+                inputs: (sn.inputs ?? [])
+                    .filter((p: { direction: string }) => p.direction === "input")
+                    .map((p: { name: string; type: string }) => ({ name: p.name, type: p.type })),
+                outputs: (sn.outputs ?? [])
+                    .filter((p: { direction: string }) => p.direction === "output")
+                    .map((p: { name: string; type: string }) => ({ name: p.name, type: p.type })),
+                color: sn.color,
+                data: mn?.data ?? undefined,
+            };
+            const node = this.addNode(def, sn.x, sn.y);
+            if (mn?.data != null) {
+                node.item.deserialize(mn.data);
+            }
+            nodeMap.set(sn.id, node);
+        }
+
+        for (const sc of layoutConns) {
+            const fromNode = nodeMap.get(sc.fromNodeId);
+            const toNode = nodeMap.get(sc.toNodeId);
+            if (fromNode && toNode) {
+                const fromPort = fromNode.outputs[sc.fromPortIndex];
+                const toPort = toNode.inputs[sc.toPortIndex];
+                if (fromPort && toPort) {
+                    this.connect(fromPort, toPort);
+                }
+            }
+        }
+    }
+
+    exportModel(): string {
+        const data = {
+            version: 1,
+            nodes: this.nodes.map((n) => ({
+                id: n.id,
+                label: n.label,
+                data: n.item.serialize(),
+            })),
+            connections: this.connections.map((c) => {
+                const fromNode = this.nodes.find((nd) => nd.outputs.includes(c.from))!;
+                const toNode = this.nodes.find((nd) => nd.inputs.includes(c.to))!;
+                return {
+                    id: `${fromNode.id}:${c.from.name}->${toNode.id}:${c.to.name}`,
+                    from: { node: fromNode.id, port: c.from.name },
+                    to: { node: toNode.id, port: c.to.name },
+                };
+            }),
+        };
+        return JSON.stringify(data, null, 2);
+    }
+
+    downloadSave(filename = "graph.json"): void {
+        this.downloadFile(this.save(), filename, "application/json");
+    }
+
+    downloadExport(filename = "model.json"): void {
+        this.downloadFile(this.exportModel(), filename, "application/json");
+    }
+
+    clear(): void {
+        while (this.connections.length > 0) {
+            this.removeConnection(this.connections[0]);
+        }
+        while (this.nodes.length > 0) {
+            this.removeNode(this.nodes[0]);
+        }
+        this.propertyPanel.hide();
+    }
+
+    autoLayout(): void {
+        this.layoutStrategy(this);
+    }
+
+    setLayoutStrategy(strategy: LayoutStrategy): void {
+        this.layoutStrategy = strategy;
+    }
+
+    loadFile(data: ArrayBuffer, filename: string): void {
+        const ext = filename.split(".").pop() ?? "";
+        const handler = this.fileHandlers.findByExtension(ext);
+        if (!handler) {
+            throw new Error(`No file handler registered for .${ext}`);
+        }
+        handler.load(data, this, filename);
+    }
+
+    exportAs(extension: string): void {
+        const handler = this.fileHandlers.findByExtension(extension);
+        if (!handler || !handler.canSave || !handler.save) {
+            throw new Error(`No saveable handler for .${extension}`);
+        }
+        const result = handler.save(this);
+        const blob = typeof result.data === "string"
+            ? new Blob([result.data], { type: result.mimeType })
+            : new Blob([result.data], { type: result.mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `export.${result.extension}`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    exportAsWithPrompt(extension: string): void {
+        const handler = this.fileHandlers.findByExtension(extension);
+        if (!handler || !handler.canSave || !handler.save) {
+            throw new Error(`No saveable handler for .${extension}`);
+        }
+        const defaultName = `export.${handler.extensions[0]}`;
+        const name = prompt(`Export as ${handler.displayName}:`, defaultName);
+        if (!name) return;
+        const result = handler.save(this);
+        const blob = typeof result.data === "string"
+            ? new Blob([result.data], { type: result.mimeType })
+            : new Blob([result.data], { type: result.mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = name;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    private createJsonHandler(): FileHandler {
+        const editor = this;
+        return {
+            extensions: ["json"],
+            mimeTypes: ["application/json"],
+            displayName: "Graph JSON",
+            canSave: true,
+            load(data: ArrayBuffer, ed: NodeEditor) {
+                const text = new TextDecoder().decode(data);
+                ed.load(text);
+            },
+            save(ed: NodeEditor) {
+                return {
+                    data: ed.save(),
+                    extension: "json",
+                    mimeType: "application/json",
+                };
+            },
+        };
+    }
+
+    private downloadFile(content: string, filename: string, type: string): void {
+        const blob = new Blob([content], { type });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
     }
 
     exportSVG(profile?: string | ExportProfile): string {
@@ -376,21 +632,58 @@ export class NodeEditor {
         URL.revokeObjectURL(url);
     }
 
-    private selectNode(node: NodeUI | null): void {
-        if (this.selectedNode) {
-            this.selectedNode.setSelected(false);
+    getSelectedNodes(): ReadonlySet<NodeUI> {
+        return this.selectedNodes;
+    }
+
+    private clearSelection(): void {
+        for (const n of this.selectedNodes) {
+            n.setSelected(false);
         }
-        this.selectedNode = node;
-        if (node) {
-            node.setSelected(true);
-            this.propertyPanel.show(node.item);
+        this.selectedNodes.clear();
+        this.propertyPanel.hide();
+    }
+
+    private selectNode(node: NodeUI, addToSelection = false): void {
+        if (!addToSelection) {
+            for (const n of this.selectedNodes) {
+                if (n !== node) n.setSelected(false);
+            }
+            this.selectedNodes.clear();
+        }
+
+        if (addToSelection && this.selectedNodes.has(node)) {
+            node.setSelected(false);
+            this.selectedNodes.delete(node);
+            if (this.selectedNodes.size === 1) {
+                this.propertyPanel.show([...this.selectedNodes][0].item);
+            } else if (this.selectedNodes.size === 0) {
+                this.propertyPanel.hide();
+            }
         } else {
-            this.propertyPanel.hide();
+            node.setSelected(true);
+            this.selectedNodes.add(node);
+            if (this.selectedNodes.size === 1) {
+                this.propertyPanel.show(node.item);
+            } else {
+                this.propertyPanel.hide();
+            }
+        }
+    }
+
+    private selectNodes(nodes: NodeUI[]): void {
+        this.clearSelection();
+        for (const n of nodes) {
+            n.setSelected(true);
+            this.selectedNodes.add(n);
+        }
+        if (nodes.length === 1) {
+            this.propertyPanel.show(nodes[0].item);
         }
     }
 
     private selectConnection(conn: Connection): void {
-        this.selectNode(null);
+        this.clearSelection();
         this.propertyPanel.show(conn.item);
     }
 
@@ -407,6 +700,21 @@ export class NodeEditor {
             if (port) return port;
         }
         return undefined;
+    }
+
+    private findPortByLabel(el: HTMLElement): Port | undefined {
+        if (!el.classList.contains("ne-port-label")) return undefined;
+        for (const node of this.nodes) {
+            const port = node.getAllPorts().find((p) => p.labelEl === el);
+            if (port) return port;
+        }
+        return undefined;
+    }
+
+    private findNodeForPort(port: Port): NodeUI | undefined {
+        return this.nodes.find((n) =>
+            n.inputs.includes(port) || n.outputs.includes(port),
+        );
     }
 
     private findConnectionByPath(el: HTMLElement): Connection | undefined {
@@ -432,6 +740,18 @@ export class NodeEditor {
     private onMouseDown(e: MouseEvent): void {
         const target = e.target as HTMLElement;
 
+        // Port label drag → reorder
+        const labelPort = this.findPortByLabel(target);
+        if (labelPort) {
+            e.stopPropagation();
+            e.preventDefault();
+            this.reorderPort = labelPort;
+            this.reorderNode = this.findNodeForPort(labelPort) ?? null;
+            this.reorderStartY = e.clientY;
+            labelPort.el.classList.add("ne-port-dragging");
+            return;
+        }
+
         const port = this.findPortByDot(target);
         if (port) {
             e.stopPropagation();
@@ -443,13 +763,23 @@ export class NodeEditor {
         const node = this.findNodeByEl(target);
         if (node) {
             e.stopPropagation();
-            this.selectNode(node);
-            this.dragNode = node;
+            const ctrlOrMeta = e.ctrlKey || e.metaKey;
 
-            const worldMouse = this.camera.screenToWorld(e.clientX, e.clientY);
-            this.dragOffset.x = worldMouse.x - node.x;
-            this.dragOffset.y = worldMouse.y - node.y;
-            node.el.style.cursor = "grabbing";
+            if (ctrlOrMeta) {
+                this.selectNode(node, true);
+            } else if (!this.selectedNodes.has(node)) {
+                this.selectNode(node, false);
+            }
+            // else: node already selected, keep current multi-selection for dragging
+
+            if (this.selectedNodes.has(node)) {
+                this.dragNode = node;
+                this.isDraggingSelection = this.selectedNodes.size > 1;
+                const worldMouse = this.camera.screenToWorld(e.clientX, e.clientY);
+                this.dragOffset.x = worldMouse.x - node.x;
+                this.dragOffset.y = worldMouse.y - node.y;
+                node.el.style.cursor = "grabbing";
+            }
             return;
         }
 
@@ -460,14 +790,50 @@ export class NodeEditor {
             return;
         }
 
-        this.selectNode(null);
-        this.isPanning = true;
-        this.panStart.x = e.clientX - this.camera.x;
-        this.panStart.y = e.clientY - this.camera.y;
-        this.canvas.style.cursor = "grabbing";
+        // Background: right-click or middle-click = pan, left-click = rectangle select
+        if (e.button === 2 || e.button === 1) {
+            this.isPanning = true;
+            this.panStart.x = e.clientX - this.camera.x;
+            this.panStart.y = e.clientY - this.camera.y;
+            this.canvas.style.cursor = "grabbing";
+        } else {
+            // Left-click on background = rectangle selection
+            this.clearSelection();
+            this.selRectStart.x = e.clientX;
+            this.selRectStart.y = e.clientY;
+            this.selectionRect = document.createElement("div");
+            this.selectionRect.className = "ne-selection-rect";
+            this.canvas.appendChild(this.selectionRect);
+        }
     }
 
     private onMouseMove(e: MouseEvent): void {
+        if (this.reorderPort && this.reorderNode) {
+            const dy = e.clientY - this.reorderStartY;
+            const portHeight = this.reorderPort.el.offsetHeight + 4; // gap
+            const threshold = portHeight * 0.6;
+
+            if (Math.abs(dy) > threshold) {
+                const direction = dy > 0 ? 1 : -1;
+                const ports = this.reorderPort.direction === "input"
+                    ? this.reorderNode.inputs
+                    : this.reorderNode.outputs;
+                const idx = ports.indexOf(this.reorderPort);
+                const newIdx = idx + direction;
+
+                if (newIdx >= 0 && newIdx < ports.length) {
+                    if (this.reorderPort.direction === "input") {
+                        this.reorderNode.moveInputPort(idx, newIdx);
+                    } else {
+                        this.reorderNode.moveOutputPort(idx, newIdx);
+                    }
+                    this.reorderStartY = e.clientY;
+                    this.updateConnections();
+                }
+            }
+            return;
+        }
+
         if (this.dragPort && this.preview) {
             const p1 = this.dragPort.getCenter();
             this.preview.updateScreen(p1.x, p1.y, e.clientX, e.clientY);
@@ -476,11 +842,32 @@ export class NodeEditor {
 
         if (this.dragNode) {
             const worldMouse = this.camera.screenToWorld(e.clientX, e.clientY);
-            this.dragNode.setPosition(
-                worldMouse.x - this.dragOffset.x,
-                worldMouse.y - this.dragOffset.y,
-            );
+            const newX = worldMouse.x - this.dragOffset.x;
+            const newY = worldMouse.y - this.dragOffset.y;
+
+            if (this.isDraggingSelection && this.selectedNodes.size > 1) {
+                const dx = newX - this.dragNode.x;
+                const dy = newY - this.dragNode.y;
+                for (const n of this.selectedNodes) {
+                    n.setPosition(n.x + dx, n.y + dy);
+                }
+            } else {
+                this.dragNode.setPosition(newX, newY);
+            }
             this.updateConnections();
+            return;
+        }
+
+        if (this.selectionRect) {
+            const x1 = Math.min(this.selRectStart.x, e.clientX);
+            const y1 = Math.min(this.selRectStart.y, e.clientY);
+            const x2 = Math.max(this.selRectStart.x, e.clientX);
+            const y2 = Math.max(this.selRectStart.y, e.clientY);
+            const canvasRect = this.canvas.getBoundingClientRect();
+            this.selectionRect.style.left = (x1 - canvasRect.left) + "px";
+            this.selectionRect.style.top = (y1 - canvasRect.top) + "px";
+            this.selectionRect.style.width = (x2 - x1) + "px";
+            this.selectionRect.style.height = (y2 - y1) + "px";
             return;
         }
 
@@ -493,6 +880,13 @@ export class NodeEditor {
     }
 
     private onMouseUp(e: MouseEvent): void {
+        if (this.reorderPort) {
+            this.reorderPort.el.classList.remove("ne-port-dragging");
+            this.reorderPort = null;
+            this.reorderNode = null;
+            return;
+        }
+
         if (this.dragPort && this.preview) {
             this.preview.remove();
             this.preview = null;
@@ -509,6 +903,30 @@ export class NodeEditor {
         if (this.dragNode) {
             this.dragNode.el.style.cursor = "grab";
             this.dragNode = null;
+            this.isDraggingSelection = false;
+            return;
+        }
+
+        if (this.selectionRect) {
+            const rect = this.selectionRect.getBoundingClientRect();
+            this.selectionRect.remove();
+            this.selectionRect = null;
+
+            // Find nodes within the selection rectangle
+            if (rect.width > 4 || rect.height > 4) {
+                const hits = this.nodes.filter((n) => {
+                    const nr = n.el.getBoundingClientRect();
+                    return (
+                        nr.left < rect.right &&
+                        nr.right > rect.left &&
+                        nr.top < rect.bottom &&
+                        nr.bottom > rect.top
+                    );
+                });
+                if (hits.length > 0) {
+                    this.selectNodes(hits);
+                }
+            }
             return;
         }
 
@@ -520,17 +938,20 @@ export class NodeEditor {
 
     private onKeyDown(e: KeyboardEvent): void {
         if (e.key === "Delete" || e.key === "Backspace") {
-            if (this.selectedNode && document.activeElement === document.body) {
-                this.removeNode(this.selectedNode);
+            if (this.selectedNodes.size > 0 && document.activeElement === document.body) {
+                const toRemove = [...this.selectedNodes];
+                for (const node of toRemove) {
+                    this.removeNode(node);
+                }
             }
         }
     }
 
     private onContextMenu(e: MouseEvent): void {
+        e.preventDefault(); // always prevent browser context menu on canvas
         const target = e.target as HTMLElement;
         const conn = this.findConnectionByPath(target);
         if (conn) {
-            e.preventDefault();
             this.removeConnection(conn);
         }
     }

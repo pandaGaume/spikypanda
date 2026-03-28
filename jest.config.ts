@@ -13,6 +13,10 @@ const config: Config = {
     moduleNameMapper: {
         "^spikypanda-core$": "<rootDir>/packages/dev/core/src/index.ts",
         "^spikypanda-core/(.*)$": "<rootDir>/packages/dev/core/src/$1",
+        "^spikypanda-runtime$": "<rootDir>/packages/dev/runtime/src/index.ts",
+        "^spikypanda-runtime/(.*)$": "<rootDir>/packages/dev/runtime/src/$1",
+        "^spikypanda-nodeeditor$": "<rootDir>/packages/dev/nodeeditor/src/index.ts",
+        "^spikypanda-nodeeditor/(.*)$": "<rootDir>/packages/dev/nodeeditor/src/$1",
     },
 };
 

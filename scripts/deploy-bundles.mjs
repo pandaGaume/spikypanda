@@ -8,6 +8,7 @@ const root = resolve(__dirname, "..");
 const sources = [
     join(root, "packages/dev/core/bundle"),
     join(root, "packages/dev/nodeeditor/bundle"),
+    join(root, "packages/dev/onnx-editor/bundle"),
 ];
 
 const dest = join(root, "packages/host/www/bundle");
