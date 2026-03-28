@@ -1,6 +1,9 @@
 
 export interface ICartesian {
-    distance(b:ICartesian) : number; 
+    /** Euclidean distance to another point. */
+    distance(b:ICartesian) : number;
+    /** Squared euclidean distance (avoids sqrt). Preferred for comparison-only use cases. */
+    distanceSquared(b:ICartesian) : number;
     subtract(b:ICartesian) : this;
     add(b:ICartesian) : this;
     addInPlace(b:ICartesian) :this;

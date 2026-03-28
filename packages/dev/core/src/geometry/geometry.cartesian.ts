@@ -28,6 +28,12 @@ export class Cartesian2 implements ICartesian2 {
         return Math.hypot(dx, dy);
     }
 
+    public distanceSquared(b: ICartesian2): number {
+        const dx = b.x - this.x,
+            dy = b.y - this.y;
+        return dx * dx + dy * dy;
+    }
+
     public subtract(b: ICartesian2): this {
         return this.newThis(this.x - b.x, this.y - b.y);
     }
@@ -88,6 +94,13 @@ export class Cartesian3 extends Cartesian2 implements ICartesian3 {
             dy = b.y - this.y,
             dz = b.z - this.z;
         return Math.hypot(dx, dy, dz);
+    }
+
+    public override distanceSquared(b: ICartesian3): number {
+        const dx = b.x - this.x,
+            dy = b.y - this.y,
+            dz = b.z - this.z;
+        return dx * dx + dy * dy + dz * dz;
     }
 
     public subtract(b: ICartesian3): this {
@@ -189,6 +202,18 @@ export class Cartesian4 extends Cartesian3 implements ICartesian4 {
             dy = B.y - A.y,
             dz = B.z - A.z;
         return Math.hypot(dx, dy, dz);
+    }
+
+    public override distanceSquared(b: ICartesian4): number {
+        const A = this.isVector ? { x: this.x, y: this.y, z: this.z, w: 0 } : { x: this.x, y: this.y, z: this.z, w: 1 };
+        const B = Cartesian4.canon(b);
+        if (A.w === 0 || B.w === 0) {
+            throw new Error("distanceSquared is only defined between points (w != 0)");
+        }
+        const dx = B.x - A.x,
+            dy = B.y - A.y,
+            dz = B.z - A.z;
+        return dx * dx + dy * dy + dz * dz;
     }
 
     public subtract(b: ICartesian4): this {
