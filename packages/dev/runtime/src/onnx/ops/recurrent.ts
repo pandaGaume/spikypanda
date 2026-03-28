@@ -1,0 +1,147 @@
+import type { ITensor } from "../../compute/compute.interfaces";
+import type { OnnxNodeInfo } from "../onnx-types";
+import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "./registry";
+
+function sigmoid(x: number): number { return 1 / (1 + Math.exp(-x)); }
+
+/**
+ * LSTM: Long Short-Term Memory.
+ *
+ * Inputs: X [seq_len, batch, input_size], W [num_dir, 4*hidden, input], R [num_dir, 4*hidden, hidden],
+ *         B [num_dir, 8*hidden] (optional), sequence_lens, initial_hidden, initial_cell
+ *
+ * Simplified: single direction, batch=1, 2D input [seq_len, input_size].
+ * Returns Y_h [1, 1, hidden_size] (last hidden state).
+ */
+class LSTMNode extends OnnxOpNode {
+    private readonly hiddenSize: number;
+    readonly outputShapes: number[][] = [];
+
+    constructor(info: OnnxNodeInfo) {
+        super(info);
+        this.hiddenSize = this.attrInt("hidden_size", 0);
+    }
+
+    execute(inputs: ITensor[]): ITensor[] {
+        const X = inputs[0];     // [seq_len, input_size] or [seq_len, batch, input_size]
+        const W = inputs[1];     // [1, 4*H, input_size]
+        const R = inputs[2];     // [1, 4*H, H]
+        const B = inputs.length > 3 ? inputs[3] : null; // [1, 8*H]
+
+        const seqLen = X.shape[0];
+        const inputSize = X.shape.length >= 3 ? X.shape[2] : X.shape[1];
+        const H = this.hiddenSize || (W.data.length / (4 * inputSize));
+
+        let h = new Float32Array(H);
+        let c = new Float32Array(H);
+
+        // Pre-extract W and R matrices (stored as [4*H, input] and [4*H, H])
+        const W4H = W.data;
+        const R4H = R.data;
+        const biasW = B ? B.data : null;
+
+        for (let t = 0; t < seqLen; t++) {
+            const xOffset = t * inputSize;
+            const gates = new Float32Array(4 * H);
+
+            // gates = W @ x + R @ h + bias
+            for (let g = 0; g < 4 * H; g++) {
+                let sum = 0;
+                for (let i = 0; i < inputSize; i++) {
+                    sum += W4H[g * inputSize + i] * X.data[xOffset + i];
+                }
+                for (let j = 0; j < H; j++) {
+                    sum += R4H[g * H + j] * h[j];
+                }
+                if (biasW) {
+                    sum += biasW[g] + biasW[4 * H + g]; // W bias + R bias
+                }
+                gates[g] = sum;
+            }
+
+            // i=sigmoid, o=sigmoid, f=sigmoid, c'=tanh (IOFC order in ONNX)
+            const newH = new Float32Array(H);
+            const newC = new Float32Array(H);
+            for (let j = 0; j < H; j++) {
+                const i = sigmoid(gates[0 * H + j]);
+                const o = sigmoid(gates[1 * H + j]);
+                const f = sigmoid(gates[2 * H + j]);
+                const g = Math.tanh(gates[3 * H + j]);
+                newC[j] = f * c[j] + i * g;
+                newH[j] = o * Math.tanh(newC[j]);
+            }
+            h = newH;
+            c = newC;
+        }
+
+        // Return last hidden state [1, 1, H]
+        return [makeTensor(h, [1, 1, H])];
+    }
+}
+
+/**
+ * GRU: Gated Recurrent Unit.
+ *
+ * Simplified: single direction, batch=1.
+ * Returns Y_h [1, 1, hidden_size].
+ */
+class GRUNode extends OnnxOpNode {
+    private readonly hiddenSize: number;
+    readonly outputShapes: number[][] = [];
+
+    constructor(info: OnnxNodeInfo) {
+        super(info);
+        this.hiddenSize = this.attrInt("hidden_size", 0);
+    }
+
+    execute(inputs: ITensor[]): ITensor[] {
+        const X = inputs[0];
+        const W = inputs[1];     // [1, 3*H, input_size]
+        const R = inputs[2];     // [1, 3*H, H]
+        const B = inputs.length > 3 ? inputs[3] : null;
+
+        const seqLen = X.shape[0];
+        const inputSize = X.shape.length >= 3 ? X.shape[2] : X.shape[1];
+        const H = this.hiddenSize || (W.data.length / (3 * inputSize));
+
+        let h = new Float32Array(H);
+        const W3H = W.data;
+        const R3H = R.data;
+        const biasW = B ? B.data : null;
+
+        for (let t = 0; t < seqLen; t++) {
+            const xOffset = t * inputSize;
+            const gates = new Float32Array(3 * H);
+
+            for (let g = 0; g < 3 * H; g++) {
+                let sum = 0;
+                for (let i = 0; i < inputSize; i++) {
+                    sum += W3H[g * inputSize + i] * X.data[xOffset + i];
+                }
+                for (let j = 0; j < H; j++) {
+                    sum += R3H[g * H + j] * h[j];
+                }
+                if (biasW) {
+                    sum += biasW[g] + biasW[3 * H + g];
+                }
+                gates[g] = sum;
+            }
+
+            const newH = new Float32Array(H);
+            for (let j = 0; j < H; j++) {
+                const z = sigmoid(gates[0 * H + j]);
+                const r = sigmoid(gates[1 * H + j]);
+                const n = Math.tanh(gates[2 * H + j]); // simplified (gate applied before sum)
+                newH[j] = (1 - z) * n + z * h[j];
+            }
+            h = newH;
+        }
+
+        return [makeTensor(h, [1, 1, H])];
+    }
+}
+
+export function registerRecurrentOps(registry: OnnxOpRegistry): void {
+    registry.register("LSTM", (info) => new LSTMNode(info));
+    registry.register("GRU", (info) => new GRUNode(info));
+}
