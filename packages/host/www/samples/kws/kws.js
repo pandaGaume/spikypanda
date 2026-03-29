@@ -111,9 +111,13 @@ function dctMatrix(nMfcc, nMels) {
 var melFB = melFilterbank(40, N_FFT, SAMPLE_RATE);
 var dctMat = dctMatrix(N_MFCC, 40);
 
+// Store mel spectrogram for visualization (before DCT)
+var lastMelSpec = null;
+
 function computeMFCC(audioData) {
     var nBins = N_FFT / 2 + 1;
     var mfcc = new Float32Array(N_MFCC * N_FRAMES);
+    var melViz = new Float32Array(40 * N_FRAMES); // for spectrogram display
     for (var t = 0; t < N_FRAMES; t++) {
         var start = t * HOP_LENGTH;
         var frame = new Float32Array(N_FFT);
@@ -136,6 +140,7 @@ function computeMFCC(audioData) {
             var sum = 0;
             for (var k2 = 0; k2 < nBins; k2++) sum += melFB[m][k2] * spectrum[k2];
             melSpec[m] = Math.log(Math.max(sum, 1e-10));
+            melViz[m * N_FRAMES + t] = melSpec[m]; // store for viz
         }
         for (var c = 0; c < N_MFCC; c++) {
             var sum2 = 0;
@@ -143,6 +148,7 @@ function computeMFCC(audioData) {
             mfcc[c * N_FRAMES + t] = sum2;
         }
     }
+    lastMelSpec = melViz;
     return mfcc;
 }
 
@@ -323,7 +329,7 @@ function processAudio() {
     var audioLevel = Math.sqrt(sumSq / audioBuffer.length);
 
     var mfcc = computeMFCC(audioBuffer);
-    drawSpectrogram(mfcc, audioLevel);
+    drawSpectrogram(lastMelSpec || mfcc, audioLevel);
 
     var result = runInference(mfcc);
     var probs = softmax(result.logits);
