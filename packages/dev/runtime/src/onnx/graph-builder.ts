@@ -36,6 +36,7 @@ class InputNode extends ComputeNodeBase {
 
     constructor(name: string, shape: number[]) {
         super();
+        this.id = name;
         this.inputName = name;
         // Replace dynamic dims (0) with 1 for inference
         this.outputShapes = [shape.map((d) => (d <= 0 ? 1 : d))];
