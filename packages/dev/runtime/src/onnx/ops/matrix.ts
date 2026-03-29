@@ -1,6 +1,6 @@
 import type { ITensor } from "../../compute/compute.interfaces";
 import type { OnnxNodeInfo } from "../onnx-types";
-import { OnnxOpNode, makeTensor, shapeSize, OnnxOpRegistry } from "./registry";
+import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "./registry";
 
 /**
  * MatMul: matrix multiplication A @ B.
@@ -15,9 +15,11 @@ class MatMulNode extends OnnxOpNode {
 
         let M: number, K: number, N: number;
         if (A.shape.length === 1) {
-            M = 1; K = A.shape[0];
+            M = 1;
+            K = A.shape[0];
         } else {
-            M = A.shape[0]; K = A.shape[1];
+            M = A.shape[0];
+            K = A.shape[1];
         }
         if (B.shape.length === 1) {
             N = 1;
@@ -135,7 +137,8 @@ class FlattenNode extends OnnxOpNode {
     execute(inputs: ITensor[]): ITensor[] {
         const inp = inputs[0];
         const shape = inp.shape;
-        let d0 = 1, d1 = 1;
+        let d0 = 1,
+            d1 = 1;
         for (let i = 0; i < this.axis; i++) d0 *= shape[i] ?? 1;
         for (let i = this.axis; i < shape.length; i++) d1 *= shape[i] ?? 1;
         return [makeTensor(new Float32Array(inp.data), [d0, d1])];
@@ -149,12 +152,8 @@ class SqueezeNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     execute(inputs: ITensor[]): ITensor[] {
         const inp = inputs[0];
-        const axes = inputs.length >= 2 && inputs[1]
-            ? Array.from(inputs[1].data).map(Math.round)
-            : null;
-        const newShape = axes
-            ? inp.shape.filter((_, i) => !axes.includes(i))
-            : inp.shape.filter((d) => d !== 1);
+        const axes = inputs.length >= 2 && inputs[1] ? Array.from(inputs[1].data).map(Math.round) : null;
+        const newShape = axes ? inp.shape.filter((_, i) => !axes.includes(i)) : inp.shape.filter((d) => d !== 1);
         if (newShape.length === 0) newShape.push(1);
         return [makeTensor(new Float32Array(inp.data), newShape)];
     }
@@ -169,7 +168,9 @@ class UnsqueezeNode extends OnnxOpNode {
         const inp = inputs[0];
         const axesT = inputs[1];
         if (!axesT) return [makeTensor(new Float32Array(inp.data), [...inp.shape])];
-        const axes = Array.from(axesT.data).map(Math.round).sort((a, b) => a - b);
+        const axes = Array.from(axesT.data)
+            .map(Math.round)
+            .sort((a, b) => a - b);
         const newShape = [...inp.shape];
         for (const a of axes) {
             newShape.splice(a, 0, 1);

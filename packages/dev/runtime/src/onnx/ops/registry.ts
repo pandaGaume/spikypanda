@@ -10,30 +10,92 @@ export type OnnxOpFactory = (
     initializers: Map<string, OnnxTensorInfo>,
 ) => ComputeNodeBase;
 
+export interface OnnxOpEntry {
+    factory: OnnxOpFactory;
+    priority: number;
+    backend: string;
+}
+
+/**
+ * Default priority levels.
+ */
+export const PRIORITY_GENERIC = 0;
+export const PRIORITY_NATIVE = 100;
+
 /**
  * Registry mapping ONNX opType strings to their compute implementations.
+ * Supports priority-based registration: higher priority wins.
+ * Multiple backends can register for the same op — highest priority is used.
  */
 export class OnnxOpRegistry {
-    private readonly factories = new Map<string, OnnxOpFactory>();
+    private readonly entries = new Map<string, OnnxOpEntry[]>();
 
-    register(opType: string, factory: OnnxOpFactory): void {
-        this.factories.set(opType, factory);
+    /**
+     * Register an op implementation.
+     * @param opType   ONNX operator type (e.g. "Conv", "LSTM")
+     * @param factory  Factory function
+     * @param priority Higher priority wins (default: PRIORITY_GENERIC = 0)
+     * @param backend  Label for the implementation source (e.g. "generic", "spikypanda")
+     */
+    register(opType: string, factory: OnnxOpFactory, priority = PRIORITY_GENERIC, backend = "generic"): void {
+        let list = this.entries.get(opType);
+        if (!list) {
+            list = [];
+            this.entries.set(opType, list);
+        }
+        list.push({ factory, priority, backend });
+        list.sort((a, b) => b.priority - a.priority);
     }
 
     has(opType: string): boolean {
-        return this.factories.has(opType);
+        return this.entries.has(opType);
     }
 
+    /**
+     * Create a node using the highest-priority factory.
+     */
     create(nodeInfo: OnnxNodeInfo, initializers: Map<string, OnnxTensorInfo>): ComputeNodeBase {
-        const factory = this.factories.get(nodeInfo.opType);
-        if (!factory) {
+        const list = this.entries.get(nodeInfo.opType);
+        if (!list || list.length === 0) {
             throw new Error(`No ONNX op implementation for: ${nodeInfo.opType}`);
         }
-        return factory(nodeInfo, initializers);
+        return list[0].factory(nodeInfo, initializers);
+    }
+
+    /**
+     * Get info about the active (highest-priority) implementation for an op.
+     */
+    getActiveBackend(opType: string): string | undefined {
+        const list = this.entries.get(opType);
+        return list && list.length > 0 ? list[0].backend : undefined;
+    }
+
+    /**
+     * Get all registered backends for an op, sorted by priority (highest first).
+     */
+    getBackends(opType: string): { backend: string; priority: number }[] {
+        const list = this.entries.get(opType);
+        return list ? list.map((e) => ({ backend: e.backend, priority: e.priority })) : [];
     }
 
     getRegistered(): string[] {
-        return [...this.factories.keys()].sort();
+        return [...this.entries.keys()].sort();
+    }
+
+    /**
+     * Summary: for each op, which backend is active.
+     */
+    summary(): { opType: string; backend: string; priority: number; alternatives: number }[] {
+        const result: { opType: string; backend: string; priority: number; alternatives: number }[] = [];
+        for (const [opType, list] of this.entries) {
+            result.push({
+                opType,
+                backend: list[0].backend,
+                priority: list[0].priority,
+                alternatives: list.length - 1,
+            });
+        }
+        return result.sort((a, b) => a.opType.localeCompare(b.opType));
     }
 }
 

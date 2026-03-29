@@ -149,7 +149,7 @@ class GemmNode extends OnnxOpNode {
                 for (let n = 0; n < N; n++) {
                     const ci = m * N + n;
                     // C is broadcastable — could be [1, N] or [M, N]
-                    const cIdx = (C.data.length === N) ? n : ci % C.data.length;
+                    const cIdx = C.data.length === N ? n : ci % C.data.length;
                     out[ci] += this.beta * C.data[cIdx];
                 }
             }

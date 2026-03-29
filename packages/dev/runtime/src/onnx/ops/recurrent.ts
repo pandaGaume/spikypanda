@@ -2,7 +2,9 @@ import type { ITensor } from "../../compute/compute.interfaces";
 import type { OnnxNodeInfo } from "../onnx-types";
 import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "./registry";
 
-function sigmoid(x: number): number { return 1 / (1 + Math.exp(-x)); }
+function sigmoid(x: number): number {
+    return 1 / (1 + Math.exp(-x));
+}
 
 /**
  * LSTM: Long Short-Term Memory.
@@ -23,14 +25,14 @@ class LSTMNode extends OnnxOpNode {
     }
 
     execute(inputs: ITensor[]): ITensor[] {
-        const X = inputs[0];     // [seq_len, input_size] or [seq_len, batch, input_size]
-        const W = inputs[1];     // [1, 4*H, input_size]
-        const R = inputs[2];     // [1, 4*H, H]
+        const X = inputs[0]; // [seq_len, input_size] or [seq_len, batch, input_size]
+        const W = inputs[1]; // [1, 4*H, input_size]
+        const R = inputs[2]; // [1, 4*H, H]
         const B = inputs.length > 3 ? inputs[3] : null; // [1, 8*H]
 
         const seqLen = X.shape[0];
         const inputSize = X.shape.length >= 3 ? X.shape[2] : X.shape[1];
-        const H = this.hiddenSize || (W.data.length / (4 * inputSize));
+        const H = this.hiddenSize || W.data.length / (4 * inputSize);
 
         let h = new Float32Array(H);
         let c = new Float32Array(H);
@@ -96,13 +98,13 @@ class GRUNode extends OnnxOpNode {
 
     execute(inputs: ITensor[]): ITensor[] {
         const X = inputs[0];
-        const W = inputs[1];     // [1, 3*H, input_size]
-        const R = inputs[2];     // [1, 3*H, H]
+        const W = inputs[1]; // [1, 3*H, input_size]
+        const R = inputs[2]; // [1, 3*H, H]
         const B = inputs.length > 3 ? inputs[3] : null;
 
         const seqLen = X.shape[0];
         const inputSize = X.shape.length >= 3 ? X.shape[2] : X.shape[1];
-        const H = this.hiddenSize || (W.data.length / (3 * inputSize));
+        const H = this.hiddenSize || W.data.length / (3 * inputSize);
 
         let h = new Float32Array(H);
         const W3H = W.data;
