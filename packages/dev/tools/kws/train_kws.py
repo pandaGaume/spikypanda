@@ -28,11 +28,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchaudio
-# Force soundfile backend on Windows (avoids torchcodec/FFmpeg dependency)
-try:
-    torchaudio.set_audio_backend("soundfile")
-except Exception:
-    pass
+import soundfile as sf
+# Force soundfile backend — torchaudio 2.9+ tries torchcodec which needs FFmpeg
+def _sf_load(path, **kwargs):
+    data, sr = sf.read(str(path), dtype="float32")
+    waveform = torch.from_numpy(data).unsqueeze(0)  # [1, samples]
+    if waveform.dim() == 3:
+        waveform = waveform.squeeze(-1)
+    return waveform, sr
+torchaudio.load = _sf_load
 from pathlib import Path
 
 # ---------------------------------------------------------------------------

@@ -127,6 +127,9 @@ function assertClose(actual: Float32Array, expected: Float32Array, opType: strin
 // Tests
 // ---------------------------------------------------------------------------
 
+// Ops that only work in graph pipeline (no inputs, everything from attributes)
+const GRAPH_ONLY_OPS = new Set(["Constant"]);
+
 // ---------------------------------------------------------------------------
 // Helper: run a single op through a given registry and compare to reference
 // ---------------------------------------------------------------------------
@@ -169,6 +172,7 @@ describe("Generic ONNX ops vs onnxruntime", () => {
         : [];
 
     for (const tc of vectorsRaw) {
+        if (GRAPH_ONLY_OPS.has(tc.opType)) continue;
         it(`${tc.opType} — generic op matches onnxruntime`, () => {
             testOpWithRegistry(tc, registry);
         });
@@ -185,10 +189,8 @@ describe("SpikyPanda native ops vs onnxruntime", () => {
         : [];
 
     for (const tc of vectorsRaw) {
-        it(`${tc.opType} — spikypanda op matches onnxruntime [${
-            // Show which backend will handle this op
-            "spikypanda"
-        }]`, () => {
+        if (GRAPH_ONLY_OPS.has(tc.opType)) continue;
+        it(`${tc.opType} — spikypanda op matches onnxruntime [spikypanda]`, () => {
             testOpWithRegistry(tc, spRegistry);
         });
     }
