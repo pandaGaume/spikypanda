@@ -70,6 +70,11 @@
             <div class="controls" style="margin-top:12px;">
                 <button id="btn-start" onclick="startListening()">Start Listening</button>
                 <button id="btn-stop" onclick="stopListening()" disabled>Stop</button>
+                <label style="margin-left:20px; cursor:pointer;">
+                    <input type="checkbox" id="chk-backend" onchange="switchBackend(this.checked)" checked />
+                    SpikyPanda native
+                </label>
+                <span id="backend-label" style="margin-left:8px; font-size:0.8em; color:var(--primary);">spikypanda</span>
                 <span id="status" style="margin-left:12px;"></span>
             </div>
 
