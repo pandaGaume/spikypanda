@@ -1,0 +1,92 @@
+{
+  "models": [
+    {
+      "name": "kws_conv_gru",
+      "labels": [
+        "yes",
+        "no",
+        "up",
+        "down",
+        "left",
+        "right",
+        "on",
+        "off",
+        "stop",
+        "go",
+        "_unknown_",
+        "_silence_"
+      ],
+      "num_classes": 12,
+      "sample_rate": 16000,
+      "n_mfcc": 40,
+      "n_fft": 512,
+      "hop_length": 160,
+      "n_frames": 101,
+      "input_shape": [
+        1,
+        40,
+        101
+      ],
+      "model_params": 13836,
+      "model_size_kb": 56.1,
+      "ops_used": [
+        "Concat",
+        "Constant",
+        "Conv",
+        "Expand",
+        "GRU",
+        "Gather",
+        "Gemm",
+        "MaxPool",
+        "Relu",
+        "Shape",
+        "Squeeze",
+        "Transpose",
+        "Unsqueeze"
+      ],
+      "trained": false,
+      "note": "Random weights \u2014 use train_kws.py for trained model"
+    },
+    {
+      "name": "kws_conv_tiny",
+      "labels": [
+        "yes",
+        "no",
+        "up",
+        "down",
+        "left",
+        "right",
+        "on",
+        "off",
+        "stop",
+        "go",
+        "_unknown_",
+        "_silence_"
+      ],
+      "num_classes": 12,
+      "sample_rate": 16000,
+      "n_mfcc": 40,
+      "n_fft": 512,
+      "hop_length": 160,
+      "n_frames": 101,
+      "input_shape": [
+        1,
+        40,
+        101
+      ],
+      "model_params": 6156,
+      "model_size_kb": 25.2,
+      "ops_used": [
+        "Constant",
+        "Conv",
+        "Gemm",
+        "GlobalAveragePool",
+        "MaxPool",
+        "Relu",
+        "Squeeze"
+      ],
+      "trained": false,
+      "note": "Random weights \u2014 use train_kws.py for trained model"
+    }
+  ]
+}
