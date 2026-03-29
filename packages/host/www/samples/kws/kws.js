@@ -227,7 +227,7 @@ function loadOnnxModel() {
             }
             kwsLog("Ops: " + ops.join(", "));
 
-            var registry = RT.createDefaultRegistry();
+            var registry = RT.createSpikyPandaRegistry ? RT.createSpikyPandaRegistry() : RT.createDefaultRegistry();
             var builder = new RT.OnnxGraphBuilder(registry);
             var result = builder.build(parsed);
 
