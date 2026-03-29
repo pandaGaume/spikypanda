@@ -564,6 +564,31 @@ def gen_pad():
 def gen_min(): return _binary("Min")
 def gen_max(): return _binary("Max")
 
+def gen_constant():
+    val = numpy_helper.from_array(np.array([1.5, 2.5, 3.5], dtype=np.float32).reshape(1, 3), "value")
+    g = helper.make_graph(
+        [helper.make_node("Constant", [], ["Y"], value=val)],
+        "g",
+        [],
+        [helper.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
+    )
+    outs, buf = _run(g, {})
+    return _make_case("Constant", [], outs, model_bytes=buf, feeds=[])
+
+def gen_expand():
+    X = _arr((1, 3))
+    shape = np.array([3, 3], dtype=np.int64)
+    g = helper.make_graph(
+        [helper.make_node("Expand", ["X", "shape"], ["Y"])],
+        "g",
+        [helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, 3])],
+        [helper.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
+        initializer=[numpy_helper.from_array(shape, "shape")],
+    )
+    outs, buf = _run(g, {"X": X})
+    return _make_case("Expand", [("X", X), ("shape", shape.astype(np.float32))], outs,
+                      model_bytes=buf, feeds=[("X", X)])
+
 # ---- recurrent -------------------------------------------------------------
 
 def gen_lstm():
@@ -635,6 +660,7 @@ ALL_GENERATORS = [
     gen_batchnorm, gen_layernorm, gen_dropout,
     gen_reducemean, gen_reducesum, gen_identity, gen_cast, gen_shape,
     gen_constantofshape, gen_pad, gen_min, gen_max,
+    gen_constant, gen_expand,
     gen_lstm, gen_gru,
 ]
 

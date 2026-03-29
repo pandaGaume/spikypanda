@@ -209,6 +209,81 @@ class MaxNode extends OnnxOpNode {
     }
 }
 
+/**
+ * Constant: produces a constant tensor from attributes.
+ * The value comes from a tensor attribute "value".
+ */
+class ConstantNode extends OnnxOpNode {
+    readonly outputShapes: number[][] = [];
+    execute(): ITensor[] {
+        const valueTensor = this.attrTensor("value");
+        if (valueTensor) {
+            const data = getInitializerData(valueTensor);
+            return [makeTensor(new Float32Array(data), [...valueTensor.dims])];
+        }
+        // Scalar fallback
+        const val = this.attr("value_float", 0);
+        return [makeTensor(new Float32Array([val]), [1])];
+    }
+}
+
+/**
+ * Expand: broadcast a tensor to a target shape.
+ * Input 0: data tensor
+ * Input 1: shape tensor (int64 values as float)
+ */
+class ExpandNode extends OnnxOpNode {
+    readonly outputShapes: number[][] = [];
+    execute(inputs: ITensor[]): ITensor[] {
+        const data = inputs[0];
+        const shapeT = inputs[1];
+        const targetShape = Array.from(shapeT.data).map(Math.round);
+
+        // Compute output size
+        let outSize = 1;
+        for (const d of targetShape) outSize *= d;
+
+        // If shapes are identical, return copy
+        if (data.data.length === outSize) {
+            return [makeTensor(new Float32Array(data.data), targetShape)];
+        }
+
+        // Broadcast: align shapes right, expand dims of size 1
+        const srcShape = data.shape;
+        const rank = targetShape.length;
+        const srcPadded: number[] = [];
+        for (let i = 0; i < rank; i++) {
+            const si = i - (rank - srcShape.length);
+            srcPadded.push(si >= 0 ? srcShape[si] : 1);
+        }
+
+        const out = new Float32Array(outSize);
+        // Compute strides for source and output
+        const outStrides: number[] = new Array(rank);
+        const srcStrides: number[] = new Array(rank);
+        outStrides[rank - 1] = 1;
+        srcStrides[rank - 1] = 1;
+        for (let i = rank - 2; i >= 0; i--) {
+            outStrides[i] = outStrides[i + 1] * targetShape[i + 1];
+            srcStrides[i] = srcStrides[i + 1] * srcPadded[i + 1];
+        }
+
+        for (let idx = 0; idx < outSize; idx++) {
+            let srcIdx = 0;
+            let rem = idx;
+            for (let d = 0; d < rank; d++) {
+                const coord = Math.floor(rem / outStrides[d]);
+                rem %= outStrides[d];
+                // If source dim is 1, broadcast (use coord 0)
+                srcIdx += (srcPadded[d] === 1 ? 0 : coord) * srcStrides[d];
+            }
+            out[idx] = data.data[srcIdx];
+        }
+
+        return [makeTensor(out, targetShape)];
+    }
+}
+
 export function registerMiscOps(registry: OnnxOpRegistry): void {
     registry.register("Div", (info) => new DivNode(info));
     registry.register("Pow", (info) => new PowNode(info));
@@ -221,4 +296,6 @@ export function registerMiscOps(registry: OnnxOpRegistry): void {
     registry.register("Pad", (info) => new PadNode(info));
     registry.register("Min", (info) => new MinNode(info));
     registry.register("Max", (info) => new MaxNode(info));
+    registry.register("Constant", (info) => new ConstantNode(info));
+    registry.register("Expand", (info) => new ExpandNode(info));
 }

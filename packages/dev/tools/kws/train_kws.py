@@ -28,6 +28,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchaudio
+# Force soundfile backend on Windows (avoids torchcodec/FFmpeg dependency)
+try:
+    torchaudio.set_audio_backend("soundfile")
+except Exception:
+    pass
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
