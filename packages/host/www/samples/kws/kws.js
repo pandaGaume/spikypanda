@@ -274,10 +274,23 @@ function drawSpectrogram(mfccData, audioLevel) {
     for (var c = 0; c < N_MFCC; c++) {
         for (var t = 0; t < N_FRAMES; t++) {
             var v = (mfccData[c * N_FRAMES + t] - min) / range;
-            // Viridis-like colormap: dark purple -> blue -> teal -> yellow
-            var r = Math.floor(Math.min(255, v * v * 300 + 20));
-            var g = Math.floor(Math.min(255, v * 220 + 10));
-            var b = Math.floor(Math.min(255, (1 - v * 0.5) * 200 + 40));
+            // Spectrogram colormap: black -> blue -> cyan -> green -> yellow -> red
+            var r, g, b;
+            if (v < 0.2) {
+                r = 0; g = 0; b = Math.floor(v * 5 * 180);
+            } else if (v < 0.4) {
+                var t = (v - 0.2) * 5;
+                r = 0; g = Math.floor(t * 200); b = 180;
+            } else if (v < 0.6) {
+                var t = (v - 0.4) * 5;
+                r = 0; g = 200; b = Math.floor(180 * (1 - t));
+            } else if (v < 0.8) {
+                var t = (v - 0.6) * 5;
+                r = Math.floor(t * 255); g = 200; b = 0;
+            } else {
+                var t = (v - 0.8) * 5;
+                r = 255; g = Math.floor(200 * (1 - t)); b = 0;
+            }
             spectCtx.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
             spectCtx.fillRect(t * cellW, c * cellH, cellW + 1, cellH + 1);
         }
