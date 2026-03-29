@@ -21,10 +21,9 @@ var bufferPos = 0;
 
 // ── ONNX runtime references ────────────────────────────────────────
 var onnxGraph = null;
-var onnxGraphGeneric = null;
-var onnxGraphSpikyPanda = null;
 var onnxInputNames = null;
 var onnxModelLoaded = false;
+var onnxModelBytes = null; // raw bytes kept for lazy rebuild
 var useSpikyPanda = true;
 
 // ── Log ──────────────────────────────────────────────────────────────
@@ -230,31 +229,10 @@ function loadOnnxModel() {
             }
             kwsLog("Ops: " + ops.join(", "));
 
-            // Build both graphs: generic and SpikyPanda native
-            var genericRegistry = RT.createDefaultRegistry();
-            var genericBuilder = new RT.OnnxGraphBuilder(genericRegistry);
-            var genericResult = genericBuilder.build(parsed);
-            onnxGraphGeneric = genericResult.graph;
-
-            if (RT.createSpikyPandaRegistry) {
-                var spRegistry = RT.createSpikyPandaRegistry();
-                var spBuilder = new RT.OnnxGraphBuilder(spRegistry);
-                // Re-parse because build() mutates node state
-                var parsed2 = RT.OnnxParser.parse(bytes);
-                var spResult = spBuilder.build(parsed2);
-                onnxGraphSpikyPanda = spResult.graph;
-                kwsLog("Built 2 graphs: generic (" + genericResult.graph.nodes.length + " nodes) + spikypanda (" + spResult.graph.nodes.length + " nodes)");
-            } else {
-                onnxGraphSpikyPanda = onnxGraphGeneric;
-                kwsLog("Built graph: " + genericResult.graph.nodes.length + " nodes (SpikyPanda registry not available)");
-            }
-
-            onnxInputNames = genericResult.inputNames;
-            onnxGraph = useSpikyPanda ? onnxGraphSpikyPanda : onnxGraphGeneric;
+            onnxModelBytes = bytes;
+            buildGraph(useSpikyPanda);
             onnxModelLoaded = true;
 
-            kwsLog("Input: " + onnxInputNames.join(", "));
-            kwsLog("Active backend: " + (useSpikyPanda ? "spikypanda" : "generic"));
             kwsLog("ONNX pipeline ready - toggle checkbox to compare backends");
             document.getElementById("info-model").textContent =
                 "kws_conv_tiny (6,156 params / " + (bytes.length / 1024).toFixed(0) + " KB) - LOADED";
@@ -432,14 +410,33 @@ function stopListening() {
         (totalInferenceMs / Math.max(inferenceCount, 1)).toFixed(1) + "ms");
 }
 
+// ── Graph build (lazy) ──────────────────────────────────────────────
+function buildGraph(native) {
+    var RT = window.SpikypandaRuntime;
+    if (!RT || !onnxModelBytes) return;
+
+    var parsed = RT.OnnxParser.parse(onnxModelBytes);
+    if (!parsed) return;
+
+    var registry = (native && RT.createSpikyPandaRegistry)
+        ? RT.createSpikyPandaRegistry()
+        : RT.createDefaultRegistry();
+    var builder = new RT.OnnxGraphBuilder(registry);
+    var result = builder.build(parsed);
+
+    onnxGraph = result.graph;
+    onnxInputNames = result.inputNames;
+
+    var label = native ? "spikypanda" : "generic";
+    kwsLog("Graph built (" + label + "): " + onnxGraph.nodes.length + " nodes, " + onnxGraph.links.length + " links");
+    document.getElementById("backend-label").textContent = label;
+}
+
 // ── Backend switch ──────────────────────────────────────────────────
 function switchBackend(useNative) {
     useSpikyPanda = useNative;
     if (onnxModelLoaded) {
-        onnxGraph = useSpikyPanda ? onnxGraphSpikyPanda : onnxGraphGeneric;
-        var label = useSpikyPanda ? "spikypanda" : "generic";
-        document.getElementById("backend-label").textContent = label;
-        kwsLog("Switched to " + label + " backend");
+        buildGraph(useSpikyPanda);
     }
 }
 
