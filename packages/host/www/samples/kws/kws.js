@@ -248,75 +248,73 @@ function loadOnnxModel() {
 
 // ── Spectrogram Visualization ───────────────────────────────────────
 function clearSpectrogram() {
-    var spectCanvas = document.getElementById("spectrogram");
-    var ctx = spectCanvas.getContext("2d");
-    var w = (spectCanvas.width = spectCanvas.clientWidth * window.devicePixelRatio);
-    var h = (spectCanvas.height = spectCanvas.clientHeight * window.devicePixelRatio);
+    var canvas = document.getElementById("spectrogram");
+    var ctx = canvas.getContext("2d");
+    var dpr = window.devicePixelRatio || 1;
+    var w = (canvas.width = canvas.clientWidth * dpr);
+    var h = (canvas.height = canvas.clientHeight * dpr);
     ctx.fillStyle = "#0a0a1a";
     ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "#1a3050";
+    ctx.beginPath();
+    ctx.moveTo(0, h * 0.5);
+    ctx.lineTo(w, h * 0.5);
+    ctx.stroke();
     ctx.fillStyle = "#333";
-    ctx.font = (12 * window.devicePixelRatio) + "px sans-serif";
+    ctx.font = (12 * dpr) + "px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Spectrogram — click Start Listening", w / 2, h / 2);
+    ctx.fillText("Audio waveform — click Start Listening", w / 2, h * 0.5 - 10 * dpr);
 }
 
-function drawSpectrogram(mfccData, audioLevel) {
-    var spectCanvas = document.getElementById("spectrogram");
-    var spectCtx = spectCanvas.getContext("2d");
-    var w = (spectCanvas.width = spectCanvas.clientWidth * window.devicePixelRatio);
-    var h = (spectCanvas.height = spectCanvas.clientHeight * window.devicePixelRatio);
-    spectCtx.fillStyle = "#0a0a1a";
-    spectCtx.fillRect(0, 0, w, h);
+function drawWaveform(audioData, audioLevel) {
+    var canvas = document.getElementById("spectrogram");
+    var ctx = canvas.getContext("2d");
+    var dpr = window.devicePixelRatio || 1;
+    var w = (canvas.width = canvas.clientWidth * dpr);
+    var h = (canvas.height = canvas.clientHeight * dpr);
 
-    // Draw MFCC heatmap
-    var cellW = w / N_FRAMES;
-    var cellH = (h - 16 * window.devicePixelRatio) / N_MFCC; // leave room for level bar
-    var min = Infinity, max = -Infinity;
-    for (var i = 0; i < mfccData.length; i++) {
-        if (mfccData[i] < min) min = mfccData[i];
-        if (mfccData[i] > max) max = mfccData[i];
+    // Background
+    ctx.fillStyle = "#0a0a1a";
+    ctx.fillRect(0, 0, w, h);
+
+    // Center line
+    var midY = h * 0.5;
+    ctx.strokeStyle = "#1a3050";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, midY);
+    ctx.lineTo(w, midY);
+    ctx.stroke();
+
+    // Waveform
+    var len = audioData.length;
+    var step = len / w;
+    ctx.strokeStyle = "#00d4ff";
+    ctx.lineWidth = 1.5 * dpr;
+    ctx.beginPath();
+    for (var x = 0; x < w; x++) {
+        var idx = Math.floor(x * step);
+        var val = audioData[idx] || 0;
+        var y = midY - val * midY * 0.9; // scale to 90% of half-height
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
     }
-    var range = max - min || 1;
-    for (var c = 0; c < N_MFCC; c++) {
-        for (var t = 0; t < N_FRAMES; t++) {
-            var v = (mfccData[c * N_FRAMES + t] - min) / range;
-            // Spectrogram colormap: black -> blue -> cyan -> green -> yellow -> red
-            var r, g, b;
-            if (v < 0.2) {
-                r = 0; g = 0; b = Math.floor(v * 5 * 180);
-            } else if (v < 0.4) {
-                var t = (v - 0.2) * 5;
-                r = 0; g = Math.floor(t * 200); b = 180;
-            } else if (v < 0.6) {
-                var t = (v - 0.4) * 5;
-                r = 0; g = 200; b = Math.floor(180 * (1 - t));
-            } else if (v < 0.8) {
-                var t = (v - 0.6) * 5;
-                r = Math.floor(t * 255); g = 200; b = 0;
-            } else {
-                var t = (v - 0.8) * 5;
-                r = 255; g = Math.floor(200 * (1 - t)); b = 0;
-            }
-            spectCtx.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
-            spectCtx.fillRect(t * cellW, c * cellH, cellW + 1, cellH + 1);
-        }
-    }
+    ctx.stroke();
 
-    // Draw audio level bar at bottom
-    var barY = h - 12 * window.devicePixelRatio;
-    var barH = 8 * window.devicePixelRatio;
-    var levelW = Math.min(w, w * audioLevel * 10); // amplify for visibility
-    spectCtx.fillStyle = "#333";
-    spectCtx.fillRect(0, barY, w, barH);
-    var levelColor = audioLevel > 0.05 ? "#00d4ff" : audioLevel > 0.01 ? "#4a8" : "#555";
-    spectCtx.fillStyle = levelColor;
-    spectCtx.fillRect(0, barY, levelW, barH);
+    // Level indicator (top-right)
+    var levelPct = (audioLevel * 100).toFixed(1);
+    ctx.fillStyle = audioLevel > 0.05 ? "#00d4ff" : audioLevel > 0.01 ? "#4a8" : "#555";
+    ctx.font = "bold " + (11 * dpr) + "px sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(levelPct + "%", w - 6 * dpr, 14 * dpr);
 
-    // Level label
-    spectCtx.fillStyle = "#888";
-    spectCtx.font = (9 * window.devicePixelRatio) + "px sans-serif";
-    spectCtx.textAlign = "right";
-    spectCtx.fillText("level: " + (audioLevel * 100).toFixed(1) + "%", w - 4, barY - 2);
+    // Time markers
+    ctx.fillStyle = "#444";
+    ctx.font = (9 * dpr) + "px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("0s", 4 * dpr, h - 4 * dpr);
+    ctx.fillText("0.5s", w * 0.5, h - 4 * dpr);
+    ctx.fillText("1s", w - 8 * dpr, h - 4 * dpr);
 }
 
 // ── Audio Processing Loop ───────────────────────────────────────────
@@ -329,7 +327,7 @@ function processAudio() {
     var audioLevel = Math.sqrt(sumSq / audioBuffer.length);
 
     var mfcc = computeMFCC(audioBuffer);
-    drawSpectrogram(lastMelSpec || mfcc, audioLevel);
+    drawWaveform(audioBuffer, audioLevel);
 
     var result = runInference(mfcc);
     var probs = softmax(result.logits);
