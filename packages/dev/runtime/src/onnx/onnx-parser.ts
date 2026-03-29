@@ -40,6 +40,9 @@ import {
     ATT_NAME,
     ATT_FLOAT,
     ATT_INT,
+    ATT_TENSOR,
+    ATT_FLOATS,
+    ATT_INTS,
     // ValueInfoProto fields
     VINFO_NAME,
     VINFO_TYPE,
@@ -291,6 +294,8 @@ export class OnnxParser {
                     let attFloat = 0;
                     let attInt = 0;
                     let hasFloat = false;
+                    let hasInt = false;
+                    let attTensor: OnnxTensorInfo | null = null;
 
                     while (reader.position < end) {
                         if (!reader.readTag()) return null;
@@ -313,6 +318,27 @@ export class OnnxParser {
                                 const i = reader.readInt64();
                                 if (i === null) return null;
                                 attInt = i;
+                                hasInt = true;
+                                break;
+                            }
+                            case ATT_TENSOR: {
+                                const sub = reader.getSubMessageReader();
+                                if (!sub) return null;
+                                attTensor = this._readInitializer(sub);
+                                break;
+                            }
+                            case ATT_INTS: {
+                                // Repeated int64: store first value as scalar attr
+                                const i = reader.readInt64();
+                                if (i === null) return null;
+                                if (!hasInt) { attInt = i; hasInt = true; }
+                                break;
+                            }
+                            case ATT_FLOATS: {
+                                // Repeated float: store first value as scalar attr
+                                const f = reader.readFloat();
+                                if (f === null) return null;
+                                if (!hasFloat) { attFloat = f; hasFloat = true; }
                                 break;
                             }
                             default:
@@ -322,7 +348,14 @@ export class OnnxParser {
                     }
 
                     if (attName) {
-                        node.attributes.set(attName, hasFloat ? attFloat : attInt);
+                        if (attTensor) {
+                            if (!node.tensorAttributes) {
+                                node.tensorAttributes = new Map();
+                            }
+                            node.tensorAttributes.set(attName, attTensor);
+                        } else if (hasFloat || hasInt) {
+                            node.attributes.set(attName, hasFloat ? attFloat : attInt);
+                        }
                     }
                     break;
                 }

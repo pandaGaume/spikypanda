@@ -381,19 +381,27 @@ export class PBReader {
         }
 
         // Multi-byte varint
-        let result = byte0 & 0x7f;
+        let lo = byte0 & 0x7f;
         let shift = 7;
         let byte: number;
+        let byteCount = 1;
         do {
             byte = this._input.readByte();
             if (byte === LB_EOF) return null;
-            result |= (byte & 0x7f) << shift;
+            byteCount++;
+            if (shift < 32) {
+                lo |= (byte & 0x7f) << shift;
+            }
             shift += 7;
         } while (byte & 0x80);
 
-        // For values > 2^32, we lose precision but that's acceptable
-        // for ONNX field numbers and most values. Full 64-bit would need BigInt.
-        return result >>> 0; // force unsigned 32-bit for safety
+        // For negative int64, protobuf uses 10-byte varints with high bits set.
+        // Detect this and return as signed 32-bit (sufficient for ONNX attribute values).
+        if (byteCount >= 10) {
+            return lo | 0; // interpret as signed 32-bit
+        }
+
+        return lo >>> 0; // force unsigned 32-bit for positive values
     }
 
     protected _readFixed32AsInt(): number | null {

@@ -1,6 +1,6 @@
 import type { ITensor } from "../../compute/compute.interfaces";
 import type { OnnxNodeInfo } from "../onnx-types";
-import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "../registry";
+import { OnnxOpNode, makeTensor, getInitializerData, OnnxOpRegistry } from "../registry";
 
 class DivNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
@@ -141,7 +141,15 @@ class ConstantOfShapeNode extends OnnxOpNode {
         const shape = Array.from(shapeT.data).map(Math.round);
         let size = 1;
         for (const d of shape) size *= d;
-        const val = this.attr("value", 0);
+        // Try tensor attribute "value" first (TensorProto), fall back to scalar
+        let val = 0;
+        const valueTensor = this.attrTensor("value");
+        if (valueTensor) {
+            const data = getInitializerData(valueTensor);
+            if (data.length > 0) val = data[0];
+        } else {
+            val = this.attr("value", 0);
+        }
         const out = new Float32Array(size).fill(val);
         return [makeTensor(out, shape)];
     }

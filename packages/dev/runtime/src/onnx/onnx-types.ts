@@ -88,6 +88,9 @@ export const NODE_ATTRIBUTE = 5;
 export const ATT_NAME = 1;
 export const ATT_FLOAT = 2;
 export const ATT_INT = 3;
+export const ATT_TENSOR = 5;
+export const ATT_FLOATS = 7;
+export const ATT_INTS = 8;
 
 // ValueInfoProto
 export const VINFO_NAME = 1;
@@ -144,6 +147,7 @@ export interface OnnxNodeInfo {
     inputs: string[];
     outputs: string[];
     attributes: Map<string, number>; // float or int attributes
+    tensorAttributes?: Map<string, OnnxTensorInfo>; // tensor-valued attributes
 }
 
 /**

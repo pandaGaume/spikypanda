@@ -129,6 +129,7 @@ export class OnnxGraphBuilder {
             const link = new DataLink(
                 producer.node as IComputeNode,
                 consumer.node as IComputeNode,
+                consumer.inputIndex,
             );
             links.push(link);
         }

@@ -1,14 +1,12 @@
 import { ComputeNodeBase } from "../compute/compute.node.base";
 import type { ITensor } from "../compute/compute.interfaces";
+import { OnnxDataType } from "./onnx-types";
 import type { OnnxNodeInfo, OnnxTensorInfo } from "./onnx-types";
 
 /**
  * Factory function that creates a ComputeNodeBase from an ONNX node definition.
  */
-export type OnnxOpFactory = (
-    nodeInfo: OnnxNodeInfo,
-    initializers: Map<string, OnnxTensorInfo>,
-) => ComputeNodeBase;
+export type OnnxOpFactory = (nodeInfo: OnnxNodeInfo, initializers: Map<string, OnnxTensorInfo>) => ComputeNodeBase;
 
 export interface OnnxOpEntry {
     factory: OnnxOpFactory;
@@ -105,11 +103,13 @@ export class OnnxOpRegistry {
 export abstract class OnnxOpNode extends ComputeNodeBase {
     readonly opType: string;
     protected readonly attributes: Map<string, number>;
+    protected readonly tensorAttributes: Map<string, OnnxTensorInfo>;
 
     constructor(nodeInfo: OnnxNodeInfo) {
         super();
         this.opType = nodeInfo.opType;
         this.attributes = nodeInfo.attributes;
+        this.tensorAttributes = nodeInfo.tensorAttributes ?? new Map();
     }
 
     get nodeType(): string {
@@ -123,6 +123,10 @@ export abstract class OnnxOpNode extends ComputeNodeBase {
     protected attrInt(name: string, defaultVal: number): number {
         return Math.round(this.attributes.get(name) ?? defaultVal);
     }
+
+    protected attrTensor(name: string): OnnxTensorInfo | undefined {
+        return this.tensorAttributes.get(name);
+    }
 }
 
 /**
@@ -133,6 +137,17 @@ export function getInitializerData(init: OnnxTensorInfo): Float32Array {
         return init.floatData;
     }
     if (init.rawData && init.rawData.length > 0) {
+        // Handle int64 raw data: convert 8-byte ints to float32
+        if (init.dataType === OnnxDataType.INT64) {
+            const view = new DataView(init.rawData.buffer, init.rawData.byteOffset, init.rawData.byteLength);
+            const count = init.rawData.byteLength / 8;
+            const out = new Float32Array(count);
+            for (let i = 0; i < count; i++) {
+                // Read as int64 (low 32 bits sufficient for typical values)
+                out[i] = Number(view.getBigInt64(i * 8, true));
+            }
+            return out;
+        }
         return new Float32Array(init.rawData.buffer, init.rawData.byteOffset, init.rawData.byteLength / 4);
     }
     return new Float32Array(0);

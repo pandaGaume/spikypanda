@@ -28,9 +28,11 @@ import {
  */
 export class DataLink extends GraphOLink implements IDataLink {
     public tensor: ITensor | null = null;
+    public inputIndex: number;
 
-    public constructor(from?: IComputeNode, to?: IComputeNode) {
+    public constructor(from?: IComputeNode, to?: IComputeNode, inputIndex = -1) {
         super(from, to);
+        this.inputIndex = inputIndex;
     }
 }
 
@@ -130,7 +132,12 @@ export class ComputeGraph extends Graph<IComputeNode, IDataLink> implements ICom
             }
         } else {
             // Transform node: read tensors from incoming data links
-            for (const link of incomingLinks) {
+            // Sort by inputIndex when set (ONNX graph builder tags links)
+            const hasIndex = incomingLinks.some((l) => l.inputIndex >= 0);
+            const ordered = hasIndex
+                ? [...incomingLinks].sort((a, b) => a.inputIndex - b.inputIndex)
+                : incomingLinks;
+            for (const link of ordered) {
                 if (link.tensor) {
                     inputs.push(link.tensor);
                 }

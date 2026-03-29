@@ -55,6 +55,8 @@ export interface ITensor {
 export interface IDataLink extends IOlink {
     /** The tensor flowing through this edge. Null before first execution. */
     tensor: ITensor | null;
+    /** Positional index of this link at the consumer node. -1 if unset. */
+    inputIndex: number;
 }
 
 // ─── Compute node ────────────────────────────────────────────────────────────
