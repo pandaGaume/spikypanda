@@ -1,6 +1,6 @@
-import { ComputeNodeBase } from "../../compute/compute.node.base";
-import type { ITensor } from "../../compute/compute.interfaces";
-import type { OnnxNodeInfo, OnnxTensorInfo } from "../onnx-types";
+import { ComputeNodeBase } from "../compute/compute.node.base";
+import type { ITensor } from "../compute/compute.interfaces";
+import type { OnnxNodeInfo, OnnxTensorInfo } from "./onnx-types";
 
 /**
  * Factory function that creates a ComputeNodeBase from an ONNX node definition.

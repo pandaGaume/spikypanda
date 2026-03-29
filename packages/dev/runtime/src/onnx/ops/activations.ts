@@ -1,5 +1,5 @@
 import type { ITensor } from "../../compute/compute.interfaces";
-import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "./registry";
+import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "../registry";
 import type { OnnxNodeInfo } from "../onnx-types";
 
 function unaryMap(inp: ITensor, fn: (x: number) => number): ITensor {

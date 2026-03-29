@@ -1,9 +1,9 @@
 import * as fs from "fs";
 import * as path from "path";
 import { OnnxParser } from "../../dev/runtime/src/onnx/onnx-parser";
-import { OnnxOpRegistry } from "../../dev/runtime/src/onnx/ops/registry";
+import { OnnxOpRegistry } from "../../dev/runtime/src/onnx/registry";
 import { registerMathOps } from "../../dev/runtime/src/onnx/ops/math";
-import { OnnxGraphBuilder } from "../../dev/runtime/src/onnx/ops/graph-builder";
+import { OnnxGraphBuilder } from "../../dev/runtime/src/onnx/graph-builder";
 import type { ITensor } from "../../dev/runtime/src/compute/compute.interfaces";
 
 const MODEL_PATH = path.resolve(

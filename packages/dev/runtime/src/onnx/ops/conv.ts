@@ -1,6 +1,6 @@
 import type { ITensor } from "../../compute/compute.interfaces";
-import type { OnnxNodeInfo, OnnxTensorInfo } from "../onnx-types";
-import { OnnxOpNode, makeTensor, getInitializerData, OnnxOpRegistry } from "./registry";
+import type { OnnxNodeInfo } from "../onnx-types";
+import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "../registry";
 
 /**
  * Conv: 2D convolution.
@@ -14,7 +14,6 @@ class ConvNode extends OnnxOpNode {
     private readonly kernelShape: number[];
     private readonly strides: number[];
     private readonly pads: number[];
-    private readonly group: number;
     readonly outputShapes: number[][] = [];
 
     constructor(info: OnnxNodeInfo) {
@@ -22,7 +21,6 @@ class ConvNode extends OnnxOpNode {
         this.kernelShape = [this.attrInt("kernel_shape", 3)];
         this.strides = [this.attrInt("strides", 1)];
         this.pads = [this.attrInt("pads", 0)];
-        this.group = this.attrInt("group", 1);
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -194,7 +192,8 @@ class GlobalAveragePoolNode extends OnnxOpNode {
                     out[n * C + c] = sum / spatial;
                 }
             }
-            return [makeTensor(out, [N, C])];
+            const outShape = [N, C, ...X.shape.slice(2).map(() => 1)];
+            return [makeTensor(out, outShape)];
         }
         return [makeTensor(new Float32Array(X.data), [...X.shape])];
     }
