@@ -16,6 +16,7 @@ import { registerConvOps } from "../../dev/runtime/src/onnx/ops/conv";
 import { registerNormOps } from "../../dev/runtime/src/onnx/ops/normalization";
 import { registerRecurrentOps } from "../../dev/runtime/src/onnx/ops/recurrent";
 import { registerMiscOps } from "../../dev/runtime/src/onnx/ops/misc";
+import { registerSpikyPandaOps } from "../../dev/runtime/src/onnx/ops/spikypanda";
 import { OnnxParser } from "../../dev/runtime/src/onnx/onnx-parser";
 import { OnnxGraphBuilder } from "../../dev/runtime/src/onnx/graph-builder";
 
@@ -45,7 +46,8 @@ interface TestCase {
 const VECTORS_PATH = path.resolve(__dirname, "test-vectors.json");
 
 let testCases: TestCase[] = [];
-let registry: OnnxOpRegistry;
+let registry: OnnxOpRegistry;        // generic ops only
+let spRegistry: OnnxOpRegistry;      // generic + SpikyPanda native overrides
 
 function toTensor(v: TensorVector): ITensor {
     return {
@@ -89,6 +91,16 @@ beforeAll(() => {
     registerNormOps(registry);
     registerRecurrentOps(registry);
     registerMiscOps(registry);
+
+    spRegistry = new OnnxOpRegistry();
+    registerMathOps(spRegistry);
+    registerActivationOps(spRegistry);
+    registerMatrixOps(spRegistry);
+    registerConvOps(spRegistry);
+    registerNormOps(spRegistry);
+    registerRecurrentOps(spRegistry);
+    registerMiscOps(spRegistry);
+    registerSpikyPandaOps(spRegistry);
 });
 
 // ---------------------------------------------------------------------------
@@ -115,58 +127,69 @@ function assertClose(actual: Float32Array, expected: Float32Array, opType: strin
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("ONNX Ops vs onnxruntime reference", () => {
-    // Map of opType to special handling for node creation
-    // Most ops use the standard factory; some need tweaks
+// ---------------------------------------------------------------------------
+// Helper: run a single op through a given registry and compare to reference
+// ---------------------------------------------------------------------------
 
+function testOpWithRegistry(tc: TestCase, reg: OnnxOpRegistry) {
+    const inputs = tc.inputs.map(toTensor);
+    const expectedOutputs = tc.outputs.map(toTensor);
+
+    const nodeInfo = {
+        opType: tc.opType,
+        inputs: tc.inputs.map((inp) => inp.name),
+        outputs: tc.outputs.map((out) => out.name),
+        attributes: buildAttributes(tc.attributes),
+    };
+
+    const node = reg.create(nodeInfo as any, new Map());
+    const actualOutputs = (node as any).execute(inputs);
+
+    expect(actualOutputs.length).toBeGreaterThanOrEqual(expectedOutputs.length);
+    for (let i = 0; i < expectedOutputs.length; i++) {
+        const actual = actualOutputs[i] as ITensor;
+        const expected = expectedOutputs[i];
+        expect(actual.shape).toEqual(expected.shape);
+        assertClose(actual.data, expected.data, tc.opType);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Generic ONNX ops vs onnxruntime reference
+// ---------------------------------------------------------------------------
+
+describe("Generic ONNX ops vs onnxruntime", () => {
     it("should have test vectors loaded", () => {
         expect(testCases.length).toBeGreaterThan(0);
         console.log(`Loaded ${testCases.length} test vectors`);
     });
 
-    it("should have all referenced ops registered", () => {
-        for (const tc of testCases) {
-            expect(registry.has(tc.opType)).toBe(true);
-        }
-    });
-
-    // Generate one test per operator
     const vectorsRaw = fs.existsSync(path.resolve(__dirname, "test-vectors.json"))
         ? JSON.parse(fs.readFileSync(path.resolve(__dirname, "test-vectors.json"), "utf-8")) as TestCase[]
         : [];
 
     for (const tc of vectorsRaw) {
-        it(`${tc.opType} — SpikeyPanda matches onnxruntime`, () => {
-            const inputs = tc.inputs.map(toTensor);
-            const expectedOutputs = tc.outputs.map(toTensor);
+        it(`${tc.opType} — generic op matches onnxruntime`, () => {
+            testOpWithRegistry(tc, registry);
+        });
+    }
+});
 
-            // Build a minimal OnnxNodeInfo
-            const nodeInfo = {
-                opType: tc.opType,
-                inputs: tc.inputs.map((inp) => inp.name),
-                outputs: tc.outputs.map((out) => out.name),
-                attributes: buildAttributes(tc.attributes),
-            };
+// ---------------------------------------------------------------------------
+// SpikyPanda native ops vs onnxruntime reference
+// ---------------------------------------------------------------------------
 
-            // Create the node via registry
-            const emptyInitializers = new Map();
-            const node = registry.create(nodeInfo as any, emptyInitializers);
+describe("SpikyPanda native ops vs onnxruntime", () => {
+    const vectorsRaw = fs.existsSync(path.resolve(__dirname, "test-vectors.json"))
+        ? JSON.parse(fs.readFileSync(path.resolve(__dirname, "test-vectors.json"), "utf-8")) as TestCase[]
+        : [];
 
-            // Execute
-            const actualOutputs = (node as any).execute(inputs);
-
-            // Compare each output
-            expect(actualOutputs.length).toBeGreaterThanOrEqual(expectedOutputs.length);
-            for (let i = 0; i < expectedOutputs.length; i++) {
-                const actual = actualOutputs[i] as ITensor;
-                const expected = expectedOutputs[i];
-
-                // Shape check
-                expect(actual.shape).toEqual(expected.shape);
-
-                // Value check
-                assertClose(actual.data, expected.data, tc.opType);
-            }
+    for (const tc of vectorsRaw) {
+        it(`${tc.opType} — spikypanda op matches onnxruntime [${
+            // Show which backend will handle this op
+            "spikypanda"
+        }]`, () => {
+            testOpWithRegistry(tc, spRegistry);
         });
     }
 });

@@ -184,26 +184,49 @@ class SpGruNode extends OnnxOpNode {
         const H = this.hiddenSize || W.data.length / (3 * inputSize);
 
         let h = new Float32Array(H);
-        const gates = new Float32Array(3 * H);
 
         for (let t = 0; t < seqLen; t++) {
             const xOff = t * inputSize;
-            gates.fill(0);
 
-            for (let g = 0; g < 3 * H; g++) {
-                let sum = 0;
-                for (let i = 0; i < inputSize; i++) sum += W.data[g * inputSize + i] * X.data[xOff + i];
-                for (let j = 0; j < H; j++) sum += R.data[g * H + j] * h[j];
-                if (B) sum += B.data[g] + B.data[3 * H + g];
-                gates[g] = sum;
+            // Compute z and r gates: gate = sigmoid(W_gate @ x + R_gate @ h + bias)
+            const zGate = new Float32Array(H);
+            const rGate = new Float32Array(H);
+            for (let j = 0; j < H; j++) {
+                let zSum = 0;
+                let rSum = 0;
+                for (let i = 0; i < inputSize; i++) {
+                    zSum += W.data[(0 * H + j) * inputSize + i] * X.data[xOff + i];
+                    rSum += W.data[(1 * H + j) * inputSize + i] * X.data[xOff + i];
+                }
+                for (let k = 0; k < H; k++) {
+                    zSum += R.data[(0 * H + j) * H + k] * h[k];
+                    rSum += R.data[(1 * H + j) * H + k] * h[k];
+                }
+                if (B) {
+                    zSum += B.data[0 * H + j] + B.data[3 * H + j];
+                    rSum += B.data[1 * H + j] + B.data[4 * H + j];
+                }
+                zGate[j] = spSigmoid(zSum);
+                rGate[j] = spSigmoid(rSum);
             }
 
+            // Candidate with linear_before_reset=1:
+            // n = tanh(Wn @ x + Wb_n + r * (Rn @ h + Rb_n))
             const newH = new Float32Array(H);
             for (let j = 0; j < H; j++) {
-                const z = spSigmoid(gates[j]);
-                const r = spSigmoid(gates[H + j]);
-                const n = spTanh(gates[2 * H + j]);
-                newH[j] = (1 - z) * n + z * h[j];
+                let nSum = 0;
+                for (let i = 0; i < inputSize; i++) {
+                    nSum += W.data[(2 * H + j) * inputSize + i] * X.data[xOff + i];
+                }
+                if (B) nSum += B.data[2 * H + j];
+                let rh = 0;
+                for (let k = 0; k < H; k++) {
+                    rh += R.data[(2 * H + j) * H + k] * h[k];
+                }
+                if (B) rh += B.data[5 * H + j];
+                nSum += rGate[j] * rh;
+                const n = spTanh(nSum);
+                newH[j] = (1 - zGate[j]) * n + zGate[j] * h[j];
             }
             h = newH;
         }
