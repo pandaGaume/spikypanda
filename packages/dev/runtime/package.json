@@ -13,7 +13,9 @@
         "clean": "rimraf dist && rimraf tsconfig.build.tsbuildinfo",
         "compile": "npm run compile:source",
         "compile:source": "tsc -b tsconfig.build.json",
-        "watch:source": "tsc -b tsconfig.build.json -w"
+        "watch:source": "tsc -b tsconfig.build.json -w",
+        "bundle": "webpack --mode production --config webpack.config.js",
+        "bundle:dev": "webpack --mode development --config webpack.config.js"
     },
     "sideEffects": false,
     "devDependencies": {
