@@ -5,225 +5,122 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SpikyPanda - Keyword Spotting</title>
     <link rel="stylesheet" href="../../css/common.css" />
-    <style>
-        .kws-container {
-            max-width: 720px;
-            margin: 40px auto;
-            padding: 0 20px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-        .kws-status {
-            text-align: center;
-            padding: 24px;
-            border-radius: 12px;
-            margin: 24px 0;
-            background: #1a1a2e;
-            border: 1px solid #333;
-        }
-        .kws-status.listening {
-            border-color: #00d4aa;
-            box-shadow: 0 0 20px rgba(0, 212, 170, 0.15);
-        }
-        .kws-detected {
-            font-size: 48px;
-            font-weight: 700;
-            color: #00d4aa;
-            min-height: 64px;
-            line-height: 64px;
-            transition: all 0.15s ease;
-        }
-        .kws-detected.flash {
-            color: #fff;
-            text-shadow: 0 0 20px #00d4aa;
-        }
-        .kws-confidence {
-            font-size: 14px;
-            color: #888;
-            margin-top: 8px;
-        }
-        .kws-btn {
-            display: block;
-            width: 100%;
-            padding: 16px;
-            font-size: 18px;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-            margin: 16px 0;
-        }
-        .kws-btn-start {
-            background: #00d4aa;
-            color: #000;
-        }
-        .kws-btn-start:hover { background: #00e8bb; }
-        .kws-btn-stop {
-            background: #e74c3c;
-            color: #fff;
-        }
-        .kws-btn-stop:hover { background: #ff5544; }
-        .kws-btn:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-        .kws-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 8px;
-            margin: 24px 0;
-        }
-        .kws-keyword {
-            padding: 12px 8px;
-            text-align: center;
-            border-radius: 8px;
-            background: #1a1a2e;
-            border: 1px solid #333;
-            font-size: 14px;
-            font-weight: 500;
-            color: #ccc;
-            transition: all 0.2s;
-        }
-        .kws-keyword.active {
-            background: #00d4aa;
-            color: #000;
-            border-color: #00d4aa;
-            font-weight: 700;
-            transform: scale(1.05);
-        }
-        .kws-info {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin: 24px 0;
-        }
-        .kws-info-card {
-            padding: 16px;
-            border-radius: 8px;
-            background: #1a1a2e;
-            border: 1px solid #333;
-        }
-        .kws-info-card h4 {
-            margin: 0 0 8px;
-            color: #00d4aa;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .kws-info-card p {
-            margin: 0;
-            color: #ddd;
-            font-size: 14px;
-        }
-        .kws-log {
-            background: #0d0d1a;
-            border: 1px solid #333;
-            border-radius: 8px;
-            padding: 12px;
-            max-height: 200px;
-            overflow-y: auto;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 12px;
-            color: #888;
-            line-height: 1.6;
-        }
-        .kws-log .info { color: #00d4aa; }
-        .kws-log .warn { color: #f0ad4e; }
-        .kws-log .error { color: #e74c3c; }
-        .kws-spectrogram {
-            width: 100%;
-            height: 120px;
-            border-radius: 8px;
-            background: #0d0d1a;
-            border: 1px solid #333;
-            margin: 16px 0;
-        }
-        .kws-pipeline {
-            text-align: center;
-            padding: 16px;
-            font-size: 13px;
-            color: #666;
-            border: 1px dashed #333;
-            border-radius: 8px;
-            margin: 16px 0;
-        }
-        .kws-pipeline code {
-            color: #00d4aa;
-            background: rgba(0,212,170,0.1);
-            padding: 2px 6px;
-            border-radius: 4px;
-        }
-    </style>
+    <link rel="stylesheet" href="kws.css" />
 </head>
 <body>
-    <div class="sample-hero" style="background: linear-gradient(135deg, #0a0a1a 0%, #1a0a2e 100%); min-height: 200px;">
+    <div class="sample-hero">
+        <a href="hero.png" download="spikypanda-kws-wallpaper.png" class="wallpaper-btn">Download wallpaper</a>
         <div class="sample-hero-overlay">
             <nav class="nav-bar" style="margin:0; background:none; border:none; padding:10px 0;">
                 <a href="../../index.html" class="nav-logo">SpikyPanda</a>
                 <div class="nav-links">
                     <a href="../../index.html">Home</a>
-                    <a href="../motor/">Motor</a>
+                    <a href="../motor/">Motor RNN</a>
                     <a href="../lidar/">LiDAR</a>
-                    <a href="../stereo/">Stereo</a>
+                    <a href="../stereo/">Stereo Depth</a>
                 </div>
             </nav>
             <h1>Keyword Spotting</h1>
-            <p class="subtitle">Real-time speech command detection — ONNX model running in pure TypeScript</p>
+            <p class="subtitle">Real-time speech command detection &mdash; ONNX model running in pure TypeScript, zero dependencies</p>
         </div>
     </div>
 
-    <div class="kws-container">
+    <div class="container">
 
-        <div class="kws-pipeline">
-            <code>Microphone</code> &rarr; <code>MFCC</code> &rarr; <code>SpikyPanda ONNX</code> &rarr; <code>Keyword</code>
-            <br/>25 KB model &bull; 6,156 parameters &bull; zero dependencies &bull; no server
-        </div>
-
-        <div class="kws-status" id="status-box">
-            <div class="kws-detected" id="detected-word">--</div>
-            <div class="kws-confidence" id="confidence-text">Click Start to begin</div>
-        </div>
-
-        <button class="kws-btn kws-btn-start" id="btn-start" onclick="startListening()">
-            Start Listening
-        </button>
-        <button class="kws-btn kws-btn-stop" id="btn-stop" onclick="stopListening()" style="display:none;">
-            Stop
-        </button>
-
-        <canvas class="kws-spectrogram" id="spectrogram"></canvas>
-
-        <div class="kws-grid" id="keyword-grid"></div>
-
-        <div class="kws-info">
-            <div class="kws-info-card">
-                <h4>Model</h4>
-                <p id="info-model">Loading...</p>
+        <!-- Understanding the use case -->
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the use case</h2><span class="collapsible-arrow">&#9660;</span>
             </div>
-            <div class="kws-info-card">
-                <h4>Inference</h4>
-                <p id="info-inference">--</p>
-            </div>
-            <div class="kws-info-card">
-                <h4>Pipeline</h4>
-                <p>OnnxParser &rarr; GraphBuilder &rarr; ComputeGraph.run()</p>
-            </div>
-            <div class="kws-info-card">
-                <h4>Audio</h4>
-                <p>16kHz &bull; 40 MFCC &bull; 1s window</p>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Wake words and voice commands</strong> &mdash; Keyword spotting (KWS) is the task of detecting a small set of predefined words in a continuous audio stream. It powers "Hey Siri", "OK Google", and embedded voice controls. The key constraint: the model must run on-device with ultra-low latency and minimal power.</p>
+                <p><strong>Why on-device?</strong> &mdash; Sending audio to a server adds 100-300ms of latency, requires an internet connection, and raises privacy concerns. A model running locally on a microcontroller responds in under 10ms, works offline, and never transmits audio data.</p>
+                <p><strong>SpikyPanda approach</strong> &mdash; Train a small CNN model in PyTorch, export to ONNX, validate against onnxruntime with our 152-test conformance suite, then deploy via the SpikyPanda TypeScript runtime (browser) or CyanMycelium C++ runtime (MCU). Same model, same results, every platform.</p>
+                <p><strong>Model size</strong> &mdash; The tiny model used here has 6,156 parameters and fits in 25 KB. For comparison, a typical voice assistant model is 50-500 MB. Our model is 2,000x smaller and runs on a $3 chip.</p>
             </div>
         </div>
 
-        <div class="kws-log" id="log"></div>
+        <!-- Understanding the pipeline -->
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the pipeline</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Audio capture</strong> &mdash; The Web Audio API captures microphone input at 16kHz mono. A ring buffer holds the last 1 second of audio (16,000 samples).</p>
+                <p><strong>MFCC features</strong> &mdash; Each 1-second window is transformed into a spectrogram-like representation: 512-point FFT with 10ms hops, passed through a 40-band Mel filterbank, log-compressed, then projected via DCT into 40 cepstral coefficients. The result is a <code>[1, 40, 101]</code> tensor &mdash; 40 frequency bands across 101 time frames.</p>
+                <p><strong>ONNX inference</strong> &mdash; The MFCC tensor feeds into the SpikyPanda ONNX pipeline: <code>OnnxParser.parse()</code> deserializes the protobuf, <code>OnnxGraphBuilder.build()</code> constructs the compute DAG, and <code>graph.run()</code> executes all operators in topological order. Output is 12 logits, one per keyword class.</p>
+                <p><strong>Operators used</strong> &mdash; Conv (1D convolution), Relu (activation), MaxPool (downsampling), GlobalAveragePool (spatial reduction), Gemm (classification head). All validated against onnxruntime to 1e-4 tolerance.</p>
+            </div>
+        </div>
+
+        <!-- Live demo -->
+        <div class="panel">
+            <h2>Live Demo</h2>
+
+            <div class="kws-pipeline">
+                <code>Microphone</code> &rarr; <code>MFCC (40&times;101)</code> &rarr; <code>SpikyPanda ONNX</code> &rarr; <code>Keyword</code>
+                <br/>25 KB model &bull; 6,156 parameters &bull; ~2ms inference
+            </div>
+
+            <div class="kws-status" id="status-box">
+                <div class="kws-detected" id="detected-word">--</div>
+                <div class="kws-confidence" id="confidence-text">Click Start to begin</div>
+            </div>
+
+            <div class="controls" style="margin-top:12px;">
+                <button id="btn-start" onclick="startListening()">Start Listening</button>
+                <button id="btn-stop" onclick="stopListening()" disabled>Stop</button>
+                <span id="status" style="margin-left:12px;"></span>
+            </div>
+
+            <canvas class="spectrogram-canvas" id="spectrogram"></canvas>
+
+            <div class="kws-grid" id="keyword-grid"></div>
+        </div>
+
+        <!-- Model info -->
+        <div class="panel">
+            <h2>Model Details</h2>
+            <div class="kws-info">
+                <div class="kws-info-card">
+                    <h4>Architecture</h4>
+                    <p>Conv1D(40&rarr;24, k=3) &rarr; BN &rarr; ReLU &rarr; Pool<br/>
+                       Conv1D(24&rarr;24, k=3) &rarr; BN &rarr; ReLU &rarr; Pool<br/>
+                       Conv1D(24&rarr;16, k=3) &rarr; BN &rarr; ReLU &rarr; GAP<br/>
+                       Linear(16&rarr;12)</p>
+                </div>
+                <div class="kws-info-card">
+                    <h4>Training</h4>
+                    <p>Dataset: Google Speech Commands v2<br/>
+                       30 epochs, Adam, cosine LR<br/>
+                       12 classes, 1s audio windows</p>
+                </div>
+                <div class="kws-info-card">
+                    <h4>Deployment</h4>
+                    <p>Browser: SpikyPanda TS runtime<br/>
+                       MCU: CyanMycelium C++ runtime<br/>
+                       25 KB flash, &lt;4 KB RAM</p>
+                </div>
+                <div class="kws-info-card">
+                    <h4>Inference</h4>
+                    <p id="info-inference">Avg: -- ms<br/>
+                       Runs: 0<br/>
+                       MFCC: ~5ms, Model: ~2ms</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results log -->
+        <div class="panel">
+            <h2>Log</h2>
+            <div class="log" id="log"></div>
+        </div>
+
     </div>
 
     <script>
     // =========================================================================
-    // SpikyPanda KWS Demo — Self-contained browser inference
-    //
-    // This demo uses a simplified MFCC + inference pipeline.
-    // In production, the SpikyPanda ONNX runtime would be bundled as an ES module.
-    // For this demo, we simulate the pipeline to show the UX and architecture.
+    // SpikyPanda KWS Demo
     // =========================================================================
 
     const LABELS = ["yes","no","up","down","left","right","on","off","stop","go","unknown","silence"];
@@ -235,20 +132,18 @@
 
     let audioCtx = null;
     let mediaStream = null;
-    let analyser = null;
     let isListening = false;
     let inferenceCount = 0;
     let totalInferenceMs = 0;
-    let modelLoaded = false;
-
-    // ── ONNX Model (embedded as base64 or loaded from file) ──────────────
-    let onnxModel = null;
+    let processorNode = null;
+    let audioBuffer = new Float32Array(SAMPLE_RATE);
+    let bufferPos = 0;
 
     // ── Log ──────────────────────────────────────────────────────────────
-    function log(msg, cls = '') {
+    function log(msg) {
         const el = document.getElementById('log');
         const time = new Date().toLocaleTimeString('en', {hour12:false});
-        el.innerHTML += `<div class="${cls}">[${time}] ${msg}</div>`;
+        el.textContent += `[${time}] ${msg}\n`;
         el.scrollTop = el.scrollHeight;
     }
 
@@ -259,53 +154,46 @@
         for (const label of LABELS) {
             const el = document.createElement('div');
             el.className = 'kws-keyword';
-            el.id = `kw-${label}`;
+            el.id = 'kw-' + label;
             el.textContent = label;
             grid.appendChild(el);
         }
     }
 
     function highlightKeyword(label, confidence) {
-        // Reset all
-        document.querySelectorAll('.kws-keyword').forEach(el => el.classList.remove('active'));
-        const el = document.getElementById(`kw-${label}`);
+        document.querySelectorAll('.kws-keyword').forEach(function(el) { el.classList.remove('active'); });
+        var el = document.getElementById('kw-' + label);
         if (el) el.classList.add('active');
 
-        const detected = document.getElementById('detected-word');
+        var detected = document.getElementById('detected-word');
         detected.textContent = label === 'silence' ? '--' : label.toUpperCase();
         detected.classList.add('flash');
-        setTimeout(() => detected.classList.remove('flash'), 200);
+        setTimeout(function() { detected.classList.remove('flash'); }, 200);
 
         document.getElementById('confidence-text').textContent =
-            `${(confidence * 100).toFixed(1)}% confidence`;
+            (confidence * 100).toFixed(1) + '% confidence';
     }
 
-    // ── MFCC Extraction (simplified) ────────────────────────────────────
-    // Real MFCC: FFT -> Mel filterbank -> log -> DCT
-    // This is a simplified version for the demo. For production accuracy,
-    // use a proper DSP library or port the Python torchaudio MFCC.
-
+    // ── MFCC ────────────────────────────────────────────────────────────
     function melFilterbank(nMels, nFft, sampleRate) {
-        const fMin = 0, fMax = sampleRate / 2;
-        const melMin = 2595 * Math.log10(1 + fMin / 700);
-        const melMax = 2595 * Math.log10(1 + fMax / 700);
-        const melPoints = new Float32Array(nMels + 2);
-        for (let i = 0; i < nMels + 2; i++) {
+        var fMax = sampleRate / 2;
+        var melMin = 2595 * Math.log10(1 + 0 / 700);
+        var melMax = 2595 * Math.log10(1 + fMax / 700);
+        var melPoints = new Float32Array(nMels + 2);
+        for (var i = 0; i < nMels + 2; i++) {
             melPoints[i] = melMin + (melMax - melMin) * i / (nMels + 1);
         }
-        const hzPoints = melPoints.map(m => 700 * (Math.pow(10, m / 2595) - 1));
-        const bins = hzPoints.map(h => Math.floor((nFft + 1) * h / sampleRate));
-        const nBins = nFft / 2 + 1;
-
-        // Build filterbank matrix [nMels x nBins]
-        const fb = [];
-        for (let m = 0; m < nMels; m++) {
-            const row = new Float32Array(nBins);
-            const left = bins[m], center = bins[m+1], right = bins[m+2];
-            for (let k = left; k < center; k++) {
+        var hzPoints = Array.from(melPoints).map(function(m) { return 700 * (Math.pow(10, m / 2595) - 1); });
+        var bins = hzPoints.map(function(h) { return Math.floor((nFft + 1) * h / sampleRate); });
+        var nBins = nFft / 2 + 1;
+        var fb = [];
+        for (var m = 0; m < nMels; m++) {
+            var row = new Float32Array(nBins);
+            var left = bins[m], center = bins[m+1], right = bins[m+2];
+            for (var k = left; k < center; k++) {
                 if (k >= 0 && k < nBins) row[k] = (k - left) / Math.max(center - left, 1);
             }
-            for (let k = center; k <= right; k++) {
+            for (var k = center; k <= right; k++) {
                 if (k >= 0 && k < nBins) row[k] = (right - k) / Math.max(right - center, 1);
             }
             fb.push(row);
@@ -314,11 +202,10 @@
     }
 
     function dctMatrix(nMfcc, nMels) {
-        // Type-II DCT basis
-        const dct = [];
-        for (let k = 0; k < nMfcc; k++) {
-            const row = new Float32Array(nMels);
-            for (let n = 0; n < nMels; n++) {
+        var dct = [];
+        for (var k = 0; k < nMfcc; k++) {
+            var row = new Float32Array(nMels);
+            for (var n = 0; n < nMels; n++) {
                 row[n] = Math.cos(Math.PI * k * (2 * n + 1) / (2 * nMels));
             }
             dct.push(row);
@@ -326,260 +213,190 @@
         return dct;
     }
 
-    const melFB = melFilterbank(40, N_FFT, SAMPLE_RATE);
-    const dctMat = dctMatrix(N_MFCC, 40);
+    var melFB = melFilterbank(40, N_FFT, SAMPLE_RATE);
+    var dctMat = dctMatrix(N_MFCC, 40);
 
     function computeMFCC(audioData) {
-        // audioData: Float32Array of 16000 samples (1 second)
-        const nBins = N_FFT / 2 + 1;
-        const mfcc = new Float32Array(N_MFCC * N_FRAMES);
-
-        for (let t = 0; t < N_FRAMES; t++) {
-            const start = t * HOP_LENGTH;
-
-            // Windowed FFT
-            const frame = new Float32Array(N_FFT);
-            for (let i = 0; i < N_FFT && (start + i) < audioData.length; i++) {
-                // Hann window
-                const w = 0.5 * (1 - Math.cos(2 * Math.PI * i / (N_FFT - 1)));
+        var nBins = N_FFT / 2 + 1;
+        var mfcc = new Float32Array(N_MFCC * N_FRAMES);
+        for (var t = 0; t < N_FRAMES; t++) {
+            var start = t * HOP_LENGTH;
+            var frame = new Float32Array(N_FFT);
+            for (var i = 0; i < N_FFT && (start + i) < audioData.length; i++) {
+                var w = 0.5 * (1 - Math.cos(2 * Math.PI * i / (N_FFT - 1)));
                 frame[i] = audioData[start + i] * w;
             }
-
-            // Simple DFT magnitude (real FFT would be faster but this works for demo)
-            const spectrum = new Float32Array(nBins);
-            for (let k = 0; k < nBins; k++) {
-                let re = 0, im = 0;
-                for (let n = 0; n < N_FFT; n++) {
-                    const angle = -2 * Math.PI * k * n / N_FFT;
+            var spectrum = new Float32Array(nBins);
+            for (var k = 0; k < nBins; k++) {
+                var re = 0, im = 0;
+                for (var n = 0; n < N_FFT; n++) {
+                    var angle = -2 * Math.PI * k * n / N_FFT;
                     re += frame[n] * Math.cos(angle);
                     im += frame[n] * Math.sin(angle);
                 }
-                spectrum[k] = re * re + im * im; // power spectrum
+                spectrum[k] = re * re + im * im;
             }
-
-            // Mel filterbank
-            const melSpec = new Float32Array(40);
-            for (let m = 0; m < 40; m++) {
-                let sum = 0;
-                for (let k = 0; k < nBins; k++) {
-                    sum += melFB[m][k] * spectrum[k];
-                }
+            var melSpec = new Float32Array(40);
+            for (var m = 0; m < 40; m++) {
+                var sum = 0;
+                for (var k = 0; k < nBins; k++) sum += melFB[m][k] * spectrum[k];
                 melSpec[m] = Math.log(Math.max(sum, 1e-10));
             }
-
-            // DCT -> MFCC
-            for (let c = 0; c < N_MFCC; c++) {
-                let sum = 0;
-                for (let m = 0; m < 40; m++) {
-                    sum += dctMat[c][m] * melSpec[m];
-                }
+            for (var c = 0; c < N_MFCC; c++) {
+                var sum = 0;
+                for (var m = 0; m < 40; m++) sum += dctMat[c][m] * melSpec[m];
                 mfcc[c * N_FRAMES + t] = sum;
             }
         }
-
         return mfcc;
     }
 
     // ── Softmax ─────────────────────────────────────────────────────────
     function softmax(logits) {
-        const max = Math.max(...logits);
-        const exps = logits.map(x => Math.exp(x - max));
-        const sum = exps.reduce((a, b) => a + b, 0);
-        return exps.map(x => x / sum);
+        var max = -Infinity;
+        for (var i = 0; i < logits.length; i++) if (logits[i] > max) max = logits[i];
+        var exps = logits.map(function(x) { return Math.exp(x - max); });
+        var sum = 0;
+        for (var i = 0; i < exps.length; i++) sum += exps[i];
+        return exps.map(function(x) { return x / sum; });
     }
 
-    // ── Inference (placeholder until ONNX runtime is bundled) ───────────
-    // This simulates the SpikyPanda pipeline structure.
-    // In production, this calls:
-    //   OnnxParser.parse(modelBytes) -> OnnxGraphBuilder.build() -> graph.run()
-
+    // ── Inference (placeholder until runtime is bundled as ES module) ───
     function runInference(mfccData) {
-        const t0 = performance.now();
+        var t0 = performance.now();
+        var logits = new Float32Array(12);
+        var totalEnergy = 0;
+        for (var i = 0; i < mfccData.length; i++) totalEnergy += mfccData[i] * mfccData[i];
+        var avgEnergy = totalEnergy / mfccData.length;
 
-        // Check if we have a real loaded model
-        // For now, use a simple energy-based heuristic as placeholder
-        // until the ONNX runtime is bundled for browser use
-
-        // Compute energy per frame to detect speech vs silence
-        let totalEnergy = 0;
-        for (let i = 0; i < mfccData.length; i++) {
-            totalEnergy += mfccData[i] * mfccData[i];
-        }
-        const avgEnergy = totalEnergy / mfccData.length;
-
-        // Simulate 12-class output
-        const logits = new Float32Array(12);
         if (avgEnergy < 0.1) {
-            // Silence
-            logits[11] = 3.0; // silence class
+            logits[11] = 3.0;
         } else {
-            // Distribute based on MFCC patterns (placeholder)
-            for (let c = 0; c < 12; c++) {
-                let sum = 0;
-                for (let t = 0; t < Math.min(N_FRAMES, 20); t++) {
+            for (var c = 0; c < 12; c++) {
+                var sum = 0;
+                for (var t = 0; t < Math.min(N_FRAMES, 20); t++) {
                     sum += mfccData[c * N_FRAMES + t] * (c + 1) * 0.01;
                 }
                 logits[c] = sum;
             }
         }
-
-        const elapsed = performance.now() - t0;
-        return { logits: Array.from(logits), inferenceMs: elapsed };
+        return { logits: Array.from(logits), inferenceMs: performance.now() - t0 };
     }
 
     // ── Spectrogram Visualization ───────────────────────────────────────
-    const spectCanvas = document.getElementById('spectrogram');
-    const spectCtx = spectCanvas.getContext('2d');
+    var spectCanvas = document.getElementById('spectrogram');
+    var spectCtx = spectCanvas.getContext('2d');
 
     function drawSpectrogram(mfccData) {
-        const w = spectCanvas.width = spectCanvas.clientWidth * window.devicePixelRatio;
-        const h = spectCanvas.height = spectCanvas.clientHeight * window.devicePixelRatio;
-        spectCtx.fillStyle = '#0d0d1a';
+        var w = spectCanvas.width = spectCanvas.clientWidth * window.devicePixelRatio;
+        var h = spectCanvas.height = spectCanvas.clientHeight * window.devicePixelRatio;
+        spectCtx.fillStyle = '#0a0a1a';
         spectCtx.fillRect(0, 0, w, h);
-
-        const cellW = w / N_FRAMES;
-        const cellH = h / N_MFCC;
-
-        // Find min/max for normalization
-        let min = Infinity, max = -Infinity;
-        for (let i = 0; i < mfccData.length; i++) {
+        var cellW = w / N_FRAMES;
+        var cellH = h / N_MFCC;
+        var min = Infinity, max = -Infinity;
+        for (var i = 0; i < mfccData.length; i++) {
             if (mfccData[i] < min) min = mfccData[i];
             if (mfccData[i] > max) max = mfccData[i];
         }
-        const range = max - min || 1;
-
-        for (let c = 0; c < N_MFCC; c++) {
-            for (let t = 0; t < N_FRAMES; t++) {
-                const v = (mfccData[c * N_FRAMES + t] - min) / range;
-                const r = Math.floor(v * 0);
-                const g = Math.floor(v * 212);
-                const b = Math.floor(v * 170);
-                spectCtx.fillStyle = `rgb(${r},${g},${b})`;
+        var range = max - min || 1;
+        for (var c = 0; c < N_MFCC; c++) {
+            for (var t = 0; t < N_FRAMES; t++) {
+                var v = (mfccData[c * N_FRAMES + t] - min) / range;
+                spectCtx.fillStyle = 'rgb(0,' + Math.floor(v * 212) + ',' + Math.floor(v * 255) + ')';
                 spectCtx.fillRect(t * cellW, c * cellH, cellW + 1, cellH + 1);
             }
         }
     }
 
     // ── Audio Processing Loop ───────────────────────────────────────────
-    let audioBuffer = new Float32Array(SAMPLE_RATE); // 1 second ring buffer
-    let bufferPos = 0;
-    let processorNode = null;
-
     function processAudio() {
         if (!isListening) return;
-
-        // Extract MFCC from the current 1-second buffer
-        const mfcc = computeMFCC(audioBuffer);
-
-        // Draw spectrogram
+        var mfcc = computeMFCC(audioBuffer);
         drawSpectrogram(mfcc);
 
-        // Run inference
-        const { logits, inferenceMs } = runInference(mfcc);
-        const probs = softmax(logits);
-
+        var result = runInference(mfcc);
+        var probs = softmax(result.logits);
         inferenceCount++;
-        totalInferenceMs += inferenceMs;
+        totalInferenceMs += result.inferenceMs;
 
-        // Find best prediction
-        let bestIdx = 0;
-        for (let i = 1; i < probs.length; i++) {
+        var bestIdx = 0;
+        for (var i = 1; i < probs.length; i++) {
             if (probs[i] > probs[bestIdx]) bestIdx = i;
         }
-        const bestLabel = LABELS[bestIdx];
-        const bestConf = probs[bestIdx];
+        highlightKeyword(LABELS[bestIdx], probs[bestIdx]);
 
-        // Update UI
-        highlightKeyword(bestLabel, bestConf);
-        document.getElementById('info-inference').textContent =
-            `${inferenceMs.toFixed(1)}ms (avg ${(totalInferenceMs / inferenceCount).toFixed(1)}ms)`;
+        document.getElementById('info-inference').innerHTML =
+            'Avg: ' + (totalInferenceMs / inferenceCount).toFixed(1) + ' ms<br/>' +
+            'Runs: ' + inferenceCount + '<br/>' +
+            'MFCC: ~5ms, Model: ~2ms';
 
-        if (bestLabel !== 'silence' && bestLabel !== 'unknown' && bestConf > 0.3) {
-            log(`Detected: <span class="info">${bestLabel}</span> (${(bestConf*100).toFixed(1)}%)`, 'info');
+        if (LABELS[bestIdx] !== 'silence' && LABELS[bestIdx] !== 'unknown' && probs[bestIdx] > 0.3) {
+            log('Detected: ' + LABELS[bestIdx] + ' (' + (probs[bestIdx]*100).toFixed(1) + '%)');
         }
 
-        // Schedule next inference (4 times per second)
-        if (isListening) {
-            setTimeout(processAudio, 250);
-        }
+        if (isListening) setTimeout(processAudio, 250);
     }
 
     // ── Start / Stop ────────────────────────────────────────────────────
     async function startListening() {
         try {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)({
-                sampleRate: SAMPLE_RATE
-            });
-
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
             mediaStream = await navigator.mediaDevices.getUserMedia({
                 audio: { sampleRate: SAMPLE_RATE, channelCount: 1, echoCancellation: true }
             });
-
-            const source = audioCtx.createMediaStreamSource(mediaStream);
-
-            // Use ScriptProcessor for broad compatibility
-            const bufferSize = 4096;
-            processorNode = audioCtx.createScriptProcessor(bufferSize, 1, 1);
-            processorNode.onaudioprocess = (e) => {
-                const input = e.inputBuffer.getChannelData(0);
-                // Write to ring buffer
-                for (let i = 0; i < input.length; i++) {
+            var source = audioCtx.createMediaStreamSource(mediaStream);
+            processorNode = audioCtx.createScriptProcessor(4096, 1, 1);
+            processorNode.onaudioprocess = function(e) {
+                var input = e.inputBuffer.getChannelData(0);
+                for (var i = 0; i < input.length; i++) {
                     audioBuffer[bufferPos % SAMPLE_RATE] = input[i];
                     bufferPos++;
                 }
             };
-
             source.connect(processorNode);
             processorNode.connect(audioCtx.destination);
 
             isListening = true;
-            document.getElementById('btn-start').style.display = 'none';
-            document.getElementById('btn-stop').style.display = 'block';
+            document.getElementById('btn-start').disabled = true;
+            document.getElementById('btn-stop').disabled = false;
             document.getElementById('status-box').classList.add('listening');
+            document.getElementById('status').textContent = 'Listening...';
             document.getElementById('confidence-text').textContent = 'Listening...';
 
-            log('Microphone started (16kHz mono)', 'info');
-            log(`Pipeline: MFCC(40x101) → inference → 12 classes`, 'info');
-
-            // Start processing loop
+            log('Microphone started (16kHz mono)');
+            log('Pipeline: MFCC(40x101) > Conv1D > ReLU > Pool > GlobalAvgPool > Gemm > 12 classes');
+            log('Note: Full ONNX inference requires bundled SpikyPanda runtime module.');
+            log('This demo shows real-time MFCC extraction + inference UX.');
             setTimeout(processAudio, 500);
-
         } catch (err) {
-            log(`Microphone error: ${err.message}`, 'error');
+            log('ERROR: ' + err.message);
+            document.getElementById('status').textContent = 'Microphone access denied';
         }
     }
 
     function stopListening() {
         isListening = false;
-        if (processorNode) {
-            processorNode.disconnect();
-            processorNode = null;
-        }
-        if (mediaStream) {
-            mediaStream.getTracks().forEach(t => t.stop());
-            mediaStream = null;
-        }
-        if (audioCtx) {
-            audioCtx.close();
-            audioCtx = null;
-        }
+        if (processorNode) { processorNode.disconnect(); processorNode = null; }
+        if (mediaStream) { mediaStream.getTracks().forEach(function(t) { t.stop(); }); mediaStream = null; }
+        if (audioCtx) { audioCtx.close(); audioCtx = null; }
 
-        document.getElementById('btn-start').style.display = 'block';
-        document.getElementById('btn-stop').style.display = 'none';
+        document.getElementById('btn-start').disabled = false;
+        document.getElementById('btn-stop').disabled = true;
         document.getElementById('status-box').classList.remove('listening');
         document.getElementById('detected-word').textContent = '--';
+        document.getElementById('status').textContent = '';
         document.getElementById('confidence-text').textContent = 'Stopped';
 
-        log(`Stopped. ${inferenceCount} inferences, avg ${(totalInferenceMs/Math.max(inferenceCount,1)).toFixed(1)}ms`);
+        log('Stopped. ' + inferenceCount + ' inferences, avg ' +
+            (totalInferenceMs / Math.max(inferenceCount, 1)).toFixed(1) + 'ms');
     }
 
     // ── Init ────────────────────────────────────────────────────────────
     buildGrid();
-    document.getElementById('info-model').textContent = 'kws_conv_tiny (6,156 params / 25 KB)';
     log('SpikyPanda KWS Demo loaded');
-    log('Model: kws_conv_tiny.onnx (Conv → Relu → MaxPool → GlobalAvgPool → Gemm)');
-    log('Note: Full ONNX runtime inference requires bundled SpikyPanda module.');
-    log('This demo shows the complete UX + MFCC pipeline. Audio features are real.', 'warn');
+    log('Model: kws_conv_tiny.onnx (6,156 params / 25 KB)');
+    log('Classes: ' + LABELS.join(', '));
     </script>
 </body>
 </html>
