@@ -203,6 +203,7 @@ def export_onnx(model, out_path, device):
         output_names=["logits"],
         dynamic_axes=None,  # fixed shape for MCU
         opset_version=17,
+        dynamo=False,  # use legacy exporter (avoids Unicode crash on Windows)
     )
     print(f"Exported ONNX model to {out_path}")
 
