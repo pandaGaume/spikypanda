@@ -1,6 +1,6 @@
 import type { ITensor } from "../../compute/compute.interfaces";
 import type { OnnxNodeInfo } from "../onnx-types";
-import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "./registry";
+import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "../registry";
 
 function sigmoid(x: number): number {
     return 1 / (1 + Math.exp(-x));
@@ -113,28 +113,50 @@ class GRUNode extends OnnxOpNode {
 
         for (let t = 0; t < seqLen; t++) {
             const xOffset = t * inputSize;
-            const gates = new Float32Array(3 * H);
 
-            for (let g = 0; g < 3 * H; g++) {
-                let sum = 0;
+            // Compute z and r gates: gate = sigmoid(W_gate @ x + R_gate @ h + bias)
+            const zGate = new Float32Array(H);
+            const rGate = new Float32Array(H);
+            for (let j = 0; j < H; j++) {
+                let zSum = 0;
+                let rSum = 0;
                 for (let i = 0; i < inputSize; i++) {
-                    sum += W3H[g * inputSize + i] * X.data[xOffset + i];
+                    zSum += W3H[(0 * H + j) * inputSize + i] * X.data[xOffset + i];
+                    rSum += W3H[(1 * H + j) * inputSize + i] * X.data[xOffset + i];
                 }
-                for (let j = 0; j < H; j++) {
-                    sum += R3H[g * H + j] * h[j];
+                for (let k = 0; k < H; k++) {
+                    zSum += R3H[(0 * H + j) * H + k] * h[k];
+                    rSum += R3H[(1 * H + j) * H + k] * h[k];
                 }
                 if (biasW) {
-                    sum += biasW[g] + biasW[3 * H + g];
+                    zSum += biasW[0 * H + j] + biasW[3 * H + j];
+                    rSum += biasW[1 * H + j] + biasW[4 * H + j];
                 }
-                gates[g] = sum;
+                zGate[j] = sigmoid(zSum);
+                rGate[j] = sigmoid(rSum);
             }
 
+            // Compute candidate with linear_before_reset=1 (ONNX default for most exporters):
+            // n = tanh(Wn @ x + Wb_n + r * (Rn @ h + Rb_n))
             const newH = new Float32Array(H);
             for (let j = 0; j < H; j++) {
-                const z = sigmoid(gates[0 * H + j]);
-                const r = sigmoid(gates[1 * H + j]);
-                const n = Math.tanh(gates[2 * H + j]); // simplified (gate applied before sum)
-                newH[j] = (1 - z) * n + z * h[j];
+                let nSum = 0;
+                for (let i = 0; i < inputSize; i++) {
+                    nSum += W3H[(2 * H + j) * inputSize + i] * X.data[xOffset + i];
+                }
+                if (biasW) {
+                    nSum += biasW[2 * H + j]; // W bias for candidate
+                }
+                let rh = 0;
+                for (let k = 0; k < H; k++) {
+                    rh += R3H[(2 * H + j) * H + k] * h[k];
+                }
+                if (biasW) {
+                    rh += biasW[5 * H + j]; // R bias for candidate (inside reset)
+                }
+                nSum += rGate[j] * rh;
+                const n = Math.tanh(nSum);
+                newH[j] = (1 - zGate[j]) * n + zGate[j] * h[j];
             }
             h = newH;
         }

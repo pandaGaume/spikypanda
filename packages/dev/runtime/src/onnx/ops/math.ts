@@ -1,6 +1,6 @@
 import type { ITensor } from "../../compute/compute.interfaces";
 import type { OnnxNodeInfo } from "../onnx-types";
-import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "./registry";
+import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "../registry";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

@@ -1,8 +1,9 @@
-import { ComputeGraph, DataLink } from "../../compute/compute.graph";
-import { ComputeNodeBase } from "../../compute/compute.node.base";
-import type { IComputeNode, ITensor } from "../../compute/compute.interfaces";
-import type { OnnxParseResult } from "../onnx-parser";
-import type { OnnxTensorInfo, OnnxValueInfo } from "../onnx-types";
+import { ComputeGraph, DataLink } from "../compute/compute.graph";
+import { ComputeNodeBase } from "../compute/compute.node.base";
+import type { IComputeNode, ITensor } from "../compute/compute.interfaces";
+import type { OnnxParseResult } from "./onnx-parser";
+import type { OnnxValueInfo } from "./onnx-types";
+import type { OnnxTensorInfo } from "./onnx-types";
 import { OnnxOpRegistry, getInitializerData, makeTensor } from "./registry";
 
 /**
@@ -35,6 +36,7 @@ class InputNode extends ComputeNodeBase {
 
     constructor(name: string, shape: number[]) {
         super();
+        this.id = name;
         this.inputName = name;
         // Replace dynamic dims (0) with 1 for inference
         this.outputShapes = [shape.map((d) => (d <= 0 ? 1 : d))];
@@ -61,10 +63,10 @@ export class OnnxGraphBuilder {
         const nodes: IComputeNode[] = [];
         const links: DataLink[] = [];
 
-        // Map tensor name → the node that produces it + output index
+        // Map tensor name -> the node that produces it + output index
         const tensorProducer = new Map<string, { node: IComputeNode; outputIndex: number }>();
 
-        // Map tensor name → list of consumers (node + input index)
+        // Map tensor name -> list of consumers (node + input index)
         const tensorConsumers: { tensorName: string; node: IComputeNode; inputIndex: number }[] = [];
 
         // Build initializer map

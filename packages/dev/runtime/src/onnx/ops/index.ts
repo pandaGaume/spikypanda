@@ -1,5 +1,3 @@
-export { OnnxOpRegistry, OnnxOpNode, getInitializerData, shapeSize, makeTensor, PRIORITY_GENERIC, PRIORITY_NATIVE } from "./registry";
-export type { OnnxOpFactory, OnnxOpEntry } from "./registry";
 export { registerMathOps } from "./math";
 export { registerActivationOps } from "./activations";
 export { registerMatrixOps } from "./matrix";
@@ -8,9 +6,8 @@ export { registerNormOps } from "./normalization";
 export { registerRecurrentOps } from "./recurrent";
 export { registerMiscOps } from "./misc";
 export { registerSpikyPandaOps } from "./spikypanda";
-export { OnnxGraphBuilder } from "./graph-builder";
 
-import { OnnxOpRegistry } from "./registry";
+import { OnnxOpRegistry } from "../registry";
 import { registerMathOps } from "./math";
 import { registerActivationOps } from "./activations";
 import { registerMatrixOps } from "./matrix";
