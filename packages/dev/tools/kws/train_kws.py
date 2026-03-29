@@ -53,42 +53,45 @@ OUT_DIR = Path(__file__).parent
 
 class KWSModel(nn.Module):
     """
-    Tiny keyword spotting model.
+    Tiny keyword spotting model — pure Conv1D, no recurrent layers.
 
     Input:  MFCC features [batch, n_mfcc, n_frames] = [B, 40, 101]
     Output: logits [batch, num_classes] = [B, 12]
 
     Architecture:
-        Conv1D(40→32, k=3) → BN → ReLU → MaxPool(2)     : [B, 32, 50]
-        Conv1D(32→32, k=3) → BN → ReLU → MaxPool(2)     : [B, 32, 24]
-        GRU(input=32, hidden=32, 1 layer)                 : [B, 32]
-        Linear(32→12)                                      : [B, 12]
+        Conv1D(40→24, k=3) → BN → ReLU → MaxPool(2)     : [B, 24, 50]
+        Conv1D(24→24, k=3) → BN → ReLU → MaxPool(2)     : [B, 24, 24]
+        Conv1D(24→16, k=3) → BN → ReLU → GlobalAvgPool  : [B, 16]
+        Linear(16→12)                                      : [B, 12]
 
-    Ops used (all validated in SpikyPanda):
-        Conv, BatchNormalization, Relu, MaxPool, GRU, Gemm, Flatten
+    Ops used (all validated in SpikyPanda — 152/152 tests):
+        Conv, BatchNormalization, Relu, MaxPool, GlobalAveragePool, Gemm
+
+    ~6K params, 25 KB ONNX — runs on MCU (CyanMycelium) and browser.
     """
     def __init__(self, n_mfcc=N_MFCC, num_classes=NUM_CLASSES):
         super().__init__()
-        self.conv1 = nn.Conv1d(n_mfcc, 32, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNormalization1d(32) if hasattr(nn, 'BatchNormalization1d') else nn.BatchNorm1d(32)
+        self.conv1 = nn.Conv1d(n_mfcc, 24, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm1d(24)
         self.pool1 = nn.MaxPool1d(2)
 
-        self.conv2 = nn.Conv1d(32, 32, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm1d(32)
+        self.conv2 = nn.Conv1d(24, 24, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm1d(24)
         self.pool2 = nn.MaxPool1d(2)
 
-        self.gru = nn.GRU(input_size=32, hidden_size=32, num_layers=1, batch_first=True)
-        self.fc = nn.Linear(32, num_classes)
+        self.conv3 = nn.Conv1d(24, 16, kernel_size=3, padding=1)
+        self.bn3 = nn.BatchNorm1d(16)
+        self.gap = nn.AdaptiveAvgPool1d(1)
+
+        self.fc = nn.Linear(16, num_classes)
 
     def forward(self, x):
         # x: [B, n_mfcc, n_frames]
         x = self.pool1(F.relu(self.bn1(self.conv1(x))))
         x = self.pool2(F.relu(self.bn2(self.conv2(x))))
-        # x: [B, 32, T] → transpose to [B, T, 32] for GRU
-        x = x.transpose(1, 2)
-        _, h = self.gru(x)  # h: [1, B, 32]
-        x = h.squeeze(0)    # [B, 32]
-        x = self.fc(x)      # [B, 12]
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = self.gap(x).squeeze(-1)  # [B, 16]
+        x = self.fc(x)               # [B, 12]
         return x
 
 
