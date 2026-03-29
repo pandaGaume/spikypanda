@@ -8,7 +8,7 @@ Real-time keyword detection running entirely in the browser via the SpikyPanda O
 Microphone -> Web Audio API -> MFCC extraction (JS) -> SpikyPanda ONNX runtime -> Keyword detected
 ```
 
-No server, no cloud, no WebAssembly. Pure TypeScript inference on a 25 KB model.
+No server, no cloud, no WebAssembly. Pure TypeScript inference.
 
 ## Models
 
@@ -20,25 +20,47 @@ No server, no cloud, no WebAssembly. Pure TypeScript inference on a 25 KB model.
 Both models classify 1-second audio windows into 12 classes:
 `yes, no, up, down, left, right, on, off, stop, go, unknown, silence`
 
+## Why we train our own model
+
+There are no ready-to-use pre-trained keyword spotting ONNX models compatible with our pipeline:
+
+- **Honk** (castorini/honk-models) provides ONNX files but in an old Caffe2 format where all weights are graph inputs instead of initializers. Incompatible with standard ONNX graph builders.
+- **Sherpa-ONNX** (k2-fsa) has keyword spotting models but uses Zipformer architecture (~3M params), too large for MCU deployment.
+- **HuggingFace models** (Wav2Vec2-based) are 100MB+ and require ops we don't need on embedded.
+
+Training our own model takes ~30 minutes and guarantees:
+- Exact control over architecture and size (6K-14K params)
+- Only ops validated by our 152-test conformance suite
+- Same model runs in browser (TypeScript) and on MCU (CyanMycelium C++)
+
 ## Quick Start
 
-### 1. Generate the ONNX models
+### 1. Install dependencies
 
 ```bash
 pip install torch torchaudio onnx onnxscript
+```
+
+### 2. Train the model (required for real inference)
+
+```bash
+python train_kws.py --epochs 30        # full training (~30min GPU, ~2h CPU)
+python train_kws.py --epochs 2 --quick  # quick test with data subset
+```
+
+This downloads Google Speech Commands v2 (~2 GB, first run only), trains the model, and exports `kws_model.onnx` with real weights.
+
+### 3. Export architecture only (for pipeline testing)
+
+```bash
 python pretrained_kws.py
 ```
 
-### 2. Train for real accuracy (optional)
+This generates `kws_conv_tiny.onnx` and `kws_conv_gru.onnx` with **random weights** (no training). Useful for validating that the SpikyPanda ONNX pipeline parses, builds, and executes the model correctly — but the inference results will be meaningless.
 
-```bash
-python train_kws.py --epochs 30        # full training (~30min GPU)
-python train_kws.py --epochs 2 --quick  # quick test
-```
+### 4. Open the demo
 
-### 3. Open the demo
-
-Open `demo.html` in a browser. Click "Start Listening" and say a keyword.
+Open `packages/host/www/samples/kws/index.html` via a local server (e.g., VS Code Live Server). Click "Start Listening" and say a keyword.
 
 ## How It Works
 
@@ -53,12 +75,14 @@ The demo extracts Mel-Frequency Cepstral Coefficients directly in JavaScript usi
 
 ### Inference Pipeline
 
-The SpikyPanda ONNX pipeline runs in ~2ms per inference:
+The SpikyPanda ONNX pipeline runs in the browser:
 
-1. `OnnxParser.parse()` — deserializes the .onnx protobuf
-2. `OnnxGraphBuilder.build()` — constructs a `ComputeGraph` DAG
+1. `OnnxParser.parse()` — deserializes the .onnx protobuf binary
+2. `OnnxGraphBuilder.build()` — constructs a `ComputeGraph` DAG with typed `DataLink`s
 3. `graph.run()` — executes all operators in topological order
 4. Read output logits, apply softmax, display result
+
+The runtime is bundled as `spikypanda-runtime.js` (webpack UMD) and loaded alongside `spikypanda-core.js`.
 
 ### MCU Deployment Path
 
@@ -68,9 +92,17 @@ The same model (`kws_conv_tiny.onnx`) can be deployed on a microcontroller via C
 
 | File | Description |
 |---|---|
-| `demo.html` | Browser demo — microphone input, real-time inference |
-| `pretrained_kws.py` | Export models to ONNX (random weights, pipeline testing) |
-| `train_kws.py` | Full training on Google Speech Commands v2 |
-| `kws_conv_tiny.onnx` | Ultra-small model (generated) |
-| `kws_conv_gru.onnx` | Small Conv+GRU model (generated) |
+| `train_kws.py` | Full training on Google Speech Commands v2 — produces a real model |
+| `pretrained_kws.py` | Export model architecture to ONNX (random weights, pipeline testing only) |
+| `kws_conv_tiny.onnx` | Ultra-small model, random weights (use train_kws.py for real weights) |
+| `kws_conv_gru.onnx` | Conv+GRU model, random weights |
 | `kws_pretrained_metadata.json` | Model metadata (labels, MFCC config) |
+
+### Browser demo (in `packages/host/www/samples/kws/`)
+
+| File | Description |
+|---|---|
+| `index.html` | Demo page with hero image, collapsible panels, spectrogram |
+| `kws.js` | Audio capture, MFCC extraction, ONNX inference via SpikypandaRuntime |
+| `kws.css` | Sample-specific styles |
+| `hero.png` | Hero banner image |
