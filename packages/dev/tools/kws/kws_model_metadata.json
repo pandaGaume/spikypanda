@@ -1,0 +1,39 @@
+{
+  "labels": [
+    "yes",
+    "no",
+    "up",
+    "down",
+    "left",
+    "right",
+    "on",
+    "off",
+    "stop",
+    "go",
+    "_unknown_",
+    "_silence_"
+  ],
+  "num_classes": 12,
+  "sample_rate": 16000,
+  "n_mfcc": 40,
+  "n_fft": 512,
+  "hop_length": 160,
+  "n_frames": 101,
+  "input_shape": [
+    1,
+    40,
+    101
+  ],
+  "model_params": 6156,
+  "best_val_accuracy": 0.9555154794108807,
+  "ops_used": [
+    "Constant",
+    "Conv",
+    "Gemm",
+    "GlobalAveragePool",
+    "MaxPool",
+    "Relu",
+    "Squeeze"
+  ],
+  "training_epochs": 30
+}
