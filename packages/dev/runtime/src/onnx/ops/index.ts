@@ -6,6 +6,7 @@ export { registerNormOps } from "./normalization";
 export { registerRecurrentOps } from "./recurrent";
 export { registerMiscOps } from "./misc";
 export { registerSpikyPandaOps } from "./spikypanda";
+export { registerDspOps } from "./dsp";
 
 import { OnnxOpRegistry } from "../registry";
 import { registerMathOps } from "./math";
@@ -16,6 +17,7 @@ import { registerNormOps } from "./normalization";
 import { registerRecurrentOps } from "./recurrent";
 import { registerMiscOps } from "./misc";
 import { registerSpikyPandaOps } from "./spikypanda";
+import { registerDspOps } from "./dsp";
 
 /**
  * Create a registry with all generic ONNX ops registered.
@@ -29,6 +31,7 @@ export function createDefaultRegistry(): OnnxOpRegistry {
     registerNormOps(registry);
     registerRecurrentOps(registry);
     registerMiscOps(registry);
+    registerDspOps(registry);
     return registry;
 }
 
