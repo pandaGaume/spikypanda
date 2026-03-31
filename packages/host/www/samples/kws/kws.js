@@ -8,7 +8,7 @@ var N_MFCC = 40;
 var N_FRAMES = 101;
 var HOP_LENGTH = 160;
 var N_FFT = 512;
-var MODEL_URL = "../../dev/tools/kws/kws_conv_tiny.onnx";
+var MODEL_URL = "models/kws_conv_tiny.onnx";
 
 var audioCtx = null;
 var mediaStream = null;
@@ -65,93 +65,44 @@ function highlightKeyword(label, confidence) {
         (confidence * 100).toFixed(1) + "% confidence";
 }
 
-// ── MFCC ────────────────────────────────────────────────────────────
-function melFilterbank(nMels, nFft, sampleRate) {
-    var fMax = sampleRate / 2;
-    var melMin = 2595 * Math.log10(1);
-    var melMax = 2595 * Math.log10(1 + fMax / 700);
-    var melPoints = new Float32Array(nMels + 2);
-    for (var i = 0; i < nMels + 2; i++) {
-        melPoints[i] = melMin + (melMax - melMin) * (i / (nMels + 1));
-    }
-    var hzPoints = Array.from(melPoints).map(function (m) {
-        return 700 * (Math.pow(10, m / 2595) - 1);
-    });
-    var bins = hzPoints.map(function (h) {
-        return Math.floor(((nFft + 1) * h) / sampleRate);
-    });
-    var nBins = nFft / 2 + 1;
-    var fb = [];
-    for (var m = 0; m < nMels; m++) {
-        var row = new Float32Array(nBins);
-        var left = bins[m], center = bins[m + 1], right = bins[m + 2];
-        for (var k = left; k < center; k++) {
-            if (k >= 0 && k < nBins)
-                row[k] = (k - left) / Math.max(center - left, 1);
-        }
-        for (var k2 = center; k2 <= right; k2++) {
-            if (k2 >= 0 && k2 < nBins)
-                row[k2] = (right - k2) / Math.max(right - center, 1);
-        }
-        fb.push(row);
-    }
-    return fb;
+// ── MFCC via SpikyPanda DSP node ────────────────────────────────────
+var mfccNode = null; // lazy-initialized SpMFCC node from runtime
+
+function getOrCreateMfccNode() {
+    if (mfccNode) return mfccNode;
+    var RT = window.SpikypandaRuntime;
+    if (!RT) return null;
+
+    // Create a SpMFCC op node via the registry
+    var registry = RT.createDefaultRegistry();
+    var nodeInfo = {
+        opType: "SpMFCC",
+        inputs: ["audio"],
+        outputs: ["mfcc"],
+        attributes: new Map([
+            ["sample_rate", SAMPLE_RATE],
+            ["n_mfcc", N_MFCC],
+            ["n_fft", N_FFT],
+            ["hop_length", HOP_LENGTH],
+            ["n_mels", 40],
+            ["window_type", 0],
+        ]),
+    };
+    mfccNode = registry.create(nodeInfo, new Map());
+    kwsLog("SpMFCC node created (FFT Cooley-Tukey + Mel + DCT)");
+    return mfccNode;
 }
-
-function dctMatrix(nMfcc, nMels) {
-    var dct = [];
-    for (var k = 0; k < nMfcc; k++) {
-        var row = new Float32Array(nMels);
-        for (var n = 0; n < nMels; n++) {
-            row[n] = Math.cos((Math.PI * k * (2 * n + 1)) / (2 * nMels));
-        }
-        dct.push(row);
-    }
-    return dct;
-}
-
-var melFB = melFilterbank(40, N_FFT, SAMPLE_RATE);
-var dctMat = dctMatrix(N_MFCC, 40);
-
-// Store mel spectrogram for visualization (before DCT)
-var lastMelSpec = null;
 
 function computeMFCC(audioData) {
-    var nBins = N_FFT / 2 + 1;
-    var mfcc = new Float32Array(N_MFCC * N_FRAMES);
-    var melViz = new Float32Array(40 * N_FRAMES); // for spectrogram display
-    for (var t = 0; t < N_FRAMES; t++) {
-        var start = t * HOP_LENGTH;
-        var frame = new Float32Array(N_FFT);
-        for (var i = 0; i < N_FFT && start + i < audioData.length; i++) {
-            var w = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (N_FFT - 1)));
-            frame[i] = audioData[start + i] * w;
-        }
-        var spectrum = new Float32Array(nBins);
-        for (var k = 0; k < nBins; k++) {
-            var re = 0, im = 0;
-            for (var n = 0; n < N_FFT; n++) {
-                var angle = (-2 * Math.PI * k * n) / N_FFT;
-                re += frame[n] * Math.cos(angle);
-                im += frame[n] * Math.sin(angle);
-            }
-            spectrum[k] = re * re + im * im;
-        }
-        var melSpec = new Float32Array(40);
-        for (var m = 0; m < 40; m++) {
-            var sum = 0;
-            for (var k2 = 0; k2 < nBins; k2++) sum += melFB[m][k2] * spectrum[k2];
-            melSpec[m] = Math.log(Math.max(sum, 1e-10));
-            melViz[m * N_FRAMES + t] = melSpec[m]; // store for viz
-        }
-        for (var c = 0; c < N_MFCC; c++) {
-            var sum2 = 0;
-            for (var m2 = 0; m2 < 40; m2++) sum2 += dctMat[c][m2] * melSpec[m2];
-            mfcc[c * N_FRAMES + t] = sum2;
-        }
+    var node = getOrCreateMfccNode();
+    if (node) {
+        // Use SpikyPanda DSP pipeline: Window → FFT → Mel → Log → DCT
+        var inputTensor = { data: audioData, shape: [audioData.length], name: "audio" };
+        var outputs = node.execute([inputTensor]);
+        return outputs[0].data; // [n_mfcc, n_frames]
     }
-    lastMelSpec = melViz;
-    return mfcc;
+    // Fallback: zeros (should not happen if runtime is loaded)
+    return new Float32Array(N_MFCC * N_FRAMES);
 }
 
 // ── Softmax ─────────────────────────────────────────────────────────
@@ -170,15 +121,16 @@ function softmax(logits) {
 }
 
 // ── ONNX Inference ──────────────────────────────────────────────────
-function runInference(mfccData) {
+function runInference(mfccData, nFrames) {
     var t0 = performance.now();
     var logits;
+    nFrames = nFrames || N_FRAMES;
 
     if (onnxModelLoaded && onnxGraph) {
         // Real SpikyPanda ONNX inference
         var inputTensor = {
             data: mfccData,
-            shape: [1, N_MFCC, N_FRAMES],
+            shape: [1, N_MFCC, nFrames],
             name: onnxInputNames[0],
         };
         var externalInputs = new Map();
@@ -322,10 +274,11 @@ function processAudio() {
     for (var i = 0; i < audioBuffer.length; i++) sumSq += audioBuffer[i] * audioBuffer[i];
     var audioLevel = Math.sqrt(sumSq / audioBuffer.length);
 
-    var mfcc = computeMFCC(audioBuffer);
+    var mfccData = computeMFCC(audioBuffer);
+    var nFrames = mfccData.length / N_MFCC;
     drawWaveform(audioBuffer, audioLevel);
 
-    var result = runInference(mfcc);
+    var result = runInference(mfccData, nFrames);
     var probs = softmax(result.logits);
     inferenceCount++;
     totalInferenceMs += result.inferenceMs;
