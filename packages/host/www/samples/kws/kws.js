@@ -158,8 +158,10 @@ function loadOnnxModel() {
 
     kwsLog("Loading ONNX model...");
 
+    kwsLog("Fetching " + MODEL_URL + "...");
     fetch(MODEL_URL)
         .then(function (resp) {
+            kwsLog("Fetch response: " + resp.status);
             if (!resp.ok) throw new Error("HTTP " + resp.status);
             return resp.arrayBuffer();
         })
