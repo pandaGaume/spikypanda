@@ -453,7 +453,6 @@ export class NodeEditor {
     }
 
     private createJsonHandler(): FileHandler {
-        const editor = this;
         return {
             extensions: ["json"],
             mimeTypes: ["application/json"],
@@ -718,7 +717,7 @@ export class NodeEditor {
     }
 
     private findConnectionByPath(el: HTMLElement): Connection | undefined {
-        return this.connections.find((c) => c.path === el);
+        return this.connections.find((c) => (c.path as unknown) === el);
     }
 
     private bindEvents(): void {
