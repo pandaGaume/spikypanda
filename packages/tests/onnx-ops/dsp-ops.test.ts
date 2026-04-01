@@ -8,7 +8,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { ITensor } from "../../dev/runtime/src/compute/compute.interfaces";
 import { OnnxOpRegistry } from "../../dev/runtime/src/onnx/registry";
-import { registerDspOps } from "../../dev/runtime/src/onnx/ops/dsp";
+import { registerDspOps, enroll, serializeTemplate, deserializeTemplate, templateToTensor } from "../../dev/runtime/src/onnx/ops/dsp";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -81,6 +81,98 @@ function assertClose(actual: Float32Array, expected: Float32Array, label: string
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Enrollment utility tests
+// ---------------------------------------------------------------------------
+
+describe("enroll / serializeTemplate / deserializeTemplate / templateToTensor", () => {
+    const PARAMS = { sampleRate: 16000, nMfcc: 13, nFft: 256, hopLength: 128, nMels: 20 };
+    // Synthetic audio: 1 second of a 440 Hz sine at 16 kHz
+    function makeSine(freq: number, durationSamples: number, sr = 16000): Float32Array {
+        const buf = new Float32Array(durationSamples);
+        for (let i = 0; i < durationSamples; i++) {
+            buf[i] = Math.sin(2 * Math.PI * freq * i / sr);
+        }
+        return buf;
+    }
+
+    it("single sample — produces correct shape", () => {
+        const audio = makeSine(440, 16000);
+        const tmpl = enroll([audio], PARAMS);
+        expect(tmpl.shape[0]).toBe(PARAMS.nMfcc);          // n_mfcc rows
+        expect(tmpl.shape[1]).toBeGreaterThan(0);           // at least 1 frame
+        expect(tmpl.data.length).toBe(tmpl.shape[0] * tmpl.shape[1]);
+    });
+
+    it("multiple samples — same shape, data is the average", () => {
+        const a = makeSine(440, 16000);
+        const b = makeSine(440, 16000);
+        const tmpl1 = enroll([a], PARAMS);
+        const tmpl2 = enroll([a, b], PARAMS);
+        // Both 440 Hz → identical MFCC → average equals the single sample
+        expect(tmpl2.shape).toEqual(tmpl1.shape);
+        for (let i = 0; i < tmpl1.data.length; i++) {
+            expect(tmpl2.data[i]).toBeCloseTo(tmpl1.data[i], 3);
+        }
+    });
+
+    it("different-length samples — normalizes to median frame count", () => {
+        const short = makeSine(440, 8000);   // 0.5 s
+        const long  = makeSine(440, 24000);  // 1.5 s
+        const tmpl  = enroll([short, long], PARAMS);
+        // median of two lengths: either of the two values, result must be >0
+        expect(tmpl.shape[1]).toBeGreaterThan(0);
+        expect(tmpl.data.length).toBe(tmpl.shape[0] * tmpl.shape[1]);
+    });
+
+    it("serialize → deserialize round-trips data exactly", () => {
+        const audio = makeSine(440, 16000);
+        const original = enroll([audio], PARAMS);
+        const json = serializeTemplate(original);
+        const restored = deserializeTemplate(json);
+
+        expect(restored.shape).toEqual(original.shape);
+        expect(restored.params).toEqual(original.params);
+        for (let i = 0; i < original.data.length; i++) {
+            expect(restored.data[i]).toBeCloseTo(original.data[i], 5);
+        }
+    });
+
+    it("templateToTensor — returns ITensor with correct shape and data", () => {
+        const audio = makeSine(440, 16000);
+        const tmpl = enroll([audio], PARAMS);
+        const tensor = templateToTensor(tmpl);
+        expect(tensor.shape).toEqual([...tmpl.shape]);
+        expect(tensor.data).toBe(tmpl.data);  // same reference, no copy
+    });
+
+    it("enroll + SpDTW — same name matches, different name does not", () => {
+        const registry = new OnnxOpRegistry();
+        registerDspOps(registry);
+
+        const zephyr1 = makeSine(440, 16000);
+        const zephyr2 = makeSine(440, 15800);  // slightly shorter, same pitch
+        const other   = makeSine(880, 16000);  // very different
+
+        const tmplZephyr = enroll([zephyr1, zephyr2], PARAMS);
+        const tmplOther  = enroll([other], PARAMS);
+
+        const liveZephyr = templateToTensor(enroll([zephyr1], PARAMS));
+        const nodeInfo   = {
+            opType: "SpDTW",
+            inputs: ["live", "template"],
+            outputs: ["distance"],
+            attributes: buildAttributes({ normalize: 1 }),
+        };
+        const node = registry.create(nodeInfo as any, new Map()) as any;
+
+        const dSame = node.execute([liveZephyr, templateToTensor(tmplZephyr)])[0].data[0] as number;
+        const dDiff = node.execute([liveZephyr, templateToTensor(tmplOther)])[0].data[0] as number;
+
+        expect(dSame).toBeLessThan(dDiff);  // same name is closer
+    });
+});
 
 // ---------------------------------------------------------------------------
 // SpDTW unit tests (self-contained, no external vectors needed)

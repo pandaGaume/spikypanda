@@ -2,7 +2,7 @@
 // SpikyPanda KWS Demo — Real ONNX inference in the browser
 // =========================================================================
 
-var LABELS = ["yes","no","up","down","left","right","on","off","stop","go","unknown","silence"];
+var LABELS = ["yes","no","up","down","left","right","on","off","stop","go","hey","unknown","silence"];
 var SAMPLE_RATE = 16000;
 var N_MFCC = 40;
 var N_FRAMES = 101;

@@ -43,8 +43,8 @@ from pathlib import Path
 # Config
 # ---------------------------------------------------------------------------
 
-# 12 classes: 10 keywords + unknown + silence
-LABELS = ["yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go"]
+# 13 classes: 11 keywords + unknown + silence
+LABELS = ["yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go", "hey"]
 NUM_CLASSES = len(LABELS) + 2  # + unknown + silence
 SAMPLE_RATE = 16000
 AUDIO_LENGTH = 16000  # 1 second
@@ -65,13 +65,13 @@ class KWSModel(nn.Module):
     Tiny keyword spotting model — pure Conv1D, no recurrent layers.
 
     Input:  MFCC features [batch, n_mfcc, n_frames] = [B, 40, 101]
-    Output: logits [batch, num_classes] = [B, 12]
+    Output: logits [batch, num_classes] = [B, 13]
 
     Architecture:
         Conv1D(40→24, k=3) → BN → ReLU → MaxPool(2)     : [B, 24, 50]
         Conv1D(24→24, k=3) → BN → ReLU → MaxPool(2)     : [B, 24, 24]
         Conv1D(24→16, k=3) → BN → ReLU → GlobalAvgPool  : [B, 16]
-        Linear(16→12)                                      : [B, 12]
+        Linear(16→13)                                      : [B, 13]
 
     Ops used (all validated in SpikyPanda — 152/152 tests):
         Conv, BatchNormalization, Relu, MaxPool, GlobalAveragePool, Gemm

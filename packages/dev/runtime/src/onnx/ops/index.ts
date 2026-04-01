@@ -6,7 +6,8 @@ export { registerNormOps } from "./normalization";
 export { registerRecurrentOps } from "./recurrent";
 export { registerMiscOps } from "./misc";
 export { registerSpikyPandaOps } from "./spikypanda";
-export { registerDspOps } from "./dsp";
+export { registerDspOps, enroll, serializeTemplate, deserializeTemplate, templateToTensor } from "./dsp";
+export type { MfccParams, DtwTemplate } from "./dsp";
 
 import { OnnxOpRegistry } from "../registry";
 import { registerMathOps } from "./math";

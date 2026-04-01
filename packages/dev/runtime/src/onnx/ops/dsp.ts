@@ -535,6 +535,157 @@ class SpDTWNode extends OnnxOpNode {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Enrollment utility
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface MfccParams {
+    sampleRate?: number;   // default 16000
+    nMfcc?: number;        // default 40
+    nFft?: number;         // default 512
+    hopLength?: number;    // default 160
+    nMels?: number;        // default 40
+    windowType?: number;   // 0=hann, 1=hamming, default 0
+}
+
+export interface DtwTemplate {
+    data: Float32Array;    // [n_mfcc, n_frames]
+    shape: [number, number];
+    params: Required<MfccParams>;
+}
+
+/**
+ * Compute MFCC for a single raw audio buffer using the same internal
+ * pipeline as SpMFCC.  Returns [n_mfcc, n_frames].
+ */
+function mfccFromAudio(audio: Float32Array, p: Required<MfccParams>): { data: Float32Array; nFrames: number } {
+    const nFrames = Math.floor((audio.length - p.nFft) / p.hopLength) + 1;
+    if (!mfccFromAudio._fb) { /* lazy init below */ }
+
+    const fb = buildMelFilterbank(p.nMels, p.nFft, p.sampleRate);
+    const engine = getFFTEngine(p.nFft);
+    const winFn = p.windowType === 1 ? hammingWindow : hannWindow;
+    const nBins = p.nFft / 2 + 1;
+    const mfcc = new Float32Array(p.nMfcc * nFrames);
+    const frame = new Float32Array(p.nFft);
+    const melSpec = new Float32Array(p.nMels);
+
+    for (let t = 0; t < nFrames; t++) {
+        const start = t * p.hopLength;
+        for (let i = 0; i < p.nFft; i++) {
+            const idx = start + i;
+            frame[i] = idx < audio.length ? audio[idx] * winFn(p.nFft, i) : 0;
+        }
+        const power = engine.forward(frame);
+        for (let m = 0; m < p.nMels; m++) {
+            let sum = 0;
+            for (let k = 0; k < nBins; k++) sum += fb[m][k] * power[k];
+            melSpec[m] = Math.log(Math.max(sum, 1e-10));
+        }
+        for (let c = 0; c < p.nMfcc; c++) {
+            let sum = 0;
+            for (let m = 0; m < p.nMels; m++) {
+                sum += melSpec[m] * Math.cos(Math.PI * c * (2 * m + 1) / (2 * p.nMels));
+            }
+            mfcc[c * nFrames + t] = sum;
+        }
+    }
+    return { data: mfcc, nFrames };
+}
+// ts requires property to exist for the lazy-init trick above
+mfccFromAudio._fb = null as null;
+
+/**
+ * Linearly resample an MFCC matrix [n_mfcc, srcFrames] to [n_mfcc, dstFrames].
+ * Used to normalize frame counts before averaging multiple enrollment samples.
+ */
+function resampleMfcc(src: Float32Array, nMfcc: number, srcFrames: number, dstFrames: number): Float32Array {
+    const out = new Float32Array(nMfcc * dstFrames);
+    for (let t = 0; t < dstFrames; t++) {
+        const srcT = t * (srcFrames - 1) / Math.max(dstFrames - 1, 1);
+        const lo = Math.floor(srcT);
+        const hi = Math.min(lo + 1, srcFrames - 1);
+        const frac = srcT - lo;
+        for (let c = 0; c < nMfcc; c++) {
+            out[c * dstFrames + t] =
+                src[c * srcFrames + lo] * (1 - frac) +
+                src[c * srcFrames + hi] * frac;
+        }
+    }
+    return out;
+}
+
+/**
+ * Enroll a name from one or more raw audio recordings.
+ *
+ * Each sample is processed through the MFCC pipeline, resampled to the
+ * median frame count, then averaged element-wise to produce a single
+ * robust template ready to be injected into SpDTW as input[1].
+ *
+ * @param samples   One or more Float32Array of raw PCM audio (same sample rate)
+ * @param params    MFCC parameters — must match those used during inference
+ * @returns         DtwTemplate ready for use with injectTemplate()
+ *
+ * @example
+ * const template = enroll([recording1, recording2], { sampleRate: 16000 });
+ * // At inference time:
+ * externalInputs.set("dtw_template", injectTemplate(template));
+ */
+export function enroll(samples: Float32Array[], params: MfccParams = {}): DtwTemplate {
+    if (samples.length === 0) throw new Error("enroll: at least one sample required");
+
+    const p: Required<MfccParams> = {
+        sampleRate: params.sampleRate ?? 16000,
+        nMfcc:      params.nMfcc      ?? 40,
+        nFft:       params.nFft       ?? 512,
+        hopLength:  params.hopLength  ?? 160,
+        nMels:      params.nMels      ?? 40,
+        windowType: params.windowType ?? 0,
+    };
+
+    // Compute MFCC for each sample
+    const computed = samples.map((s) => mfccFromAudio(s, p));
+
+    // Normalize to median frame count
+    const frameCounts = computed.map((c) => c.nFrames).sort((a, b) => a - b);
+    const targetFrames = frameCounts[Math.floor(frameCounts.length / 2)];
+
+    // Resample and average
+    const avg = new Float32Array(p.nMfcc * targetFrames);
+    for (const { data, nFrames } of computed) {
+        const resampled = nFrames === targetFrames
+            ? data
+            : resampleMfcc(data, p.nMfcc, nFrames, targetFrames);
+        for (let i = 0; i < avg.length; i++) avg[i] += resampled[i];
+    }
+    for (let i = 0; i < avg.length; i++) avg[i] /= samples.length;
+
+    return { data: avg, shape: [p.nMfcc, targetFrames], params: p };
+}
+
+/**
+ * Serialize a DtwTemplate to a plain JSON-safe object for storage
+ * (localStorage, IndexedDB, asset config file, etc.).
+ */
+export function serializeTemplate(t: DtwTemplate): { data: number[]; shape: [number, number]; params: Required<MfccParams> } {
+    return { data: Array.from(t.data), shape: t.shape, params: t.params };
+}
+
+/**
+ * Deserialize a stored template back to a DtwTemplate.
+ */
+export function deserializeTemplate(raw: ReturnType<typeof serializeTemplate>): DtwTemplate {
+    return { data: new Float32Array(raw.data), shape: raw.shape, params: raw.params };
+}
+
+/**
+ * Wrap a DtwTemplate as an ITensor ready to inject into graph.run()
+ * as the "dtw_template" external input.
+ */
+export function templateToTensor(t: DtwTemplate): ITensor {
+    return { data: t.data, shape: [...t.shape] };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Registration
 // ═══════════════════════════════════════════════════════════════════════════
 
