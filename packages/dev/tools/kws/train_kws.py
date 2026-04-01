@@ -122,37 +122,86 @@ def pad_or_trim(waveform, length=AUDIO_LENGTH):
     return F.pad(waveform, (0, length - waveform.shape[-1]))
 
 
-def build_dataloaders(data_dir, batch_size=128, quick=False):
+def build_cache(data_dir, cache_path, subset, quick=False):
+    """
+    Read all WAV files once, compute MFCCs, save as a single .pt tensor file.
+    On subsequent runs the cache is loaded directly — no WAV I/O, no MFCC math.
+    """
     mfcc_transform = torchaudio.transforms.MFCC(
         sample_rate=SAMPLE_RATE,
         n_mfcc=N_MFCC,
         melkwargs={"n_fft": N_FFT, "hop_length": HOP_LENGTH, "n_mels": 40},
     )
 
-    def collate(batch):
-        waveforms, labels = [], []
-        for waveform, sr, label, *_ in batch:
-            if sr != SAMPLE_RATE:
-                waveform = torchaudio.transforms.Resample(sr, SAMPLE_RATE)(waveform)
-            waveform = pad_or_trim(waveform)
-            mfcc = mfcc_transform(waveform).squeeze(0)  # [n_mfcc, n_frames]
-            waveforms.append(mfcc)
-            labels.append(label_to_index(label))
-        return torch.stack(waveforms), torch.tensor(labels)
-
-    train_ds = torchaudio.datasets.SPEECHCOMMANDS(data_dir, download=True, subset="training")
-    val_ds = torchaudio.datasets.SPEECHCOMMANDS(data_dir, download=True, subset="validation")
-
+    ds = torchaudio.datasets.SPEECHCOMMANDS(data_dir, download=True, subset=subset)
     if quick:
-        train_ds = torch.utils.data.Subset(train_ds, range(min(2000, len(train_ds))))
-        val_ds = torch.utils.data.Subset(val_ds, range(min(500, len(val_ds))))
+        ds = torch.utils.data.Subset(ds, range(min(2000 if subset == "training" else 500, len(ds))))
+
+    n = len(ds)
+    print(f"  Building {subset} cache ({n} samples) → {cache_path} ...")
+    t0 = time.time()
+
+    all_mfcc   = torch.zeros(n, N_MFCC, N_FRAMES)
+    all_labels = torch.zeros(n, dtype=torch.long)
+
+    for i in range(n):
+        waveform, sr, label, *_ = ds[i]
+        if sr != SAMPLE_RATE:
+            waveform = torchaudio.transforms.Resample(sr, SAMPLE_RATE)(waveform)
+        waveform = pad_or_trim(waveform)
+        all_mfcc[i]   = mfcc_transform(waveform).squeeze(0)
+        all_labels[i] = label_to_index(label)
+        if (i + 1) % 5000 == 0:
+            print(f"    {i + 1}/{n}  ({time.time() - t0:.0f}s)")
+
+    torch.save({"mfcc": all_mfcc, "labels": all_labels}, cache_path)
+    print(f"  Cache saved in {time.time() - t0:.0f}s  ({cache_path.stat().st_size / 1e6:.0f} MB)")
+    return all_mfcc, all_labels
+
+
+class CachedDataset(torch.utils.data.Dataset):
+    """In-memory dataset loaded from a pre-computed .pt cache file."""
+    def __init__(self, mfcc: torch.Tensor, labels: torch.Tensor):
+        self.mfcc   = mfcc
+        self.labels = labels
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        return self.mfcc[idx], self.labels[idx]
+
+
+def build_dataloaders(data_dir, batch_size=128, quick=False):
+    cache_dir = Path(data_dir)
+    suffix    = "_quick" if quick else ""
+    train_cache = cache_dir / f"train_mfcc{suffix}.pt"
+    val_cache   = cache_dir / f"val_mfcc{suffix}.pt"
+
+    # Build cache on first run, reuse on subsequent runs
+    if train_cache.exists():
+        print(f"  Loading train cache from {train_cache} ...")
+        train_data = torch.load(train_cache, weights_only=True)
+    else:
+        train_mfcc, train_labels = build_cache(data_dir, train_cache, "training", quick)
+        train_data = {"mfcc": train_mfcc, "labels": train_labels}
+
+    if val_cache.exists():
+        print(f"  Loading val cache from {val_cache} ...")
+        val_data = torch.load(val_cache, weights_only=True)
+    else:
+        val_mfcc, val_labels = build_cache(data_dir, val_cache, "validation", quick)
+        val_data = {"mfcc": val_mfcc, "labels": val_labels}
+
+    train_ds = CachedDataset(train_data["mfcc"], train_data["labels"])
+    val_ds   = CachedDataset(val_data["mfcc"],   val_data["labels"])
 
     train_loader = torch.utils.data.DataLoader(
-        train_ds, batch_size=batch_size, shuffle=True, collate_fn=collate,
+        train_ds, batch_size=batch_size, shuffle=True,
         num_workers=0, pin_memory=True
     )
     val_loader = torch.utils.data.DataLoader(
-        val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate,
+        val_ds, batch_size=batch_size, shuffle=False,
         num_workers=0, pin_memory=True
     )
     return train_loader, val_loader
