@@ -13,6 +13,7 @@
  *   SpDCT             — Type-II Discrete Cosine Transform
  *   SpMFCC            — Full MFCC pipeline (Window → FFT → Mel → Log → DCT)
  *   SpWindow          — Apply window function (Hann, Hamming, etc.)
+ *   SpDTW             — Dynamic Time Warping distance between two MFCC sequences
  */
 
 import type { ITensor } from "../../compute/compute.interfaces";
@@ -427,6 +428,113 @@ class SpMFCCNode extends OnnxOpNode {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DTW — Dynamic Time Warping
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Euclidean distance between two frames extracted from [n_features, n_frames]
+ * packed Float32Arrays.
+ */
+function frameDist(
+    a: Float32Array, frameA: number, nFramesA: number,
+    b: Float32Array, frameB: number, nFramesB: number,
+    nFeatures: number,
+): number {
+    let sum = 0;
+    for (let f = 0; f < nFeatures; f++) {
+        const d = a[f * nFramesA + frameA] - b[f * nFramesB + frameB];
+        sum += d * d;
+    }
+    return Math.sqrt(sum);
+}
+
+/**
+ * DTW with optional Sakoe-Chiba band constraint.
+ * Returns the accumulated cost at the end of the optimal warping path.
+ * When normalize=true the cost is divided by (n+m) to be length-independent.
+ */
+function dtw(
+    live: Float32Array, nFramesLive: number,
+    tmpl: Float32Array, nFramesTmpl: number,
+    nFeatures: number,
+    band: number,       // Sakoe-Chiba radius, -1 = no constraint
+    normalize: boolean,
+): number {
+    const n = nFramesLive;
+    const m = nFramesTmpl;
+    const INF = Infinity;
+
+    // Cost matrix stored row-major: cost[i*m + j]
+    const cost = new Float32Array(n * m).fill(INF);
+
+    for (let i = 0; i < n; i++) {
+        for (let j = 0; j < m; j++) {
+            // Sakoe-Chiba band
+            if (band >= 0 && Math.abs(i - j) > band) continue;
+
+            const d = frameDist(live, i, n, tmpl, j, m, nFeatures);
+            const top  = i > 0 ? cost[(i - 1) * m + j] : INF;
+            const left = j > 0 ? cost[i * m + (j - 1)] : INF;
+            const diag = (i > 0 && j > 0) ? cost[(i - 1) * m + (j - 1)] : INF;
+
+            const prev = (i === 0 && j === 0) ? 0 : Math.min(top, left, diag);
+            cost[i * m + j] = d + (prev === INF ? 0 : prev);
+        }
+    }
+
+    const raw = cost[(n - 1) * m + (m - 1)];
+    return normalize ? raw / (n + m) : raw;
+}
+
+/**
+ * SpDTW: Dynamic Time Warping distance between two MFCC sequences.
+ *
+ * Typical use: detect a spoken name by comparing incoming audio against a
+ * per-asset enrolled template.  A low distance means the sequences match.
+ *
+ * Inputs:
+ *   [0]  live     — MFCC of incoming audio     [n_features, n_frames_live]
+ *   [1]  template — MFCC of enrolled reference [n_features, n_frames_template]
+ *
+ * Output: [1] — DTW distance (lower = closer match)
+ *
+ * Attributes:
+ *   normalize  (0=raw, 1=divide by n+m,  default 1)
+ *   band       (Sakoe-Chiba radius, -1=no constraint, default -1)
+ */
+class SpDTWNode extends OnnxOpNode {
+    readonly outputShapes: number[][] = [];
+    private readonly normalize: boolean;
+    private readonly band: number;
+
+    constructor(info: OnnxNodeInfo) {
+        super(info);
+        this.normalize = this.attrInt("normalize", 1) !== 0;
+        this.band = this.attrInt("band", -1);
+    }
+
+    execute(inputs: ITensor[]): ITensor[] {
+        const live = inputs[0];
+        const tmpl = inputs[1];
+
+        // Both inputs must be [n_features, n_frames] — same feature dimension
+        const nFeatures = live.shape[0];
+        const nFramesLive = live.shape[1] ?? 1;
+        const nFramesTmpl = tmpl.shape[1] ?? 1;
+
+        const distance = dtw(
+            live.data, nFramesLive,
+            tmpl.data, nFramesTmpl,
+            nFeatures,
+            this.band,
+            this.normalize,
+        );
+
+        return [makeTensor(new Float32Array([distance]), [1])];
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Registration
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -437,4 +545,5 @@ export function registerDspOps(registry: OnnxOpRegistry): void {
     registry.register("SpLogScale", (info) => new SpLogScaleNode(info));
     registry.register("SpDCT", (info) => new SpDCTNode(info));
     registry.register("SpMFCC", (info) => new SpMFCCNode(info));
+    registry.register("SpDTW", (info) => new SpDTWNode(info));
 }
