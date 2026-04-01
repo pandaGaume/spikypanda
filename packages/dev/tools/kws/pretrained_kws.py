@@ -20,7 +20,7 @@ from pathlib import Path
 
 OUT_DIR = Path(__file__).parent
 
-LABELS = ["yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go",
+LABELS = ["yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go", "hey",
           "_unknown_", "_silence_"]
 NUM_CLASSES = len(LABELS)
 SAMPLE_RATE = 16000
