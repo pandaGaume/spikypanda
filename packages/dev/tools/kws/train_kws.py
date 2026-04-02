@@ -1,22 +1,38 @@
 """
 Keyword Spotting — Train a small CNN model on Google Speech Commands v2.
 
-Architecture: Conv1D + BatchNorm + ReLU + MaxPool → GRU → Linear → Softmax
-~35K parameters — fits on any MCU with 150KB RAM.
+Architecture: Conv1D + BatchNorm + ReLU + MaxPool → GlobalAvgPool → Linear
+~6K parameters — fits on any MCU.
+
+Classes (13): yes, no, up, down, left, right, on, off, stop, go, hey,
+              _unknown_, _silence_
+
+"hey" enables two-stage wake-word detection: KWS detects "hey", then a
+DTW matcher (SpDTW op) identifies the asset name from an enrolled template.
+See packages/dev/runtime/src/onnx/ops/dsp.ts for enroll() and SpDTW.
 
 Outputs:
   - kws_model.onnx          : ONNX model for SpikyPanda pipeline
   - kws_model_metadata.json : class labels, MFCC config, model info
 
 Usage:
-    pip install torch torchaudio onnx
-    python train_kws.py                    # full training (~30min GPU, ~2h CPU)
-    python train_kws.py --epochs 2 --quick # quick test run
+    pip install torch torchaudio onnx soundfile
+    python train_kws.py                    # full training (~30min GPU)
+    python train_kws.py --epochs 2 --quick # quick smoke test
+
+First run downloads the dataset (~2 GB) and builds an MFCC cache (~1.2 GB).
+Subsequent runs skip all WAV I/O and load the cache directly — training is
+then ~5 min/epoch instead of hours.
+
+To force a cache rebuild (e.g. after changing LABELS or MFCC params):
+    del data\\train_mfcc.pt data\\val_mfcc.pt   (Windows)
+    rm  data/train_mfcc.pt  data/val_mfcc.pt   (Unix)
 
 Requirements:
     - PyTorch >= 2.0
     - torchaudio >= 2.0
     - onnx >= 1.14
+    - soundfile >= 0.12
 """
 
 import argparse

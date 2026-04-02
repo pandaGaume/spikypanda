@@ -10,10 +10,11 @@
     "off",
     "stop",
     "go",
+    "hey",
     "_unknown_",
     "_silence_"
   ],
-  "num_classes": 12,
+  "num_classes": 13,
   "sample_rate": 16000,
   "n_mfcc": 40,
   "n_fft": 512,
@@ -24,8 +25,8 @@
     40,
     101
   ],
-  "model_params": 6156,
-  "best_val_accuracy": 0.9555154794108807,
+  "model_params": 6173,
+  "best_val_accuracy": 0.9522091974752029,
   "ops_used": [
     "Constant",
     "Conv",

@@ -1,10 +1,16 @@
 """
-Keyword Spotting — Use a pre-trained small CNN model.
+Keyword Spotting — Export untrained model skeletons for pipeline testing.
 
-Downloads a tiny res8 model (~110K params) pre-trained on Google Speech Commands,
-exports to ONNX, and validates it can be loaded by SpikyPanda.
+Generates two ONNX models with random weights so the SpikyPanda inference
+pipeline can be validated without running the full training loop.
+Use train_kws.py for a properly trained model.
 
-This is the "instant demo" path — no training required.
+Classes (13): yes, no, up, down, left, right, on, off, stop, go, hey,
+              _unknown_, _silence_
+
+Models exported:
+  - kws_conv_gru.onnx   : Conv1D + GRU (~35K params)
+  - kws_conv_tiny.onnx  : Conv1D only (~12K params, MCU-friendly)
 
 Usage:
     pip install torch torchaudio onnx
