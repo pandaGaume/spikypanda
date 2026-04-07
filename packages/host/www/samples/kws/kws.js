@@ -2,7 +2,7 @@
 // SpikyPanda KWS Demo — Real ONNX inference in the browser
 // =========================================================================
 
-var LABELS = ["yes","no","up","down","left","right","on","off","stop","go","hey","unknown","silence"];
+var LABELS = ["yes","no","up","down","left","right","on","off","stop","go","unknown","silence"];
 var SAMPLE_RATE = 16000;
 var N_MFCC = 40;
 var N_FRAMES = 101;
@@ -140,9 +140,9 @@ function runInference(mfccData, nFrames) {
         var output = results.values().next().value;
         logits = Array.from(output.data);
     } else {
-        // Fallback: silence
-        logits = new Array(12).fill(0);
-        logits[11] = 1.0;
+        // Fallback: silence (last index)
+        logits = new Array(LABELS.length).fill(0);
+        logits[LABELS.indexOf("silence")] = 1.0;
     }
 
     return { logits: logits, inferenceMs: performance.now() - t0 };
@@ -289,15 +289,27 @@ function processAudio() {
     for (var i2 = 1; i2 < probs.length; i2++) {
         if (probs[i2] > probs[bestIdx]) bestIdx = i2;
     }
-    highlightKeyword(LABELS[bestIdx], probs[bestIdx]);
+
+    // If audio level is very low, override to silence
+    // If best keyword confidence is below threshold, fall back to unknown
+    var label = LABELS[bestIdx];
+    var conf = probs[bestIdx];
+    if (audioLevel < 0.005) {
+        label = "silence";
+        conf = 1.0;
+    } else if (label !== "silence" && label !== "unknown" && conf < 0.5) {
+        label = "unknown";
+        conf = probs[LABELS.indexOf("unknown")];
+    }
+    highlightKeyword(label, conf);
 
     document.getElementById("info-inference").innerHTML =
         "Avg: " + (totalInferenceMs / inferenceCount).toFixed(1) + " ms<br/>" +
         "Runs: " + inferenceCount + "<br/>" +
         (onnxModelLoaded ? "ONNX pipeline active" : "Placeholder");
 
-    if (LABELS[bestIdx] !== "silence" && LABELS[bestIdx] !== "unknown" && probs[bestIdx] > 0.3) {
-        kwsLog("Detected: " + LABELS[bestIdx] + " (" + (probs[bestIdx] * 100).toFixed(1) + "%)");
+    if (label !== "silence" && label !== "unknown" && conf > 0.5) {
+        kwsLog("Detected: " + label + " (" + (conf * 100).toFixed(1) + "%)");
     }
 
     if (isListening) setTimeout(processAudio, 250);
@@ -332,7 +344,7 @@ async function startListening() {
         document.getElementById("confidence-text").textContent = "Listening...";
 
         kwsLog("Microphone started (16kHz mono)");
-        kwsLog("Pipeline: MFCC(40x101) > " + (onnxModelLoaded ? "ONNX graph.run()" : "placeholder") + " > 12 classes");
+        kwsLog("Pipeline: MFCC(40x101) > " + (onnxModelLoaded ? "ONNX graph.run()" : "placeholder") + " > " + LABELS.length + " classes");
         setTimeout(processAudio, 500);
     } catch (err) {
         kwsLog("ERROR: " + err.message);

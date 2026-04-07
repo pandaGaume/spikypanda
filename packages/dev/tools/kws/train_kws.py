@@ -146,6 +146,7 @@ def build_cache(data_dir, cache_path, subset, quick=False):
     mfcc_transform = torchaudio.transforms.MFCC(
         sample_rate=SAMPLE_RATE,
         n_mfcc=N_MFCC,
+        log_mels=True,  # Use ln() to match SpMFCC in SpikyPanda runtime
         melkwargs={"n_fft": N_FFT, "hop_length": HOP_LENGTH, "n_mels": 40},
     )
 
