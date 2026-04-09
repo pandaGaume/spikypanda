@@ -77,6 +77,138 @@ segments them into fixed-length windows, labels by fault type, and exports as
 
 ---
 
+### prepare_motor_current.py
+
+Companion to `prepare_motor.py`, but for **motor electrical fault** datasets:
+builds windowed 3-phase stator current (Ia, Ib, Ic) sequences for Motor Current
+Signature Analysis (MCSA) style classification. Output format is identical to
+`prepare_motor.py` (3 channels, windowed, normalized to [0, 1]) so the
+`samples/motor_current/` browser sample can consume it with minimal changes.
+
+```bash
+# Synthetic only (offline, no download):
+python prepare_motor_current.py
+
+# Point at an extracted UFU Broken Rotor Bar dataset (.mat files):
+python prepare_motor_current.py --source-dir packages/host/www/data/motor_current
+
+# Point at a CSV-based dataset (other corpora from the list below):
+python prepare_motor_current.py --source-dir /path/to/csv/dataset
+```
+
+**Parameters:**
+
+| Arg | Default | Description |
+|-----|---------|-------------|
+| `--source-dir` | - | Local path to an extracted electrical-fault dataset. If omitted, synthetic 3-phase data is generated. |
+| `--num-synthetic` | 400 | Number of synthetic samples when no source dir is provided. |
+
+**Output:** `train.json` / `test.json` in `../../host/www/data/motor_current/`.
+Class list depends on the input:
+
+- **Synthetic / generic CSV path** — 4 classes:
+  `Normal`, `OpenPhase`, `ShortCircuit`, `Unbalanced`
+- **UFU .mat path** (auto-detected from `struct_*_R1.mat` files) — 5 classes:
+  `Healthy`, `BRB1`, `BRB2`, `BRB3`, `BRB4` (healthy + 1..4 broken rotor bars)
+
+The generated JSON is consumed directly by the
+[`samples/motor_current/`](../../../host/www/samples/motor_current) browser
+demo (LSTM/GRU classifier with live loss curve, confusion matrix, and
+3-phase signal visualization). The demo falls back to an in-browser
+synthetic generator if no JSON is present.
+
+**Public electrical-signal datasets for motor fault detection.** Unlike CWRU /
+Paderborn / SOON-pEMP which are vibration corpora, the datasets below expose
+stator current and/or voltage signals — the fault signatures live in the
+electrical domain (harmonics, sideband frequencies, phase asymmetry). The
+script walks the extracted directory looking for CSV files with three current
+columns and classifies each file by filename keywords.
+
+| # | Dataset | Signals | Why pick it | Link |
+|---|---------|---------|-------------|------|
+| 1 | Synchronous Motor Electrical Faults | 3x voltage + 3x current + speed | 5 fault types (open phase, stator short, rotor excitation), includes CNN/LSTM reference classifiers. Closest analog to a MAFAULDA-style electrical corpus. | [ScienceDirect](https://www.sciencedirect.com/science/article/pii/S2666546823000460) |
+| 2 | Rotor Broken Bar (3-phase induction) — UFU | 3x voltage + 3x current + 5x vibration | **Recommended starting point** — dual-modality, lets you reuse the vibration sample as a baseline and add MCSA as a second branch. See breakdown below. | [IEEE DataPort](https://ieee-dataport.org/open-access/experimental-database-detecting-and-diagnosing-rotor-broken-bar-three-phase-induction) |
+| 3 | Three-phase Induction Motor Multi-Sensor (2025) | Vibration + voltage + current @ 50 kHz | 10 operational states on a 0.2 kW squirrel cage motor. Clean schema, well documented. | [Nature Sci. Data](https://www.nature.com/articles/s41597-025-05437-3) |
+| 4 | Inverter-driven PMSM Fault Dataset (2025) | Current + voltage + temperature | Drive-side (inverter) faults in addition to motor faults — relevant for VFD applications. | [ScienceDirect](https://www.sciencedirect.com/science/article/pii/S2352340925000186) |
+| 5 | Induction Motor Fault Dataset (IMFDS) | Current | Small and simple — good for a quick smoke test. Requires Kaggle API credentials. | [Kaggle](https://www.kaggle.com/datasets/sabermalek/imfds) |
+
+Most of these require a (free) account to download, so the script does **not**
+auto-download: grab the archive manually, extract it, and pass the folder via
+`--source-dir`. If auto-classification by filename fails for a given corpus,
+adjust the `classify_file` function at the top of the script.
+
+**Where to put the raw files.** The recommended location is directly under
+`packages/host/www/data/motor_current/` (which is already the output directory
+for the generated JSON). The entire `data/` tree is already covered by the
+repo's top-level `.gitignore`, so neither the raw `.mat`/`.csv` files nor the
+generated `train.json` / `test.json` are committed — regenerate them on
+demand by re-running the prep script.
+
+#### Rotor Broken Bar dataset (UFU) — breakdown
+
+Reference details for the recommended dataset (#2 above), copied from the
+IEEE DataPort page for convenience when wiring up `classify_file` and the
+window sizing:
+
+**Experimental setup**
+- Three-phase induction motor coupled to a DC machine acting as a generator
+  to simulate load torque, connected via a shaft with a rotary torque wrench.
+- Induction motor: **1 hp, 220 V / 380 V, 3.02 A / 1.75 A, 4 poles, 60 Hz**,
+  nominal torque **4.1 Nm**, rated speed **1715 rpm**. Squirrel-cage rotor
+  with **34 bars**.
+- Load torque is adjusted by varying the DC generator field-winding voltage
+  (single-phase variator + filtered full-bridge rectifier).
+
+**Operating conditions**
+- Load levels: **12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100 %** of full load.
+- Rotor defects: healthy rotor, then rotors with **1, 2, 3, 4 adjacent broken
+  bars** (drilled, starting from the first rotor bar).
+- **10 repetitions** per (load × severity) combination.
+- Each acquisition is **18 s long**, covering transient to steady state.
+
+**Acquired signals** (all sampled simultaneously)
+- **3x phase voltage** — measured directly at the motor terminals with
+  Yokogawa oscilloscope voltage probes.
+- **3x phase current** — Yokogawa 96033 AC current probes, 50 A<sub>RMS</sub>
+  capacity, 10 mV/A output.
+- **5x vibration** — axial accelerometers, 10 mV/mm/s sensitivity, 5–2000 Hz
+  range, placed on the drive-end (DE) and non-drive-end (NDE) sides of the
+  motor, axially / radially, horizontal / vertical.
+
+**HDF5 layout of the .mat files** (MATLAB v7.3)
+
+    <rotor_key>/                              # 'rs' or 'r1b'..'r4b'
+        torque05..torque40/                   # 8 load levels (12.5..100 %)
+            Ia, Ib, Ic                        # shape (10,1), HDF5 refs
+            Va, Vb, Vc                        # shape (10,1), HDF5 refs
+            Trigger                           # shape (10,1), HDF5 refs
+            Vib_acpe, Vib_acpi, Vib_axial,
+            Vib_base, Vib_carc                # 5 vibration channels
+
+Each referenced array is shape `(1, N)` where:
+- currents / voltages: N ≈ 1,001,000 (~55.6 kHz × 18 s)
+- vibration:           N ≈   153,504 (~ 8.5 kHz × 18 s)
+
+`prepare_motor_current.py` opens these files with `h5py`, walks
+`rotor → torque → repetition`, dereferences the `Ia/Ib/Ic` refs, decimates
+the ~55.6 kHz currents by 56× down to ~1 kHz (matching the Motor Vibration
+sample's temporal footprint so a 64-step window covers ~4 line cycles at
+60 Hz), windows them, normalizes per-channel to [0, 1], and writes JSON.
+
+**Implications for the prep script**
+- 5 fault classes are available (healthy + 1..4 broken bars); the script
+  automatically switches to `["Healthy", "BRB1", "BRB2", "BRB3", "BRB4"]`
+  when UFU `.mat` files are detected, otherwise it uses the 4-class
+  synthetic / generic CSV class list.
+- 5 rotors × 8 loads × 10 repetitions = 400 raw current traces per run set;
+  the `MAX_SAMPLES_PER_CLASS` cap in the script (default 400) is the right
+  place to keep the exported JSON lightweight.
+- Because the electrical and vibration streams are co-recorded, the same
+  windowing can feed both the existing Motor Vibration sample (5 accelerometer
+  channels) and the Motor Current sample (3 phase currents).
+
+---
+
 ### cifar10_to_json.py
 
 Converts CIFAR-10 (Python pickle format) to JSON for the MNIST/CNN sample.
