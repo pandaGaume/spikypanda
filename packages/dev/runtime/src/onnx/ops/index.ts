@@ -6,6 +6,7 @@ export { registerNormOps } from "./normalization";
 export { registerRecurrentOps } from "./recurrent";
 export { registerMiscOps } from "./misc";
 export { registerSpikyPandaOps } from "./spikypanda";
+export { registerDotVisionOps } from "./dotvision";
 export { registerDspOps, enroll, serializeTemplate, deserializeTemplate, templateToTensor } from "./dsp";
 export type { MfccParams, DtwTemplate } from "./dsp";
 
@@ -18,6 +19,7 @@ import { registerNormOps } from "./normalization";
 import { registerRecurrentOps } from "./recurrent";
 import { registerMiscOps } from "./misc";
 import { registerSpikyPandaOps } from "./spikypanda";
+import { registerDotVisionOps } from "./dotvision";
 import { registerDspOps } from "./dsp";
 
 /**
@@ -42,5 +44,6 @@ export function createDefaultRegistry(): OnnxOpRegistry {
 export function createSpikyPandaRegistry(): OnnxOpRegistry {
     const registry = createDefaultRegistry();
     registerSpikyPandaOps(registry);
+    registerDotVisionOps(registry);
     return registry;
 }

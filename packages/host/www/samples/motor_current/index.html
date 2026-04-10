@@ -122,6 +122,12 @@
                     <button id="btnLoad">Load / Generate Data</button>
                     <button id="btnTrain" disabled>Train</button>
                     <button id="btnTest" disabled>Test</button>
+                    <button id="btnExport" disabled>Export ONNX</button>
+                    <select id="exportMode" style="margin-left:4px;">
+                        <option value="custom">Custom op (EnvelopeCenter)</option>
+                        <option value="standard">Standard ONNX ops</option>
+                        <option value="none">LSTM only (no preprocessing)</option>
+                    </select>
                 </div>
             </div>
             <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
@@ -253,6 +259,7 @@ console.log("Predicted rotor state:", predicted);</pre>
     </div>
 
     <script src="../../bundle/spikypanda-core.js"></script>
+    <script src="../../bundle/spikypanda-runtime.js"></script>
     <script src="../../js/common.js"></script>
     <script src="motor_current.js"></script>
 </body>
