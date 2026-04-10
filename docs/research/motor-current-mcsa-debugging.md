@@ -4,7 +4,9 @@
 **Sample:** `packages/host/www/samples/motor_current/`
 **Prep script:** `packages/dev/tools/python/prepare_motor_current.py`
 **Dataset:** UFU Broken Rotor Bar (IEEE DataPort) — 5 rotor states × 8 load levels × 10 reps
-**Companion:** [Technical principles](motor-current-mcsa-principles.md) — physics, math, full pipeline
+**Companion docs:**
+- [Technical principles](motor-current-mcsa-principles.md) — physics, math, full pipeline
+- [Novelty claim & prior art](motor-current-mcsa-novelty.md) — R&D paper draft
 
 This document is a post-mortem on the first three end-to-end attempts at the
 Motor Current sample. The original implementation cloned the Motor Vibration

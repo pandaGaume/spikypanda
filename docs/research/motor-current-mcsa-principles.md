@@ -3,7 +3,9 @@
 **Date:** 2026-04-09
 **Sample:** `packages/host/www/samples/motor_current/`
 **Prep script:** `packages/dev/tools/python/prepare_motor_current.py`
-**Companion:** [Debugging trace](motor-current-mcsa-debugging.md) (7 bugs, 5 attempts)
+**Companion docs:**
+- [Debugging trace](motor-current-mcsa-debugging.md) — 7 bugs, 5 attempts, 10 lessons
+- [Novelty claim & prior art](motor-current-mcsa-novelty.md) — R&D paper draft
 **Dataset:** Broken Rotor Bar dataset, published by the Universidade
 Federal de Uberlândia (Brazil) on IEEE DataPort. Python constants
 prefixed `UFU_` refer to parameters specific to this dataset.
