@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda - Motor Current Anomaly Monitor</title>
+    <link rel="stylesheet" href="../../css/common.css" />
+    <link rel="stylesheet" href="motor_monitor.css" />
+</head>
+<body>
+    <div class="sample-hero">
+        <div class="sample-hero-overlay">
+            <nav class="nav-bar" style="margin:0; background:none; border:none; padding:10px 0;">
+                <a href="../../index.html" class="nav-logo">SpikyPanda</a>
+                <div class="nav-links">
+                    <a href="../../index.html">Home</a>
+                    <a href="../motor/">Motor Vibration</a>
+                    <a href="../motor_current/">Motor Current</a>
+                    <a href="../kws/">KWS</a>
+                </div>
+            </nav>
+            <h1>Motor Monitor</h1>
+            <p class="subtitle">Detect anomalies in 3-phase stator current envelope without identifying the fault type</p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>How it works</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Tier 1 listener</strong> - This sample implements the first stage of the edge fault detection pipeline. An ESP32-class MCU continuously monitors the stator current envelope, looking for drift from a learned baseline. It does not identify what fault occurred. It only detects that something changed.</p>
+                <p><strong>Online calibration</strong> - The first 20 windows are used to build a statistical baseline: the mean and standard deviation of three per-window features (modulation amplitude, peak-to-peak range, clipping rate) across three current phases. This calibrates at the current operating point, not across all loads.</p>
+                <p><strong>Anomaly scoring</strong> - Each subsequent window is scored as the average z-score of its features against the baseline. A score of 1.0 means the window is one standard deviation from normal on average. The raw score is smoothed with an exponential moving average (EMA) to avoid false alarms from single noisy windows.</p>
+                <p><strong>Adaptive thresholds</strong> - Warning and alarm thresholds are computed automatically from the calibration data itself: the calibration windows are scored against the baseline, and the thresholds are set at mean + 2 sigma (warning) and mean + 3 sigma (alarm) of those healthy scores. This adapts to the specific motor, load, and sensor without manual tuning. The sliders in the configuration panel show the computed values and can be adjusted manually if needed.</p>
+                <p><strong>Simulation</strong> - The demo streams healthy windows first (baseline confirmation), then switches to broken rotor bar data. The anomaly score should rise and trigger warnings/alarms after the transition.</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Configuration</h2>
+            <div class="controls">
+                <div>
+                    <label for="streamSpeed">Stream speed:</label><br>
+                    <select id="streamSpeed">
+                        <option value="100">100 ms</option>
+                        <option value="250" selected>250 ms</option>
+                        <option value="500">500 ms</option>
+                        <option value="1000">1000 ms</option>
+                    </select>
+                </div>
+                <div class="slider-group">
+                    <label for="warnThreshold">Warning threshold</label>
+                    <input type="range" id="warnThreshold" min="0.5" max="5" step="0.1" value="2.0" />
+                    <span class="slider-value" id="warnThresholdVal">2.0</span>
+                </div>
+                <div class="slider-group">
+                    <label for="alarmThreshold">Alarm threshold</label>
+                    <input type="range" id="alarmThreshold" min="1" max="10" step="0.5" value="3.5" />
+                    <span class="slider-value" id="alarmThresholdVal">3.5</span>
+                </div>
+                <div class="slider-group">
+                    <label for="emaAlpha">EMA smoothing (alpha)</label>
+                    <input type="range" id="emaAlpha" min="0.05" max="0.8" step="0.05" value="0.3" />
+                    <span class="slider-value" id="emaAlphaVal">0.3</span>
+                </div>
+            </div>
+            <div class="controls" style="margin-top:10px;">
+                <div style="display:flex; gap:8px; align-self:flex-end;">
+                    <button id="btnStart" disabled>Start Monitoring</button>
+                    <button id="btnStop" disabled>Stop</button>
+                </div>
+            </div>
+            <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+            <div id="status">Loading data...</div>
+        </div>
+
+        <div class="panel">
+            <h2>Anomaly Score</h2>
+            <div class="score-display">
+                <div class="score-number normal" id="scoreNumber">0.00</div>
+                <div class="score-label normal" id="scoreLabel">NORMAL</div>
+                <div class="phase-indicator" id="phaseIndicator"></div>
+            </div>
+            <canvas class="score-canvas" id="scoreCanvas"></canvas>
+        </div>
+
+        <div class="panel">
+            <h2>Live Envelope</h2>
+            <canvas class="signal-canvas" id="signalCanvas"></canvas>
+        </div>
+
+        <div class="panel">
+            <h2>Monitor Log</h2>
+            <div class="log" id="log">Ready.
+</div>
+        </div>
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Data preparation</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p>Generate the streaming data from the existing motor current dataset:</p>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent).then(() => { this.textContent='Copied!'; this.classList.add('copied'); setTimeout(() => { this.textContent='Copy'; this.classList.remove('copied'); }, 2000); })">Copy</button>
+<pre>python packages/dev/tools/python/prepare_monitor_baseline.py \
+    --from-json packages/host/www/data/motor_current</pre>
+                </div>
+                <p>This reads the existing train.json/test.json, selects healthy and BRB windows from a similar load region, and writes <code>streaming.json</code> to <code>packages/host/www/data/motor_monitor/</code>. The baseline is computed online in the browser from the first 20 healthy windows.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="../../js/common.js"></script>
+    <script src="motor_monitor.js"></script>
+</body>
+</html>
