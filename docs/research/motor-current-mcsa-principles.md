@@ -4,6 +4,9 @@
 **Sample:** `packages/host/www/samples/motor_current/`
 **Prep script:** `packages/dev/tools/python/prepare_motor_current.py`
 **Companion:** [Debugging trace](motor-current-mcsa-debugging.md) (7 bugs, 5 attempts)
+**Dataset:** Broken Rotor Bar dataset, published by the Universidade
+Federal de Uberlândia (Brazil) on IEEE DataPort. Python constants
+prefixed `UFU_` refer to parameters specific to this dataset.
 
 This document is the mathematical and physical reference for the Motor
 Current sample. It traces the full signal processing chain from the raw
@@ -26,7 +29,7 @@ are:
     Ic(t) = I_peak · sin(2π·f·t + 2π/3)
 
 where:
-- `f` is the line frequency (60 Hz in the UFU dataset)
+- `f` is the line frequency (60 Hz in the Broken Rotor Bar dataset)
 - `I_peak` is proportional to the mechanical load on the shaft
 
 Under ideal conditions the three phases are perfectly symmetric: same
@@ -40,7 +43,7 @@ synchronous speed of the magnetic field. The difference is called
 
     s = (n_sync - n_rotor) / n_sync
 
-For the UFU motor (4 poles, 60 Hz):
+For the test motor (4 poles, 60 Hz):
 - Synchronous speed: `n_sync = 120·f / P = 120·60 / 4 = 1800 rpm`
 - Rated speed: `n_rotor = 1715 rpm` (from the nameplate)
 - Rated slip: `s = (1800 - 1715) / 1800 = 0.047` (4.7 %)
@@ -50,7 +53,7 @@ near zero; at full load, it reaches the rated value.
 
 ### 1.3 Broken rotor bars and their electrical signature
 
-A squirrel-cage rotor has conductive bars (34 in the UFU motor)
+A squirrel-cage rotor has conductive bars (34 in the test motor)
 shorted at each end by rings. When one or more adjacent bars break,
 the rotor impedance becomes asymmetric. This asymmetry creates a
 backward-rotating magnetic field component in the air gap, which
@@ -58,7 +61,7 @@ induces **sideband currents** in the stator at frequencies:
 
     f_brb = f · (1 ± 2·s)
 
-For the UFU motor at rated load (`f = 60 Hz`, `s ≈ 0.047`):
+For the test motor at rated load (`f = 60 Hz`, `s ≈ 0.047`):
 
     f_brb = 60 · (1 ± 2·0.047) = 60 ± 5.64 Hz
           = 54.36 Hz  and  65.64 Hz
@@ -96,7 +99,7 @@ envelope modulation) increases with the number of broken bars. For
 
     sideband amplitude ∝ k / N
 
-For the UFU motor (`N = 34`):
+For the test motor (`N = 34`):
 - 1 broken bar → `1/34 ≈ 2.9 %` modulation depth
 - 4 broken bars → `4/34 ≈ 11.8 %` modulation depth
 
@@ -183,7 +186,7 @@ acceleration → steady state) and keep only the steady-state region
 where the broken-bar signature exists.
 
 **Duration:** `UFU_TRANSIENT_SKIP = 360` envelope samples at 60 Hz =
-**6.0 seconds**. The UFU dataset documentation says each acquisition
+**6.0 seconds**. The dataset documentation says each acquisition
 is 18 s "from transient to steady state". Empirical inspection shows:
 
 - t = 0–1 s: zero current (motor not yet energized)
@@ -203,7 +206,7 @@ state signal (±2.8 A) into a tiny fraction of the normalized range.
 **Goal:** Remove the load-dependent DC component from each window so
 the LSTM sees only the modulation signal.
 
-**The problem:** The UFU dataset tests every rotor state at 8 load
+**The problem:** The dataset tests every rotor state at 8 load
 levels (12.5 % to 100 %). The RMS envelope mean is proportional to
 load:
 
@@ -259,7 +262,7 @@ These windows contain no useful modulation signal — just noise or
 residual sensor artifacts. Including them degrades the normalization
 range and confuses the classifier.
 
-**Threshold:** `UFU_MIN_ENV_THRESHOLD = 0.15 A RMS`. The lightest UFU
+**Threshold:** `UFU_MIN_ENV_THRESHOLD = 0.15 A RMS`. The lightest dataset
 load (12.5 %) produces ~0.4 A RMS, so 0.15 A is a conservative floor.
 
 ---
@@ -333,7 +336,7 @@ Plus the output layer: `h · num_classes + num_classes`
 Total for `h = 32`: **4773 parameters** — small enough for MCU
 deployment (< 20 KB at float32).
 
-Empirical results on the UFU dataset:
+Empirical results on the Broken Rotor Bar dataset:
 - `h = 16`, 25 epochs: 31.8 % accuracy (underfitting)
 - `h = 32`, 50 epochs: 70.8 % accuracy
 - `h = 32`, 80 epochs: 78.3 % accuracy (loss still falling)
@@ -393,7 +396,7 @@ for this problem.
 
 ---
 
-## 4. Dataset-specific considerations (UFU Broken Rotor Bar)
+## 4. Dataset-specific considerations (Broken Rotor Bar — Univ. Federal de Uberlândia)
 
 ### 4.1 Experimental setup
 
@@ -500,7 +503,7 @@ Browser LSTM (3 inputs, 32 hidden, 5 outputs, sigmoid + MSE + Adam)
 
 ## 6. References
 
-1. **UFU Broken Rotor Bar dataset:**
+1. **Broken Rotor Bar dataset (Univ. Federal de Uberlândia):**
    https://ieee-dataport.org/open-access/experimental-database-detecting-and-diagnosing-rotor-broken-bar-three-phase-induction
 
 2. **MCSA sideband formula:**
