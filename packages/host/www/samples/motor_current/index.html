@@ -46,9 +46,10 @@
             <div class="collapsible-body metrics-help">
                 <p><strong>Dataset - UFU Broken Rotor Bar</strong> - This sample consumes the Broken Rotor Bar dataset published by the Federal University of Uberlândia (UFU) on IEEE DataPort. It contains simultaneous electrical and vibration recordings from a 1&nbsp;hp, 220/380&nbsp;V, 4-pole, 60&nbsp;Hz squirrel-cage induction motor (rated 1715&nbsp;rpm, nominal torque 4.1&nbsp;Nm, 34 rotor bars). Only the three phase currents (Ia, Ib, Ic) are used here; voltages and the five vibration channels are ignored.</p>
                 <p><strong>Five rotor states</strong> - The classifier distinguishes five conditions: (0) <em>Healthy</em> - no mechanical defect; (1) <em>BRB1</em> - one broken rotor bar; (2) <em>BRB2</em> - two adjacent broken bars; (3) <em>BRB3</em> - three adjacent broken bars; (4) <em>BRB4</em> - four adjacent broken bars. Each rotor was tested under 8 load levels (12.5 % to 100 % of rated torque, in 12.5 % steps) with 10 repetitions per condition. The script <code>prepare_motor_current.py</code> pulls 400 windows per class for a balanced 2000-sample dataset.</p>
-                <p><strong>Decimation to ~1 kHz</strong> - Raw currents are sampled at roughly 55.6 kHz, which is far more resolution than an RNN needs for broken-bar detection. The prep script decimates by 56x (taking every 56th sample) to reach an effective rate of ~1 kHz, matching the temporal footprint of the vibration sample. At that rate a 64-sample window covers ~64 ms, i.e. just under 4 line cycles at 60 Hz — long enough for the sideband components to be visible to the RNN.</p>
-                <p><strong>3-phase sinusoids</strong> - A healthy 3-phase motor produces three currents offset by 120° with identical amplitude. Broken bars introduce low-frequency amplitude modulation at twice the slip frequency, visible as sidebands around the 60&nbsp;Hz fundamental and as a slow envelope in the time domain. The RNN learns that envelope directly from the raw windows; no explicit Fourier transform is required. When real data is not available, the sample falls back to a synthetic 3-phase generator with the same 5 classes (healthy + 1..4 broken bars).</p>
-                <p><strong>Normalization</strong> - Raw currents are in Amperes (roughly ±17&nbsp;A). The prep script normalizes each window's three channels to [0, 1] using the global per-channel min/max, which keeps the signal shape intact while ensuring all RNN inputs share a consistent range.</p>
+                <p><strong>Envelope preprocessing</strong> - The key design decision in the prep script is that the RNN does <em>not</em> see the raw 60&nbsp;Hz stator currents. Instead, each phase current is passed through a moving RMS filter whose window is one half-cycle of the line frequency (~463 raw samples). This cancels the 60&nbsp;Hz fundamental and leaves only the slow amplitude envelope — which is exactly where the broken-bar fault signature lives. The envelope is then decimated to ~60&nbsp;Hz so a 64-timestep window covers ~1&nbsp;second of motor running, capturing 2-5 periods of the 2-5&nbsp;Hz slip-frequency modulation. Earlier attempts that fed the raw 60&nbsp;Hz current to the LSTM failed because the fundamental dominates the signal and the fault modulation is buried in a 256+ step BPTT chain that the gradient cannot traverse.</p>
+                <p><strong>Why the envelope trick works</strong> - Broken bars produce sidebands at f<sub>line</sub>&nbsp;± 2·s·f<sub>line</sub> (where s is rotor slip, a few percent). In the time domain these sidebands appear as a slow envelope modulation at 2·s·f<sub>line</sub> ≈ 2-5&nbsp;Hz. Moving RMS over one half-cycle is a cheap way to extract that envelope without FFTs or Hilbert transforms. Once the fundamental is gone, the signal becomes a smooth slowly-varying function that a tiny LSTM can learn in a few dozen epochs.</p>
+                <p><strong>Synthetic fallback</strong> - When real UFU data is not available, the sample falls back to a synthetic 3-phase <em>raw</em> sinusoid generator with 4 electrical fault classes (Normal, OpenPhase, ShortCircuit, Unbalanced). Note that the synthetic path trains on raw sinusoids while the real-data path trains on envelopes — the two are visually different but share the same 3-channel, windowed, [0,1]-normalized JSON schema.</p>
+                <p><strong>Normalization</strong> - Envelope values (in Amps RMS) are normalized to [0, 1] using <em>global</em> per-channel min/max computed across the entire dataset, not per-trace. Per-trace normalization would erase the absolute amplitude differences between load levels and rotor states, which is one of the discriminators. The global max is also capped at 6&nbsp;A RMS to prevent residual inrush artifacts from wasting dynamic range.</p>
             </div>
         </div>
 
@@ -60,7 +61,7 @@
                 <p><strong>LSTM vs GRU</strong> - LSTM (Long Short-Term Memory) uses 4 gates (forget, input, candidate, output) and maintains a separate cell state for long-term memory. GRU (Gated Recurrent Unit) uses 3 gates (reset, update, candidate) and merges the cell state into the hidden state, making it simpler and faster. For short current windows, GRU typically matches LSTM accuracy with fewer parameters — a good default for edge deployment.</p>
                 <p><strong>Hidden size</strong> - The number of recurrent units in the hidden layer. For 5-class broken-bar classification, 16 units is usually enough. Push to 32 if accuracy is low; drop to 8 for faster experiments on constrained hardware.</p>
                 <p><strong>Learning rate</strong> - Controls the step size during gradient updates. 0.003 with Adam is a solid default for this task. If training is unstable (loss jumps around), try 0.001. If training is too slow, try 0.005.</p>
-                <p><strong>Window size</strong> - The number of timesteps per sample. At the script's effective ~1&nbsp;kHz rate, 64 timesteps cover ~64&nbsp;ms (~4 line cycles at 60&nbsp;Hz). 32 timesteps (~32&nbsp;ms, ~2 line cycles) also works for cleaner faults but gives less context for the RNN to average the sideband energy over.</p>
+                <p><strong>Window size</strong> - The number of timesteps per sample. On the real-data path the prep script computes a moving-RMS envelope of the raw 55.6&nbsp;kHz currents and decimates it to ~60&nbsp;Hz, so a 64-step window covers ~1.0&nbsp;s of motor running — long enough to see 2-5 periods of the 2-5&nbsp;Hz slip-frequency modulation where the broken-bar signature lives. 64 steps is also short enough for the LSTM's BPTT gradients to flow easily during training (vanishing gradients were the main failure mode of an earlier 256-step raw-current attempt). The dropdown only affects the in-browser synthetic fallback; real UFU data always uses whatever window size the JSON file declares.</p>
             </div>
         </div>
 
@@ -90,13 +91,13 @@
                     <label for="hiddenSize">Hidden size:</label><br>
                     <select id="hiddenSize">
                         <option value="8">8</option>
-                        <option value="16" selected>16</option>
-                        <option value="32">32</option>
+                        <option value="16">16</option>
+                        <option value="32" selected>32</option>
                     </select>
                 </div>
                 <div>
                     <label for="epochs">Epochs:</label><br>
-                    <input type="number" id="epochs" value="25" min="1" max="100" style="width:70px" />
+                    <input type="number" id="epochs" value="80" min="1" max="200" style="width:70px" />
                 </div>
                 <div>
                     <label for="lr">Learning rate:</label><br>
@@ -111,6 +112,7 @@
                     <select id="windowSize">
                         <option value="32">32</option>
                         <option value="64" selected>64</option>
+                        <option value="128">128</option>
                     </select>
                 </div>
             </div>

@@ -207,6 +207,19 @@ sample's temporal footprint so a 64-step window covers ~4 line cycles at
   windowing can feed both the existing Motor Vibration sample (5 accelerometer
   channels) and the Motor Current sample (3 phase currents).
 
+#### Debugging trace — read before tweaking the prep script
+
+The first end-to-end run of this sample sat at chance accuracy because of
+four compounding preprocessing bugs (per-trace normalization erasing the
+fault signature, startup transients contaminating global stats, windows
+too short to see the broken-bar envelope, and an "optimum-trap" target
+in the JS training loop). All four are documented in detail in
+[`docs/research/motor-current-mcsa-debugging.md`](../../../../docs/research/motor-current-mcsa-debugging.md),
+along with general principles for any future fault-detection sample. The
+fixes are now baked into `prepare_motor_current.py` and the browser
+sample, but the document is the canonical record of *why* each design
+choice was made.
+
 ---
 
 ### cifar10_to_json.py
