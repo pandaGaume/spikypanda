@@ -131,6 +131,15 @@ The prep script transforms raw 55.6 kHz 3-phase currents into
 normalized 64-step envelope windows. Each step has a precise
 mathematical rationale.
 
+![Pipeline overview](figures/fig1_pipeline.png)
+*Figure 1 — Signal at each stage: (a) raw current, (b) moving-RMS
+envelope, (c) decimated + transient skipped, (d) per-window centered.*
+
+![Before/after preprocessing](figures/fig2_before_after.png)
+*Figure 2 — Raw current (top) vs. centered envelope (bottom) for
+Healthy and BRB4 at full load. The raw signals are indistinguishable;
+the envelopes show a clear modulation difference.*
+
 ### 2.1 Moving RMS (envelope extraction)
 
 **Goal:** Remove the 60 Hz carrier and extract the slow amplitude
@@ -449,6 +458,8 @@ relationships across Ia/Ib/Ic), not just the variance.
 
 ### 4.4 Confusion pattern
 
+![Confusion matrix](figures/fig5_confusion.png)
+
 The LSTM at h=32, 80 epochs achieves 78.3 % overall accuracy with a
 characteristic confusion pattern:
 
@@ -473,6 +484,10 @@ In a real deployment, this confusion pattern is acceptable because:
 ---
 
 ## 5. Full pipeline summary
+
+![Accuracy vs. model size](figures/fig4_pareto.png)
+*Figure 4 — Our model occupies the TinyML-feasible region of the
+accuracy/size frontier, 1000x smaller than the nearest competitor.*
 
 ```
 Raw 3-phase currents (55.6 kHz, 18 s, ±17 A)

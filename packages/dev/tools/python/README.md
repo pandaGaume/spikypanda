@@ -222,6 +222,34 @@ choice was made.
 
 ---
 
+### generate_mcsa_figures.py
+
+Generates publication-quality PDF figures for the MCSA broken rotor bar paper.
+Requires `matplotlib`, `numpy`, `h5py`.
+
+```bash
+pip install matplotlib
+python generate_mcsa_figures.py \
+    --data-dir ../../host/www/data/motor_current \
+    --output-dir ../../../../docs/research/figures
+```
+
+Produces 6 figures in `docs/research/figures/`:
+
+| Figure | File | Content |
+|---|---|---|
+| Fig 1 | `fig1_pipeline.pdf` | 4-panel processing pipeline (raw -> RMS -> decimated -> centered) |
+| Fig 2 | `fig2_before_after.pdf` | 2x2 comparison: raw vs. envelope for Healthy and BRB4 |
+| Fig 3 | `fig3_ablation.pdf` | Ablation bar chart (4 preprocessing variants, 16-78% accuracy) |
+| Fig 4 | `fig4_pareto.pdf` | Accuracy vs. model size Pareto frontier (log scale) |
+| Fig 5 | `fig5_confusion.pdf` | 5x5 confusion matrix heatmap from the 78.3% run |
+| Fig 6 | `fig6_training_curves.pdf` | Loss vs. epoch for all 4 experimental attempts |
+
+See [`docs/research/motor-current-mcsa-novelty.md`](../../../../docs/research/motor-current-mcsa-novelty.md)
+for the paper draft that references these figures.
+
+---
+
 ### cifar10_to_json.py
 
 Converts CIFAR-10 (Python pickle format) to JSON for the MNIST/CNN sample.

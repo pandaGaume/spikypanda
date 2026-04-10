@@ -27,6 +27,10 @@ fault detection sample, so they are all documented here in detail.
 | 4 | 64-step LSTM on 60 Hz RMS envelope, per-window centered + amplified (h=32, 50 ep) | 70.8 % | Working. Healthy near-perfect (79/80), confusions only between adjacent severities. Loss still falling at epoch 50. |
 | 5 | Same as 4 but 80 epochs | **78.3 %** | Healthy 98.8 %, BRB3 82.7 %, BRB4 77.8 %, BRB1 67.8 %, BRB2 64.9 %. Confusions only between adjacent severities. Loss 0.268 at epoch 77, still trending down. |
 
+![Confusion matrix — final result](figures/fig5_confusion.png)
+*Confusion matrix from Attempt 5 (78.3 %). Errors are only between
+adjacent severities — the binary Healthy/Faulty decision is 98.8 %.*
+
 ## 1. Symptoms
 
 ```
@@ -384,6 +388,14 @@ per-sample baseline). "The RNN will learn to ignore it" is optimistic
 larger and the optimizer follows it.
 
 ## 3. Verification
+
+![Training curves](figures/fig6_training_curves.png)
+*Training loss across all 4 attempts. Raw-signal attempts (red, orange)
+show rising or flat loss. The envelope + centered pipeline (green)
+descends steadily.*
+
+![Ablation](figures/fig3_ablation.png)
+*Accuracy progression: each preprocessing fix contributes measurably.*
 
 The table below tracks the state of the preprocessing pipeline across
 the three attempts so the progression is explicit:

@@ -1,0 +1,165 @@
+{
+  "article_type": "Article",
+  "title": "Envelope-Domain Preprocessing for Ultra-Compact LSTM-Based Broken Rotor Bar Severity Classification",
+  "authors": "Guillaume Pelletier",
+  "affiliations": [
+    "DotVision, 75008 Paris, France; guillaume.pelletier@dotvision.com"
+  ],
+  "correspondence": "guillaume.pelletier@dotvision.com",
+  "ai_disclosure": "AI-assisted tools were used for language refinement and clarity. All technical content, experiments, and conclusions are the author's own.",
+  "abstract": "We present a 4,773-parameter LSTM classifier for 5-class broken rotor bar severity classification from three-phase stator currents. On the public Universidade Federal de Uberlandia dataset (IEEE DataPort), it reaches 78.3% accuracy and trains in under 3 minutes on a laptop CPU, entirely in a web browser. A preprocessing pipeline extracts the amplitude envelope of the stator current via half-cycle moving RMS, decimates it to 60 Hz, and removes the load-dependent baseline by per-window mean subtraction. This collapses the input from 256 high-frequency samples to 64 slowly-varying envelope samples. Without it, the same LSTM fails to train due to vanishing gradients through the longer sequence. Broken rotor bars produce sidebands at f \u00b1 2sf in the stator current spectrum. In the time domain these appear as slow amplitude modulation at 2\u20136 Hz, which the moving RMS captures directly. The envelope captures the information relevant to BRB severity, while the carrier primarily contributes redundant high-frequency structure. An ablation across four pipeline variants (26.8% to 78.3%) confirms that each preprocessing step contributes measurably. Accuracy is below the 95\u201399% reported by large CNN models on the same data. The gap is expected given a 1000x reduction in parameter count. Collapsing to a binary healthy/faulty decision gives 94.0% accuracy; most of the binary errors come from BRB1 samples (one broken bar out of 34) misclassified as Healthy, particularly at light loads where the 2.9% modulation is near the noise floor.",
+  "keywords": "Motor Current Signature Analysis; broken rotor bar; LSTM; TinyML; envelope extraction; edge computing; predictive maintenance; induction motor",
+  "highlights": {
+    "findings": [
+      "A 4,773-parameter LSTM achieves 78.3% accuracy on 5-class broken rotor bar severity classification.",
+      "Envelope-domain preprocessing (moving RMS + centering) enables training where raw-signal approaches fail.",
+      "The model fits in 19 KB (float32), suitable for Cortex-M0+ class MCUs."
+    ],
+    "implications": [
+      "Domain-informed signal representation can substitute for model scale in MCSA applications.",
+      "Battery-powered wireless sensor nodes become feasible for continuous motor monitoring."
+    ]
+  },
+  "sections": [
+    {
+      "heading": "1. Introduction",
+      "level": 1,
+      "content": [
+        {"type": "paragraph_no_indent", "text": "The broken rotor bar fault signature is a low-frequency amplitude modulation (2\u20136 Hz) of the stator current carrier (50/60 Hz). Rotor asymmetry creates sidebands at f(1 \u00b1 2s) in the current spectrum, which manifest as a slow envelope oscillation. The envelope is therefore empirically sufficient for fault detection on this task."},
+        {"type": "paragraph", "text": "The mainstream approach uses large neural networks (CNNs, ResNets, VGGs) operating on spectrograms or raw waveforms to implicitly learn this envelope extraction. We show that making the extraction explicit via a simple moving-RMS filter reduces the need for model capacity by three orders of magnitude."},
+        {"type": "heading2", "text": "1.1. Prior Art"},
+        {"type": "paragraph_no_indent", "text": "Table 1 compares published neural-network approaches for broken rotor bar detection. The top-performing approaches use 60\u2013144 M parameters to solve a 5-class signal processing problem. They achieve 98\u201399% accuracy but require GPU hardware and are impractical for MCU deployment. Decision trees on FFT features achieve 95\u201398% with fewer parameters but require explicit sideband identification, which is fragile under variable speed and noise."},
+        {"type": "table_caption", "text": "Table 1. Comparison with published approaches and baselines."},
+        {"type": "table", "headers": ["Reference", "Architecture", "Params", "Classes", "Accuracy", "Input"],
+         "rows": [
+           ["Chisedzi [1]", "DT / ANN", "~1\u201310 K", "3", "95\u201398%", "FFT features"],
+           ["Barrera [2]", "VGG-19", "143.7 M", "5", "99.4%", "Spectrogram"],
+           ["Barrera [2]", "NASNet-M", "5.3 M", "5", "96.2%", "Spectrogram"],
+           ["Jakaria [3]", "CNN-LSTM", "~100 K", "5", "92.3%", "Raw current"],
+           ["Baseline", "FFT+SVM", "n/p", "5", "81.5%", "18 FFT feat."],
+           ["Baseline", "FFT+MLP", "773", "5", "67.0%", "18 FFT feat."],
+           ["This work", "LSTM h=32", "4,773", "5", "78.3%", "Envelope"]
+         ]}
+      ]
+    },
+    {
+      "heading": "2. Dataset",
+      "level": 1,
+      "content": [
+        {"type": "paragraph_no_indent", "text": "The Broken Rotor Bar dataset, published by the Universidade Federal de Uberlandia on IEEE DataPort, contains electrical and vibration recordings from a 1 hp, 220/380 V, 4-pole, 60 Hz squirrel-cage induction motor (rated 1715 rpm, 4.1 Nm, 34 rotor bars)."},
+        {"type": "paragraph", "text": "Five rotor states are tested: Healthy (no defect), BRB1\u2013BRB4 (1\u20134 adjacent broken bars). Each state is tested at 8 load levels (12.5\u2013100% of rated torque) with 10 repetitions per condition. Each acquisition is 18 s long, sampled at ~55.6 kHz, covering startup transient to steady state. Only the three phase currents (Ia, Ib, Ic) are used; voltages and vibration channels are discarded."}
+      ]
+    },
+    {
+      "heading": "3. Proposed Method",
+      "level": 1,
+      "content": [
+        {"type": "heading2", "text": "3.1. Physics of Broken Rotor Bars"},
+        {"type": "paragraph_no_indent", "text": "Broken rotor bars introduce sidebands in the stator current at frequencies f(1 \u00b1 2s), where f is the line frequency and s is the slip. For the test motor (f = 60 Hz, s ~ 0.047 at rated load), this gives sidebands at 54.4 Hz and 65.6 Hz. In the time domain, these manifest as amplitude modulation at 2sf ~ 5.6 Hz. The modulation depth is proportional to k/N, where k is the number of broken bars and N = 34: ~2.9% for BRB1, ~11.8% for BRB4. The classification task thus reduces to estimating modulation depth, which can be inferred directly from the envelope signal."},
+        {"type": "heading2", "text": "3.2. Envelope Extraction"},
+        {"type": "paragraph_no_indent", "text": "The 60 Hz carrier is removed by computing the moving root-mean-square over one half-cycle (463 samples at 55.6 kHz):"},
+        {"type": "equation", "text": "env(t) = \u221a[ (1/W) \u00b7 \u03a3 x(t+i)\u00b2 ],  i = 0..W\u22121"},
+        {"type": "paragraph_no_indent", "text": "For a pure sinusoid x(t) = A*sin(wt), the half-cycle RMS equals A/sqrt(2). For an amplitude-modulated signal x(t) = A(t)*sin(wt) where A(t) varies slowly, the RMS tracks the envelope A(t)/sqrt(2)."},
+        {"type": "figure", "file": "fig1_pipeline.png", "width": 450, "height": 516,
+         "caption": "Figure 1. Processing pipeline: (a) raw current, (b) moving-RMS envelope, (c) decimated to 60 Hz, (d) per-window centered."},
+        {"type": "heading2", "text": "3.3. Decimation and Transient Removal"},
+        {"type": "paragraph_no_indent", "text": "The envelope is decimated by 927x to reach ~60 Hz (one sample per fundamental cycle). The first 360 samples (~6 s) are discarded to exclude the startup transient (inrush peaks of \u00b117 A that contaminate normalization statistics)."},
+        {"type": "heading2", "text": "3.4. Per-Window Centering"},
+        {"type": "paragraph_no_indent", "text": "The envelope mean encodes load level, which is a confound (all classes appear at all loads). For each 64-step window and each channel:"},
+        {"type": "equation", "text": "out(t) = clamp[ (env(t) - mean(env)) * G + 0.5,  0,  1 ]"},
+        {"type": "paragraph_no_indent", "text": "with gain G = 6.0. This removes the load baseline and maps the \u00b10.05 A modulation into \u00b10.3 of the [0, 1] dynamic range, giving the LSTM a 10x increase in the relative magnitude of the fault signature."},
+        {"type": "figure", "file": "fig2_before_after.png", "width": 450, "height": 318,
+         "caption": "Figure 2. Raw current (top) vs. centered envelope (bottom) for Healthy and BRB4 at full load."},
+        {"type": "heading2", "text": "3.5. LSTM Architecture"},
+        {"type": "paragraph_no_indent", "text": "A single-layer LSTM with 3 inputs (Ia, Ib, Ic envelopes), 32 hidden units, and 5 sigmoid outputs. Total: 4,773 parameters (19.1 KB at float32). The model is trained with MSE loss and Adam optimizer (lr = 0.003) for 80 epochs, with one-hot targets applied at every timestep. Sigmoid + MSE was chosen for compatibility with the runtime; softmax + cross-entropy would be standard and is expected to improve results near decision boundaries."},
+        {"type": "table_caption", "text": "Table 2. Parameter count breakdown."},
+        {"type": "table", "headers": ["Component", "Formula", "Count"],
+         "rows": [
+           ["LSTM input-to-hidden", "4 x 32 x 3", "384"],
+           ["LSTM hidden-to-hidden", "4 x 32 x 32", "4,096"],
+           ["LSTM biases", "4 x 32", "128"],
+           ["Output weights", "32 x 5", "160"],
+           ["Output biases", "5", "5"],
+           ["Total", "", "4,773"]
+         ]}
+      ]
+    },
+    {
+      "heading": "4. Results",
+      "level": 1,
+      "content": [
+        {"type": "heading2", "text": "4.1. Ablation Study"},
+        {"type": "paragraph_no_indent", "text": "Table 3 and Figure 3 show the impact of each preprocessing step. The full envelope + centering pipeline achieves 3x the accuracy of the best raw-signal variant. Each step contributes measurably: removing any one causes a regression."},
+        {"type": "table_caption", "text": "Table 3. Ablation: preprocessing impact on accuracy."},
+        {"type": "table", "headers": ["Pipeline variant", "Accuracy", "Dominant failure"],
+         "rows": [
+           ["Raw, per-trace norm, 64-step", "26.8%", "Signature erased"],
+           ["Raw, global norm, 256-step", "16.0%", "Vanishing gradient"],
+           ["Envelope, global min/max", "35.0%", "Load confound"],
+           ["Envelope, centered + gain", "78.3%", "Full pipeline"],
+           ["FFT + SVM (baseline)", "81.5%", "Hand-crafted features"],
+           ["FFT + MLP (baseline)", "67.0%", "Small parametric model"]
+         ]},
+        {"type": "figure", "file": "fig3_ablation.png", "width": 450, "height": 253,
+         "caption": "Figure 3. Ablation: accuracy at each preprocessing stage. Dashed line = chance (20%)."},
+        {"type": "figure", "file": "fig6_training_curves.png", "width": 450, "height": 220,
+         "caption": "Figure 4. Training loss across 4 attempts. Only the envelope + centering pipeline (green) converges."},
+        {"type": "heading2", "text": "4.2. Comparison with Classical MCSA"},
+        {"type": "paragraph_no_indent", "text": "An FFT + SVM baseline using 18 hand-crafted spectral features (sideband amplitudes at f(1 \u00b1 2s) for five slip values, harmonic ratios, RMS, crest factor, THD) reaches 81.5% on the same data split. The SVM outperforms the LSTM by 3.2 percentage points, but requires explicit sideband identification and slip estimation, which depend on prior knowledge of the operating conditions. An FFT + MLP with 773 parameters (comparable to our model size) drops to 67.0%, suggesting that FFT features alone are insufficient for a small parametric model without additional structure. The LSTM learns directly from the time-domain envelope without any frequency-domain computation."},
+        {"type": "heading2", "text": "4.3. Classification Performance"},
+        {"type": "paragraph_no_indent", "text": "The final model (LSTM h=32, 80 epochs) achieves 78.3% overall 5-class accuracy. Collapsing to binary healthy/faulty gives 94.0%. Healthy recall is 98.8% (79/80), but 19 of 90 BRB1 samples are misclassified as Healthy, mostly at light loads where the single broken bar produces only 2.9% modulation depth."},
+        {"type": "figure", "file": "fig5_confusion.png", "width": 380, "height": 309,
+         "caption": "Figure 5. Confusion matrix. Errors are concentrated between adjacent severities."},
+        {"type": "heading2", "text": "4.4. Efficiency"},
+        {"type": "figure", "file": "fig4_pareto.png", "width": 450, "height": 298,
+         "caption": "Figure 6. Accuracy vs. model size. This work (red diamond) occupies the TinyML-feasible region."},
+        {"type": "table_caption", "text": "Table 4. Efficiency comparison."},
+        {"type": "table", "headers": ["Model", "Params", "Size", "Accuracy", "Acc/10K", "Inference"],
+         "rows": [
+           ["VGG-19 [2]", "143.7 M", "574 MB", "99.4%", "0.007", "~500ms GPU"],
+           ["NASNet-M [2]", "5.3 M", "21 MB", "96.2%", "0.18", "~50ms GPU"],
+           ["CNN-LSTM [3]", "~100 K", "400 KB", "92.3%", "9.2", "~10ms GPU"],
+           ["This work", "4,773", "19 KB", "78.3%", "164", "1.5ms JS"]
+         ]},
+        {"type": "paragraph_no_indent", "text": "The proposed model achieves 164 accuracy points per 10K parameters, vs. 0.007\u20139.2 for published approaches. At 19.1 KB (float32), it fits in the SRAM of a Cortex-M0+ MCU."}
+      ]
+    },
+    {
+      "heading": "5. Discussion",
+      "level": 1,
+      "content": [
+        {"type": "heading2", "text": "5.1. Limitations"},
+        {"type": "paragraph_no_indent", "text": "The 78.3% accuracy is below the 95\u201399% of large models. The gap comes from model capacity (4,773 vs. millions of parameters), suboptimal loss function (sigmoid + MSE vs. softmax + cross-entropy), and no data augmentation. Binary healthy/faulty accuracy is 94.0%. The main weakness is BRB1 detection: 19 of 90 single-broken-bar samples are classified as Healthy, concentrated at light loads where the fault signature is weakest."},
+        {"type": "paragraph", "text": "Results are reported on a single dataset (1 motor, 34 bars, 60 Hz). Generalization requires validation on different line frequencies (50 Hz), bar counts, and variable-speed drives."},
+        {"type": "heading2", "text": "5.2. Deployment Context"},
+        {"type": "paragraph_no_indent", "text": "The target platform is an ESP32-class MCU. It continuously tracks the frequency spectrum and harmonic signature of the stator current, comparing against a learned baseline. The monitoring stage does not attempt fault identification. It only detects change."},
+        {"type": "paragraph", "text": "When a spectral shift is flagged, the device enters a diagnostic phase. Connected to a supervisory policy engine, it can receive ONNX models pushed at runtime and run them over a defined observation period. Several tiny classifiers may be loaded in sequence, each targeting a different fault family. The broken rotor bar classifier presented here is one of them. In standalone mode (no connectivity), the MCU runs whatever models are stored in flash and queues results until the link is restored."},
+        {"type": "paragraph", "text": "The graph-native runtime can load and modify ONNX model topology at runtime without recompilation. This structural plasticity is what makes the architecture practical: a single MCU can host different diagnostic models depending on what the monitoring stage observed, rather than being hard-wired to one fault type."}
+      ]
+    },
+    {
+      "heading": "6. Conclusions",
+      "level": 1,
+      "content": [
+        {"type": "paragraph_no_indent", "text": "Extracting the stator current envelope before classification reduced the required model size from hundreds of thousands of parameters to 4,773. The preprocessing is straightforward (half-cycle moving RMS, decimation, mean subtraction) and each step has a measurable effect on accuracy, as shown in the ablation. The resulting 19 KB LSTM reaches 78.3% on 5-class severity classification and 94.0% on binary fault detection. BRB1 at light load remains the hardest case."},
+        {"type": "paragraph", "text": "On an ESP32, this classifier would run as one module in a larger pipeline: the MCU monitors harmonic signatures for spectral change, then loads the appropriate ONNX model to investigate. The 4,773 parameters fit comfortably in SRAM at any precision. For MCSA, careful signal representation can substitute for model scale."}
+      ]
+    }
+  ],
+  "back_matter": [
+    {"heading": "Author Contributions", "text": "G.P. conceived the study, developed the preprocessing pipeline, implemented and trained the models, performed the ablation analysis and baseline comparisons, and wrote the manuscript."},
+    {"heading": "Funding", "text": "This research received no external funding."},
+    {"heading": "Data Availability Statement", "text": "The Broken Rotor Bar dataset is publicly available on IEEE DataPort: https://ieee-dataport.org/open-access/experimental-database-detecting-and-diagnosing-rotor-broken-bar-three-phase-induction"},
+    {"heading": "Conflicts of Interest", "text": "The author declares no conflict of interest."}
+  ],
+  "references": [
+    "Chisedzi, L.P.; Muteba, M. Detection of Broken Rotor Bars in Cage Induction Motors Using Machine Learning Methods. Sensors 2023, 23, 9079. https://doi.org/10.3390/s23229079",
+    "Barrera-Llanga, K.; Burriel-Valencia, J.; Sapena-Bano, A.; Martinez-Roman, J. A Comparative Analysis of Deep Learning CNN Architectures for Fault Diagnosis of Broken Rotor Bars in Induction Motors. Sensors 2023, 23, 8196. https://doi.org/10.3390/s23198196",
+    "Jakaria, J.M.; Sabir, J.; Rahman, Md.Z.; Ali, Md.F. Hybrid deep learning framework for real-time fault detection in squirrel-cage induction motors. PLOS ONE 2025, 20, e0336323. https://doi.org/10.1371/journal.pone.0336323",
+    "Kilickaya, S. Microcontroller-based real-time motor bearing fault detection and diagnosis using 1D convolutional neural networks. M.Sc. Thesis, Izmir University of Economics, Izmir, Turkey, 2022.",
+    "Imamura, L.Y.; Avila, S.L.; Pacheco, F.S.; et al. Diagnosis of Unbalance in Lightweight Rotating Machines Using a Recurrent Neural Network Suitable for an Edge-Computing Framework. J. Control Autom. Electr. Syst. 2022, 33, 1190-1201. https://doi.org/10.1007/s40313-021-00893-9",
+    "Texas Instruments. New TI MCUs Enable Edge AI and Industry-Leading Real-Time Control. Press Release, 11 November 2024. Available online: https://www.ti.com/about-ti/newsroom/news-releases/2024/",
+    "Njor, E.; Madsen, J.; Fafoutis, X. A Primer for tinyML Predictive Maintenance: Input and Model Optimisation. In Proceedings of the IFIP AIAI; Springer: Cham, Switzerland, 2022; Volume 647, pp. 59-73. https://doi.org/10.1007/978-3-031-08337-2_6",
+    "Thomson, W.T.; Fenger, M. Current signature analysis to detect induction motor faults. IEEE Ind. Appl. Mag. 2001, 7, 26-34. https://doi.org/10.1109/2943.930988"
+  ]
+}
