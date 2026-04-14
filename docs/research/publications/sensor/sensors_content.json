@@ -7,11 +7,11 @@
   ],
   "correspondence": "guillaume.pelletier@dotvision.com",
   "ai_disclosure": "AI-assisted tools were used for language refinement and clarity. All technical content, experiments, and conclusions are the author's own.",
-  "abstract": "We present a 4,773-parameter LSTM classifier for 5-class broken rotor bar severity classification from three-phase stator currents. On the public Universidade Federal de Uberlandia dataset (IEEE DataPort), it reaches 78.3% accuracy and trains in under 3 minutes on a laptop CPU, entirely in a web browser. A preprocessing pipeline extracts the amplitude envelope of the stator current via half-cycle moving RMS, decimates it to 60 Hz, and removes the load-dependent baseline by per-window mean subtraction. This collapses the input from 256 high-frequency samples to 64 slowly-varying envelope samples. Without it, the same LSTM fails to train due to vanishing gradients through the longer sequence. Broken rotor bars produce sidebands at f \u00b1 2sf in the stator current spectrum. In the time domain these appear as slow amplitude modulation at 2\u20136 Hz, which the moving RMS captures directly. The envelope captures the information relevant to BRB severity, while the carrier primarily contributes redundant high-frequency structure. An ablation across four pipeline variants (26.8% to 78.3%) confirms that each preprocessing step contributes measurably. Accuracy is below the 95\u201399% reported by large CNN models on the same data. The gap is expected given a 1000x reduction in parameter count. Collapsing to a binary healthy/faulty decision gives 94.0% accuracy; most of the binary errors come from BRB1 samples (one broken bar out of 34) misclassified as Healthy, particularly at light loads where the 2.9% modulation is near the noise floor.",
+  "abstract": "We present a 4,773-parameter LSTM classifier for 5-class broken rotor bar severity classification from three-phase stator currents. On the public Universidade Federal de Uberlandia dataset (IEEE DataPort), it reaches 88.0% accuracy and trains in under 3 minutes on a laptop CPU, entirely in a web browser. A preprocessing pipeline extracts the amplitude envelope of the stator current via half-cycle moving RMS, decimates it to 60 Hz, and removes the load-dependent baseline by per-window mean subtraction. This collapses the input from 256 high-frequency samples to 64 slowly-varying envelope samples. Without it, the same LSTM fails to train due to vanishing gradients through the longer sequence. Broken rotor bars produce sidebands at f \u00b1 2sf in the stator current spectrum. In the time domain these appear as slow amplitude modulation at 2\u20136 Hz, which the moving RMS captures directly. The envelope captures the information relevant to BRB severity, while the carrier primarily contributes redundant high-frequency structure. An ablation across four pipeline variants (26.8% to 88.0%) confirms that each preprocessing step contributes measurably. Accuracy surpasses the FFT+SVM baseline (81.5%) while remaining below the 95\u201399% reported by large CNN models on the same data. Collapsing to a binary healthy/faulty decision gives 97.3% accuracy; only 6 faulty motors are misclassified as Healthy (5 BRB1 + 1 BRB3), concentrated at light loads where the modulation is near the noise floor.",
   "keywords": "Motor Current Signature Analysis; broken rotor bar; LSTM; TinyML; envelope extraction; edge computing; predictive maintenance; induction motor",
   "highlights": {
     "findings": [
-      "A 4,773-parameter LSTM achieves 78.3% accuracy on 5-class broken rotor bar severity classification.",
+      "A 4,773-parameter LSTM achieves 88.0% accuracy on 5-class broken rotor bar severity classification.",
       "Envelope-domain preprocessing (moving RMS + centering) enables training where raw-signal approaches fail.",
       "The model fits in 19 KB (float32), suitable for Cortex-M0+ class MCUs."
     ],
@@ -38,7 +38,7 @@
            ["Jakaria [3]", "CNN-LSTM", "~100 K", "5", "92.3%", "Raw current"],
            ["Baseline", "FFT+SVM", "n/p", "5", "81.5%", "18 FFT feat."],
            ["Baseline", "FFT+MLP", "773", "5", "67.0%", "18 FFT feat."],
-           ["This work", "LSTM h=32", "4,773", "5", "78.3%", "Envelope"]
+           ["This work", "LSTM h=32", "4,773", "5", "88.0%", "Envelope"]
          ]}
       ]
     },
@@ -71,7 +71,7 @@
         {"type": "figure", "file": "fig2_before_after.png", "width": 450, "height": 318,
          "caption": "Figure 2. Raw current (top) vs. centered envelope (bottom) for Healthy and BRB4 at full load."},
         {"type": "heading2", "text": "3.5. LSTM Architecture"},
-        {"type": "paragraph_no_indent", "text": "A single-layer LSTM with 3 inputs (Ia, Ib, Ic envelopes), 32 hidden units, and 5 sigmoid outputs. Total: 4,773 parameters (19.1 KB at float32). The model is trained with MSE loss and Adam optimizer (lr = 0.003) for 80 epochs, with one-hot targets applied at every timestep. Sigmoid + MSE was chosen for compatibility with the runtime; softmax + cross-entropy would be standard and is expected to improve results near decision boundaries."},
+        {"type": "paragraph_no_indent", "text": "A single-layer LSTM with 3 inputs (Ia, Ib, Ic envelopes), 32 hidden units, and 5 sigmoid outputs. Total: 4,773 parameters (19.1 KB at float32). The model is trained with MSE loss and Adam optimizer (lr = 0.003) for 150 epochs, with one-hot targets applied at every timestep. Sigmoid + MSE was chosen for compatibility with the runtime; softmax + cross-entropy would be standard and is expected to improve results near decision boundaries."},
         {"type": "table_caption", "text": "Table 2. Parameter count breakdown."},
         {"type": "table", "headers": ["Component", "Formula", "Count"],
          "rows": [
@@ -96,7 +96,7 @@
            ["Raw, per-trace norm, 64-step", "26.8%", "Signature erased"],
            ["Raw, global norm, 256-step", "16.0%", "Vanishing gradient"],
            ["Envelope, global min/max", "35.0%", "Load confound"],
-           ["Envelope, centered + gain", "78.3%", "Full pipeline"],
+           ["Envelope, centered + gain", "88.0%", "Full pipeline"],
            ["FFT + SVM (baseline)", "81.5%", "Hand-crafted features"],
            ["FFT + MLP (baseline)", "67.0%", "Small parametric model"]
          ]},
@@ -105,9 +105,9 @@
         {"type": "figure", "file": "fig6_training_curves.png", "width": 450, "height": 220,
          "caption": "Figure 4. Training loss across 4 attempts. Only the envelope + centering pipeline (green) converges."},
         {"type": "heading2", "text": "4.2. Comparison with Classical MCSA"},
-        {"type": "paragraph_no_indent", "text": "An FFT + SVM baseline using 18 hand-crafted spectral features (sideband amplitudes at f(1 \u00b1 2s) for five slip values, harmonic ratios, RMS, crest factor, THD) reaches 81.5% on the same data split. The SVM outperforms the LSTM by 3.2 percentage points, but requires explicit sideband identification and slip estimation, which depend on prior knowledge of the operating conditions. An FFT + MLP with 773 parameters (comparable to our model size) drops to 67.0%, suggesting that FFT features alone are insufficient for a small parametric model without additional structure. The LSTM learns directly from the time-domain envelope without any frequency-domain computation."},
+        {"type": "paragraph_no_indent", "text": "An FFT + SVM baseline using 18 hand-crafted spectral features (sideband amplitudes at f(1 \u00b1 2s) for five slip values, harmonic ratios, RMS, crest factor, THD) reaches 81.5% on the same data split. The LSTM now surpasses the SVM by 6.5 percentage points, while requiring no explicit sideband identification or slip estimation. An FFT + MLP with 773 parameters (comparable to our model size) drops to 67.0%, suggesting that FFT features alone are insufficient for a small parametric model without additional structure. The LSTM learns directly from the time-domain envelope without any frequency-domain computation."},
         {"type": "heading2", "text": "4.3. Classification Performance"},
-        {"type": "paragraph_no_indent", "text": "The final model (LSTM h=32, 80 epochs) achieves 78.3% overall 5-class accuracy. Collapsing to binary healthy/faulty gives 94.0%. Healthy recall is 98.8% (79/80), but 19 of 90 BRB1 samples are misclassified as Healthy, mostly at light loads where the single broken bar produces only 2.9% modulation depth."},
+        {"type": "paragraph_no_indent", "text": "The final model (LSTM h=32, 150 epochs) achieves 88.0% overall 5-class accuracy. Collapsing to binary healthy/faulty gives 97.3%. Healthy recall is 93.8% (75/80). BRB1 recall improved to 80.0% (72/90). Only 6 faulty motors are misclassified as Healthy (5 BRB1 + 1 BRB3), concentrated at light loads."},
         {"type": "figure", "file": "fig5_confusion.png", "width": 380, "height": 309,
          "caption": "Figure 5. Confusion matrix. Errors are concentrated between adjacent severities."},
         {"type": "heading2", "text": "4.4. Efficiency"},
@@ -119,9 +119,9 @@
            ["VGG-19 [2]", "143.7 M", "574 MB", "99.4%", "0.007", "~500ms GPU"],
            ["NASNet-M [2]", "5.3 M", "21 MB", "96.2%", "0.18", "~50ms GPU"],
            ["CNN-LSTM [3]", "~100 K", "400 KB", "92.3%", "9.2", "~10ms GPU"],
-           ["This work", "4,773", "19 KB", "78.3%", "164", "1.5ms JS"]
+           ["This work", "4,773", "19 KB", "88.0%", "184.4", "1.5ms JS"]
          ]},
-        {"type": "paragraph_no_indent", "text": "The proposed model achieves 164 accuracy points per 10K parameters, vs. 0.007\u20139.2 for published approaches. At 19.1 KB (float32), it fits in the SRAM of a Cortex-M0+ MCU."}
+        {"type": "paragraph_no_indent", "text": "The proposed model achieves 184.4 accuracy points per 10K parameters, vs. 0.007\u20139.2 for published approaches. At 19.1 KB (float32), it fits in the SRAM of a Cortex-M0+ MCU."}
       ]
     },
     {
@@ -129,7 +129,7 @@
       "level": 1,
       "content": [
         {"type": "heading2", "text": "5.1. Limitations"},
-        {"type": "paragraph_no_indent", "text": "The 78.3% accuracy is below the 95\u201399% of large models. The gap comes from model capacity (4,773 vs. millions of parameters), suboptimal loss function (sigmoid + MSE vs. softmax + cross-entropy), and no data augmentation. Binary healthy/faulty accuracy is 94.0%. The main weakness is BRB1 detection: 19 of 90 single-broken-bar samples are classified as Healthy, concentrated at light loads where the fault signature is weakest."},
+        {"type": "paragraph_no_indent", "text": "The 88.0% accuracy surpasses the FFT+SVM baseline (81.5%) but is below the 95\u201399% of large models. The gap comes from model capacity (4,773 vs. millions of parameters), suboptimal loss function (sigmoid + MSE vs. softmax + cross-entropy), and no data augmentation. Binary healthy/faulty accuracy is 97.3%. BRB1 recall improved to 80.0% (72/90); only 5 BRB1 samples remain misclassified as Healthy, concentrated at light loads."},
         {"type": "paragraph", "text": "Results are reported on a single dataset (1 motor, 34 bars, 60 Hz). Generalization requires validation on different line frequencies (50 Hz), bar counts, and variable-speed drives."},
         {"type": "heading2", "text": "5.2. Deployment Context"},
         {"type": "paragraph_no_indent", "text": "The target platform is an ESP32-class MCU. It continuously tracks the frequency spectrum and harmonic signature of the stator current, comparing against a learned baseline. The monitoring stage does not attempt fault identification. It only detects change."},
@@ -141,7 +141,7 @@
       "heading": "6. Conclusions",
       "level": 1,
       "content": [
-        {"type": "paragraph_no_indent", "text": "Extracting the stator current envelope before classification reduced the required model size from hundreds of thousands of parameters to 4,773. The preprocessing is straightforward (half-cycle moving RMS, decimation, mean subtraction) and each step has a measurable effect on accuracy, as shown in the ablation. The resulting 19 KB LSTM reaches 78.3% on 5-class severity classification and 94.0% on binary fault detection. BRB1 at light load remains the hardest case."},
+        {"type": "paragraph_no_indent", "text": "Extracting the stator current envelope before classification reduced the required model size from hundreds of thousands of parameters to 4,773. The preprocessing is straightforward (half-cycle moving RMS, decimation, mean subtraction) and each step has a measurable effect on accuracy, as shown in the ablation. The resulting 19 KB LSTM reaches 88.0% on 5-class severity classification and 97.3% on binary fault detection, surpassing the FFT+SVM baseline (81.5%). BRB1 at light load remains the hardest case."},
         {"type": "paragraph", "text": "On an ESP32, this classifier would run as one module in a larger pipeline: the MCU monitors harmonic signatures for spectral change, then loads the appropriate ONNX model to investigate. The 4,773 parameters fit comfortably in SRAM at any precision. For MCSA, careful signal representation can substitute for model scale."}
       ]
     }

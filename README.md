@@ -30,6 +30,7 @@ This matters because:
 - **MNIST digit classification** - 93% accuracy with CNN, 74% with ViT (500 training samples)
 - **Motor vibration fault detection** - 100% accuracy with LSTM on real pEMP dataset
 - **LiDAR occupancy grid compression** - MSE 0.0024 with convolutional autoencoder
+- **MOx gas discrimination** - 93.9% accuracy on the DotVision metal oxide e-nose dataset (Air / Acetone / HCl), beating the published 5-layer LSTM baseline (89.7%) with a single-layer GRU of 37 neurons
 
 ## Installation
 
@@ -52,6 +53,7 @@ Self-contained HTML demos are available in `packages/host/www/samples/`:
 - **MNIST** - CNN and ViT digit classification with visual prediction grid
 - **LiDAR** - Autoencoder on synthetic 64x64x6 LiDAR grids with per-channel reconstruction
 - **Motor Vibration** - LSTM/GRU fault detection on real accelerometer data
+- **MOx Gas Discrimination** - 5-sensor e-nose array classifying Air / Acetone / HCl with a compact GRU
 - **Brain 3D** - BabylonJS visualization of a neural network (XOR)
 
 ## The bigger picture

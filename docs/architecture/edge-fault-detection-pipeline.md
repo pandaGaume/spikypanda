@@ -81,14 +81,14 @@ near the motor, connected to current clamps and/or accelerometers.
        ▼
    Stage 1: Binary classifier (Healthy / Fault)
              ~500 parameters, <1 KB
-             Result: 98.8% accuracy
+             Result: 97.3% accuracy
        │
        ├─ Healthy → return to listen mode
        │
        ▼
    Stage 2: Severity grader (BRB1..BRB4)
              ~4,773 parameters, 19 KB
-             Result: 78.3% accuracy on 5-class
+             Result: 88.0% accuracy on 5-class
        │
        ▼
    Stage 3 (optional): Multi-fault classifier
@@ -278,7 +278,7 @@ feasible.
 
 ### 4.2 Accuracy cascading
 
-The binary stage (Healthy vs. Fault) runs at **98.8% accuracy** — it
+The binary stage (Healthy vs. Fault) runs at **97.3% accuracy** — it
 almost never misses a fault. The severity stage then only needs to
 discriminate between fault types, not between healthy and faulty. This
 conditional architecture has higher effective accuracy than a single
@@ -370,7 +370,7 @@ deployment scenario this means:
 
 | Phase | Deliverable | Status |
 |---|---|---|
-| 1. Prove the classifier | 5-class LSTM on UFU data, 78.3% accuracy | **Done** (this work) |
+| 1. Prove the classifier | 5-class LSTM on UFU data, 88.0% accuracy | **Done** (this work) |
 | 2. ONNX export | Export trained LSTM to .onnx, load via CyanMycelium C++ runtime | Next |
 | 3. MCU port | Run int8-quantized LSTM on Cortex-M0+ (STM32L0 or similar) | Planned |
 | 4. Anomaly listener | Envelope-threshold wake-up trigger on MCU | Planned |
@@ -386,7 +386,7 @@ Phase 1 is the foundation. The MCSA paper established that:
 - The model fits in MCU SRAM at any precision (19 KB float32, 4.8 KB
   int8)
 - Training can happen in a browser without infrastructure
-- The accuracy is operationally useful (98.8% binary Healthy/Fault)
+- The accuracy is operationally useful (97.3% binary Healthy/Fault)
 
 Everything else builds on this foundation.
 

@@ -41,15 +41,15 @@ const doc = new Document({
       )]),
 
       p([t(
-        "On the public Universidade Federal de Uberl\u00e2ndia dataset, this reaches 78.3% on " +
-        "5-class classification and 94.0% on binary fault detection. The full model fits in 19 KB. " +
+        "On the public Universidade Federal de Uberl\u00e2ndia dataset, this reaches 88.0% on " +
+        "5-class classification and 97.3% on binary fault detection. The full model fits in 19 KB. " +
         "Training runs in a web browser in under three minutes, with no server or GPU."
       )]),
 
       p([t(
-        "The paper includes an ablation across four pipeline variants (16% to 78%) showing that " +
+        "The paper includes an ablation across four pipeline variants (16% to 88%) showing that " +
         "each preprocessing step contributes measurably, and a classical FFT + SVM baseline at " +
-        "81.5%. The SVM scores higher but requires hand-crafted spectral features; the LSTM " +
+        "81.5%. The LSTM now surpasses the SVM while requiring no hand-crafted spectral features; it " +
         "works directly from the time-domain envelope."
       )]),
 

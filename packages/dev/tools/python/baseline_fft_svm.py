@@ -312,7 +312,7 @@ def main():
     print(f"Feature vector:    {n_feat} dimensions")
     print(f"SVM (RBF):         {acc_svm*100:.1f}% (5-class), {acc_bin_svm*100:.1f}% (binary)")
     print(f"MLP (32 hidden):   {acc_mlp*100:.1f}% (5-class), {acc_bin_mlp*100:.1f}% (binary), {mlp_params} params")
-    print(f"LSTM (this work):  78.3% (5-class), 94.0% (binary), 4773 params")
+    print(f"LSTM (this work):  88.0% (5-class), 97.3% (binary), 4773 params")
 
 
 if __name__ == "__main__":

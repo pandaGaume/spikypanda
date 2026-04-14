@@ -215,7 +215,7 @@ def fig3_ablation(plt, out_dir):
         "RMS envelope\nglobal min/max\n(Attempt 3)",
         "RMS envelope\ncentered + gain\n(Attempt 4)",
     ]
-    accuracies = [26.8, 16.0, 35.0, 78.3]
+    accuracies = [26.8, 16.0, 35.0, 88.0]
     colors = ["#CC4444", "#CC4444", "#DDAA33", "#228833"]
 
     fig, ax = plt.subplots(figsize=(6, 3.5))
@@ -252,7 +252,7 @@ def fig4_pareto(plt, out_dir):
         ("ResNet-152\n[2]",      60_200_000, 98.8),
         ("NASNet-Mobile\n[2]",    5_300_000, 96.2),
         ("CNN-LSTM\n[3]",          100_000,  92.3),
-        ("This work",               4_773,  78.3),
+        ("This work",               4_773,  88.0),
     ]
 
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -271,7 +271,7 @@ def fig4_pareto(plt, out_dir):
 
     # Efficiency frontier (dashed)
     frontier_params = [4_773, 100_000, 5_300_000, 143_700_000]
-    frontier_acc = [78.3, 92.3, 96.2, 99.4]
+    frontier_acc = [88.0, 92.3, 96.2, 99.4]
     ax.plot(frontier_params, frontier_acc, "--", color="gray",
             linewidth=0.8, alpha=0.6, zorder=1)
 
@@ -300,13 +300,13 @@ def fig4_pareto(plt, out_dir):
 # ---------------------------------------------------------------------------
 
 def fig5_confusion(plt, out_dir):
-    # From the 78.3% run: LSTM h=32, 80 epochs
+    # From the 88.0% run: LSTM h=32, 150 epochs
     cm = np.array([
-        [79,  1,  0,  0,  0],
-        [19, 61,  6,  4,  0],
-        [ 3,  4, 50, 19,  1],
-        [ 1,  0, 12, 67,  1],
-        [ 0,  1,  0, 15, 56],
+        [75,  1,  4,  0,  0],
+        [ 5, 72, 13,  0,  0],
+        [ 0,  0, 64, 12,  1],
+        [ 1,  0,  0, 75,  5],
+        [ 0,  0,  1,  5, 66],
     ])
 
     fig, ax = plt.subplots(figsize=(5, 4.2))
@@ -318,7 +318,7 @@ def fig5_confusion(plt, out_dir):
     ax.set_yticklabels(CLASS_NAMES, fontsize=8)
     ax.set_xlabel("Predicted")
     ax.set_ylabel("Actual")
-    ax.set_title("Confusion matrix — LSTM h=32, 80 epochs (78.3%)")
+    ax.set_title("Confusion matrix, LSTM h=32, 150 epochs (88.0%)")
 
     # Annotate cells
     for i in range(5):
@@ -393,15 +393,15 @@ def fig6_training_curves(plt, out_dir):
     ax.plot(range(1, 26), attempt3, "^-", color="#888888",
             linewidth=1.0, markersize=3,
             label="Att. 3: Envelope, global min/max (35.0%)")
-    ax.plot(range(1, 81), attempt4, "o-", color="#228833",
+    ax.plot(range(1, len(attempt4) + 1), attempt4, "o-", color="#228833",
             linewidth=1.0, markersize=2,
-            label="Att. 4: Envelope, centered (78.3%)")
+            label="Att. 4: Envelope, centered (88.0%)")
 
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Average training loss (MSE)")
     ax.set_title("Training curves across 4 preprocessing attempts")
     ax.legend(fontsize=7, loc="upper right", framealpha=0.9)
-    ax.set_xlim(0, 82)
+    ax.set_xlim(0, 155)
     ax.set_ylim(0.05, 0.45)
     ax.grid(True, alpha=0.3)
 

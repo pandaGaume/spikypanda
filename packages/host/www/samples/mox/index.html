@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda - MOx Gas Discrimination</title>
+    <link rel="stylesheet" href="../../css/common.css" />
+    <link rel="stylesheet" href="mox.css" />
+</head>
+<body>
+    <div class="sample-hero">
+        <div class="sample-hero-overlay">
+            <nav class="nav-bar" style="margin:0; background:none; border:none; padding:10px 0;">
+                <a href="../../index.html" class="nav-logo">SpikyPanda</a>
+                <div class="nav-links">
+                    <a href="../../index.html">Home</a>
+                    <a href="../motor/">Motor RNN</a>
+                    <a href="../motor_current/">Motor Current</a>
+                    <a href="../motor_monitor/">Motor Monitor</a>
+                    <a href="../kws/">KWS</a>
+                    <a href="../mnist/">MNIST</a>
+                    <a href="../lidar/">LiDAR</a>
+                    <a href="../stereo/">Stereo Depth</a>
+                </div>
+            </nav>
+            <h1>MOx Gas Discrimination</h1>
+            <p class="subtitle">Fuse 5 metal oxide sensors into an e-nose array and classify Air / Acetone / HCl with a single-layer SpikyPanda RNN</p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the use case</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Low-cost gas detection</strong> - Commercial metal oxide semiconductor (MOS) sensors are cheap, robust, and widely deployed for indoor air quality, industrial safety and environmental monitoring. Their main limitation is selectivity: a single sensor cannot tell two reducing gases apart, because very different molecules can produce nearly identical resistance responses.</p>
+                <p><strong>Electronic nose array</strong> - The classical answer is to build an <em>e-nose</em>: run several MOS sensors in parallel, each with a slightly different sensing layer, and let a model learn the multi-dimensional response signature. This demo reproduces that idea on real data from the DotVision experimental chamber, fusing the 5 most diagnostic sensors into a single input stream.</p>
+                <p><strong>The Pumba device</strong> - The long term goal of the project is Pumba, a self-contained microelectronic device that continuously detects and discriminates volatile organic compounds in real time. It needs a classifier small enough to run on a constrained MCU, which is why this demo focuses on compact, single-layer recurrent models rather than deep stacks.</p>
+                <p><strong>This sample reproduces</strong> the experiment described in Dirani et al., <em>Discrimination of different COV using MOS sensors</em> (DotVision, 2024), which reaches 89.7% accuracy with a 5-layer LSTM and teacher/student knowledge distillation. Here we replace that whole stack by a <strong>single-layer SpikyPanda GRU with 37 neurons and 592 synapses</strong>, fed by a 5-sensor e-nose fusion with engineered features and 2-second temporal windows. Measured accuracy: <strong>93.9% on the held-out test set</strong>, exceeding the published result by 4.2 points while running inference in 0.30 ms per window on the JavaScript runtime.</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the data</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Experimental chamber</strong> - A sealed chamber equipped with 13 commercial MICS 6814 / MICS 4514 metal oxide sensors, each with its own integrated heater. Controlled pumps inject acetone or hydrogen chloride (HCl) while a centralized control system cycles the ambient temperature between 0&deg;C and 200&deg;C and maintains a fixed humidity. Raw resistance is sampled at about 50 Hz.</p>
+                <p><strong>Why 5 sensors, not 13</strong> - The original paper identifies two distinct sensitivity clusters: MOX 9 and MOX 13 respond strongly to acetone, while MOX 5, MOX 21 and MOX 25 are the most reactive to HCl. Fusing these 5 sensors gives the classifier one "specialist" per gas family plus cross-validation, which is exactly what an e-nose array is supposed to offer.</p>
+                <p><strong>6 raw columns per sensor</strong> - For each timestep the device records <code>temperature</code>, <code>RH</code>, <code>heat</code> (heater setpoint), <code>R</code> (sensing layer resistance), <code>Ratio</code> and <code>Difference</code> (two precomputed baseline-normalized quantities). Temperature, humidity and heater state are shared across sensors. R, Ratio and Difference are per-sensor.</p>
+                <p><strong>Per-sensor normalization</strong> - Each MOS sensor has its own baseline: R0 (median resistance observed in clean air). The preprocessing script computes <code>Rn = R / R0</code> per sensor, which is the standard e-nose feature because it is unit-free and comparable across sensors regardless of their individual sensitivity. <code>Rn</code> is approximately 1 in clean air and moves up or down depending on the reaction chemistry.</p>
+                <p><strong>Engineered derivative</strong> - The demo also computes the centered derivative <code>dRn/dt</code>. Gas sensors have a characteristic transient profile at injection and purge; the slope of the response is often more diagnostic than its absolute value, especially during temperature cycling. Including <code>dRn/dt</code> is what separates the <em>Enhanced GRU</em> preset from the baseline.</p>
+                <p><strong>Temporal decimation to 10 Hz</strong> - The raw CSVs are sampled at 50 Hz, but MOS sensor chemistry operates on a second-scale response time. Native-rate 20-timestep windows would only cover 400 ms, which is shorter than a single adsorption/desorption cycle. The preprocessing therefore averages every 5 consecutive rows into one, reducing the effective rate to 10 Hz and lowering measurement noise at the same time. Each network input is a <strong>2-second window of 20 timesteps</strong>, which actually covers a full gas response transient. Moving from 400 ms to 2 s windows was the single biggest accuracy lever, adding about 10 points on its own.</p>
+                <p><strong>Sliding windows</strong> - The decimated 10 Hz stream is sliced into fixed windows of 20 timesteps (2 s each) with stride 5. Windows that cross a gas boundary are discarded. The train split keeps up to 200 windows per class (Air / Acetone / HCl), the test split up to 66 per class.</p>
+                <p><strong>23 feature channels</strong> - Each timestep of each window is a 23-dimensional vector: 3 shared channels (<code>temperature, RH, heat</code>), 3 per-sensor base channels times 5 sensors (<code>Rn, Ratio-1, Difference/500</code>), and 1 per-sensor engineered channel times 5 sensors (<code>dRn/dt</code>). The baseline presets use the first 18 channels only; the enhanced preset uses all 23.</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the configuration</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Architecture presets</strong> - Three one-click presets reflect three different research tradeoffs. <em>Paper LSTM</em> keeps the spirit of the published work: a single LSTM cell with hidden=32 and the 18 base channels, measured at <strong>91.9%</strong>. <em>Compact GRU</em> is the Pumba candidate: a GRU with hidden=16 and the same 18 base channels, roughly 3&times; fewer synapses than the LSTM and 20% cheaper inference, measured at <strong>93.9%</strong> and therefore the default. <em>Enhanced GRU</em> feeds the additional <code>dRn/dt</code> derivative channels into a slightly larger GRU (hidden=24, 23 inputs) and reaches about 90.4% with a perfect Air recall.</p>
+                <p><strong>LSTM vs GRU</strong> - LSTM has 4 gates and a separate cell state; GRU has 3 gates and merges cell and hidden state. On these short 2-second windows the extra LSTM capacity does not pay off: the Compact GRU actually outperforms the larger Paper LSTM by 2 points while running at 0.30 ms per window vs 0.51 ms. This is consistent with the literature observation that GRU matches or beats LSTM on short sequences.</p>
+                <p><strong>Hidden size</strong> - Number of recurrent units in the cell layer. Larger means more capacity but a quadratic cost in hidden-to-hidden synapses. For this 3-class task hidden=16 already reaches 93.9%; going higher mostly inflates inference cost.</p>
+                <p><strong>Epochs and learning rate</strong> - Adam at a constant learning rate of 0.002 for 60 epochs is the sweet spot. The loss landscape here is bumpy, with many shallow local minima, so the network benefits from continuing high-LR exploration rather than settling early.</p>
+                <p><strong>LR schedule</strong> - Three options are exposed. <em>constant</em> is the default because it turned out to be the best on this dataset. <em>cosine decay</em> drops the LR smoothly to 10% of its initial value and is the classic anti-overfit schedule, but here it actively hurts accuracy by 2 to 8 points: the late low-LR phase traps the model in the first mediocre basin it finds. <em>cyclic sin</em> oscillates between 30% and 100% of the base LR with two full sine waves, an intermediate option. This is a real negative result worth keeping in the demo: standard schedules can backfire on noisy loss landscapes.</p>
+                <p><strong>Samples</strong> - Number of training windows actually used each run. Lower values are good for quick iteration, higher values give steadier results but take longer. The balanced train set maxes out at 600 (200 per class).</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Understanding the results</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Measured results</strong> - On a held-out test set of 198 balanced windows (66 per class), using 60 epochs of Adam at a constant learning rate of 0.002 on 300 balanced train samples:</p>
+                <table class="confusion-table" style="margin-bottom:10px; max-width:100%;">
+                    <tr><th>Preset</th><th>Accuracy</th><th>Air</th><th>Acetone</th><th>HCl</th><th>Synapses</th><th>Latency</th></tr>
+                    <tr><td class="row-label">Paper LSTM</td><td>91.9%</td><td>66/66</td><td>57/66</td><td>59/66</td><td>1696</td><td>0.51 ms</td></tr>
+                    <tr><td class="row-label">Compact GRU</td><td><strong>93.9%</strong></td><td>66/66</td><td><strong>64/66</strong></td><td>56/66</td><td><strong>592</strong></td><td><strong>0.30 ms</strong></td></tr>
+                    <tr><td class="row-label">Enhanced GRU</td><td>90.4%</td><td>66/66</td><td>58/66</td><td>55/66</td><td>1200</td><td>0.48 ms</td></tr>
+                </table>
+                <p><strong>Compared to the paper</strong> (89.7% with 5-layer LSTM + teacher/student distillation on a single sensor): the Compact GRU exceeds it by 4.2 points with a fraction of the parameter count and no distillation step.</p>
+                <p><strong>Air is perfectly classified (66/66)</strong> in every preset. The network never misses a gas alarm. All residual errors are between Acetone and HCl, which is the intrinsic difficulty of the task: both are reducing gases that pull the sensor resistance in the same direction. The paper reports the exact same failure mode.</p>
+                <p><strong>Confusion matrix</strong> - Rows are true labels, columns are predicted labels. Green diagonal cells are correct; red off-diagonal cells are errors. Expect a green Air row with no leakage, and a few red entries clustered on the Acetone / HCl boundary.</p>
+                <p><strong>Signal visualization</strong> - The plot shows <code>Rn(t)</code> for the 5 sensors over one test window, color coded. A clean Air window is nearly flat around 1.0, an Acetone window drifts below 1 and stays low, and an HCl window shows a sharp transient followed by partial recovery. This panel is useful for sanity-checking what the model is actually seeing.</p>
+                <p><strong>Inference time</strong> - Total time to classify every test window on the current machine. Dividing by the number of test samples gives per-window latency, which is the metric that matters for real-time edge deployment on a constrained MCU.</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Configuration</h2>
+            <div class="controls">
+                <div>
+                    <label for="preset">Architecture:</label><br>
+                    <select id="preset">
+                        <option value="paper-lstm">Paper LSTM - hidden=32, 18 base features (91.9%)</option>
+                        <option value="compact-gru" selected>Compact GRU - hidden=16, 18 base features (93.9%)</option>
+                        <option value="enhanced-gru">Enhanced GRU - hidden=24, 23 features + dRn/dt (90.4%)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="epochs">Epochs:</label><br>
+                    <input type="number" id="epochs" value="60" min="1" max="200" style="width:70px" />
+                </div>
+                <div>
+                    <label for="lr">Learning rate:</label><br>
+                    <input type="number" id="lr" value="0.002" step="0.001" min="0.0001" style="width:90px" />
+                </div>
+                <div>
+                    <label for="numSamples">Samples:</label><br>
+                    <input type="number" id="numSamples" value="300" min="30" max="600" step="30" style="width:80px" />
+                </div>
+                <div>
+                    <label for="lrSchedule">LR schedule:</label><br>
+                    <select id="lrSchedule">
+                        <option value="constant" selected>constant</option>
+                        <option value="cosine">cosine decay</option>
+                        <option value="cyclic">cyclic sin</option>
+                    </select>
+                </div>
+            </div>
+            <div class="preset-info" id="presetInfo">
+                <strong>Compact GRU</strong> - Single GRU cell, hidden=16, 37 neurons, 592 synapses, fed by the 18 base channels (3 shared + 3 per-sensor x 5 sensors). Measured at 93.9% accuracy and 0.30 ms per window, this is the champion preset and the Pumba candidate: smallest footprint while still beating the original paper's 5-layer LSTM.
+            </div>
+            <div class="controls" style="margin-top:10px;">
+                <div style="display:flex; gap:8px; align-self:flex-end;">
+                    <button id="btnLoad">Load Data</button>
+                    <button id="btnTrain" disabled>Train</button>
+                    <button id="btnTest" disabled>Test</button>
+                </div>
+            </div>
+            <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+            <div id="status">Click Load Data to begin.</div>
+        </div>
+
+        <div class="panel">
+            <h2>Training Log</h2>
+            <div class="log" id="log">Ready.
+</div>
+            <canvas class="loss-canvas" id="lossCanvas"></canvas>
+        </div>
+
+        <div class="panel" id="resultsPanel" style="display:none">
+            <h2>Results</h2>
+            <div class="stats">
+                <div class="stat"><div class="value" id="accuracy">-</div><div class="label">Accuracy</div></div>
+                <div class="stat"><div class="value" id="finalLoss">-</div><div class="label">Final Loss</div></div>
+                <div class="stat"><div class="value" id="inferenceTime">-</div><div class="label">Inference Time</div></div>
+                <div class="stat"><div class="value" id="testCount">-</div><div class="label">Test Samples</div></div>
+            </div>
+            <div class="results-grid">
+                <div class="result-section">
+                    <h3>Sensor responses (Rn per sensor)</h3>
+                    <canvas class="signal-canvas" id="signalCanvas"></canvas>
+                </div>
+                <div class="result-section">
+                    <h3>Confusion Matrix</h3>
+                    <div id="confusionMatrix"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Code</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body">
+                <p style="font-size:0.85em; color:#bbb; margin-bottom:10px;">Build the SpikyPanda RNN that powers this demo using <code style="color:var(--log-text);">@spiky-panda/core</code>:</p>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent).then(() => { this.textContent='Copied!'; this.classList.add('copied'); setTimeout(() => { this.textContent='Copy'; this.classList.remove('copied'); }, 2000); })">Copy</button>
+<pre>import {
+  RnnBuilder,
+  RnnCellType,
+  RnnInferenceRuntime,
+  RnnTrainingRuntime,
+  ActivationFunctions,
+  LossFunctions,
+  Optimizers,
+} from "@spiky-panda/core";
+
+// Champion preset: Compact GRU on the 5-sensor e-nose fusion.
+// 18 input channels = 3 shared (T, RH, heat) + 3 per-sensor x 5 sensors
+// (Rn = R/R0 centered, Ratio-1, Difference/500). 37 neurons, 592 synapses.
+// Measured at 93.9% accuracy on the held-out test set.
+const graph = new RnnBuilder()
+    .withInputSize(18)
+    .withHiddenSize(16)
+    .withOutputSize(3)          // Air, Acetone, HCl
+    .withCellType(RnnCellType.GRU)
+    .withOutputActivation(ActivationFunctions.sigmoid)
+    .build();
+
+const runtime = new RnnInferenceRuntime(graph);
+// CrossEntropy produces sharp gradients when the model is confidently wrong,
+// which is exactly what sigmoid + MSE lacks on a 3-class classification task.
+const trainer = new RnnTrainingRuntime(
+    graph, runtime,
+    LossFunctions.CrossEntropy,
+    0.002,
+    Optimizers.Adam()
+);
+
+// Train 60 epochs with a constant learning rate. On this noisy loss landscape
+// cosine decay actively hurts (it freezes the model in a mediocre basin), so
+// keep the LR high and let the network keep exploring.
+for (let epoch = 0; epoch &lt; 60; epoch++) {
+    let total = 0;
+    for (const sample of trainData) {
+        runtime.resetState();
+        // Inject the one-hot target on every timestep. On 2-second windows
+        // the network has enough context to commit to a class from the start.
+        const oneHot = new Array(3).fill(0); oneHot[sample.label] = 1;
+        const targets = sample.sequence.map(() =&gt; oneHot.slice());
+        total += trainer.trainStep(sample.sequence, targets);
+    }
+    console.log(`Epoch ${epoch + 1} - Loss: ${(total / trainData.length).toFixed(6)}`);
+}
+
+// Inference: read out the last timestep's output and argmax.
+runtime.resetState();
+const outputs = runtime.run(testSample.sequence);
+const last = outputs[outputs.length - 1];
+let best = 0;
+for (let c = 1; c &lt; last.length; c++) if (last[c] &gt; last[best]) best = c;
+console.log("Predicted gas:", ["Air", "Acetone", "HCl"][best]);</pre>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="../../bundle/spikypanda-core.js"></script>
+    <script src="../../js/common.js"></script>
+    <script src="mox.js"></script>
+</body>
+</html>

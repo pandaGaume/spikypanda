@@ -117,7 +117,7 @@ const titleSection = {
     para([txtI(
       "We present a 4,773-parameter LSTM classifier for 5-class broken rotor bar severity grading " +
       "from three-phase stator currents. On the public Universidade Federal de Uberl\u00e2ndia dataset " +
-      "(IEEE DataPort), it reaches 78.3% accuracy and trains in under 3 minutes on a laptop CPU, " +
+      "(IEEE DataPort), it reaches 88.0% accuracy and trains in under 3 minutes on a laptop CPU, " +
       "entirely in a web browser."
     )]),
     para([txtI(
@@ -132,14 +132,14 @@ const titleSection = {
       "domain these appear as slow amplitude modulation at 2\u20136 Hz, which the moving RMS captures " +
       "directly. The envelope captures the discriminative information relevant to BRB severity, " +
       "while the carrier primarily contributes redundant high-frequency structure. " +
-      "An ablation across four pipeline variants (26.8% to 78.3%) confirms that each preprocessing " +
+      "An ablation across four pipeline variants (26.8% to 88.0%) confirms that each preprocessing " +
       "step contributes measurably."
     )]),
     para([txtI(
-      "Accuracy is below the 95\u201399% reported by large CNN models on the same data. The gap is " +
-      "expected given a 1000\u00d7 reduction in parameter count. Collapsing to a binary healthy/faulty " +
-      "decision gives 94.0% accuracy; most of the binary errors come from BRB1 samples (one broken " +
-      "bar out of 34) misclassified as Healthy, particularly at light loads where the 2.9% modulation " +
+      "Accuracy is below the 95\u201399% reported by large CNN models on the same data, but surpasses " +
+      "the FFT+SVM baseline (81.5%). Collapsing to a binary healthy/faulty " +
+      "decision gives 97.3% accuracy; only 6 faulty motors are misclassified as Healthy " +
+      "(5 BRB1 + 1 BRB3), concentrated at light loads where the modulation " +
       "is near the noise floor."
     )]),
     para([
@@ -197,7 +197,7 @@ bodyChildren.push(new Table({
     tableRow([{t:"Jakaria [3]",w:tIcw[0]},{t:"CNN-LSTM",w:tIcw[1]},{t:"~100 K",w:tIcw[2]},{t:"5",w:tIcw[3]},{t:"92.3%",w:tIcw[4]},{t:"Raw I",w:tIcw[5]},{t:"GPU",w:tIcw[6]}]),
     tableRow([{t:"Baseline",w:tIcw[0]},{t:"FFT+SVM",w:tIcw[1]},{t:"n/p",w:tIcw[2]},{t:"5",w:tIcw[3]},{t:"81.5%",w:tIcw[4]},{t:"18 FFT feat.",w:tIcw[5]},{t:"Desktop",w:tIcw[6]}]),
     tableRow([{t:"Baseline",w:tIcw[0]},{t:"FFT+MLP",w:tIcw[1]},{t:"773",w:tIcw[2]},{t:"5",w:tIcw[3]},{t:"67.0%",w:tIcw[4]},{t:"18 FFT feat.",w:tIcw[5]},{t:"Desktop",w:tIcw[6]}]),
-    tableRow([{t:[txtB("This work",{size:15})],w:tIcw[0]},{t:[txtB("LSTM h=32",{size:15})],w:tIcw[1]},{t:[txtB("4,773",{size:15})],w:tIcw[2]},{t:[txtB("5",{size:15})],w:tIcw[3]},{t:[txtB("78.3%",{size:15})],w:tIcw[4]},{t:[txtB("Envelope",{size:15})],w:tIcw[5]},{t:[txtB("Browser",{size:15})],w:tIcw[6]}]),
+    tableRow([{t:[txtB("This work",{size:15})],w:tIcw[0]},{t:[txtB("LSTM h=32",{size:15})],w:tIcw[1]},{t:[txtB("4,773",{size:15})],w:tIcw[2]},{t:[txtB("5",{size:15})],w:tIcw[3]},{t:[txtB("88.0%",{size:15})],w:tIcw[4]},{t:[txtB("Envelope",{size:15})],w:tIcw[5]},{t:[txtB("Browser",{size:15})],w:tIcw[6]}]),
   ],
 }));
 bodyChildren.push(para([], { spacing: { after: 80 } })); // spacer
@@ -305,7 +305,7 @@ bodyChildren.push(heading(HeadingLevel.HEADING_2, "E. LSTM Architecture"));
 bodyChildren.push(para([
   txt("A single-layer LSTM with 3 inputs (Ia, Ib, Ic envelopes), 32 hidden units, and 5 sigmoid " +
       "outputs. Total: 4,773 parameters (19.1 KB at float32). The model is trained with MSE loss and " +
-      "Adam optimizer (lr = 0.003) for 80 epochs, with one-hot targets applied at every timestep. " +
+      "Adam optimizer (lr = 0.003) for 150 epochs, with one-hot targets applied at every timestep. " +
       "Sigmoid + MSE was chosen for compatibility with the runtime; softmax + cross-entropy would " +
       "be standard and is expected to improve results near decision boundaries."),
 ]));
@@ -351,7 +351,7 @@ bodyChildren.push(new Table({
     tableRow([{t:"Raw, per-trace norm, 64-step",w:tIIIcw[0]},{t:"26.8%",w:tIIIcw[1],a:AlignmentType.RIGHT},{t:"Signature erased by normalization",w:tIIIcw[2]}]),
     tableRow([{t:"Raw, global norm, 256-step",w:tIIIcw[0]},{t:"16.0%",w:tIIIcw[1],a:AlignmentType.RIGHT},{t:"Vanishing gradient (256 BPTT steps)",w:tIIIcw[2]}]),
     tableRow([{t:"Envelope, global min/max",w:tIIIcw[0]},{t:"35.0%",w:tIIIcw[1],a:AlignmentType.RIGHT},{t:"Load confound (75% dynamic range)",w:tIIIcw[2]}]),
-    tableRow([{t:[txtB("Env. centered",{size:15})],w:tIIIcw[0]},{t:[txtB("78.3%",{size:15})],w:tIIIcw[1],a:AlignmentType.RIGHT},{t:[txtB("Full pipeline",{size:15})],w:tIIIcw[2]}]),
+    tableRow([{t:[txtB("Env. centered",{size:15})],w:tIIIcw[0]},{t:[txtB("88.0%",{size:15})],w:tIIIcw[1],a:AlignmentType.RIGHT},{t:[txtB("Full pipeline",{size:15})],w:tIIIcw[2]}]),
     tableRow([{t:"FFT + SVM (baseline)",w:tIIIcw[0]},{t:"81.5%",w:tIIIcw[1],a:AlignmentType.RIGHT},{t:"Requires hand-crafted features",w:tIIIcw[2]}]),
     tableRow([{t:"FFT + MLP (baseline)",w:tIIIcw[0]},{t:"67.0%",w:tIIIcw[1],a:AlignmentType.RIGHT},{t:"Small parametric model on FFT features",w:tIIIcw[2]}]),
   ],
@@ -370,7 +370,7 @@ bodyChildren.push(heading(HeadingLevel.HEADING_2, "B. Comparison with Classical 
 bodyChildren.push(para([
   txt("An FFT + SVM baseline using 18 hand-crafted spectral features (sideband amplitudes at " +
       "f(1 \u00b1 2s) for five slip values, harmonic ratios, RMS, crest factor, THD) reaches " +
-      "81.5% on the same data split. The SVM outperforms the LSTM by 3.2 percentage points, " +
+      "81.5% on the same data split. The LSTM now surpasses the SVM by 6.5 percentage points, " +
       "but requires explicit sideband identification and slip estimation, which depend on " +
       "prior knowledge of the operating conditions. An FFT + MLP with 773 parameters (comparable " +
       "to our model size) drops to 67.0%, suggesting that FFT features alone are insufficient " +
@@ -380,10 +380,10 @@ bodyChildren.push(para([
 
 bodyChildren.push(heading(HeadingLevel.HEADING_2, "C. Classification Performance"));
 bodyChildren.push(para([
-  txt("The final model (LSTM h=32, 80 epochs) achieves 78.3% overall 5-class accuracy. " +
-      "Collapsing to binary healthy/faulty gives 94.0%. Healthy recall is 98.8% (79/80), but " +
-      "19 of 90 BRB1 samples are misclassified as Healthy, mostly at light loads where the single " +
-      "broken bar produces only 2.9% modulation depth."),
+  txt("The final model (LSTM h=32, 150 epochs) achieves 88.0% overall 5-class accuracy. " +
+      "Collapsing to binary healthy/faulty gives 97.3%. Healthy recall is 93.8% (75/80). " +
+      "BRB1 recall improved to 80.0% (72/90). Only 6 faulty motors are misclassified as " +
+      "Healthy (5 BRB1 + 1 BRB3), concentrated at light loads."),
 ]));
 
 // Fig 5 - Confusion
@@ -398,8 +398,8 @@ bodyChildren.push(para([
   txtI("k"),
   txt("+1 broken bars is only 1/"),
   txtI("N"),
-  txt(" = 2.9% additional depth. BRB1 is the hardest class (67.8%), mostly confused with Healthy at " +
-      "light loads where the 2.9% modulation is below the noise floor."),
+  txt(" = 2.9% additional depth. BRB1 is the hardest class (80.0%), mostly confused with BRB2 at " +
+      "light loads where the modulation differences between adjacent severities are subtle."),
 ]));
 
 bodyChildren.push(heading(HeadingLevel.HEADING_2, "D. Efficiency"));
@@ -420,13 +420,13 @@ bodyChildren.push(new Table({
     tableRow([{t:"VGG-19 [2]",w:tIVcw[0]},{t:"143.7 M",w:tIVcw[1]},{t:"574 MB",w:tIVcw[2]},{t:"99.4%",w:tIVcw[3]},{t:"0.007",w:tIVcw[4]},{t:"~500ms GPU",w:tIVcw[5]}]),
     tableRow([{t:"NASNet-M [2]",w:tIVcw[0]},{t:"5.3 M",w:tIVcw[1]},{t:"21 MB",w:tIVcw[2]},{t:"96.2%",w:tIVcw[3]},{t:"0.18",w:tIVcw[4]},{t:"~50ms GPU",w:tIVcw[5]}]),
     tableRow([{t:"CNN-LSTM [3]",w:tIVcw[0]},{t:"~100 K",w:tIVcw[1]},{t:"400 KB",w:tIVcw[2]},{t:"92.3%",w:tIVcw[3]},{t:"9.2",w:tIVcw[4]},{t:"~10ms GPU",w:tIVcw[5]}]),
-    tableRow([{t:[txtB("This work",{size:15})],w:tIVcw[0]},{t:[txtB("4,773",{size:15})],w:tIVcw[1]},{t:[txtB("19 KB",{size:15})],w:tIVcw[2]},{t:[txtB("78.3%",{size:15})],w:tIVcw[3]},{t:[txtB("164",{size:15})],w:tIVcw[4]},{t:[txtB("1.5ms JS",{size:15})],w:tIVcw[5]}]),
+    tableRow([{t:[txtB("This work",{size:15})],w:tIVcw[0]},{t:[txtB("4,773",{size:15})],w:tIVcw[1]},{t:[txtB("19 KB",{size:15})],w:tIVcw[2]},{t:[txtB("88.0%",{size:15})],w:tIVcw[3]},{t:[txtB("184.4",{size:15})],w:tIVcw[4]},{t:[txtB("1.5ms JS",{size:15})],w:tIVcw[5]}]),
   ],
 }));
 bodyChildren.push(para([], { spacing: { after: 80 } }));
 
 bodyChildren.push(para([
-  txt("The proposed model achieves 164 accuracy points per 10K parameters, vs. 0.007\u20139.2 for " +
+  txt("The proposed model achieves 184.4 accuracy points per 10K parameters, vs. 0.007\u20139.2 for " +
       "published approaches. At 19.1 KB (float32), it fits in the SRAM of a Cortex-M0+ MCU."),
 ]));
 
@@ -462,11 +462,11 @@ bodyChildren.push(para([], { spacing: { after: 80 } }));
 
 bodyChildren.push(heading(HeadingLevel.HEADING_2, "B. Limitations"));
 bodyChildren.push(para([
-  txt("The 78.3% accuracy is below the 95\u201399% of large models. The gap comes from model capacity " +
-      "(4,773 vs. millions of parameters), suboptimal loss function (sigmoid + MSE vs. softmax + cross-entropy), " +
-      "and no data augmentation. Binary healthy/faulty accuracy is 94.0%. The main weakness is BRB1 " +
-      "detection: 19 of 90 single-broken-bar samples are classified as Healthy, concentrated at light " +
-      "loads where the fault signature is weakest."),
+  txt("The 88.0% accuracy surpasses the FFT+SVM baseline (81.5%) but is below the 95\u201399% of large models. " +
+      "The gap comes from model capacity (4,773 vs. millions of parameters), suboptimal loss function " +
+      "(sigmoid + MSE vs. softmax + cross-entropy), and no data augmentation. Binary healthy/faulty " +
+      "accuracy is 97.3%. BRB1 recall improved to 80.0% (72/90); only 5 BRB1 samples remain " +
+      "misclassified as Healthy, concentrated at light loads."),
 ]));
 bodyChildren.push(para([
   txt("Results are reported on a single dataset (1 motor, 34 bars, 60 Hz). Generalization requires " +
@@ -512,9 +512,9 @@ bodyChildren.push(para([
   txt("Extracting the stator current envelope before classification reduced the required model size " +
       "from hundreds of thousands of parameters to 4,773. The preprocessing is straightforward " +
       "(half-cycle moving RMS, decimation, mean subtraction) and each step has a measurable effect " +
-      "on accuracy, as shown in the ablation. The resulting 19 KB LSTM reaches 78.3% on 5-class " +
-      "severity grading and 94.0% on binary fault detection. BRB1 at light load remains the " +
-      "hardest case."),
+      "on accuracy, as shown in the ablation. The resulting 19 KB LSTM reaches 88.0% on 5-class " +
+      "severity grading and 97.3% on binary fault detection, surpassing the FFT+SVM baseline " +
+      "(81.5%). BRB1 at light load remains the hardest case."),
 ]));
 bodyChildren.push(para([
   txt("On an ESP32, this classifier would run as one module in a larger pipeline: the MCU monitors " +

@@ -350,7 +350,7 @@ deployment (< 20 KB at float32).
 Empirical results on the Broken Rotor Bar dataset:
 - `h = 16`, 25 epochs: 31.8 % accuracy (underfitting)
 - `h = 32`, 50 epochs: 70.8 % accuracy
-- `h = 32`, 80 epochs: 78.3 % accuracy (loss still falling)
+- `h = 32`, 150 epochs: 88.0 % accuracy
 
 ### 3.4 Training targets: many-to-one via many-to-many API
 
@@ -460,12 +460,13 @@ relationships across Ia/Ib/Ic), not just the variance.
 
 ![Confusion matrix](figures/fig5_confusion.png)
 
-The LSTM at h=32, 80 epochs achieves 78.3 % overall accuracy with a
+The LSTM at h=32, 150 epochs achieves 88.0 % overall accuracy with a
 characteristic confusion pattern:
 
-    Healthy → BRB1:  19 errors (23.8 % of BRB1 test samples)
-    BRB2 → BRB3:     19 errors (24.7 % of BRB2 test samples)
-    BRB4 → BRB3:     15 errors (20.8 % of BRB4 test samples)
+    Healthy → BRB1:   5 errors (5.6 % of BRB1 test samples)
+    BRB1 → BRB2:     13 errors (14.4 % of BRB1 test samples)
+    BRB2 → BRB3:     12 errors (15.6 % of BRB2 test samples)
+    BRB4 → BRB3:      5 errors (6.9 % of BRB4 test samples)
 
 All confusions are between **adjacent severities**. This is the
 expected MCSA failure mode: the difference between k and k+1 broken
@@ -474,8 +475,8 @@ loads this is below the noise floor.
 
 In a real deployment, this confusion pattern is acceptable because:
 1. The binary Healthy/Faulty decision (which matters most for safety)
-   is nearly perfect (98.8 %)
-2. Confusing BRB3 with BRB4 is operationally harmless — both require
+   is 97.3 % (only 6 faulty motors called Healthy: 5 BRB1 + 1 BRB3)
+2. Confusing BRB3 with BRB4 is operationally harmless, both require
    the same maintenance action (schedule rotor replacement)
 3. BRB1 being confused with Healthy is the only safety-relevant
    failure mode, and it occurs mostly at light loads where the motor
@@ -512,8 +513,8 @@ Raw 3-phase currents (55.6 kHz, 18 s, ±17 A)
 Browser LSTM (3 inputs, 32 hidden, 5 outputs, sigmoid + MSE + Adam)
     │
     ├─ Target: one-hot at every timestep
-    ├─ 80 epochs, lr = 0.003
-    └─ → 78.3 % accuracy (h=32), loss 0.268
+    ├─ 150 epochs, lr = 0.003
+    └─ → 88.0 % accuracy (h=32), loss 0.214
 ```
 
 ---

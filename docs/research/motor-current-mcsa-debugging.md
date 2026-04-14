@@ -25,11 +25,11 @@ fault detection sample, so they are all documented here in detail.
 | 2 | 256-step LSTM on raw 253 Hz current, global norm, transient skip, one-hot target | 16.0 % | Bug E (vanishing gradient through 256 steps) |
 | 3 | 64-step LSTM on 60 Hz RMS envelope, global min/max norm | 35.0 % | Bug G (load baseline confound taking 75 % of dynamic range) |
 | 4 | 64-step LSTM on 60 Hz RMS envelope, per-window centered + amplified (h=32, 50 ep) | 70.8 % | Working. Healthy near-perfect (79/80), confusions only between adjacent severities. Loss still falling at epoch 50. |
-| 5 | Same as 4 but 80 epochs | **78.3 %** | Healthy 98.8 %, BRB3 82.7 %, BRB4 77.8 %, BRB1 67.8 %, BRB2 64.9 %. Confusions only between adjacent severities. Loss 0.268 at epoch 77, still trending down. |
+| 5 | Same as 4 but 150 epochs | **88.0 %** | Healthy 93.8 % (75/80), BRB1 80.0 % (72/90), BRB2 83.1 % (64/77), BRB3 92.6 % (75/81), BRB4 91.7 % (66/72). Binary 97.3 %. Loss 0.214. |
 
 ![Confusion matrix — final result](figures/fig5_confusion.png)
-*Confusion matrix from Attempt 5 (78.3 %). Errors are only between
-adjacent severities — the binary Healthy/Faulty decision is 98.8 %.*
+*Confusion matrix from Attempt 5 (88.0 %). Errors are only between
+adjacent severities, the binary Healthy/Faulty decision is 97.3 %.*
 
 ## 1. Symptoms
 
