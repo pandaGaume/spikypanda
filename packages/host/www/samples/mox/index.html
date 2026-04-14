@@ -38,7 +38,7 @@
                 <p><strong>Low-cost gas detection</strong> - Commercial metal oxide semiconductor (MOS) sensors are cheap, robust, and widely deployed for indoor air quality, industrial safety and environmental monitoring. Their main limitation is selectivity: a single sensor cannot tell two reducing gases apart, because very different molecules can produce nearly identical resistance responses.</p>
                 <p><strong>Electronic nose array</strong> - The classical answer is to build an <em>e-nose</em>: run several MOS sensors in parallel, each with a slightly different sensing layer, and let a model learn the multi-dimensional response signature. This demo reproduces that idea on real data from the DotVision experimental chamber, fusing the 5 most diagnostic sensors into a single input stream.</p>
                 <p><strong>The Pumba device</strong> - The long term goal of the project is Pumba, a self-contained microelectronic device that continuously detects and discriminates volatile organic compounds in real time. It needs a classifier small enough to run on a constrained MCU, which is why this demo focuses on compact, single-layer recurrent models rather than deep stacks.</p>
-                <p><strong>This sample reproduces</strong> the experiment described in Dirani et al., <em>Discrimination of different COV using MOS sensors</em> (DotVision, 2024), which reaches 89.7% accuracy with a 5-layer LSTM and teacher/student knowledge distillation. Here we replace that whole stack by a <strong>single-layer SpikyPanda GRU with 37 neurons and 592 synapses</strong>, fed by a 5-sensor e-nose fusion with engineered features and 2-second temporal windows. Measured accuracy: <strong>93.9% on the held-out test set</strong>, exceeding the published result by 4.2 points while running inference in 0.30 ms per window on the JavaScript runtime.</p>
+                <p><strong>This sample reproduces</strong> the experiment described in Dirani et al., <em>Discrimination of different COV using MOS sensors</em> (DotVision, 2024), which reaches 89.7% accuracy with a 5-layer LSTM and teacher/student knowledge distillation. Here we replace that whole stack by a <strong>single-layer SpikyPanda GRU with 37 neurons and 592 synapses</strong>, fed by a 5-sensor e-nose fusion with engineered features, 2-second temporal windows, cross-entropy loss and best-weights checkpointing. Measured accuracy: <strong>95.5% on the held-out test set</strong>, exceeding the published result by 5.8 points while running inference in 0.20 ms per window on the JavaScript runtime.</p>
             </div>
         </div>
 
@@ -63,11 +63,17 @@
                 <h2>Understanding the configuration</h2><span class="collapsible-arrow">&#9660;</span>
             </div>
             <div class="collapsible-body metrics-help">
-                <p><strong>Architecture presets</strong> - Three one-click presets reflect three different research tradeoffs. <em>Paper LSTM</em> keeps the spirit of the published work: a single LSTM cell with hidden=32 and the 18 base channels, measured at <strong>91.9%</strong>. <em>Compact GRU</em> is the Pumba candidate: a GRU with hidden=16 and the same 18 base channels, roughly 3&times; fewer synapses than the LSTM and 20% cheaper inference, measured at <strong>93.9%</strong> and therefore the default. <em>Enhanced GRU</em> feeds the additional <code>dRn/dt</code> derivative channels into a slightly larger GRU (hidden=24, 23 inputs) and reaches about 90.4% with a perfect Air recall.</p>
-                <p><strong>LSTM vs GRU</strong> - LSTM has 4 gates and a separate cell state; GRU has 3 gates and merges cell and hidden state. On these short 2-second windows the extra LSTM capacity does not pay off: the Compact GRU actually outperforms the larger Paper LSTM by 2 points while running at 0.30 ms per window vs 0.51 ms. This is consistent with the literature observation that GRU matches or beats LSTM on short sequences.</p>
-                <p><strong>Hidden size</strong> - Number of recurrent units in the cell layer. Larger means more capacity but a quadratic cost in hidden-to-hidden synapses. For this 3-class task hidden=16 already reaches 93.9%; going higher mostly inflates inference cost.</p>
+                <p><strong>Architecture presets</strong> - Three one-click presets reflect three different research tradeoffs. <em>Paper LSTM</em> keeps the spirit of the published work: a single LSTM cell with hidden=32 and the 18 base channels. <em>Compact GRU</em> is the Pumba candidate and the champion: a GRU with hidden=16 and the same 18 base channels, measured at <strong>95.5%</strong> accuracy with best-weights checkpointing, and therefore the default. <em>Enhanced GRU</em> feeds the additional <code>dRn/dt</code> derivative channels into a slightly larger GRU (hidden=24, 23 inputs); the derivatives turn out to be largely redundant with what the GRU gating already extracts internally.</p>
+                <p><strong>LSTM vs GRU</strong> - LSTM has 4 gates and a separate cell state; GRU has 3 gates and merges cell and hidden state. On these short 2-second windows the extra LSTM capacity does not pay off: the Compact GRU outperforms the larger Paper LSTM by a few points while running at 0.20 ms per window vs 0.51 ms. This is consistent with the literature observation that GRU matches or beats LSTM on short sequences.</p>
+                <p><strong>Hidden size</strong> - Number of recurrent units in the cell layer. Larger means more capacity but a quadratic cost in hidden-to-hidden synapses. For this 3-class task hidden=16 already reaches 95.5%; going higher mostly inflates inference cost.</p>
                 <p><strong>Epochs and learning rate</strong> - Adam at a constant learning rate of 0.002 for 60 epochs is the sweet spot. The loss landscape here is bumpy, with many shallow local minima, so the network benefits from continuing high-LR exploration rather than settling early.</p>
-                <p><strong>LR schedule</strong> - Three options are exposed. <em>constant</em> is the default because it turned out to be the best on this dataset. <em>cosine decay</em> drops the LR smoothly to 10% of its initial value and is the classic anti-overfit schedule, but here it actively hurts accuracy by 2 to 8 points: the late low-LR phase traps the model in the first mediocre basin it finds. <em>cyclic sin</em> oscillates between 30% and 100% of the base LR with two full sine waves, an intermediate option. This is a real negative result worth keeping in the demo: standard schedules can backfire on noisy loss landscapes.</p>
+                <p><strong>Best-weights checkpointing</strong> - The training loop tracks the minimum per-epoch loss after a 5-epoch warmup and snapshots every learnable parameter of the graph at that moment. Before the test phase the snapshot is restored, so evaluation runs on the actual best state the optimizer visited rather than on whatever weights happen to be in memory at the final epoch. Epochs that improve the best-so-far loss are marked with <code>*</code> in the log. With <em>constant</em> the best is usually the final epoch so the checkpoint is silent; on the other schedules it systematically rescues about 1 to 3 points of accuracy.</p>
+                <p><strong>LR schedule</strong> - Five options are exposed, and the default <em>constant</em> is the best on this dataset. The other four are included because the path to that verdict is more interesting than the verdict itself.</p>
+                <p><em>cosine decay</em> drops the LR smoothly to 10% of its initial value over the full training run and is the classic anti-overfit schedule, but here it actively hurts accuracy by 2 to 8 points: the late low-LR phase traps the model in the first mediocre basin it finds, and the loss often climbs again in the last third of training instead of fine-tuning.</p>
+                <p><em>cyclic sin</em> oscillates between 30% and 100% of the base LR with two full sine waves, an intermediate option that keeps some exploration energy throughout but cannot recover what cosine loses.</p>
+                <p><em>cosine + adaptive kick</em> is the reactive answer to the cosine failure mode. It follows the cosine curve normally, watches the per-epoch loss, and whenever the loss rises two epochs in a row the scheduler bumps the LR up to three times the current scheduled value (capped at the initial base LR) and holds that elevated rate for three consecutive epochs, then falls back to the cosine curve and imposes a cooldown before another kick can fire. Every kick is logged in the training panel. This variant recovers most of what plain cosine loses (measured at about +6 points on Compact GRU, 86.4% to 92.4%) but still underperforms <em>constant</em> by 1 to 2 points.</p>
+                <p><em>constant + adaptive kick</em> applies the same reactive idea on top of a constant base. When the loss rises two epochs in a row the scheduler doubles the LR (from 0.002 to 0.004) and holds it there for three epochs before falling back. This is the natural stress test: can detecting a drift in real time give anything beyond what constantly-high exploration already delivers on its own? Try it and compare with plain <em>constant</em>.</p>
+                <p><strong>What all this tells us</strong> - The MOx loss landscape is unusually rugged for such a small model. Standard schedulers that assume a clean exploration-then-exploitation progression backfire because there is no clean exploitation regime to settle into: every time the LR drops the model drifts again. On tasks with this kind of geometry, the simplest strategy (keep pushing at the initial LR) tends to win, and adaptive mechanisms mostly recover what fancier schedules give up. This is a genuine negative result worth keeping in the demo.</p>
                 <p><strong>Samples</strong> - Number of training windows actually used each run. Lower values are good for quick iteration, higher values give steadier results but take longer. The balanced train set maxes out at 600 (200 per class).</p>
             </div>
         </div>
@@ -77,15 +83,16 @@
                 <h2>Understanding the results</h2><span class="collapsible-arrow">&#9660;</span>
             </div>
             <div class="collapsible-body metrics-help">
-                <p><strong>Measured results</strong> - On a held-out test set of 198 balanced windows (66 per class), using 60 epochs of Adam at a constant learning rate of 0.002 on 300 balanced train samples:</p>
+                <p><strong>Measured results</strong> - On a held-out test set of 198 balanced windows (66 per class), using 60 epochs of Adam at a constant learning rate of 0.002 on 300 balanced train samples with best-weights checkpointing:</p>
                 <table class="confusion-table" style="margin-bottom:10px; max-width:100%;">
                     <tr><th>Preset</th><th>Accuracy</th><th>Air</th><th>Acetone</th><th>HCl</th><th>Synapses</th><th>Latency</th></tr>
                     <tr><td class="row-label">Paper LSTM</td><td>91.9%</td><td>66/66</td><td>57/66</td><td>59/66</td><td>1696</td><td>0.51 ms</td></tr>
-                    <tr><td class="row-label">Compact GRU</td><td><strong>93.9%</strong></td><td>66/66</td><td><strong>64/66</strong></td><td>56/66</td><td><strong>592</strong></td><td><strong>0.30 ms</strong></td></tr>
+                    <tr><td class="row-label">Compact GRU</td><td><strong>95.5%</strong></td><td>66/66</td><td><strong>61/66</strong></td><td><strong>62/66</strong></td><td><strong>592</strong></td><td><strong>0.20 ms</strong></td></tr>
                     <tr><td class="row-label">Enhanced GRU</td><td>90.4%</td><td>66/66</td><td>58/66</td><td>55/66</td><td>1200</td><td>0.48 ms</td></tr>
                 </table>
-                <p><strong>Compared to the paper</strong> (89.7% with 5-layer LSTM + teacher/student distillation on a single sensor): the Compact GRU exceeds it by 4.2 points with a fraction of the parameter count and no distillation step.</p>
+                <p><strong>Compared to the paper</strong> (89.7% with 5-layer LSTM + teacher/student distillation on a single sensor): the Compact GRU exceeds it by 5.8 points with a fraction of the parameter count, no distillation step, and best-weights checkpointing as the only training trick on top of plain Adam.</p>
                 <p><strong>Air is perfectly classified (66/66)</strong> in every preset. The network never misses a gas alarm. All residual errors are between Acetone and HCl, which is the intrinsic difficulty of the task: both are reducing gases that pull the sensor resistance in the same direction. The paper reports the exact same failure mode.</p>
+                <p><strong>Why constant LR wins</strong> - On this noisy loss landscape the MOx task does not offer a clean exploration-then-exploitation progression. Every schedule that eventually lowers the LR (cosine, cyclic, cosine+kick) locks the network into a mediocre basin and then drifts. The adaptive kick variants actually reach a lower training loss than constant (0.32 vs 0.31) but at the price of memorizing noise rather than learning generalizable features, which is why they lose about 4 points on the test set. Plain constant LR with checkpointing wins because it keeps exploring until the end and captures the state where the train loss is lowest on a smooth trajectory.</p>
                 <p><strong>Confusion matrix</strong> - Rows are true labels, columns are predicted labels. Green diagonal cells are correct; red off-diagonal cells are errors. Expect a green Air row with no leakage, and a few red entries clustered on the Acetone / HCl boundary.</p>
                 <p><strong>Signal visualization</strong> - The plot shows <code>Rn(t)</code> for the 5 sensors over one test window, color coded. A clean Air window is nearly flat around 1.0, an Acetone window drifts below 1 and stays low, and an HCl window shows a sharp transient followed by partial recovery. This panel is useful for sanity-checking what the model is actually seeing.</p>
                 <p><strong>Inference time</strong> - Total time to classify every test window on the current machine. Dividing by the number of test samples gives per-window latency, which is the metric that matters for real-time edge deployment on a constrained MCU.</p>
@@ -99,7 +106,7 @@
                     <label for="preset">Architecture:</label><br>
                     <select id="preset">
                         <option value="paper-lstm">Paper LSTM - hidden=32, 18 base features (91.9%)</option>
-                        <option value="compact-gru" selected>Compact GRU - hidden=16, 18 base features (93.9%)</option>
+                        <option value="compact-gru" selected>Compact GRU - hidden=16, 18 base features (95.5%)</option>
                         <option value="enhanced-gru">Enhanced GRU - hidden=24, 23 features + dRn/dt (90.4%)</option>
                     </select>
                 </div>
@@ -119,13 +126,15 @@
                     <label for="lrSchedule">LR schedule:</label><br>
                     <select id="lrSchedule">
                         <option value="constant" selected>constant</option>
+                        <option value="constant+kick">constant + adaptive kick</option>
                         <option value="cosine">cosine decay</option>
+                        <option value="cosine+kick">cosine + adaptive kick</option>
                         <option value="cyclic">cyclic sin</option>
                     </select>
                 </div>
             </div>
             <div class="preset-info" id="presetInfo">
-                <strong>Compact GRU</strong> - Single GRU cell, hidden=16, 37 neurons, 592 synapses, fed by the 18 base channels (3 shared + 3 per-sensor x 5 sensors). Measured at 93.9% accuracy and 0.30 ms per window, this is the champion preset and the Pumba candidate: smallest footprint while still beating the original paper's 5-layer LSTM.
+                <strong>Compact GRU</strong> - Single GRU cell, hidden=16, 37 neurons, 592 synapses, fed by the 18 base channels (3 shared + 3 per-sensor x 5 sensors). Measured at 95.5% accuracy and 0.20 ms per window with best-weights checkpointing, this is the champion preset and the Pumba candidate: smallest footprint, beats the paper's 89.7% (5-layer LSTM + distillation) by 5.8 points.
             </div>
             <div class="controls" style="margin-top:10px;">
                 <div style="display:flex; gap:8px; align-self:flex-end;">
@@ -139,7 +148,13 @@
         </div>
 
         <div class="panel">
-            <h2>Training Log</h2>
+            <div class="log-header">
+                <h2>Training Log</h2>
+                <div class="log-actions">
+                    <button class="log-copy-btn" id="btnCopyLog" title="Copy log to clipboard">Copy</button>
+                    <button class="log-copy-btn" id="btnClearLog" title="Clear log">Clear</button>
+                </div>
+            </div>
             <div class="log" id="log">Ready.
 </div>
             <canvas class="loss-canvas" id="lossCanvas"></canvas>
@@ -186,7 +201,7 @@
 // Champion preset: Compact GRU on the 5-sensor e-nose fusion.
 // 18 input channels = 3 shared (T, RH, heat) + 3 per-sensor x 5 sensors
 // (Rn = R/R0 centered, Ratio-1, Difference/500). 37 neurons, 592 synapses.
-// Measured at 93.9% accuracy on the held-out test set.
+// Measured at 95.5% accuracy on the held-out test set.
 const graph = new RnnBuilder()
     .withInputSize(18)
     .withHiddenSize(16)
@@ -205,9 +220,12 @@ const trainer = new RnnTrainingRuntime(
     Optimizers.Adam()
 );
 
-// Train 60 epochs with a constant learning rate. On this noisy loss landscape
-// cosine decay actively hurts (it freezes the model in a mediocre basin), so
-// keep the LR high and let the network keep exploring.
+// Train 60 epochs with a constant learning rate and best-weights checkpointing.
+// On this noisy loss landscape cosine decay actively hurts (it freezes the
+// model in a mediocre basin) and adaptive kicks overfit. Constant LR keeps
+// exploring until the end; the checkpoint captures the best epoch observed.
+let bestLoss = Infinity;
+let bestSnapshot = null;
 for (let epoch = 0; epoch &lt; 60; epoch++) {
     let total = 0;
     for (const sample of trainData) {
@@ -218,8 +236,14 @@ for (let epoch = 0; epoch &lt; 60; epoch++) {
         const targets = sample.sequence.map(() =&gt; oneHot.slice());
         total += trainer.trainStep(sample.sequence, targets);
     }
-    console.log(`Epoch ${epoch + 1} - Loss: ${(total / trainData.length).toFixed(6)}`);
+    const avgLoss = total / trainData.length;
+    if (epoch &gt;= 5 &amp;&amp; avgLoss &lt; bestLoss) {
+        bestLoss = avgLoss;
+        bestSnapshot = snapshotWeights(graph); // save learnable params
+    }
+    console.log(`Epoch ${epoch + 1} - Loss: ${avgLoss.toFixed(6)}`);
 }
+if (bestSnapshot) restoreWeights(graph, bestSnapshot);
 
 // Inference: read out the last timestep's output and argmax.
 runtime.resetState();

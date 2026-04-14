@@ -30,7 +30,7 @@ This matters because:
 - **MNIST digit classification** - 93% accuracy with CNN, 74% with ViT (500 training samples)
 - **Motor vibration fault detection** - 100% accuracy with LSTM on real pEMP dataset
 - **LiDAR occupancy grid compression** - MSE 0.0024 with convolutional autoencoder
-- **MOx gas discrimination** - 93.9% accuracy on the DotVision metal oxide e-nose dataset (Air / Acetone / HCl), beating the published 5-layer LSTM baseline (89.7%) with a single-layer GRU of 37 neurons
+- **MOx gas discrimination** - 95.5% accuracy on the DotVision metal oxide e-nose dataset (Air / Acetone / HCl), beating the published 5-layer LSTM + distillation baseline (89.7%) by 5.8 points with a single-layer GRU of 37 neurons
 
 ## Installation
 
