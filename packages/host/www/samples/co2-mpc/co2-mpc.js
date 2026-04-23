@@ -208,60 +208,61 @@ function controllerMPC(co2, crewSize, scrubberRate) {
 // We wrap the dynamics graph with a function that reassembles the model input.
 function createMpcAdapter() {
     if (!RT) return null;
-    // Build a custom ComputeGraph with an adapter node that runs the dynamics
-    // with the correct input layout. We implement this by wrapping the raw
-    // dynamics graph call inside a lightweight node.
 
-    var AdapterNode = function() {
-        RT.ComputeNodeBase.call(this);
-        this.id = "mpc_adapter_input";
-    };
-    AdapterNode.prototype = Object.create(RT.ComputeNodeBase.prototype);
-    AdapterNode.prototype.nodeType = "mpc_adapter";
-    AdapterNode.prototype.outputShapes = [[1]];
-    AdapterNode.prototype.execute = function(inputs) {
-        var d = inputs[0].data;
-        // RolloutNode passes concat(state, action):
-        //   d[0] = co2_norm
-        //   d[1] = crew_norm
-        //   d[2] = scrubber_rate_norm
-        //   d[3..6] = action one-hot
-        //
-        // Model schema: [co2_norm, action(4), crew_norm, scrubber_norm]
-        var reordered = new Float32Array(7);
-        reordered[0] = d[0];            // co2_norm
-        reordered[1] = d[3];            // action[0]
-        reordered[2] = d[4];            // action[1]
-        reordered[3] = d[5];            // action[2]
-        reordered[4] = d[6];            // action[3]
-        reordered[5] = d[1];            // crew_norm
-        reordered[6] = d[2];            // scrubber_rate_norm
-        var modelInput = {
-            data: reordered,
-            shape: [1, 7],
-            name: dynamicsInputName,
-        };
-        var ext = new Map();
-        ext.set(dynamicsInputName, modelInput);
-        var out = dynamicsGraph.run(ext);
-        var modelOut = out.values().next().value;
-
-        // Propagate scrubber lag analytically (physics we know perfectly)
-        var actionIdx = 0;
-        for (var a = 0; a < 4; a++) {
-            if (d[3 + a] > 0.5) { actionIdx = a; break; }
+    // The adapter node wraps the trained dynamics graph and applies the
+    // known scrubber lag analytically. Implemented as an ES6 class because
+    // ComputeNodeBase is an ES6 class and cannot be called with .call(this).
+    class AdapterNode extends RT.ComputeNodeBase {
+        constructor() {
+            super();
+            this.id = "mpc_adapter_input";
+            this.nodeType = "mpc_adapter";
+            this.outputShapes = [[1]];
         }
-        var targetRate = SCRUBBER_RATES[actionIdx] / SCRUBBER_RATE_MAX;
-        var currentRate = d[2];
-        var nextScrubber = currentRate + (targetRate - currentRate) * SCRUBBER_TAU;
 
-        // Next state: co2 (from model), crew (unchanged), scrubber (analytical)
-        var nextState = new Float32Array(3);
-        nextState[0] = d[0] + modelOut.data[0]; // co2_norm + delta
-        nextState[1] = d[1];                     // crew stays
-        nextState[2] = nextScrubber;             // lagged scrubber
-        return [{ data: nextState, shape: [3], name: "next_state" }];
-    };
+        execute(inputs) {
+            var d = inputs[0].data;
+            // RolloutNode passes concat(state, action):
+            //   d[0] = co2_norm
+            //   d[1] = crew_norm
+            //   d[2] = scrubber_rate_norm
+            //   d[3..6] = action one-hot
+            //
+            // Model schema: [co2_norm, action(4), crew_norm, scrubber_norm]
+            var reordered = new Float32Array(7);
+            reordered[0] = d[0];            // co2_norm
+            reordered[1] = d[3];            // action[0]
+            reordered[2] = d[4];            // action[1]
+            reordered[3] = d[5];            // action[2]
+            reordered[4] = d[6];            // action[3]
+            reordered[5] = d[1];            // crew_norm
+            reordered[6] = d[2];            // scrubber_rate_norm
+            var modelInput = {
+                data: reordered,
+                shape: [1, 7],
+                name: dynamicsInputName,
+            };
+            var ext = new Map();
+            ext.set(dynamicsInputName, modelInput);
+            var out = dynamicsGraph.run(ext);
+            var modelOut = out.values().next().value;
+
+            // Propagate scrubber lag analytically (physics we know perfectly)
+            var actionIdx = 0;
+            for (var a = 0; a < 4; a++) {
+                if (d[3 + a] > 0.5) { actionIdx = a; break; }
+            }
+            var targetRate = SCRUBBER_RATES[actionIdx] / SCRUBBER_RATE_MAX;
+            var currentRate = d[2];
+            var nextScrubber = currentRate + (targetRate - currentRate) * SCRUBBER_TAU;
+
+            var nextState = new Float32Array(3);
+            nextState[0] = d[0] + modelOut.data[0]; // co2_norm + delta
+            nextState[1] = d[1];                     // crew stays
+            nextState[2] = nextScrubber;             // lagged scrubber
+            return [{ data: nextState, shape: [3], name: "next_state" }];
+        }
+    }
 
     var adapterNode = new AdapterNode();
     return new RT.ComputeGraph([adapterNode], []);
