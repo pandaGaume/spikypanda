@@ -142,17 +142,15 @@ function controllerBangBang(co2) {
     return _reactiveState ? 3 : 0;
 }
 
+// Debug: how often to print the detailed MPC decision breakdown (in sim minutes)
+var MPC_DEBUG_EVERY = 10;
+
 function controllerMPC(co2, crewSize, scrubberRate) {
     if (!selectorNode || !rolloutNode || !objectiveNode) {
         return controllerBangBang(co2); // fallback
     }
     var startMs = performance.now();
 
-    // State = [co2_norm, crew_norm, scrubber_rate_norm]   (stateDim = 3)
-    // Action = one-hot(4)                                  (actionDim = 4)
-    // The adapter node reassembles this into the model's input schema
-    // [co2_norm, action(4), crew_norm, scrubber_norm] and propagates
-    // scrubber state with the known first-order lag.
     var initState = new Float32Array([
         co2 / CO2_MAX_PPM,
         crewSize / CREW_MAX,
@@ -167,6 +165,7 @@ function controllerMPC(co2, crewSize, scrubberRate) {
     var result = selectorNode.execute([stateTensor]);
     var bestAction = result[0];
     var bestCost = result[1].data[0];
+    var allCosts = result[2].data;
 
     var chosen = 0;
     for (var i = 0; i < 4; i++) {
@@ -174,11 +173,31 @@ function controllerMPC(co2, crewSize, scrubberRate) {
     }
 
     var elapsed = performance.now() - startMs;
+
+    // Detailed breakdown: cost of each structured seed (first 6 candidates)
+    var seedLabels = ["const_off", "const_low", "const_med", "const_high",
+                      "ramp_up", "early_burst"];
+    var seedInfo = "";
+    for (var i = 0; i < Math.min(6, allCosts.length); i++) {
+        seedInfo += "\n  " + seedLabels[i] + ": " + allCosts[i].toFixed(1);
+    }
+
     document.getElementById("info-mpc").textContent =
-        "Plans tested: " + mpcParams.candidates + "\n" +
-        "Planning horizon: " + mpcParams.horizon + " minutes\n" +
-        "Best plan score: " + bestCost.toFixed(2) + " (lower is better)\n" +
-        "Decision time: " + elapsed.toFixed(1) + " ms (ESP32 equivalent ~50 ms)";
+        "Current CO2: " + Math.round(co2) + " ppm\n" +
+        "Best cost: " + bestCost.toFixed(1) + " (pick: " + ["off","low","med","high"][chosen] + ")\n" +
+        "Decision: " + elapsed.toFixed(1) + " ms" +
+        seedInfo;
+
+    // Periodic log: dump the structured seed costs so we can see why MPC
+    // picks what it picks.
+    if (simTime % MPC_DEBUG_EVERY === 0) {
+        var logMsg = "[MPC t=" + simTime + " co2=" + Math.round(co2) + "] ";
+        for (var i = 0; i < 6 && i < allCosts.length; i++) {
+            logMsg += seedLabels[i] + "=" + allCosts[i].toFixed(0) + " ";
+        }
+        logMsg += "-> pick=" + ["off","low","med","high"][chosen];
+        co2Log(logMsg);
+    }
 
     return chosen;
 }
