@@ -364,10 +364,46 @@ function rebuildMpc(adapterGraph) {
         horizon: mpcParams.horizon,
     });
 
+    // Hybrid sampler: includes structured seeds (constants, ramps) so the
+    // optimizer can actually find regulation strategies. Pure random
+    // piecewise-constant never generates "constant action" sequences
+    // (probability ~0), but those are exactly the optimal regulation
+    // solutions. We reserve a few candidate slots for structured seeds.
+    var randomSampler = RT.makePiecewiseConstantSampler(4, 3, 10);
+    var callCount = 0;
+    var hybridSampler = function(horizon, actionDim, rng) {
+        callCount++;
+        var slot = (callCount - 1) % 8;
+        var out = new Float32Array(horizon * actionDim);
+        if (slot < 4) {
+            // Slots 0-3: constant action (off, low, medium, high)
+            for (var t = 0; t < horizon; t++) out[t * actionDim + slot] = 1.0;
+            return out;
+        }
+        if (slot === 4) {
+            // Slot 4: gradual ramp up off → low → medium → high over horizon
+            var quarter = Math.floor(horizon / 4);
+            for (var t = 0; t < horizon; t++) {
+                var level = Math.min(3, Math.floor(t / Math.max(1, quarter)));
+                out[t * actionDim + level] = 1.0;
+            }
+            return out;
+        }
+        if (slot === 5) {
+            // Slot 5: early medium then off (pre-emptive burst)
+            var earlyLen = Math.floor(horizon / 3);
+            for (var t = 0; t < earlyLen; t++) out[t * actionDim + 2] = 1.0;
+            for (var t = earlyLen; t < horizon; t++) out[t * actionDim + 0] = 1.0;
+            return out;
+        }
+        // Other slots: random piecewise constant (exploration)
+        return randomSampler(horizon, actionDim, rng);
+    };
+
     selectorNode = new RT.ShootingSelectorNode({
         rollout: rolloutNode,
         objective: objectiveNode,
-        sampler: RT.makePiecewiseConstantSampler(4, 3, 10),
+        sampler: hybridSampler,
         numCandidates: mpcParams.candidates,
         horizon: mpcParams.horizon,
         stateDim: STATE_DIM,
