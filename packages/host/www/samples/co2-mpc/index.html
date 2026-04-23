@@ -173,25 +173,47 @@
             </div>
         </div>
 
-        <!-- Performance -->
+        <!-- Head to head -->
         <div class="panel">
-            <h2>Performance</h2>
-            <div class="co2-info">
-                <div class="co2-info-card">
-                    <h4>Dynamics model</h4>
-                    <p id="info-model">Loading...</p>
+            <h2>Head-to-head comparison</h2>
+            <p class="metrics-help" style="margin-bottom:12px;font-size:0.85em;">Run the Reactive controller for, say, 60 simulated minutes, click Stop, then Reset, switch to Predictive, run 60 minutes, compare the numbers below. Lower max CO2 and lower total energy both mean a better controller.</p>
+            <div class="co2-compare">
+                <div class="co2-compare-col current">
+                    <h4>Current run</h4>
+                    <div class="stat"><span class="stat-label">Controller</span><span class="stat-value" id="stat-curr-ctrl">-</span></div>
+                    <div class="stat"><span class="stat-label">Time</span><span class="stat-value" id="stat-curr-time">0 min</span></div>
+                    <div class="stat"><span class="stat-label">Max CO2 reached</span><span class="stat-value" id="stat-curr-max">- ppm</span></div>
+                    <div class="stat"><span class="stat-label">Minutes above soft limit</span><span class="stat-value" id="stat-curr-soft">0</span></div>
+                    <div class="stat"><span class="stat-label">Minutes above vital limit</span><span class="stat-value alert" id="stat-curr-vital">0</span></div>
+                    <div class="stat"><span class="stat-label">Total energy used</span><span class="stat-value" id="stat-curr-energy">0 Wh</span></div>
                 </div>
-                <div class="co2-info-card">
-                    <h4>AI decision cost</h4>
-                    <p id="info-mpc">Waiting for first run</p>
+                <div class="co2-compare-col previous">
+                    <h4>Previous run (saved after Stop)</h4>
+                    <div class="stat"><span class="stat-label">Controller</span><span class="stat-value" id="stat-prev-ctrl">-</span></div>
+                    <div class="stat"><span class="stat-label">Time</span><span class="stat-value" id="stat-prev-time">-</span></div>
+                    <div class="stat"><span class="stat-label">Max CO2 reached</span><span class="stat-value" id="stat-prev-max">-</span></div>
+                    <div class="stat"><span class="stat-label">Minutes above soft limit</span><span class="stat-value" id="stat-prev-soft">-</span></div>
+                    <div class="stat"><span class="stat-label">Minutes above vital limit</span><span class="stat-value alert" id="stat-prev-vital">-</span></div>
+                    <div class="stat"><span class="stat-label">Total energy used</span><span class="stat-value" id="stat-prev-energy">-</span></div>
                 </div>
-                <div class="co2-info-card">
-                    <h4>Last run (for comparison)</h4>
-                    <p id="info-compare">Reset and switch controller to compare</p>
-                </div>
-                <div class="co2-info-card">
-                    <h4>Status</h4>
-                    <p id="info-status">Idle</p>
+            </div>
+        </div>
+
+        <!-- Technical info -->
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Technical details</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body">
+                <div class="co2-info">
+                    <div class="co2-info-card">
+                        <h4>Dynamics model</h4>
+                        <p id="info-model">Loading...</p>
+                    </div>
+                    <div class="co2-info-card">
+                        <h4>AI decision cost</h4>
+                        <p id="info-mpc">Waiting for first run</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -200,6 +222,8 @@
         <div class="panel">
             <h2>Log</h2>
             <div class="log" id="log"></div>
+            <span id="info-status" style="display:none"></span>
+            <span id="info-compare" style="display:none"></span>
         </div>
     </div>
 

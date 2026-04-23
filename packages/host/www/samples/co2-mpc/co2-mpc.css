@@ -150,8 +150,71 @@
     white-space: pre-line;
 }
 
+.co2-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 8px;
+}
+
+.co2-compare-col {
+    background: var(--log-bg);
+    border-radius: 6px;
+    padding: 16px;
+    border: 1px solid var(--panel-border);
+}
+
+.co2-compare-col.current {
+    border-color: var(--primary);
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.08);
+}
+
+.co2-compare-col h4 {
+    margin: 0 0 12px;
+    color: var(--primary);
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.co2-compare-col .stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.9em;
+}
+
+.co2-compare-col .stat:last-child {
+    border-bottom: none;
+}
+
+.co2-compare-col .stat-label {
+    color: var(--text-muted);
+}
+
+.co2-compare-col .stat-value {
+    color: var(--text);
+    font-family: 'Cascadia Code', Consolas, monospace;
+    font-weight: 600;
+}
+
+.co2-compare-col .stat-value.alert {
+    color: #ff6b6b;
+}
+
+.co2-compare-col .stat-value.better {
+    color: #5bd97a;
+}
+
+.co2-compare-col .stat-value.worse {
+    color: #f0ad4e;
+}
+
 @media (max-width: 800px) {
     .co2-status { grid-template-columns: repeat(3, 1fr); }
     .co2-params { grid-template-columns: 1fr; }
     .co2-info { grid-template-columns: 1fr; }
+    .co2-compare { grid-template-columns: 1fr; }
 }
