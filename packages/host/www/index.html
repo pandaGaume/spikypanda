@@ -234,6 +234,16 @@
         <div class="section">
             <h2 class="section-title">Interactive Samples</h2>
             <div class="cards" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+                <a href="samples/co2-mpc/" class="card">
+                    <h3>CO2 Control: MPC vs Threshold</h3>
+                    <p>Predictive AI versus reactive threshold versus no control, on a sealed lunar habitat CO2 loop. Pick a scrubber state (oversized, normal, degraded), pick a controller, compare runs head to head. Same tiny 401-parameter world model runs in the browser and on an ESP32.</p>
+                    <span class="card-arrow">Open demo &rarr;</span>
+                </a>
+                <a href="samples/co2-vitals/" class="card">
+                    <h3>CO2 Control: Human Impact</h3>
+                    <p>Same CO2 controller as sample 1. Adds three astronauts with live heart rate, SpO2, respiratory rate, cognitive alertness, real-time ECG and a work-efficiency readout. Shows how a controller's decisions look on the people inside, including the "minimal scrubber" failure mode where only one crew can survive.</p>
+                    <span class="card-arrow">Open demo &rarr;</span>
+                </a>
                 <a href="samples/mnist/" class="card">
                     <h3>MNIST CNN</h3>
                     <p>Train a convolutional neural network on handwritten digits. Choose from fast, balanced, and accuracy presets, then evaluate on the test set with a visual prediction grid.</p>

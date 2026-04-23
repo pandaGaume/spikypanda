@@ -1,0 +1,357 @@
+/* CO2 + Vitals sample specific styles */
+
+/* Inline prose links inside panels. Browser-default purple/blue is
+   unreadable on the dark background, so route them to the primary accent
+   with a subtle underline. */
+.metrics-help a,
+.collapsible-body a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-decoration-color: rgba(0, 212, 255, 0.4);
+    text-underline-offset: 2px;
+    transition: color 0.15s, text-decoration-color 0.15s;
+}
+.metrics-help a:hover,
+.collapsible-body a:hover {
+    color: #6bf0ff;
+    text-decoration-color: #6bf0ff;
+}
+.metrics-help a:visited,
+.collapsible-body a:visited {
+    color: var(--primary);
+}
+
+/* Reuse styles from the co2-mpc sample */
+.co2-chart {
+    width: 100%;
+    height: 220px;
+    background: var(--log-bg);
+    border-radius: 4px;
+    margin-top: 12px;
+    display: block;
+}
+
+.co2-chart.crew-chart {
+    height: 130px;
+    margin-top: 4px;
+}
+
+.co2-status {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.co2-metric {
+    background: var(--log-bg);
+    border-radius: 6px;
+    padding: 12px;
+    text-align: center;
+    border: 1px solid var(--panel-border);
+}
+
+.co2-metric .label {
+    font-size: 0.7em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.co2-metric .value {
+    font-size: 1.1em;
+    color: var(--primary);
+    font-weight: 700;
+}
+
+.co2-metric .hint {
+    font-size: 0.7em;
+    color: #666;
+    margin-top: 4px;
+    font-style: italic;
+}
+
+.co2-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 8px;
+}
+
+.co2-compare-col {
+    background: var(--log-bg);
+    border-radius: 6px;
+    padding: 16px;
+    border: 1px solid var(--panel-border);
+}
+
+.co2-compare-col.current {
+    border-color: var(--primary);
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.08);
+}
+
+.co2-compare-col h4 {
+    margin: 0 0 12px;
+    color: var(--primary);
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.co2-compare-col .stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.9em;
+}
+
+.co2-compare-col .stat:last-child { border-bottom: none; }
+.co2-compare-col .stat-label { color: var(--text-muted); }
+.co2-compare-col .stat-value {
+    color: var(--text);
+    font-family: 'Cascadia Code', Consolas, monospace;
+    font-weight: 600;
+}
+.co2-compare-col .stat-value.alert { color: #ff6b6b; }
+
+/* Crew widgets (the main new UI) */
+.crew-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.crew-card {
+    background: var(--log-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 14px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.crew-card.status-nominal { border-color: #2a6; }
+.crew-card.status-elevated { border-color: #d4a316; }
+.crew-card.status-impaired {
+    border-color: #e67e22;
+    box-shadow: 0 0 12px rgba(230, 126, 34, 0.15);
+}
+.crew-card.status-critical {
+    border-color: #ff6b6b;
+    box-shadow: 0 0 20px rgba(255, 107, 107, 0.25);
+    animation: pulseCritical 1.5s ease-in-out infinite;
+}
+.crew-card.status-deceased {
+    border-color: #661a1a;
+    box-shadow: 0 0 10px rgba(180, 30, 30, 0.15);
+    opacity: 0.75;
+    animation: none;
+}
+.crew-card.status-deceased .crew-avatar {
+    filter: grayscale(0.95);
+}
+
+@keyframes pulseCritical {
+    0%, 100% { box-shadow: 0 0 10px rgba(255, 107, 107, 0.2); }
+    50% { box-shadow: 0 0 25px rgba(255, 107, 107, 0.5); }
+}
+
+.crew-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    gap: 10px;
+}
+
+/* Avatar cropped out of the crew.png triptych. The file is 3 equal panels
+   side by side (image ~1474x1067). We render the image at 300 % width
+   with "auto" height so the original aspect ratio is preserved, then
+   slide horizontally per index and pull down a bit so the panda face
+   lands in the center of the circle. */
+.crew-avatar {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background-image: url('crew.png');
+    background-size: 300% auto;
+    background-repeat: no-repeat;
+    border: 2px solid var(--panel-border);
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+.crew-avatar.idx-0 { background-position: 0% 35%; }
+.crew-avatar.idx-1 { background-position: 50% 35%; }
+.crew-avatar.idx-2 { background-position: 100% 35%; }
+
+.crew-ident { flex: 1; min-width: 0; }
+
+/* Status badge + EVA button sit together on the right of the header. */
+.crew-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-end;
+}
+
+.crew-eva-btn {
+    font-size: 0.7em;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 10px;
+    background: rgba(0, 212, 255, 0.12);
+    color: var(--primary);
+    border: 1px solid rgba(0, 212, 255, 0.45);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    min-width: 60px;
+}
+.crew-eva-btn:hover:not(:disabled) {
+    background: rgba(0, 212, 255, 0.25);
+    border-color: var(--primary);
+}
+.crew-eva-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Out-of-habitat state: dashed border, reduced opacity, distinct badge. */
+.crew-card.out-of-habitat {
+    opacity: 0.70;
+    border-style: dashed;
+    border-color: #6bb;
+    animation: none;
+    box-shadow: none;
+}
+.crew-card.out-of-habitat .crew-avatar {
+    filter: saturate(0.6) brightness(0.85);
+    border-color: #6bb;
+    box-shadow: none;
+}
+.crew-card.out-of-habitat .crew-status-badge {
+    background: rgba(107, 187, 187, 0.2);
+    color: #8dd;
+}
+.crew-card.out-of-habitat .crew-eva-btn {
+    background: rgba(107, 187, 187, 0.15);
+    color: #8dd;
+    border-color: rgba(107, 187, 187, 0.5);
+}
+
+.crew-name {
+    font-weight: 700;
+    font-size: 1em;
+    color: var(--primary);
+    letter-spacing: 1px;
+}
+
+.crew-activity {
+    font-size: 0.7em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.crew-status-badge {
+    display: inline-block;
+    font-size: 0.7em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    margin-top: 4px;
+}
+
+.status-nominal .crew-status-badge { background: rgba(42, 170, 102, 0.2); color: #6be; }
+.status-elevated .crew-status-badge { background: rgba(212, 163, 22, 0.2); color: #fd8; }
+.status-impaired .crew-status-badge { background: rgba(230, 126, 34, 0.2); color: #fa8; }
+.status-critical .crew-status-badge { background: rgba(255, 107, 107, 0.2); color: #f88; }
+.status-deceased .crew-status-badge { background: rgba(80, 80, 80, 0.3); color: #999; }
+
+.status-nominal  .crew-avatar { border-color: #2a6; }
+.status-elevated .crew-avatar { border-color: #d4a316; }
+.status-impaired .crew-avatar { border-color: #e67e22; }
+.status-critical .crew-avatar { border-color: #ff6b6b; box-shadow: 0 0 10px rgba(255, 107, 107, 0.5); }
+.status-deceased .crew-avatar { border-color: #555; box-shadow: none; }
+
+.vital-row {
+    display: grid;
+    grid-template-columns: 45px 1fr 60px;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+    font-size: 0.85em;
+}
+
+.vital-label {
+    color: var(--text-muted);
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.vital-value {
+    font-family: 'Cascadia Code', Consolas, monospace;
+    font-weight: 700;
+    text-align: right;
+    color: var(--text);
+    font-size: 1em;
+}
+
+.vital-value.warn { color: #d4a316; }
+.vital-value.alert { color: #ff6b6b; }
+
+.vital-bar {
+    height: 6px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+}
+
+.vital-bar-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #2a6, #6be);
+    transition: width 0.2s ease;
+}
+
+.vital-bar-fill.warn { background: linear-gradient(90deg, #c99, #d4a316); }
+.vital-bar-fill.alert { background: linear-gradient(90deg, #d4a316, #ff6b6b); }
+
+.vital-sparkline {
+    width: 100%;
+    height: 36px;
+    margin-top: 8px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 4px;
+    display: block;
+}
+
+/* Real-time ECG trace at the bottom of each crew card. Taller than the
+   sparkline so the R-spike is readable, and with a subtle grid to evoke
+   a medical monitor strip. */
+.vital-ecg {
+    width: 100%;
+    height: 50px;
+    margin-top: 10px;
+    background: #061a0c;
+    border-radius: 4px;
+    display: block;
+    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.6);
+}
+
+@media (max-width: 900px) {
+    .crew-grid { grid-template-columns: 1fr; }
+    .co2-status { grid-template-columns: repeat(2, 1fr); }
+    .co2-compare { grid-template-columns: 1fr; }
+}

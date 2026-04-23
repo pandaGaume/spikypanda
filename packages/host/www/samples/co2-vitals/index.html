@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda - CO2 Control with Astronaut Vitals</title>
+    <link rel="stylesheet" href="../../css/common.css" />
+    <link rel="stylesheet" href="co2-vitals.css" />
+</head>
+<body>
+    <div class="sample-hero">
+        <a href="hero.png" download="spikypanda-co2vitals-wallpaper.png" class="wallpaper-btn">Download wallpaper</a>
+        <div class="sample-hero-overlay">
+            <nav class="nav-bar" style="margin:0; background:none; border:none; padding:10px 0;">
+                <a href="../../index.html" class="nav-logo">SpikyPanda</a>
+                <div class="nav-links">
+                    <a href="../../index.html">Home</a>
+                    <a href="../co2-mpc/">Sample 1 (CO2)</a>
+                    <a href="../kws/">KWS</a>
+                    <a href="../motor/">Motor</a>
+                </div>
+            </nav>
+            <h1>CO2 Control: Human Impact</h1>
+            <p class="subtitle">Sample 2. Same controller as sample 1. Now with three astronauts living inside.</p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <!-- Standalone scenario setup, so this page does not require reading sample 1 first -->
+        <div class="panel">
+            <h2>The scenario</h2>
+            <div class="metrics-help">
+                <p>A sealed lunar habitat. Three astronauts inside. They breathe, they work, they sleep, and every breath adds CO2 to a closed cabin. Above 4000 ppm focus drops. Above 5000 you start risking loss of consciousness. Above 8000 it is life-threatening over hours.</p>
+                <p>A chemical scrubber can remove CO2, but it draws power. Solar input varies, batteries have to survive the 14-day lunar night, and no one is going to help from outside. Earth is 2.5 seconds of round-trip latency away; in an emergency that is too long. A small controller, on a chip inside the habitat, has to decide by itself when to turn the scrubber on, at what power, and for how long.</p>
+                <p>The simulator gives you three scrubber states and three controllers. Pick any combination, press Start, watch the cabin dynamics unfold for as long as you want. Switch controller or scrubber state and the previous run stays on the right for comparison.</p>
+                <p><strong>Scrubber states.</strong> <em>Oversized</em> is a brand-new, over-dimensioned unit (anything works here). <em>Normal</em> is the nominal end-of-life regime. <em>Degraded</em> is a partially clogged or tired unit where max capacity barely covers three crew at rest. <em>Minimal</em> is the failure mode: the scrubber can only sustain one or two crew. Three is unsustainable; the habitat will have to lose someone.</p>
+                <p><strong>Controllers.</strong> <em>Predictive (AI)</em> runs a tiny world model (a 401-parameter neural net, about 2.2 KB of ONNX) plus a planner: at every step it rolls out the next 30 simulated minutes against several candidate action sequences and picks the one with the lowest cost. <em>Reactive threshold</em> is a bang-bang controller: above 3500 ppm turn scrubber high, below 2500 turn it off. Simple, effective, no anticipation. <em>No control</em> leaves the scrubber off; included so you can see how fast CO2 climbs with nothing to remove it.</p>
+                <p>The whole decision loop runs entirely in your browser on the same SpikyPanda runtime that runs on an ESP32 class microcontroller, under 2 ms per step. No cloud, no GPU, no network.</p>
+            </div>
+        </div>
+
+        <!-- Why this sample exists (what's different from sample 1) -->
+        <div class="panel">
+            <h2>Why this sample exists</h2>
+            <div class="metrics-help">
+                <p><a href="../co2-mpc/">Sample 1</a> compared the MPC against a threshold on CO2 alone. The gap was real but small. A well-tuned classical loop got close to the AI. That was the honest conclusion, and it still is.</p>
+                <p>Same simulation here. Same physics, same controllers. What is added is the crew: three astronauts with heart rate, SpO2, respiratory rate, cognitive alertness, and a work-efficiency readout. Each value reacts to CO2 and to the activity schedule using published physiological curves.</p>
+                <p>Work efficiency is where it becomes interesting. Health is one thing, productivity is another. A crew at 70 percent cognitive does not do 70 percent of the work. They do closer to 60, because they make mistakes, redo tasks, and move slower. That means more minutes at heavy activity to finish the same job, which produces more CO2, which slows them down further. The "work per Wh" line in the comparison panel catches this: how much useful output you got per Wh of scrubber energy. That number moves a lot more than the max-CO2 number does.</p>
+                <p>Run threshold. Watch the Work bar drop during a heavy-work period and the crew slide from nominal to elevated. Switch to the AI. Same run. The vitals barely move because CO2 never pushes them.</p>
+                <p>The controllers do not read the vitals. Everything you see on the crew cards is downstream of the CO2 they produce. Sample 3 closes that loop.</p>
+            </div>
+        </div>
+
+        <!-- Crew cards (the main attraction) -->
+        <div class="panel">
+            <h2>Crew status</h2>
+            <p class="metrics-help" style="font-size:0.85em;margin-bottom:12px;">Three astronauts, each with a slightly different sensitivity profile. Respiratory rate follows CO2 almost directly (that is how the body regulates it). Heart rate tracks both CO2 and the current activity. SpO2 only starts moving at high CO2. Cognitive drops with sustained exposure and recovers slower than it falls. Work is a non-linear function of all of these. Once a crew member hits critical they cannot recover on their own, and after prolonged exposure their ECG goes flat.</p>
+            <div class="crew-grid" id="crew-grid">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="panel">
+            <h2>Run the simulation</h2>
+            <div class="controls" style="margin-top:8px;">
+                <label style="font-size:0.85em; color:var(--text-label);">Scrubber:</label>
+                <select id="preset-select" onchange="co2SetPreset(this.value)" style="background:var(--input-bg); color:var(--text); border:1px solid var(--input-border); border-radius:4px; padding:4px 8px;">
+                    <option value="oversized">Oversized (new habitat)</option>
+                    <option value="normal">Normal (end-of-life)</option>
+                    <option value="degraded">Degraded (real problem)</option>
+                    <option value="minimal">Minimal (solo-survivor ceiling)</option>
+                </select>
+            </div>
+            <p class="metrics-help" id="preset-desc" style="font-size:0.8em; color:var(--text-muted); margin:4px 0 12px; font-style:italic;">Brand new scrubber, over-dimensioned. Any action handles any load. Threshold and AI look alike here.</p>
+
+            <div class="controls" style="margin-top:8px;">
+                <button id="btn-start" onclick="co2Start()">Start</button>
+                <button id="btn-stop" onclick="co2Stop()" disabled>Stop</button>
+                <button id="btn-reset" onclick="co2Reset()">Reset</button>
+                <label style="margin-left:12px; font-size:0.85em; color:var(--text-label);">Run for:</label>
+                <select id="timecap-select" onchange="co2SetTimeCap(this.value)" style="background:var(--input-bg); color:var(--text); border:1px solid var(--input-border); border-radius:4px; padding:4px 8px;">
+                    <option value="0">No cap (forever)</option>
+                    <option value="30">30 sim min</option>
+                    <option value="60" selected>60 sim min</option>
+                    <option value="120">2 sim hours</option>
+                    <option value="240">4 sim hours</option>
+                    <option value="480">8 sim hours</option>
+                    <option value="1440">24 sim hours</option>
+                </select>
+                <label style="margin-left:20px; cursor:pointer;">
+                    <input type="radio" name="controller" value="mpc" id="ctrl-mpc" checked onchange="co2SetController(this.value)" />
+                    Predictive (AI)
+                </label>
+                <label style="cursor:pointer;">
+                    <input type="radio" name="controller" value="bangbang" id="ctrl-bangbang" onchange="co2SetController(this.value)" />
+                    Reactive threshold
+                </label>
+                <label style="cursor:pointer;">
+                    <input type="radio" name="controller" value="off" id="ctrl-off" onchange="co2SetController(this.value)" />
+                    No control
+                </label>
+            </div>
+
+            <canvas class="co2-chart" id="chart-co2"></canvas>
+            <canvas class="co2-chart crew-chart" id="chart-crew"></canvas>
+            <p class="metrics-help" style="font-size:0.8em;margin-top:4px;color:var(--text-muted);">
+                Crew aggregate: solid green line = mean work efficiency, dashed blue = mean cognitive alertness, red band at the bottom = minutes with at least one impaired/critical crew. Dashed yellow line at 80 % is the productivity reference.
+            </p>
+
+            <div class="co2-status" id="status-box">
+                <div class="co2-metric">
+                    <div class="label">Current CO2</div>
+                    <div class="value" id="metric-co2">- ppm</div>
+                    <div class="hint">parts per million</div>
+                </div>
+                <div class="co2-metric">
+                    <div class="label">Scrubber</div>
+                    <div class="value" id="metric-action">-</div>
+                    <div class="hint">command (effective %)</div>
+                </div>
+                <div class="co2-metric">
+                    <div class="label">Time</div>
+                    <div class="value" id="metric-time">-</div>
+                    <div class="hint">simulated</div>
+                </div>
+                <div class="co2-metric">
+                    <div class="label">Total energy</div>
+                    <div class="value" id="metric-energy">-</div>
+                    <div class="hint">scrubber consumption</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Head-to-head with human-focused metrics -->
+        <div class="panel">
+            <h2>Head-to-head: the human side</h2>
+            <p class="metrics-help" style="margin-bottom:12px;font-size:0.85em;">Run one controller, then switch and run the other. The first result stays pinned on the right. Only the numbers about the crew are here, not the CO2 profile. Lower average HR, higher minimum SpO2, fewer crew-minutes impaired, fewer deaths. The last two lines are productivity: how much of the scheduled work got done, and how many units of output you bought per Wh of scrubber energy. Those two are where the gap between the controllers actually widens.</p>
+            <div class="co2-compare">
+                <div class="co2-compare-col current">
+                    <h4>Current run</h4>
+                    <div class="stat"><span class="stat-label">Controller</span><span class="stat-value" id="stat-curr-ctrl">-</span></div>
+                    <div class="stat"><span class="stat-label">Duration</span><span class="stat-value" id="stat-curr-time">0 min</span></div>
+                    <div class="stat"><span class="stat-label">Max CO2</span><span class="stat-value" id="stat-curr-max">- ppm</span></div>
+                    <div class="stat"><span class="stat-label">Avg crew heart rate</span><span class="stat-value" id="stat-curr-hr">- bpm</span></div>
+                    <div class="stat"><span class="stat-label">Min crew SpO2</span><span class="stat-value" id="stat-curr-spo2">- %</span></div>
+                    <div class="stat"><span class="stat-label">Crew-minutes impaired</span><span class="stat-value alert" id="stat-curr-impaired">0</span></div>
+                    <div class="stat"><span class="stat-label">Crew deaths</span><span class="stat-value alert" id="stat-curr-deaths">0</span></div>
+                    <div class="stat"><span class="stat-label">Work done / scheduled</span><span class="stat-value" id="stat-curr-work">0 / 0 (100%)</span></div>
+                    <div class="stat"><span class="stat-label">Work per Wh</span><span class="stat-value" id="stat-curr-workwh">-</span></div>
+                    <div class="stat"><span class="stat-label">Scrubber energy</span><span class="stat-value" id="stat-curr-energy">0 Wh</span></div>
+                </div>
+                <div class="co2-compare-col previous">
+                    <h4>Previous run</h4>
+                    <div class="stat"><span class="stat-label">Controller</span><span class="stat-value" id="stat-prev-ctrl">-</span></div>
+                    <div class="stat"><span class="stat-label">Duration</span><span class="stat-value" id="stat-prev-time">-</span></div>
+                    <div class="stat"><span class="stat-label">Max CO2</span><span class="stat-value" id="stat-prev-max">-</span></div>
+                    <div class="stat"><span class="stat-label">Avg crew heart rate</span><span class="stat-value" id="stat-prev-hr">-</span></div>
+                    <div class="stat"><span class="stat-label">Min crew SpO2</span><span class="stat-value" id="stat-prev-spo2">-</span></div>
+                    <div class="stat"><span class="stat-label">Crew-minutes impaired</span><span class="stat-value alert" id="stat-prev-impaired">-</span></div>
+                    <div class="stat"><span class="stat-label">Crew deaths</span><span class="stat-value alert" id="stat-prev-deaths">-</span></div>
+                    <div class="stat"><span class="stat-label">Work done / scheduled</span><span class="stat-value" id="stat-prev-work">-</span></div>
+                    <div class="stat"><span class="stat-label">Work per Wh</span><span class="stat-value" id="stat-prev-workwh">-</span></div>
+                    <div class="stat"><span class="stat-label">Scrubber energy</span><span class="stat-value" id="stat-prev-energy">-</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Physiological model details -->
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Physiological model</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p>The vitals are driven by published data on human CO2 response in confined spaces (Satish et al. 2012, Allen et al. 2016, NASA Human Integration Design Handbook). Below 1500 ppm the crew sits at baseline.</p>
+                <p><strong>Heart rate</strong>. Rises roughly linearly with CO2, a few bpm per 1000 ppm at rest, more under activity. Per-member sensitivity varies.</p>
+                <p><strong>SpO2</strong>. Mostly flat until CO2 gets high (above 3500 ppm in this model). Bicarbonate buffering breaks down and the O2 dissociation curve shifts. Drops of 1 to 3 percent are realistic at very high CO2; worse numbers in real habitats usually mean ambient O2 is also low, which we do not model here.</p>
+                <p><strong>Respiratory rate</strong>. The fastest responder, because brainstem chemoreceptors sense CO2 directly and scale minute ventilation. Doubling CO2 roughly doubles respiratory drive.</p>
+                <p><strong>Cognitive alertness</strong>. Degrades with sustained exposure. Mild effects start around 2500 ppm, strong ones above 5000 ppm. Recovery is slower than the drop.</p>
+                <p><strong>Work efficiency</strong>. Derived, not measured. We map it from cognitive state with a non-linear curve (roughly cognitive<sup>1.5</sup>) plus multiplicative penalties for sustained tachycardia and low SpO2. A modest dip in alertness produces a larger dip in output, because errors, retries, and slow coordination compound. The run total (work done divided by work scheduled) is what turns "my CO2 peaked at X" into a mission cost.</p>
+                <p><strong>Critical and death</strong>. A crew member reaches critical when cognitive falls below 30, or SpO2 below 88, or HR above 145. Critical is a trap: they stay critical even if CO2 recovers, and they cannot perform tasks. After 90 sim minutes in critical without rescue, the ECG goes flat. In real CO2 narcosis this takes hours at these levels; the demo compresses it so the arc fits in a 24-hour run.</p>
+                <p>The model is simplified on purpose. It runs locally and deterministically, to make the human side of a CO2 control decision visible. It is not medical software.</p>
+            </div>
+        </div>
+
+        <!-- Log -->
+        <div class="panel">
+            <h2>Log</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script src="../../bundle/spikypanda-core.js"></script>
+    <script src="../../bundle/spikypanda-runtime.js"></script>
+    <script src="../../js/common.js"></script>
+    <script src="co2-vitals.js"></script>
+</body>
+</html>

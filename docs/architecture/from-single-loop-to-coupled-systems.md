@@ -86,8 +86,7 @@ classical control theory already solved the single-loop problem.
 A sealed habitat does not have one controller. It has a dozen of them,
 and they are coupled. This is not a software opinion, it is an
 architectural fact well documented in the space habitat literature.
-Research by Olga Bannova at the University of Houston
-(https://scholar.google.com/citations?user=FJLhoZoAAAAJ) on lunar and
+Research by Olga Bannova at the University of Houston on lunar and
 Martian habitat design shows that the interactions between life support,
 thermal management, power allocation, and crew activity define the
 habitability envelope more than any single subsystem does in isolation.

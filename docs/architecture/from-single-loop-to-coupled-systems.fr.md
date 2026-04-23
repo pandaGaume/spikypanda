@@ -97,8 +97,7 @@ mono-boucle.
 Un habitat scellé n'a pas un contrôleur. Il en a une dizaine, et ils
 sont couplés. Ce n'est pas une opinion logicielle, c'est un fait
 architectural bien documenté dans la littérature sur les habitats
-spatiaux. Les travaux d'Olga Bannova à l'Université de Houston
-(https://scholar.google.com/citations?user=FJLhoZoAAAAJ) sur la
+spatiaux. Les travaux d'Olga Bannova à l'Université de Houston sur la
 conception d'habitats lunaires et martiens montrent que les interactions
 entre le support de vie, la gestion thermique, l'allocation d'énergie et
 l'activité de l'équipage définissent l'enveloppe d'habitabilité plus que
