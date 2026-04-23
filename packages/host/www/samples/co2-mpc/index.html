@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda - Smart CO2 Control (Lunar Habitat)</title>
+    <link rel="stylesheet" href="../../css/common.css" />
+    <link rel="stylesheet" href="co2-mpc.css" />
+</head>
+<body>
+    <div class="sample-hero">
+        <a href="hero.png" download="spikypanda-co2mpc-wallpaper.png" class="wallpaper-btn">Download wallpaper</a>
+        <div class="sample-hero-overlay">
+            <nav class="nav-bar" style="margin:0; background:none; border:none; padding:10px 0;">
+                <a href="../../index.html" class="nav-logo">SpikyPanda</a>
+                <div class="nav-links">
+                    <a href="../../index.html">Home</a>
+                    <a href="../kws/">KWS</a>
+                    <a href="../motor/">Motor</a>
+                    <a href="../lidar/">LiDAR</a>
+                    <a href="../stereo/">Stereo</a>
+                </div>
+            </nav>
+            <h1>Smart CO2 Control</h1>
+            <p class="subtitle">Three astronauts. One lunar habitat. No connection to Earth. A tiny AI on a three-dollar chip decides how to keep them breathing while saving energy.</p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <!-- The story -->
+        <div class="panel">
+            <h2>The story</h2>
+            <div class="metrics-help">
+                <p>You are three astronauts in a small lunar habitat. You breathe, you work, you sleep. Every breath you exhale adds CO2 to the sealed cabin. Above 4000 parts per million, you start losing focus. Above 5000, you risk fainting. Above 8000, it becomes life-threatening.</p>
+                <p>A scrubber can remove CO2, but it draws a lot of power. Solar panels are precious. Batteries have to last through the 14-day lunar night. You cannot run the scrubber flat out all the time.</p>
+                <p>Mission Control on Earth could help, but any command takes more than 2.5 seconds to round-trip. In an emergency, that is too long. So a controller on a small chip, inside the habitat, decides by itself when to turn the scrubber on, for how long, and at what power.</p>
+                <p>This page lets you play that controller. Three crew members breathing at different activity levels (sleep, rest, light work, heavy work) for 24 simulated hours. Your job: keep CO2 safe, use as little energy as possible. Click Start and watch what happens.</p>
+            </div>
+        </div>
+
+        <!-- What you will see -->
+        <div class="panel">
+            <h2>What you will see when you click Start</h2>
+            <div class="metrics-help">
+                <p><strong>The blue line</strong> is the cabin CO2 concentration in parts per million. It rises as the crew breathes and falls when the scrubber runs.</p>
+                <p><strong>The dashed orange line</strong> (at 3500 ppm by default) is the comfort limit. Below, people work fine. Above, focus drops.</p>
+                <p><strong>The dashed red line</strong> (at 4000 ppm) is the safety limit. NASA considers this the upper bound for sustained operations.</p>
+                <p><strong>The colored strip at the bottom</strong> is what the scrubber is doing: dark for off, green for low power, yellow for medium, red for high. A good controller stays mostly dark and green.</p>
+                <p><strong>Scrubber effective %.</strong> Real chemical scrubbers do not reach full power instantly. When you command "high", it takes a few minutes to ramp up (chemical activation, gas transport). The "Scrubber" metric shows the command and the current effective power in parentheses. The Predictive controller knows about this lag and anticipates. The Reactive one does not, which is why it sometimes overshoots.</p>
+                <p><strong>The metrics row</strong> shows the current CO2, the current action, the current power draw, and the total energy used since the start. The <em>total energy</em> is what you want to minimize, as long as CO2 stays under the red line.</p>
+                <p>Three controllers are available. Pick one, click Start, let it run for 20 minutes of simulated time, then click Stop and Reset, switch controller, run again. Compare the total energy used at the same end time.</p>
+            </div>
+        </div>
+
+        <!-- Controllers -->
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>The three controllers you can pick</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p><strong>Predictive (the SpikyPanda AI controller).</strong> This is the interesting one. A small neural network running on the ESP32 knows how CO2 evolves over time. Every minute, it simulates 30 possible futures: what happens if I keep the scrubber off for five minutes, then switch to medium? what if I run it at low for twenty minutes? It picks the future that keeps CO2 safe with the least energy, and executes the first step of that plan. Then it replans every minute. The technical name is Model Predictive Control.</p>
+                <p><strong>Reactive threshold.</strong> A simple recipe: if CO2 goes above 3500, switch to high power. If it is between 2500 and 3500, go medium. Below that, low or off. No planning, no anticipation, only reaction to the current reading. In control theory this is called a bang-bang controller. It works, but it tends to overshoot and waste energy because it only responds after the problem is already there.</p>
+                <p><strong>No control.</strong> The scrubber never runs. Useful to see how fast CO2 climbs in a sealed habitat with three people. You will see the safety line cross in under an hour. This is the worst case and the reason any controller is needed.</p>
+            </div>
+        </div>
+
+        <!-- Pipeline (technical) -->
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Technical pipeline</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body metrics-help">
+                <p>The Predictive controller runs entirely in your browser using the same SpikyPanda runtime that runs on an ESP32. The dynamics model is a tiny neural network with 401 parameters (2.2 KB ONNX file, Gemm and Relu ops only, all validated by our 156 conformance tests). It takes the current CO2, the current crew size, and a candidate scrubber action, and predicts the CO2 value one minute later.</p>
+                <p>Three new compute graph nodes wrap this dynamics model: RolloutNode unrolls it 30 times forward to simulate a 30-minute window. ObjectiveNode scores the simulated trajectory with a cost function (penalize high CO2, penalize energy). ShootingSelectorNode samples 30 candidate action sequences, scores each via rollout + cost, returns the first action of the best one.</p>
+                <p>The whole decision loop, sense plus think plus act, takes roughly 2 ms in the browser and under 50 ms on an ESP32 running the compiled C++ version. No cloud, no GPU, no dependencies beyond the runtime bundle.</p>
+                <p>The article "Factor Graphs and World Models" (gtsam.org, 2026) describes this pattern as Sense-Think-Act with Graphs. The past graph estimates state from sensors. The future graph rolls out candidate actions and picks one. Both share the dynamics model. This page is a runnable instance of that idea.</p>
+            </div>
+        </div>
+
+        <!-- Live simulation -->
+        <div class="panel">
+            <h2>Run the simulation</h2>
+
+            <div class="controls" style="margin-top:8px;">
+                <button id="btn-start" onclick="co2Start()">Start</button>
+                <button id="btn-stop" onclick="co2Stop()" disabled>Stop</button>
+                <button id="btn-reset" onclick="co2Reset()">Reset</button>
+                <label style="margin-left:20px; cursor:pointer;">
+                    <input type="radio" name="controller" value="mpc" id="ctrl-mpc" checked onchange="co2SetController(this.value)" />
+                    Predictive (AI)
+                </label>
+                <label style="cursor:pointer;">
+                    <input type="radio" name="controller" value="bangbang" id="ctrl-bangbang" onchange="co2SetController(this.value)" />
+                    Reactive threshold
+                </label>
+                <label style="cursor:pointer;">
+                    <input type="radio" name="controller" value="off" id="ctrl-off" onchange="co2SetController(this.value)" />
+                    No control
+                </label>
+                <span id="status" style="margin-left:12px;"></span>
+            </div>
+
+            <canvas class="co2-chart" id="chart-co2"></canvas>
+
+            <div class="co2-status" id="status-box">
+                <div class="co2-metric">
+                    <div class="label">Current CO2</div>
+                    <div class="value" id="metric-co2">- ppm</div>
+                    <div class="hint">parts per million</div>
+                </div>
+                <div class="co2-metric">
+                    <div class="label">Crew</div>
+                    <div class="value" id="metric-crew">-</div>
+                    <div class="hint">people / activity</div>
+                </div>
+                <div class="co2-metric">
+                    <div class="label">Scrubber</div>
+                    <div class="value" id="metric-action">-</div>
+                    <div class="hint">command (effective %)</div>
+                </div>
+                <div class="co2-metric">
+                    <div class="label">Power draw</div>
+                    <div class="value" id="metric-power">-</div>
+                    <div class="hint">right now</div>
+                </div>
+                <div class="co2-metric">
+                    <div class="label">Time</div>
+                    <div class="value" id="metric-time">-</div>
+                    <div class="hint">simulated</div>
+                </div>
+                <div class="co2-metric">
+                    <div class="label">Total energy</div>
+                    <div class="value" id="metric-energy">-</div>
+                    <div class="hint">the lower the better</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tuning -->
+        <div class="panel">
+            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
+                <h2>Tune the predictive controller</h2><span class="collapsible-arrow">&#9660;</span>
+            </div>
+            <div class="collapsible-body">
+                <p class="tuning-intro">These controls only affect the Predictive AI controller. Try different values and compare total energy after 20 simulated minutes.</p>
+                <div class="co2-params">
+                    <div class="param">
+                        <label>How far ahead it plans</label>
+                        <input type="range" id="p-horizon" min="5" max="60" value="30" oninput="co2UpdateParam('horizon', this.value)" />
+                        <span id="v-horizon">30</span>
+                        <div class="param-hint">minutes. Longer = smarter plans, more compute</div>
+                    </div>
+                    <div class="param">
+                        <label>Candidate plans per decision</label>
+                        <input type="range" id="p-candidates" min="5" max="100" value="30" oninput="co2UpdateParam('candidates', this.value)" />
+                        <span id="v-candidates">30</span>
+                        <div class="param-hint">more = better choice, more compute</div>
+                    </div>
+                    <div class="param">
+                        <label>Comfort limit (soft)</label>
+                        <input type="range" id="p-soft" min="1500" max="4000" step="100" value="3500" oninput="co2UpdateParam('soft', this.value)" />
+                        <span id="v-soft">3500</span>
+                        <div class="param-hint">ppm. Above this, AI starts reacting</div>
+                    </div>
+                    <div class="param">
+                        <label>How much energy matters</label>
+                        <input type="range" id="p-energy" min="0" max="200" value="50" oninput="co2UpdateParam('energy', this.value)" />
+                        <span id="v-energy">50</span>
+                        <div class="param-hint">higher = more energy-saving behavior</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance -->
+        <div class="panel">
+            <h2>Performance</h2>
+            <div class="co2-info">
+                <div class="co2-info-card">
+                    <h4>Dynamics model</h4>
+                    <p id="info-model">Loading...</p>
+                </div>
+                <div class="co2-info-card">
+                    <h4>AI decision cost</h4>
+                    <p id="info-mpc">Waiting for first run</p>
+                </div>
+                <div class="co2-info-card">
+                    <h4>Last run (for comparison)</h4>
+                    <p id="info-compare">Reset and switch controller to compare</p>
+                </div>
+                <div class="co2-info-card">
+                    <h4>Status</h4>
+                    <p id="info-status">Idle</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log -->
+        <div class="panel">
+            <h2>Log</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script src="../../bundle/spikypanda-core.js"></script>
+    <script src="../../bundle/spikypanda-runtime.js"></script>
+    <script src="../../js/common.js"></script>
+    <script src="co2-mpc.js"></script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+{
+  "n_sequences": 2000,
+  "sequence_length": 180,
+  "dt_min": 1.0,
+  "co2_max_ppm": 10000.0,
+  "co2_min_ppm": 300.0,
+  "crew_max": 6,
+  "scrubber_rates": [
+    0.0,
+    0.03,
+    0.08,
+    0.2
+  ],
+  "scrubber_power": [
+    0.0,
+    1.0,
+    3.0,
+    8.0
+  ],
+  "scrubber_tau": 0.3,
+  "scrubber_rate_max": 0.2,
+  "activity_emission": {
+    "sleep": 2.0,
+    "rest": 3.5,
+    "light_work": 5.5,
+    "heavy_work": 7.0
+  },
+  "cabin_leak_rate": 0.001,
+  "input_dim": 7,
+  "output_dim": 1,
+  "input_schema": [
+    "co2 / co2_max",
+    "action_onehot[0] (off)",
+    "action_onehot[1] (low)",
+    "action_onehot[2] (medium)",
+    "action_onehot[3] (high)",
+    "crew_size / crew_max",
+    "scrubber_rate / scrubber_rate_max"
+  ],
+  "output_schema": [
+    "co2_next / co2_max"
+  ],
+  "train_samples": 324000,
+  "val_samples": 36000
+}
