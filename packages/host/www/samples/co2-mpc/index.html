@@ -168,21 +168,27 @@
                 <div class="co2-params">
                     <div class="param">
                         <label>How far ahead it plans</label>
-                        <input type="range" id="p-horizon" min="5" max="60" value="30" oninput="co2UpdateParam('horizon', this.value)" />
-                        <span id="v-horizon">30</span>
+                        <input type="range" id="p-horizon" min="15" max="120" value="60" oninput="co2UpdateParam('horizon', this.value)" />
+                        <span id="v-horizon">60</span>
                         <div class="param-hint">minutes. Longer = smarter plans, more compute</div>
                     </div>
                     <div class="param">
                         <label>Candidate plans per decision</label>
-                        <input type="range" id="p-candidates" min="5" max="100" value="30" oninput="co2UpdateParam('candidates', this.value)" />
-                        <span id="v-candidates">30</span>
+                        <input type="range" id="p-candidates" min="10" max="100" value="40" oninput="co2UpdateParam('candidates', this.value)" />
+                        <span id="v-candidates">40</span>
                         <div class="param-hint">more = better choice, more compute</div>
                     </div>
                     <div class="param">
-                        <label>Comfort limit (soft)</label>
+                        <label>Comfort target</label>
+                        <input type="range" id="p-comfort" min="800" max="3000" step="100" value="2000" oninput="co2UpdateParam('comfort', this.value)" />
+                        <span id="v-comfort">2000</span>
+                        <div class="param-hint">ppm. Below this, zero cost. Above: AI gently regulates toward it.</div>
+                    </div>
+                    <div class="param">
+                        <label>Warning limit (soft)</label>
                         <input type="range" id="p-soft" min="1500" max="4000" step="100" value="3500" oninput="co2UpdateParam('soft', this.value)" />
                         <span id="v-soft">3500</span>
-                        <div class="param-hint">ppm. Above this, AI starts reacting</div>
+                        <div class="param-hint">ppm. Above this, strong penalty kicks in.</div>
                     </div>
                     <div class="param">
                         <label>How much energy matters</label>

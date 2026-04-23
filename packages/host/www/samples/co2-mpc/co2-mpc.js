@@ -75,10 +75,11 @@ var lastRunStats = null;
 // Controller settings
 var controller = "mpc";
 var mpcParams = {
-    horizon: 30,
-    candidates: 30,
-    soft: 3500,
-    energy: 50,
+    horizon: 60,      // minutes - long enough to see CO2 rise past soft
+    candidates: 40,   // more diverse exploration
+    soft: 3500,       // ppm - above this, strong penalty
+    comfort: 2000,    // ppm - target regulation level
+    energy: 50,       // relative energy weight
 };
 
 // SpikyPanda runtime
@@ -314,21 +315,39 @@ function rebuildMpc(adapterGraph) {
         deltaMode: false,
     });
 
+    // Cost function with three zones so MPC has a gradient to follow at
+    // every CO2 level instead of a flat region below soft (which would
+    // degenerate MPC into threshold control).
+    //
+    //   [0, comfort]       : no cost. Regulation goal is to stay here.
+    //   [comfort, soft]    : linear ramp. Small cost, but non-zero, so MPC
+    //                        prefers to bring CO2 back toward comfort if
+    //                        energy is cheap.
+    //   [soft, vital]      : quadratic ramp, 100x larger. Strong push to
+    //                        avoid entering this zone.
+    //   above vital        : huge penalty. Safety-critical.
+    //
+    // Comfort target is set well below soft (default 2000 ppm) so MPC
+    // actively regulates rather than waiting.
     var costFn = function(trajectory, actions, stateDim, actionDim, horizon) {
-        var softLimit = mpcParams.soft / CO2_MAX_PPM;
-        var vitalLimit = CO2_VITAL / CO2_MAX_PPM;
-        var cost = 0;
+        var comfort = (mpcParams.comfort || 2000) / CO2_MAX_PPM;
+        var soft = mpcParams.soft / CO2_MAX_PPM;
+        var vital = CO2_VITAL / CO2_MAX_PPM;
 
+        var cost = 0;
         for (var t = 0; t <= horizon; t++) {
-            var co2 = trajectory[t * stateDim]; // state[0] = co2_norm
-            if (co2 > softLimit) {
-                var excess = (co2 - softLimit) / softLimit;
-                cost += 1000 * excess * excess;
-            }
-            if (co2 > vitalLimit) {
+            var co2 = trajectory[t * stateDim];
+            if (co2 > vital) {
                 cost += 1e6;
+            } else if (co2 > soft) {
+                var excess = (co2 - soft) / (vital - soft); // 0..1
+                cost += 100 + 9900 * excess * excess;
+            } else if (co2 > comfort) {
+                var ratio = (co2 - comfort) / (soft - comfort); // 0..1
+                cost += 100 * ratio;
             }
         }
+
         var energyWeight = mpcParams.energy / 50.0;
         for (var t = 0; t < horizon; t++) {
             for (var a = 0; a < actionDim; a++) {
@@ -591,12 +610,11 @@ function co2Start() {
     if (!dynamicsGraph && controller === "mpc") {
         co2Log("AI model not loaded yet, using reactive fallback");
     }
-    // Save whatever is currently on screen as the "previous run" before
-    // starting a new one. This way both previous and current are visible
-    // throughout the new run.
-    if (simTime >= 5) {
-        saveRunAsPrevious();
-        // Reset stats for the fresh run
+    // If a previous run is sitting on screen (user hit Stop, then changed
+    // controller), reset the current sim state so the new run starts fresh.
+    // The previous run's stats were saved at Stop time and stay in the
+    // "Previous" column throughout the new run.
+    if (simTime > 0) {
         simCO2 = SIM_INITIAL_CO2;
         simScrubberRate = 0.0;
         simTime = 0;
@@ -624,6 +642,14 @@ function co2Stop() {
     document.getElementById("btn-start").disabled = false;
     document.getElementById("btn-stop").disabled = true;
     co2Log("Stopped at t=" + simTime + " min, CO2=" + Math.round(simCO2) + " ppm, energy=" + simEnergyUsed.toFixed(0) + " Wh");
+    // Save the just-completed run to the "Previous" column. The saved controller
+    // label is the one that was ACTIVE during the run (simTime > 0 means the run
+    // happened), so even if the user switches controller after Stop, the label
+    // remains correct.
+    if (simTime >= 5) {
+        saveRunAsPrevious();
+        updateStatsCards();
+    }
 }
 
 function co2Reset() {
