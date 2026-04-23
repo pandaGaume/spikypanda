@@ -10,10 +10,41 @@
 var CO2_MAX_PPM = 10000.0;
 var CO2_VITAL = 4000.0;
 var CREW_MAX = 6;
-var SCRUBBER_RATES = [0.0, 0.03, 0.08, 0.20];
-var SCRUBBER_RATE_MAX = 0.20;
-var SCRUBBER_TAU = 0.3;
-var SCRUBBER_POWER = [0.0, 1.0, 3.0, 8.0];
+
+// Scrubber presets. The model was trained on "oversized" rates, so those are
+// the reference. Lower rates (degraded, failing) remain within the training
+// distribution and the model generalizes correctly because it learned the
+// physics (removal = rate * (co2 - 400)), not the specific action-to-rate
+// mapping (which only shows up through the scrubber_rate state input).
+var SCRUBBER_PRESETS = {
+    oversized: {
+        label: "Oversized (new habitat)",
+        desc: "Brand new scrubber, over-dimensioned. Any action handles any load. Threshold and AI look alike here.",
+        rates: [0.0, 0.03, 0.08, 0.20],
+        power: [0.0, 1.0, 3.0, 8.0],
+        tau: 0.3,
+    },
+    normal: {
+        label: "Normal (end-of-life)",
+        desc: "Scrubber at nominal design capacity. Low is tight for heavy work, medium handles it, high drops CO2. Anticipation starts mattering.",
+        rates: [0.0, 0.010, 0.025, 0.050],
+        power: [0.0, 1.0, 3.0, 8.0],
+        tau: 0.3,
+    },
+    degraded: {
+        label: "Degraded (real problem)",
+        desc: "Scrubber partially clogged or chemically tired. Even high barely keeps up with heavy work, and it reacts more slowly. The real maintenance window where planning matters most.",
+        rates: [0.0, 0.004, 0.010, 0.022],
+        power: [0.0, 1.0, 3.0, 8.0],
+        tau: 0.15, // slower response when clogged
+    },
+};
+
+var currentPreset = "oversized";
+var SCRUBBER_RATES = SCRUBBER_PRESETS[currentPreset].rates.slice();
+var SCRUBBER_RATE_MAX = 0.20; // normalization constant used by model input
+var SCRUBBER_TAU = SCRUBBER_PRESETS[currentPreset].tau;
+var SCRUBBER_POWER = SCRUBBER_PRESETS[currentPreset].power.slice();
 var ACTIVITY_EMISSION = {
     sleep: 2.0, rest: 3.5, light_work: 5.5, heavy_work: 7.0,
 };
@@ -621,6 +652,22 @@ function co2UpdateParam(key, val) {
         var adapter = createMpcAdapter();
         rebuildMpc(adapter);
     }
+}
+
+function co2SetPreset(name) {
+    if (!SCRUBBER_PRESETS[name]) return;
+    currentPreset = name;
+    var p = SCRUBBER_PRESETS[name];
+    SCRUBBER_RATES = p.rates.slice();
+    SCRUBBER_POWER = p.power.slice();
+    SCRUBBER_TAU = p.tau;
+    // Clear comparison: changing the physics invalidates any saved run
+    lastRunStats = null;
+    document.getElementById("preset-desc").textContent = p.desc;
+    co2Reset();
+    co2Log("Scrubber preset: " + p.label);
+    co2Log("  High removes " + (p.rates[3] * 100).toFixed(1) + "% of excess CO2 per minute");
+    co2Log("  Response time constant: " + p.tau + "/min (reaches " + (p.tau * 100).toFixed(0) + "% of target in 1 min)");
 }
 
 // ── Init ──────────────────────────────────────────────────────────────

@@ -35,7 +35,8 @@
                 <p>You are three astronauts in a small lunar habitat. You breathe, you work, you sleep. Every breath you exhale adds CO2 to the sealed cabin. Above 4000 parts per million, you start losing focus. Above 5000, you risk fainting. Above 8000, it becomes life-threatening.</p>
                 <p>A scrubber can remove CO2, but it draws a lot of power. Solar panels are precious. Batteries have to last through the 14-day lunar night. You cannot run the scrubber flat out all the time.</p>
                 <p>Mission Control on Earth could help, but any command takes more than 2.5 seconds to round-trip. In an emergency, that is too long. So a controller on a small chip, inside the habitat, decides by itself when to turn the scrubber on, for how long, and at what power.</p>
-                <p>This page lets you play that controller. Three crew members breathing at different activity levels (sleep, rest, light work, heavy work) for 24 simulated hours. Your job: keep CO2 safe, use as little energy as possible. Click Start and watch what happens.</p>
+                <p>This page lets you play that controller. Three crew members breathing at different activity levels (sleep, rest, light work, heavy work) for as long as you want. Your job: keep CO2 safe, use as little energy as possible. Click Start and watch what happens.</p>
+                <p>The scrubber itself can be in three states: brand new and oversized, end-of-life at nominal capacity, or degraded (clogged, tired, reduced efficiency). Try each preset. An AI planner is only useful when the hardware is marginal or broken. Testing all three is how you discover where the AI earns its cost.</p>
             </div>
         </div>
 
@@ -62,6 +63,7 @@
                 <p><strong>Predictive (the SpikyPanda AI controller).</strong> This is the interesting one. A small neural network running on the ESP32 knows how CO2 evolves over time. Every minute, it simulates 30 possible futures: what happens if I keep the scrubber off for five minutes, then switch to medium? what if I run it at low for twenty minutes? It picks the future that keeps CO2 safe with the least energy, and executes the first step of that plan. Then it replans every minute. The technical name is Model Predictive Control.</p>
                 <p><strong>Reactive threshold.</strong> A simple recipe: if CO2 goes above 3500, switch to high power. If it is between 2500 and 3500, go medium. Below that, low or off. No planning, no anticipation, only reaction to the current reading. In control theory this is called a bang-bang controller. It works, but it tends to overshoot and waste energy because it only responds after the problem is already there.</p>
                 <p><strong>No control.</strong> The scrubber never runs. Useful to see how fast CO2 climbs in a sealed habitat with three people. You will see the safety line cross in under an hour. This is the worst case and the reason any controller is needed.</p>
+                <p><strong>Which controller wins depends on the hardware.</strong> Try each scenario with the scrubber preset above. With a brand new oversized scrubber, the Reactive threshold does fine, the AI has little room to improve. With an end-of-life scrubber, the AI starts winning. With a degraded scrubber where even full power barely handles the load, the AI is the only one that keeps CO2 safe, because it anticipates the slow response and pre-activates the scrubber. This is where MPC earns its cost.</p>
             </div>
         </div>
 
@@ -81,6 +83,16 @@
         <!-- Live simulation -->
         <div class="panel">
             <h2>Run the simulation</h2>
+
+            <div class="controls" style="margin-top:8px;">
+                <label style="font-size:0.85em; color:var(--text-label);">Scrubber:</label>
+                <select id="preset-select" onchange="co2SetPreset(this.value)" style="background:var(--input-bg); color:var(--text); border:1px solid var(--input-border); border-radius:4px; padding:4px 8px;">
+                    <option value="oversized">Oversized (new habitat)</option>
+                    <option value="normal">Normal (end-of-life)</option>
+                    <option value="degraded">Degraded (real problem)</option>
+                </select>
+            </div>
+            <p class="metrics-help" id="preset-desc" style="font-size:0.8em; color:var(--text-muted); margin:4px 0 12px; font-style:italic;">Brand new scrubber, over-dimensioned. Any action handles any load. Threshold and AI look alike here.</p>
 
             <div class="controls" style="margin-top:8px;">
                 <button id="btn-start" onclick="co2Start()">Start</button>
