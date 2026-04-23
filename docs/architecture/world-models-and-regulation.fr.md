@@ -126,9 +126,61 @@ opérationnellement inutile.
 | Objectifs multiples concurrents (sécurité + confort + énergie + usure + longévité) | **MPC avec coût multi-termes**. Seule une fonction de coût explicite peut arbitrer entre objectifs. Un seuil n'a aucun mécanisme de compromis. |
 | Perturbations imprévisibles (équipage variable, capteurs défaillants) | **MPC à horizon glissant**. Replanifier à chaque pas absorbe l'incertitude. |
 
+## Une seconde observation : le world model ne vaut que par sa distribution d'entraînement
+
+Après avoir corrigé la fonction de coût, on a observé que le MPC se
+comportait bien sur le preset scrubber sur lequel il avait été entraîné
+(oversized : matériel neuf), mais dérivait vers un CO2 d'équilibre plus
+élevé sur les autres presets (normal end-of-life, degraded).
+
+Le modèle dynamique n'avait été entraîné que sur le preset oversized.
+Déployé sur du matériel normal ou dégradé, les rates scrubber étaient 5
+à 10 fois plus petits que tout ce qu'il avait vu en training. Le modèle
+extrapolait, et ses prédictions devenaient moins précises dans ce régime.
+
+Concrètement, à CO2 = 3000 ppm sur le preset degraded, le MPC choisissait
+"low" (coût ~700 en rollout) plutôt que "medium" (coût ~1200). Mais dans
+la vraie physique, low est insuffisant sur degraded et le CO2 continue de
+grimper. Le modèle prédisait une trajectoire stable que la réalité ne
+reproduisait pas. Le MPC prenait la bonne décision étant donné son
+modèle. Le modèle se trompait sur la réalité.
+
+C'est une deuxième conclusion, tout aussi importante :
+
+> **Un world model ne vaut que par sa distribution d'entraînement. Déployé
+> hors de cette distribution, le contrôleur se dégrade, même si la
+> fonction de coût est correcte.**
+
+Ré-entraîner le modèle avec des données issues des trois presets scrubber
+(échantillonnage uniforme entre oversized, normal, degraded) a restauré
+un comportement MPC précis sur chaque preset. Le schéma d'entrée n'a pas
+changé (toujours 7 features). Ce qui a changé, c'est que le modèle a vu
+des rates scrubber sur toute la plage opérationnelle, y compris les
+petits rates correspondant au matériel dégradé.
+
+C'est un point opérationnellement critique. Dans un système déployé, le
+scrubber vieillit. Les rates dérivent. Si le world model n'a été entraîné
+que sur du matériel nominal, il sera faux exactement au moment où le
+matériel a le plus besoin d'un contrôle intelligent. La conséquence
+pratique : les world models pour un déploiement longue durée doivent
+être entraînés sur une distribution couvrant tout le cycle de vie du
+système, ou ré-entraînés en ligne au fil de l'évolution du matériel.
+
+Pour reprendre le vocabulaire STAG : les factor graphs expriment leur
+world model via des facteurs de transition et des facteurs unaires. Ces
+facteurs ont des paramètres (appris ou analytiques). Si les paramètres
+ont été calibrés sur une tranche de données étroite, le factor graph est
+biaisé. La boucle Sense-Think-Act tourne sur un modèle de la réalité, pas
+sur la réalité elle-même. Maintenir ce modèle représentatif de la
+réalité courante est aussi important que choisir le bon coût.
+
 ## La phrase à retenir
 
 > **La dynamique sans coût, c'est de la prédiction. La dynamique avec coût, c'est un world model. Seul un world model permet de réguler au lieu de réagir.**
+
+Et son corollaire :
+
+> **Un world model ne vaut que par sa distribution d'entraînement. Si le système change, le modèle doit changer avec lui.**
 
 Ce n'est pas propre à SpikyPanda. Ça s'applique à tout système de
 contrôle. Mais c'est particulièrement pertinent pour l'IA embarquée :

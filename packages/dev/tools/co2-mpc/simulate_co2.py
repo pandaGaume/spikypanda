@@ -36,14 +36,26 @@ OUT_META = OUT_DIR / "co2_dataset.json"
 
 DT_MIN = 1.0  # simulation step in minutes
 
-# Scrubber target efficacy per action level (fraction/min removed of CO2 above 400 ppm)
-# 4 discrete actions: 0 = off, 1 = low, 2 = medium, 3 = high
-SCRUBBER_RATES = np.array([0.0, 0.03, 0.08, 0.20])
+# Scrubber presets. Must match SCRUBBER_PRESETS in the browser demo
+# (packages/host/www/samples/co2-mpc/co2-mpc.js). Training samples are
+# drawn uniformly from these three regimes so the model generalises
+# across brand-new, end-of-life, and degraded hardware.
+SCRUBBER_PRESETS = {
+    "oversized": {"rates": np.array([0.0, 0.03, 0.08, 0.20]), "tau": 0.3},
+    "normal":    {"rates": np.array([0.0, 0.010, 0.025, 0.050]), "tau": 0.3},
+    "degraded":  {"rates": np.array([0.0, 0.004, 0.010, 0.022]), "tau": 0.15},
+}
+PRESET_NAMES = list(SCRUBBER_PRESETS.keys())
 
-# Scrubber first-order lag time constant (per minute). 0.3 means the scrubber
-# reaches ~26% of the commanded rate after 1 minute, ~70% after 4 minutes.
-# Models the physical startup latency: gas transport + chemical activation.
-SCRUBBER_TAU = 0.3
+# Normalization constant for scrubber_rate input to the model. Picked at the
+# largest across all presets so scrubber_rate_norm always stays in [0, 1]
+# regardless of which preset generated the sample.
+SCRUBBER_RATE_MAX = 0.20
+
+# Legacy globals for backward compatibility; actual values are chosen per
+# sequence in generate_sequence().
+SCRUBBER_RATES = SCRUBBER_PRESETS["oversized"]["rates"]
+SCRUBBER_TAU = SCRUBBER_PRESETS["oversized"]["tau"]
 
 # Energy cost per action level (arbitrary units, higher = more power)
 SCRUBBER_POWER = np.array([0.0, 1.0, 3.0, 8.0])
@@ -79,13 +91,13 @@ CREW_SIZE_RANGE = (1, 6)
 # ---------------------------------------------------------------------------
 
 def step(co2: float, scrubber_rate: float, action: int, crew_size: int,
-         activity: str, emission_noise: float = 0.0,
-         dt: float = DT_MIN) -> tuple[float, float]:
+         activity: str, scrubber_rates: np.ndarray, tau: float,
+         emission_noise: float = 0.0, dt: float = DT_MIN) -> tuple[float, float]:
     """Advance the CO2 state by one timestep.
 
     Models a real scrubber with first-order startup latency: commanding
     "high" does not immediately give high removal rate; the effective rate
-    lags behind with time constant SCRUBBER_TAU.
+    lags behind with time constant tau.
 
     Args:
         co2             current CO2 (ppm)
@@ -93,25 +105,25 @@ def step(co2: float, scrubber_rate: float, action: int, crew_size: int,
         action          scrubber command {0..3}
         crew_size       number of people
         activity        activity label from ACTIVITY_EMISSION
+        scrubber_rates  action-level-to-target-rate mapping for this preset
+        tau             first-order lag time constant for this preset
         emission_noise  additive noise on emission (ppm/min)
         dt              timestep (minutes)
 
     Returns:
         (next_co2, next_scrubber_rate) tuple.
     """
-    target_rate = SCRUBBER_RATES[action]
-    # First-order lag: scrubber rate slowly approaches commanded rate
-    next_scrubber_rate = scrubber_rate + (target_rate - scrubber_rate) * SCRUBBER_TAU * dt
+    target_rate = scrubber_rates[action]
+    next_scrubber_rate = scrubber_rate + (target_rate - scrubber_rate) * tau * dt
 
     e_rate = ACTIVITY_EMISSION[activity] * crew_size + emission_noise
-    # Scrubbing uses the *effective* rate, not the commanded rate
     scrub = scrubber_rate * max(co2 - 400.0, 0.0)
     leak = CABIN_LEAK_RATE * (co2 - C_EXTERNAL)
 
     dco2 = e_rate - scrub - leak
     next_co2 = co2 + dco2 * dt
     return (float(np.clip(next_co2, CO2_MIN, CO2_MAX)),
-            float(np.clip(next_scrubber_rate, 0.0, max(SCRUBBER_RATES))))
+            float(np.clip(next_scrubber_rate, 0.0, float(SCRUBBER_RATE_MAX))))
 
 
 # ---------------------------------------------------------------------------
@@ -159,13 +171,18 @@ def _sample_action_sequence(length: int) -> np.ndarray:
 
 
 def generate_sequence(length: int = SEQUENCE_LENGTH) -> dict:
-    """Generate one simulation run."""
+    """Generate one simulation run with a randomly chosen scrubber preset."""
+    preset_name = str(rng.choice(PRESET_NAMES))
+    preset = SCRUBBER_PRESETS[preset_name]
+    scrubber_rates = preset["rates"]
+    tau = preset["tau"]
+
     crew_size = int(rng.integers(CREW_SIZE_RANGE[0], CREW_SIZE_RANGE[1] + 1))
     activities = _sample_activity_profile(length)
     actions = _sample_action_sequence(length)
     co2_init = float(rng.uniform(*CO2_INITIAL_RANGE))
-    # Start with a random initial scrubber rate (sometimes already running)
-    scrubber_init = float(rng.uniform(0.0, max(SCRUBBER_RATES)))
+    # Initial scrubber rate within this preset's range
+    scrubber_init = float(rng.uniform(0.0, float(max(scrubber_rates))))
 
     co2_trace = np.zeros(length + 1, dtype=np.float32)
     scrubber_trace = np.zeros(length + 1, dtype=np.float32)
@@ -176,7 +193,7 @@ def generate_sequence(length: int = SEQUENCE_LENGTH) -> dict:
         noise = rng.normal(0.0, 0.5)
         next_co2, next_scrub = step(co2_trace[t], scrubber_trace[t],
                                     int(actions[t]), crew_size,
-                                    activities[t], noise)
+                                    activities[t], scrubber_rates, tau, noise)
         co2_trace[t + 1] = next_co2
         scrubber_trace[t + 1] = next_scrub
 
@@ -186,6 +203,7 @@ def generate_sequence(length: int = SEQUENCE_LENGTH) -> dict:
         "actions": actions,
         "crew_size": crew_size,
         "activities": activities,
+        "preset": preset_name,
     }
 
 
@@ -211,9 +229,14 @@ def build_dataset():
         if (i + 1) % 500 == 0:
             print(f"  {i + 1}/{N_SEQUENCES}")
 
-    scrubber_max = max(SCRUBBER_RATES)
+    # Use a single normalization constant across all presets so the scrubber
+    # rate feature has consistent meaning regardless of which preset produced
+    # the sample. Normalized rates stay in [0, 1].
+    scrubber_norm = float(SCRUBBER_RATE_MAX)
     X_list, Y_list = [], []
+    preset_counts = {name: 0 for name in PRESET_NAMES}
     for seq in sequences:
+        preset_counts[seq["preset"]] += 1
         co2 = seq["co2"]
         scrubber = seq["scrubber_rate"]
         actions = seq["actions"]
@@ -227,11 +250,12 @@ def build_dataset():
                 [co2[t] / CO2_MAX],
                 action_onehot,
                 [crew / CREW_SIZE_RANGE[1]],
-                [scrubber[t] / scrubber_max],
+                [scrubber[t] / scrubber_norm],
             ]).astype(np.float32)
             y = np.array([co2[t + 1] / CO2_MAX], dtype=np.float32)
             X_list.append(x)
             Y_list.append(y)
+    print(f"Preset distribution: {preset_counts}")
 
     X = np.stack(X_list)
     Y = np.stack(Y_list)
@@ -259,10 +283,13 @@ def build_dataset():
         "co2_max_ppm": CO2_MAX,
         "co2_min_ppm": CO2_MIN,
         "crew_max": CREW_SIZE_RANGE[1],
-        "scrubber_rates": SCRUBBER_RATES.tolist(),
+        "scrubber_presets": {
+            name: {"rates": p["rates"].tolist(), "tau": p["tau"]}
+            for name, p in SCRUBBER_PRESETS.items()
+        },
         "scrubber_power": SCRUBBER_POWER.tolist(),
-        "scrubber_tau": SCRUBBER_TAU,
-        "scrubber_rate_max": float(max(SCRUBBER_RATES)),
+        "scrubber_rate_max": float(SCRUBBER_RATE_MAX),
+        "preset_distribution": preset_counts,
         "activity_emission": ACTIVITY_EMISSION,
         "cabin_leak_rate": CABIN_LEAK_RATE,
         "input_dim": int(X.shape[1]),

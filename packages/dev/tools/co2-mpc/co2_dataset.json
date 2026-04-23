@@ -5,20 +5,47 @@
   "co2_max_ppm": 10000.0,
   "co2_min_ppm": 300.0,
   "crew_max": 6,
-  "scrubber_rates": [
-    0.0,
-    0.03,
-    0.08,
-    0.2
-  ],
+  "scrubber_presets": {
+    "oversized": {
+      "rates": [
+        0.0,
+        0.03,
+        0.08,
+        0.2
+      ],
+      "tau": 0.3
+    },
+    "normal": {
+      "rates": [
+        0.0,
+        0.01,
+        0.025,
+        0.05
+      ],
+      "tau": 0.3
+    },
+    "degraded": {
+      "rates": [
+        0.0,
+        0.004,
+        0.01,
+        0.022
+      ],
+      "tau": 0.15
+    }
+  },
   "scrubber_power": [
     0.0,
     1.0,
     3.0,
     8.0
   ],
-  "scrubber_tau": 0.3,
   "scrubber_rate_max": 0.2,
+  "preset_distribution": {
+    "oversized": 682,
+    "normal": 662,
+    "degraded": 656
+  },
   "activity_emission": {
     "sleep": 2.0,
     "rest": 3.5,

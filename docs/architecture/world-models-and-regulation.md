@@ -120,9 +120,56 @@ useless.
 | Multiple competing objectives (safety + comfort + energy + wear + lifetime) | **MPC with multi-term cost**. Only explicit cost function can arbitrate between objectives. Threshold has no mechanism for trade-offs. |
 | Unpredictable disturbances (varying crew, failing sensors) | **MPC with receding horizon**. Replanning every step absorbs uncertainty. |
 
+## A second finding: the world model is only as good as its training distribution
+
+After fixing the cost function, we observed MPC behaving well on the scrubber
+preset it was trained on (oversized: brand-new hardware), but drifting to a
+higher steady-state CO2 on the other presets (normal end-of-life, degraded).
+
+The dynamics model had been trained only on the oversized preset. When
+deployed on normal or degraded hardware, scrubber rates were 5x to 10x
+smaller than anything in training. The model extrapolated, and its
+predictions became less accurate in that regime.
+
+Concretely, at CO2 = 3000 ppm on the degraded preset, the MPC was picking
+"low" (cost ~700 in rollout) over "medium" (cost ~1200). But in the real
+physics, low is insufficient on degraded and CO2 keeps climbing. The model
+was predicting a stable trajectory that reality did not reproduce. The MPC
+made the right decision given its model. The model was wrong about reality.
+
+This is a second, equally important conclusion:
+
+> **A world model is only as good as its training distribution. Deploy outside
+> that distribution and the controller degrades, even when the cost function
+> is correct.**
+
+Retraining the model with data from all three scrubber presets (uniform
+sampling across oversized, normal, degraded) restored accurate MPC behavior
+on every preset. The input schema did not change (still 7 features). What
+changed is that the model had seen scrubber rates across the full operating
+range, including the small rates that correspond to degraded hardware.
+
+This matters operationally. In a deployed system the scrubber will age.
+Rates will drift. If the world model was trained only on nominal hardware,
+it will be wrong precisely when the hardware needs the smartest control. The
+practical implication is that world models for long-duration deployment must
+be trained on a distribution that covers the full lifecycle of the system,
+or be retrained online as the hardware state evolves.
+
+Connecting to the GTSAM framing: factor graphs express their world model
+through transition factors and unary factors. Those factors have parameters
+(learned or analytical). If the parameters were fit on a narrow data slice,
+the factor graph is biased. The Sense-Think-Act loop runs on a model of
+reality, not on reality. Keeping that model representative of the current
+reality is as important as choosing the right cost.
+
 ## The one-line takeaway
 
 > **Dynamics without cost is prediction. Dynamics with cost is a world model. Only a world model lets you regulate instead of react.**
+
+And its corollary:
+
+> **A world model is only as good as its training distribution. If the system changes, the model must change with it.**
 
 This is not a SpikyPanda-specific insight. It applies to any control
 system. But it is especially relevant for embedded AI: a neural network
