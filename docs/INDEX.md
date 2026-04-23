@@ -5,6 +5,7 @@
 | Document | Description |
 |---|---|
 | [Structural Plasticity Vision](architecture/plasticity-vision.md) | Core differentiator of SpikyPanda: online structural adaptation (synaptogenesis, pruning, Hebbian learning). Why tensor frameworks cannot do this. |
+| [World Models and Regulation](architecture/world-models-and-regulation.md) ([FR](architecture/world-models-and-regulation.fr.md)) | Why dynamics alone is not a world model. The cost function is what turns prediction into decision. Lessons from the CO2 MPC demo and the connection to factor graphs / STAG. |
 | [README](README.md) | Project overview, architecture summary, available modules |
 
 ## Vision - LiDAR Perception
