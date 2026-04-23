@@ -63,6 +63,7 @@ var simEnergyUsed = 0.0;
 var simHistory = [];
 var simInterval = null;
 var simAction = 0;
+var simTimeCap = 60; // default matches the UI select; 0 = no cap (forever)
 // Live stats for current run
 var statsMaxCO2 = SIM_INITIAL_CO2;
 var statsMinCO2 = SIM_INITIAL_CO2;
@@ -495,6 +496,14 @@ function simStep() {
     if (simCO2 > mpcParams.soft) statsMinutesAboveSoft += 1;
     if (simCO2 > CO2_VITAL) statsMinutesAboveVital += 1;
 
+    // Time cap reached? Stop automatically so the user can compare runs at
+    // the same simulated duration without having to watch a stopwatch.
+    if (simTimeCap > 0 && simTime >= simTimeCap) {
+        co2Log("Time cap reached (" + simTimeCap + " min simulated). Stopping.");
+        co2Stop();
+        return;
+    }
+
     simHistory.push({
         t: simTime,
         co2: simCO2,
@@ -652,6 +661,12 @@ function co2UpdateParam(key, val) {
         var adapter = createMpcAdapter();
         rebuildMpc(adapter);
     }
+}
+
+function co2SetTimeCap(val) {
+    simTimeCap = parseInt(val, 10) || 0;
+    var label = simTimeCap > 0 ? (simTimeCap + " min") : "no cap";
+    co2Log("Time cap: " + label);
 }
 
 function co2SetPreset(name) {

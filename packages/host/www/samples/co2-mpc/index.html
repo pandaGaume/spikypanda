@@ -98,6 +98,15 @@
                 <button id="btn-start" onclick="co2Start()">Start</button>
                 <button id="btn-stop" onclick="co2Stop()" disabled>Stop</button>
                 <button id="btn-reset" onclick="co2Reset()">Reset</button>
+                <label style="margin-left:12px; font-size:0.85em; color:var(--text-label);">Run for:</label>
+                <select id="timecap-select" onchange="co2SetTimeCap(this.value)" style="background:var(--input-bg); color:var(--text); border:1px solid var(--input-border); border-radius:4px; padding:4px 8px;">
+                    <option value="0">No cap (forever)</option>
+                    <option value="30">30 sim min</option>
+                    <option value="60" selected>60 sim min</option>
+                    <option value="120">2 sim hours</option>
+                    <option value="240">4 sim hours</option>
+                    <option value="480">8 sim hours</option>
+                </select>
                 <label style="margin-left:20px; cursor:pointer;">
                     <input type="radio" name="controller" value="mpc" id="ctrl-mpc" checked onchange="co2SetController(this.value)" />
                     Predictive (AI)
