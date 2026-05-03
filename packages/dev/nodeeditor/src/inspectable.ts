@@ -1,8 +1,15 @@
+export interface SelectOption {
+    value: string;
+    label: string;
+}
+
 export interface PropertyEntry {
     key: string;
     value: unknown;
     editable?: boolean;
-    type?: "string" | "number" | "boolean";
+    type?: "string" | "number" | "boolean" | "select";
+    /** Only meaningful when type === "select". */
+    options?: SelectOption[];
 }
 
 export interface Inspectable {
@@ -43,6 +50,20 @@ export interface IToggableNode {
     setEnabled(enabled: boolean): void;
 }
 
+/**
+ * IStartableNode marks a processor node whose capture/recording can be
+ * started and stopped independently of the graph executor. Distinct from
+ * IRunnableNode (which drives signal generation sources): an IStartableNode
+ * node can be live in the graph while not yet capturing.
+ *
+ * Typical implementer: spk.DatasetCapture.
+ * The editor renders a ● / ■ record-toggle button in the node header.
+ */
+export interface IStartableNode {
+    isStarted(): boolean;
+    setStarted(started: boolean): void;
+}
+
 export function isRunnableNode(obj: unknown): obj is IRunnableNode {
     if (obj == null || typeof obj !== "object") return false;
     const c = obj as Record<string, unknown>;
@@ -53,6 +74,12 @@ export function isToggableNode(obj: unknown): obj is IToggableNode {
     if (obj == null || typeof obj !== "object") return false;
     const c = obj as Record<string, unknown>;
     return typeof c["isEnabled"] === "function" && typeof c["setEnabled"] === "function";
+}
+
+export function isStartableNode(obj: unknown): obj is IStartableNode {
+    if (obj == null || typeof obj !== "object") return false;
+    const c = obj as Record<string, unknown>;
+    return typeof c["isStarted"] === "function" && typeof c["setStarted"] === "function";
 }
 
 export function isInspectable(obj: unknown): obj is Inspectable {

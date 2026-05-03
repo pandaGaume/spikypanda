@@ -18,9 +18,20 @@
 // samples/nodeeditor/ and resolves URLs as `../<detailPage>`).
 //
 // `attrSchema` is the per-op editable surface. Each entry: { key, label,
-// type, ...constraints }. Types: "number" | "int" | "string" | "boolean".
-// "select" is reserved for future use; until the editor's PropertyPanel
-// gains a dropdown widget, dropdowns are emulated as "string".
+// type, ...constraints }. Types: "number" | "int" | "string" | "boolean" | "select".
+// "select" requires an `options: [{ value, label }]` array and renders as a
+// native <select> dropdown in the property panel.
+//
+// Serialization format (.spikypanda JSON):
+//   "@type"  : op id — the authoritative type discriminant for reconstruction.
+//              Follows the JSON-LD / ONNX convention.  A loader uses "@type"
+//              to look up the op and re-attach its methods; it does not need
+//              any other context.  Versioning: "@type" is stable; breaking
+//              changes increment opset and the deserializer can branch on it.
+//   "op"     : same value as "@type", kept for human readability and backward
+//              compatibility with files saved before "@type" was introduced.
+//   "nodeId" : instance id assigned by the editor (node_N).
+//   "config" : snapshot of the mutable attribute values.
 
 // ---- Shared port type for kinematic streams ---------------------------
 // Kinematics carries (theta, omega) per sample. Encoded as vec2 so the
@@ -44,10 +55,25 @@ const MOTOR_DC = {
     // all source nodes; there is no autoStart flag. Wire StartRuntime.started
     // to Motor.start so the motor activates when Play begins, or leave it
     // unwired and use the on-node play button to start it manually.
-    inputs: [],
+    //
+    // dutyCycle: optional float input (0-1). When wired, overrides the static
+    // pwmDutyCycle config each tick, allowing live speed control from any
+    // float source (Constant, Ramp, PWM, etc.). When unwired, the config value is used.
+    //
+    // pwmFrequency: optional float input (Hz). When wired (e.g. from a spk.PWM
+    // node), overrides the pwmFrequencyHz config each tick so both PWM params
+    // can be driven together from a single PWM node.
+    inputs: [
+        { name: "dutyCycle",    type: "float" },
+        { name: "pwmFrequency", type: "float" },
+    ],
     outputs: [
         { name: "current",    type: "float" },
         { name: "kinematics", type: KINEMATICS },
+        // Instantaneous mechanical speed in rps (revolutions per second),
+        // one sample per tick. Feed into a Scope to monitor live speed,
+        // or into a Sensor/FFT to analyse speed fluctuations.
+        { name: "speed",      type: "float" },
     ],
     defaultConfig: {
         // The motor is a pure physics source: signal(t) with no knowledge
@@ -59,25 +85,29 @@ const MOTOR_DC = {
         motorSpeedRps: 50.0,
         commutatorBars: 12,
         brushCount: 2,
-        nominalCurrent: 5.0,
         loadFactor: 1.0,
         rippleFactor: 0.05,
         pwmFrequencyHz: 10000,
         pwmDutyCycle: 1.0,
     },
+    // I_DC (steady-state armature current) is NOT a direct property.
+    // It is fully determined by the electrical equation:
+    //   I_DC = (supplyVoltage * pwmDutyCycle - backEmfConstant * motorSpeedRps) / resistance
+    // With the defaults below: (24*1 - 0.36*50) / 1.2 = (24-18)/1.2 = 5 A.
+    // Adjust supplyVoltage, pwmDutyCycle, backEmfConstant, motorSpeedRps or
+    // resistance to change the DC operating point.
     attrSchema: [
-        { key: "supplyVoltage",    label: "Supply (V)",         type: "number", min: 0.1,   step: 0.5  },
-        { key: "resistance",       label: "Resistance (Ohm)",   type: "number", min: 0.001, step: 0.05 },
-        { key: "inductance",       label: "Inductance (H)",     type: "number", min: 1e-6,  step: 0.001 },
-        { key: "backEmfConstant",  label: "Back-EMF Ke (V/rps)",type: "number", min: 0,     step: 0.005 },
-        { key: "motorSpeedRps",    label: "Speed nom (rps)",    type: "number", min: 0.1,   step: 1    },
-        { key: "commutatorBars",   label: "Commutator bars",    type: "int",    min: 1,     step: 1    },
-        { key: "brushCount",       label: "Brush count",        type: "int",    min: 0,     step: 1    },
-        { key: "nominalCurrent",   label: "Nominal current (A)",type: "number", min: 0,     step: 0.1  },
-        { key: "loadFactor",       label: "Load factor",        type: "number", min: 0,     step: 0.05 },
-        { key: "rippleFactor",     label: "Ripple factor",      type: "number", min: 0, max: 1, step: 0.01 },
-        { key: "pwmFrequencyHz",   label: "PWM freq (Hz)",      type: "number", min: 100,   step: 500  },
-        { key: "pwmDutyCycle",     label: "PWM duty (0-1)",     type: "number", min: 0, max: 1, step: 0.01 },
+        { key: "supplyVoltage",    label: "Supply V  [I_DC = (V*D - Ke*w)/R]", type: "number", min: 0.1,   step: 0.5  },
+        { key: "resistance",       label: "Resistance R (Ohm)",                 type: "number", min: 0.001, step: 0.05 },
+        { key: "inductance",       label: "Inductance L (H)",                   type: "number", min: 1e-6,  step: 0.001 },
+        { key: "backEmfConstant",  label: "Back-EMF Ke (V/rps)",                type: "number", min: 0,     step: 0.005 },
+        { key: "motorSpeedRps",    label: "Speed w (rps)",                      type: "number", min: 0.1,   step: 1    },
+        { key: "commutatorBars",   label: "Commutator bars",                    type: "int",    min: 1,     step: 1    },
+        { key: "brushCount",       label: "Brush count",                        type: "int",    min: 0,     step: 1    },
+        { key: "loadFactor",       label: "Load factor",                        type: "number", min: 0,     step: 0.05 },
+        { key: "rippleFactor",     label: "Ripple factor",                      type: "number", min: 0, max: 1, step: 0.01 },
+        { key: "pwmFrequencyHz",   label: "PWM freq (Hz)",                      type: "number", min: 100,   step: 500  },
+        { key: "pwmDutyCycle",     label: "PWM duty D (0-1)",                   type: "number", min: 0, max: 1, step: 0.01 },
     ],
 };
 
@@ -113,14 +143,16 @@ const BEARING_DEFECT   = faultOp("spk.BearingFault",       "Fault: Bearing",    
     ]);
 
 const BROKEN_BAR       = faultOp("spk.BrokenBarFault",     "Fault: Broken Bar",   "#a84",
-    { severity: 0.5, totalBars: 12, brokenIndices: "0" },
+    { severity: 0.5, totalBars: 12, brokenIndices: "0", slip: 0.02 },
     [
         SEVERITY_ATTR,
-        { key: "totalBars",     label: "Total bars",       type: "int",    min: 1, step: 1 },
-        // Encoded as a comma-separated string ("0,3,7"). Property panel
-        // gives plain text editing; the runtime parses on init. Will be
-        // upgraded to a structured editor when PropertyPanel grows arrays.
+        { key: "totalBars",     label: "Total bars",       type: "int",    min: 1,    step: 1    },
+        // Comma-separated bar indices ("0" = 1 bar, "0,3" = 2 bars).
+        // The runtime counts them; individual indices are metadata only.
         { key: "brokenIndices", label: "Broken (csv idx)", type: "string" },
+        // Slip: how far sidebands are offset from the commutation frequency.
+        // fComm is derived from the motor (kinematics.fComm), not declared here.
+        { key: "slip",          label: "Slip (0-1)",       type: "number", min: 0, max: 1, step: 0.005 },
     ]);
 
 const ECCENTRICITY     = faultOp("spk.EccentricityFault",  "Fault: Eccentricity", "#a4a",
@@ -162,6 +194,114 @@ const GRAVITY = {
         { key: "airGap",                 label: "Air gap g0 (m)",       type: "number", min: 1e-6,  step: 0.0001  },
         { key: "bearingRadialStiffness", label: "Bearing k (N/m)",      type: "number", min: 1,     step: 10000   },
         { key: "equivalentCurrent",      label: "I_eq (A)",             type: "number", min: 0,     step: 0.1     },
+    ],
+};
+
+// ---- Constant (float signal source) -----------------------------------
+// Emits a fixed scalar value every tick. The primary use-case is feeding
+// control inputs (e.g. dutyCycle on MotorDC) with a static setpoint so
+// the user can change it via the property panel without re-wiring. Wire
+// Constant.out → MotorDC.dutyCycle to override the motor's duty cycle live.
+const CONSTANT = {
+    id: "spk.Constant",
+    domain: "spikypanda.ai",
+    opset: 1,
+    kind: "source",
+    category: "Source",
+    label: "Constant",
+    color: "#556",
+    inputs: [],
+    outputs: [{ name: "out", type: "float" }],
+    defaultConfig: { value: 1.0 },
+    attrSchema: [
+        { key: "value", label: "Value", type: "number", step: 0.05 },
+    ],
+};
+
+// ---- Ramp (linearly sweeping float source) ----------------------------
+// Outputs a value that increases from `start` to `end` over `durationS`
+// seconds, then holds at `end` (clamp) or restarts from `start` (loop).
+// Feed into MotorDC.dutyCycle to simulate a speed ramp.
+const RAMP = {
+    id: "spk.Ramp",
+    domain: "spikypanda.ai",
+    opset: 1,
+    kind: "source",
+    category: "Source",
+    label: "Ramp",
+    color: "#556",
+    inputs: [],
+    outputs: [
+        { name: "out",   type: "float" },
+        // `ended`: 0.0 while ramp is running, 1.0 once it has reached `end`
+        // (non-looping only; stays at 1.0 after the ramp completes).
+        // Wire to a Constant node's enable or a Sum input to chain effects.
+        { name: "ended", type: "float" },
+    ],
+    defaultConfig: { start: 0.0, end: 1.0, durationS: 5.0, loop: false },
+    attrSchema: [
+        { key: "start",     label: "Start value",   type: "number",  step: 0.05 },
+        { key: "end",       label: "End value",     type: "number",  step: 0.05 },
+        { key: "durationS", label: "Duration (s)",  type: "number",  min: 0.001, step: 0.5 },
+        { key: "loop",      label: "Loop",          type: "boolean" },
+    ],
+};
+
+// ---- PWM driver (dual float source) ----------------------------------
+// Models a PWM driver IC: two config knobs (frequencyHz, dutyCycle) emitted
+// as a pair of constant float streams. Wire PWM.dutyCycle to MotorDC.dutyCycle
+// and PWM.frequencyHz to MotorDC.pwmFrequency to centralise all PWM control
+// in one node instead of two separate Constant nodes.
+//
+// Neither output generates an actual square wave — the motor physics model
+// uses frequencyHz and dutyCycle as parameters, not as a sampled waveform.
+const PWM = {
+    id: "spk.PWM",
+    domain: "spikypanda.ai",
+    opset: 1,
+    kind: "source",
+    category: "Source",
+    label: "PWM Driver",
+    color: "#466",
+    inputs: [],
+    outputs: [
+        { name: "frequencyHz", type: "float" },
+        { name: "dutyCycle",   type: "float" },
+    ],
+    defaultConfig: {
+        frequencyHz: 10000,
+        dutyCycle:   1.0,
+    },
+    attrSchema: [
+        { key: "frequencyHz", label: "Frequency (Hz)", type: "number", min: 100, step: 500 },
+        { key: "dutyCycle",   label: "Duty cycle (0-1)", type: "number", min: 0, max: 1, step: 0.01 },
+    ],
+};
+
+// ---- Switch (binary signal mux) --------------------------------------
+// Selects between two float streams based on a control signal.
+//   select < threshold  → out = a
+//   select >= threshold → out = b
+// Primary use-case: hand control from a Ramp to a PWM Driver once the
+// ramp has completed. Wire Ramp.ended → Switch.select, Ramp.out → Switch.a,
+// PWM.dutyCycle → Switch.b, Switch.out → MotorDC.dutyCycle.
+const SWITCH = {
+    id: "spk.Switch",
+    domain: "spikypanda.ai",
+    opset: 1,
+    kind: "processor",
+    category: "Composition",
+    label: "Switch (A/B)",
+    color: "#446",
+    inputs: [
+        { name: "a",      type: "float" },
+        { name: "b",      type: "float" },
+        { name: "select", type: "float" },
+    ],
+    outputs: [{ name: "out", type: "float" }],
+    defaultConfig: { threshold: 0.5 },
+    attrSchema: [
+        { key: "threshold", label: "Threshold (select >= → B)", type: "number", min: 0, step: 0.05 },
     ],
 };
 
@@ -236,18 +376,40 @@ const FFT = {
         // Power of 2. 1024 at fs=5000 Hz gives ~5 frames/s with 4.88 Hz bin
         // resolution and a Nyquist of 2500 Hz over 512 magnitude bins.
         size: 1024,
-        // Hann is the default; "rect" disables windowing for testing.
+        // Hop size (samples between successive frames). Must be <= size.
+        // Default = size means no overlap (one frame per full window).
+        // 512 = 50 % overlap (doubles frame rate, smoother spectrograms).
+        // 256 = 75 % overlap (4x frame rate, recommended for CNN spectrograms).
+        hopSize: 1024,
+        // Spectral window function applied before the DFT.
+        // hann     : good all-round default (-32 dB sidelobes).
+        // hamming  : slightly better frequency resolution than Hann (-43 dB).
+        // blackman : lowest sidelobes (-58 dB); best for MCSA broken-bar
+        //            detection where sidebands sit 1-4 Hz from the fundamental.
+        // flattop  : flattest passband; use when you need accurate sideband
+        //            amplitude (fault severity estimation).
+        // rect     : no windowing; only for testing with exactly periodic signals.
         windowType: "hann",
-        // Subtract the block mean before windowing (DC removal). Eliminates
-        // spectral leakage from large DC offsets (e.g. motor nominal current)
-        // that would otherwise swamp AC harmonics under auto-scale. Disable
-        // only when you explicitly want to see the absolute signal level.
+        // Subtract the block mean before windowing. Eliminates spectral leakage
+        // from the motor's DC bias (nominal current) that would otherwise raise
+        // the noise floor around the fundamental and mask sidebands.
+        // Equivalent to AC coupling on a scope. Keep ON for MCSA.
         dcRemoval: true,
     },
     attrSchema: [
-        { key: "size",       label: "FFT size (pow2)",  type: "int",     min: 64, step: 64 },
-        { key: "windowType", label: "Window (hann|rect)", type: "string" },
-        { key: "dcRemoval",  label: "DC removal",        type: "boolean" },
+        { key: "size",       label: "FFT size (pow2)",    type: "int",     min: 64, step: 64 },
+        { key: "hopSize",    label: "Hop size (samples)", type: "int",     min: 1,  step: 64 },
+        {
+            key: "windowType", label: "Window function", type: "select",
+            options: [
+                { value: "hann",     label: "Hann (default, -32 dB)"          },
+                { value: "hamming",  label: "Hamming (-43 dB)"                 },
+                { value: "blackman", label: "Blackman (-58 dB, best for MCSA)" },
+                { value: "flattop",  label: "Flat-top (amplitude accuracy)"    },
+                { value: "rect",     label: "Rectangular (no window)"          },
+            ],
+        },
+        { key: "dcRemoval",  label: "DC removal (AC coupling)", type: "boolean" },
     ],
 };
 
@@ -282,6 +444,35 @@ const SENSOR = {
         { key: "bias",         label: "Bias (A)",         type: "number",           step: 0.01 },
         { key: "noiseStd",     label: "Noise std (A)",    type: "number", min: 0,   step: 0.005 },
         { key: "rngSeed",      label: "RNG seed",         type: "int",    min: 0,   step: 1    },
+    ],
+};
+
+// ---- Gauge (sink — live numeric + arc display) ------------------------
+// Reads any float stream and displays the instantaneous value as a large
+// number inside an arc gauge in the play panel. No processing; the widget
+// subscribes directly to the upstream stream on the bus (same pattern as
+// Scope). Configure min/max so the arc fills meaningfully.
+const GAUGE = {
+    id: "spk.Gauge",
+    domain: "spikypanda.ai",
+    opset: 1,
+    kind: "sink",
+    category: "Sink",
+    label: "Gauge",
+    color: "#56a",
+    inputs:  [{ name: "in", type: "float" }],
+    outputs: [],
+    defaultConfig: {
+        unit:     "rps",
+        min:      0,
+        max:      100,
+        decimals: 1,
+    },
+    attrSchema: [
+        { key: "unit",     label: "Unit",     type: "string" },
+        { key: "min",      label: "Min",      type: "number",           step: 1   },
+        { key: "max",      label: "Max",      type: "number",           step: 1   },
+        { key: "decimals", label: "Decimals", type: "int",    min: 0,   step: 1   },
     ],
 };
 
@@ -335,34 +526,61 @@ const MOTOR_CURRENT_DC_COMPOSITE = {
     ],
 };
 
-// ---- DatasetCapture (sink with passthrough output) --------------------
-// Records labeled windows from its input stream and exposes a "dataset"
-// stream so downstream NN training/inference nodes can subscribe.
+// ---- DatasetCapture (multi-channel, labeled window recorder) ----------
+// Variadic float inputs. `in_0` drives the capture cadence:
+//   - If `in_0` carries an FFT frame (payload.frame === true), one record
+//     is saved per incoming frame. This is the intended primary use-case:
+//     FFT.spectrum → DatasetCapture.in_0 defines the feature vector.
+//   - If `in_0` is a raw time-domain stream, samples accumulate and one
+//     record is saved every `windowS` seconds.
+// All other inputs (`in_1`, `in_2`, ...) are sampled at the same moment:
+//   frame inputs are saved as arrays, scalar streams as [lastValue].
+//
+// The captured windows are exported via the play-panel widget (Export JSON
+// / Export CSV). JSON format: { classes, windows:[{label,channels:[[]]}],
+// sampleRate, channelNames }. CSV: one flat row per window.
 const DATASET_CAPTURE = {
     id: "spk.DatasetCapture",
     domain: "spikypanda.ai",
     opset: 1,
-    kind: "sink",
+    kind: "processor",
     category: "Sink",
     label: "Dataset Capture",
     color: "#a33",
-    inputs:  [{ name: "in", type: "float" }],
-    outputs: [{ name: "dataset", type: "tensor" }],
-    detailPage: "dataset/",
+    // Non-variadic declared ports (preserved by the reconciler even when
+    // unconnected). `in_*` are the variadic data channels.
+    // `labelIndex` is optional: when wired, floor(value) indexes into
+    // classNames to set the active label each tick. When unwired, the
+    // static `label` config is used.
+    inputs: [
+        { name: "in_0",       type: "float" },
+        { name: "labelIndex", type: "float" },
+    ],
+    outputs: [],
     defaultConfig: {
-        label: "healthy",
-        windowS: 1.0,
-        count: 10,
-        format: "json",
+        // Static label used when labelIndex is not wired.
+        label:        "healthy",
+        // Comma-separated class names for labelIndex wiring.
+        // index 0 = first name, index 1 = second, etc.
+        classNames:   "healthy",
+        windowS:      1.0,
+        channelNames: "ch0",
+        filename:     "dataset",
+        maxWindows:   500,
     },
     attrSchema: [
-        { key: "label",   label: "Label",          type: "string" },
-        { key: "windowS", label: "Window (s)",     type: "number", min: 0.05, step: 0.1 },
-        { key: "count",   label: "Window count",   type: "int",    min: 1,    step: 1   },
-        // Dropdown emulated as plain string until PropertyPanel grows a
-        // proper select widget. Valid values: "json" | "csv".
-        { key: "format",  label: "Format (json|csv)", type: "string" },
+        { key: "label",        label: "Label (static/fallback)",  type: "string" },
+        { key: "classNames",   label: "Class names (csv)",        type: "string" },
+        { key: "windowS",      label: "Window (s)",               type: "number", min: 0.05, step: 0.1 },
+        { key: "channelNames", label: "Channel names (csv)",      type: "string" },
+        { key: "filename",     label: "Output filename",          type: "string" },
+        { key: "maxWindows",   label: "Max windows",              type: "int",    min: 1,    step: 10  },
     ],
+    variadicInput: { prefix: "in_", type: "float" },
+    // Marks DatasetCapture as implementing IStartableNode. buildNodeDef
+    // attaches isStarted / setStarted and the _onStartChange callback hook
+    // that nodeeditor.js wires to the runtime's startCapture / stopCapture.
+    startable: true,
 };
 
 // ---- Op set ------------------------------------------------------------
@@ -371,6 +589,10 @@ export const OPS_V1 = [
     // Motor + composite shortcut
     MOTOR_DC,
     MOTOR_CURRENT_DC_COMPOSITE,
+    // Signal sources (feed control inputs)
+    CONSTANT,
+    RAMP,
+    PWM,
     // Faults
     MISALIGNMENT,
     BEARING_DEFECT,
@@ -384,8 +606,10 @@ export const OPS_V1 = [
     // Composition / sensing
     START_RUNTIME,
     SUM,
+    SWITCH,
     SENSOR,
     // Sinks
+    GAUGE,
     SCOPE,
     DATASET_CAPTURE,
 ];
@@ -441,12 +665,14 @@ export function buildNodeDef(op, nodeId) {
     // toggle propagates to the executor; without a callback the state
     // is local-only (useful for design-time previewing of the on-state).
     const isStartRuntime = op.id === "spk.StartRuntime";
-    const isSource   = op.kind === "source" && !isStartRuntime;
-    const isToggable = op.category === "Fault" || op.category === "Environment";
+    const isSource    = op.kind === "source" && !isStartRuntime;
+    const isToggable  = op.category === "Fault" || op.category === "Environment";
+    const isStartable = !!op.startable;
     // Sources always start paused; the "start" exec input (wired from
     // StartRuntime or triggered by the on-node play button) activates them.
     let _running = false;
     let _enabled = true;
+    let _started = false;
     const data = {
         op: op.id,
         domain: op.domain,
@@ -457,27 +683,34 @@ export function buildNodeDef(op, nodeId) {
         // setRunning / setEnabled forward to executor.setNodeRunning. Null
         // in design mode and after Play exits.
         _onRuntimeChange: null,
+        // Callback for IStartableNode: wired by nodeeditor.js on Play start to
+        // call inst.startCapture() / inst.stopCapture() on the runtime instance.
+        _onStartChange: null,
         // Direct setters used by nodeeditor.js to sync local state from
         // the executor when entering Play (so the on-node button reflects
-        // autoStart-derived initial state without firing the forwarder).
+        // the authoritative state without firing the forwarder).
         _setRunningLocal: function (r) { _running = !!r; },
         _setEnabledLocal: function (e) { _enabled = !!e; },
+        _setStartedLocal: function (s) { _started = !!s; },
         // Inspectable interface: drives the editor property panel. Each
         // schema entry becomes one editable row. We also expose op label
         // as the panel header so the user knows what they are editing.
         getDisplayName: function () { return op.label; },
         getProperties: function () {
             return (op.attrSchema || []).map(function (s) {
-                return {
-                    key: s.key,
-                    value: config[s.key],
+                const entry = {
+                    key:      s.key,
+                    value:    config[s.key],
                     editable: true,
-                    // PropertyPanel only knows string|number|boolean. Map
-                    // "int" to "number" and validate integer in setProperty.
+                    // "select" gets a native <select> dropdown in the panel.
+                    // "int" maps to "number" with integer validation in setProperty.
                     type: s.type === "boolean" ? "boolean"
+                        : s.type === "select"  ? "select"
                         : s.type === "string"  ? "string"
                         : "number",
                 };
+                if (s.type === "select" && s.options) entry.options = s.options;
+                return entry;
             });
         },
         setProperty: function (key, value) {
@@ -492,6 +725,10 @@ export function buildNodeDef(op, nodeId) {
                 if (s.max !== undefined && v > s.max) v = s.max;
             } else if (s.type === "boolean") {
                 v = !!v;
+            } else if (s.type === "select") {
+                v = String(v);
+                // Reject values not in the declared option list.
+                if (s.options && !s.options.find(function (o) { return o.value === v; })) return;
             } else {
                 v = String(v);
             }
@@ -499,22 +736,34 @@ export function buildNodeDef(op, nodeId) {
         },
         // Serializable interface: editor.save() calls this so config
         // round-trips through .spikypanda files. We only persist the
-        // pure-data subset; the methods are recreated on load.
+        // pure-data subset; the methods are recreated on load via the
+        // @type discriminant.
+        //
+        // "@type" is the authoritative type reference used by the
+        // deserializer to look up the correct op and re-attach its methods.
+        // Using "@type" (JSON-LD convention) rather than relying on the
+        // runtime "op" field makes the file format self-describing: a
+        // loader can reconstruct the exact node class without any other
+        // context.  "op" is kept for backward compatibility with older files.
         serialize: function () {
             return {
-                op: this.op,
-                domain: this.domain,
-                opset: this.opset,
-                nodeId: this.nodeId,
-                config: JSON.parse(JSON.stringify(this.config)),
+                "@type": this.op,   // type discriminant — primary key for deserialization
+                op:      this.op,   // kept for backward compat + human readability
+                domain:  this.domain,
+                opset:   this.opset,
+                nodeId:  this.nodeId,
+                config:  JSON.parse(JSON.stringify(this.config)),
             };
         },
         deserialize: function (blob) {
             if (!blob || typeof blob !== "object") return;
-            if (blob.op) this.op = blob.op;
+            // "@type" is the authoritative id; fall back to "op" for files
+            // saved before @type was introduced.
+            const typeId = blob["@type"] || blob.op;
+            if (typeId && typeId !== this.op) return; // wrong target, ignore
             if (blob.nodeId) this.nodeId = blob.nodeId;
             if (blob.domain) this.domain = blob.domain;
-            if (blob.opset) this.opset = blob.opset;
+            if (blob.opset)  this.opset  = blob.opset;
             if (blob.config) {
                 // Replace, not merge: avoids stale keys from older versions.
                 Object.keys(this.config).forEach((k) => delete this.config[k]);
@@ -537,6 +786,17 @@ export function buildNodeDef(op, nodeId) {
         data.setEnabled = function (e) {
             _enabled = !!e;
             if (typeof data._onRuntimeChange === "function") data._onRuntimeChange(_enabled);
+        };
+    }
+    // IStartableNode: capture/recorder nodes (DatasetCapture).
+    // Distinct from IRunnableNode (sources) and IToggableNode (faults):
+    // a startable node is always live in the graph but captures only when
+    // the user explicitly starts recording.
+    if (isStartable) {
+        data.isStarted = function () { return _started; };
+        data.setStarted = function (s) {
+            _started = !!s;
+            if (typeof data._onStartChange === "function") data._onStartChange(_started);
         };
     }
     // ── Auto-injected exec pins ──────────────────────────────────────────

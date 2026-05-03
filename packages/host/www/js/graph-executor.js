@@ -270,6 +270,11 @@ export class GraphExecutor {
     get sampleRateHz() { return this._sampleRateHz; }
     get graph() { return this._graph; }
 
+    /** Return the live runtime instance for a node, or null if not built. */
+    getNodeInstance(nodeId) {
+        return this._instances.get(nodeId) || null;
+    }
+
     // ---- Internals ------------------------------------------------------
 
     // BeginPlay: pre-populate the "started" exec output of every

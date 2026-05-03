@@ -152,6 +152,32 @@ export class PropertyPanel {
             return cb;
         }
 
+        if (type === "select") {
+            const sel = document.createElement("select");
+            sel.className = "ne-pp-input ne-pp-select";
+            const opts = entry.options ?? [];
+            for (const opt of opts) {
+                const o = document.createElement("option");
+                o.value = opt.value;
+                o.textContent = opt.label;
+                if (opt.value === String(entry.value)) o.selected = true;
+                sel.appendChild(o);
+            }
+            // Fallback: if current value is not in options list, add it as-is.
+            if (opts.length === 0 || !opts.find((o) => o.value === String(entry.value))) {
+                const o = document.createElement("option");
+                o.value = String(entry.value);
+                o.textContent = String(entry.value);
+                o.selected = true;
+                sel.insertBefore(o, sel.firstChild);
+            }
+            sel.addEventListener("change", () => {
+                this.staged.set(entry.key, sel.value);
+                this.updateButtons();
+            });
+            return sel;
+        }
+
         const input = document.createElement("input");
         input.className = "ne-pp-input";
         input.type = type === "number" ? "number" : "text";

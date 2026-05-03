@@ -1,4 +1,4 @@
-import { UIItemBase, IRunnableNode, IToggableNode, isRunnableNode, isToggableNode } from "./inspectable.js";
+import { UIItemBase, IRunnableNode, IToggableNode, IStartableNode, isRunnableNode, isToggableNode, isStartableNode } from "./inspectable.js";
 import { Port } from "./port.js";
 import { NodeDef, PortType } from "./types.js";
 
@@ -6,6 +6,8 @@ const RUN_PLAY_SVG  = '<svg width="9" height="9" viewBox="0 0 16 16" fill="curre
 const RUN_STOP_SVG  = '<svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg>';
 const ENABLED_SVG   = '<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8 7 12 13 4"/></svg>';
 const DISABLED_SVG  = '<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>';
+// Filled circle: record indicator for IStartableNode (capture/recorder nodes).
+const REC_SVG       = '<svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="5"/></svg>';
 
 const GRID = 20;
 
@@ -28,9 +30,10 @@ export class NodeUI {
     private readonly outputsContainer: HTMLDivElement;
     private readonly headerEl: HTMLDivElement;
     private readonly titleEl: HTMLSpanElement;
-    private runBtn: HTMLButtonElement | null = null;   // play (start) button
-    private stopBtn: HTMLButtonElement | null = null;  // stop button
+    private runBtn: HTMLButtonElement | null = null;    // play (start) button
+    private stopBtn: HTMLButtonElement | null = null;   // stop button
     private toggleBtn: HTMLButtonElement | null = null;
+    private recBtn: HTMLButtonElement | null = null;    // record toggle (IStartableNode)
     private _inPlayMode = false;
 
     constructor(def: NodeDef, parent: HTMLElement) {
@@ -241,6 +244,12 @@ export class NodeUI {
             this.toggleBtn.innerHTML = e ? ENABLED_SVG : DISABLED_SVG;
             this.toggleBtn.title = e ? "Disable" : "Enable";
         }
+        if (this.recBtn && isStartableNode(data)) {
+            const s = (data as IStartableNode).isStarted();
+            this.recBtn.disabled = !inPlay;
+            this.recBtn.classList.toggle("ne-rtbtn-record-active", inPlay && s);
+            this.recBtn.title = s ? "Stop recording" : "Record";
+        }
     }
 
     /**
@@ -318,6 +327,27 @@ export class NodeUI {
             });
             this.headerEl.appendChild(btn);
             this.toggleBtn = btn;
+        }
+
+        // IStartableNode: capture/recorder nodes (e.g. DatasetCapture).
+        // A single record button toggles between capturing and stopped.
+        if (isStartableNode(data)) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "ne-node-runtime-btn";
+            btn.title = "Record";
+            btn.innerHTML = REC_SVG;
+            btn.addEventListener("pointerdown", blockDrag, { capture: true });
+            btn.addEventListener("mousedown",   blockDrag, { capture: true });
+            btn.addEventListener("click", (ev: MouseEvent) => {
+                ev.stopPropagation();
+                ev.stopImmediatePropagation();
+                const s = (data as IStartableNode).isStarted();
+                (data as IStartableNode).setStarted(!s);
+                this.refreshRuntimeButtons();
+            });
+            this.headerEl.appendChild(btn);
+            this.recBtn = btn;
         }
 
         // Initial visual state: Design mode, all buttons disabled.

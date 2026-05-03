@@ -4,7 +4,10 @@ import { OPS_V1, findOp, buildNodeDef, generateNodeId, opsByCategory } from "../
 import { GraphChannel } from "../../js/spikypanda-graph.js";
 import { StreamBus } from "../../js/stream-bus.js";
 import { GraphExecutor } from "../../js/graph-executor.js";
-import { ScopeWidget } from "../../js/scope-widget.js";
+import { ScopeWidget }     from "../../js/scope-widget.js";
+import { PwmWidget }       from "../../js/pwm-widget.js";
+import { GaugeWidget }     from "../../js/gauge-widget.js";
+import { DatasetWidget }   from "../../js/dataset-widget.js";
 
 (function () {
     "use strict";
@@ -28,6 +31,13 @@ import { ScopeWidget } from "../../js/scope-widget.js";
         canSave: true,
         load: function (buf, ed) {
             ed.load(new TextDecoder().decode(buf));
+            // Re-attach inspectable methods lost during JSON round-trip.
+            if (ed.nodes) {
+                ed.nodes.forEach(function (n) {
+                    syncNodeId(n);
+                    reattachNodeMethods(n);
+                });
+            }
         },
         save: function (ed) {
             return {
@@ -59,6 +69,51 @@ import { ScopeWidget } from "../../js/scope-widget.js";
         if (nodeUI && nodeUI.item && nodeUI.item.data) {
             nodeUI.item.data.nodeId = nodeUI.id;
         }
+    }
+
+    // After loading a graph from a file the editor restores nodes as plain
+    // JSON objects { op, domain, opset, nodeId, config } — the closures added
+    // by buildNodeDef (getProperties, setProperty, serialize, IRunnableNode, …)
+    // are not present, so isInspectable() returns false and the property panel
+    // falls back to Object.entries which shows a raw JSON blob.
+    //
+    // Fix: rebuild a fresh buildNodeDef for each node whose data lacks
+    // getProperties, merge the saved config over the op defaults, then replace
+    // the UIItemBase's data reference.  All existing NodeUI references remain
+    // valid because we only touch item.data (the UIItemBase field).
+    // Reconstruct the buildNodeDef closures (getProperties, setProperty,
+    // IRunnableNode, …) that are lost during JSON serialization.
+    //
+    // The "@type" field in the serialized blob is the authoritative op id.
+    // Files saved before "@type" was introduced fall back to the "op" field.
+    // This is the single point of truth for type-based reconstruction: any
+    // code that needs to rebuild a node from a blob should go through here.
+    function reattachNodeMethods(nodeUI) {
+        var data = nodeUI && nodeUI.item && nodeUI.item.data;
+        if (!data) return;
+        if (typeof data.getProperties === 'function') return; // already live
+
+        // "@type" is the primary discriminant; "op" is the legacy fallback.
+        var typeId = data["@type"] || data.op;
+        if (!typeId) return;
+        var op = findOp(typeId);
+        if (!op) return;
+
+        // buildNodeDef returns a NodeDef { label, color, inputs, outputs, data }.
+        // The Inspectable blob with config and closures is at def.data.
+        var def      = buildNodeDef(op, data.nodeId || nodeUI.id);
+        var freshData = def.data;
+
+        // Merge saved config over the op defaults so user edits survive the
+        // round-trip.  Only copy keys that exist in the saved blob; unknown
+        // keys (from a future op version) are silently ignored.
+        if (data.config && typeof data.config === 'object') {
+            Object.keys(data.config).forEach(function (k) {
+                freshData.config[k] = data.config[k];
+            });
+        }
+
+        nodeUI.item.data = freshData;
     }
 
     function spawnNode(op) {
@@ -208,8 +263,14 @@ import { ScopeWidget } from "../../js/scope-widget.js";
                 // Restore data.nodeId to match the NodeUI's authoritative id
                 // assigned during deserialization. The serialized blob may have
                 // an op-scoped id that no longer matches the new NodeUI id.
+                // Then re-attach the buildNodeDef closures (getProperties,
+                // setProperty, IRunnableNode, …) that are lost during JSON
+                // round-trip.
                 if (editor.nodes) {
-                    editor.nodes.forEach(function (n) { syncNodeId(n); });
+                    editor.nodes.forEach(function (n) {
+                        syncNodeId(n);
+                        reattachNodeMethods(n);
+                    });
                 }
             } catch (err) {
                 alert("Failed to load: " + err.message);
@@ -313,8 +374,40 @@ import { ScopeWidget } from "../../js/scope-widget.js";
             var variadicPorts = node.inputs.filter(function (p) {
                 return p.name.indexOf(prefix) === 0;
             });
+
+            // Migration: remove legacy ports whose names look like old
+            // pre-variadic versions of this slot (e.g. "in" on a node that
+            // became variadic "in_*"). Safe criteria:
+            //   - not exec
+            //   - unconnected
+            //   - not declared in the current op.inputs (preserved ports like
+            //     "labelIndex" are in op.inputs and must survive)
+            //   - name matches the prefix root without the trailing "_"
+            //     (e.g. prefix="in_" → legacy root="in")
+            var legacyRoot = prefix.replace(/_+$/, "");
+            var declaredNames = (op.inputs || []).map(function (p) { return p.name; });
+            node.inputs.filter(function (p) {
+                return p.type !== "exec"
+                    && !isPortConnected(p)
+                    && declaredNames.indexOf(p.name) < 0
+                    && p.name.indexOf(prefix) !== 0
+                    && (p.name === legacyRoot || p.name.indexOf(legacyRoot) === 0);
+            }).forEach(function (p) {
+                if (typeof editor.removeNodePort === "function") {
+                    editor.removeNodePort(node, p);
+                } else {
+                    var idx = node.inputs.indexOf(p);
+                    if (idx >= 0) node.inputs.splice(idx, 1);
+                    if (p.detach) p.detach();
+                }
+            });
+            // Re-query after migration removal.
+            variadicPorts = node.inputs.filter(function (p) {
+                return p.name.indexOf(prefix) === 0;
+            });
+
             if (!variadicPorts.length) {
-                // Empty Sum somehow; seed it with one slot.
+                // No variadic ports yet; seed with one slot.
                 node.addInput(prefix + "0", type);
                 continue;
             }
@@ -424,6 +517,60 @@ import { ScopeWidget } from "../../js/scope-widget.js";
     playStatus.textContent = "Design mode";
     playHeader.appendChild(playStatus);
 
+    // "Record All" / "Stop All" buttons: appear on the right side of the
+    // play header when DatasetCapture nodes exist. Clicking either button
+    // propagates setStarted(true/false) to every IStartableNode in the graph.
+    var playRecordAllDiv = document.createElement("div");
+    playRecordAllDiv.className = "ne-play-record-all";
+
+    var recordAllBtn = document.createElement("button");
+    recordAllBtn.type = "button";
+    recordAllBtn.className = "ne-record-all-btn";
+    recordAllBtn.innerHTML = "&#9210; Record All";   // ⏺
+    recordAllBtn.disabled = true;
+    playRecordAllDiv.appendChild(recordAllBtn);
+
+    var stopAllBtn = document.createElement("button");
+    stopAllBtn.type = "button";
+    stopAllBtn.className = "ne-record-all-btn";
+    stopAllBtn.innerHTML = "&#9209; Stop All";        // ⏹
+    stopAllBtn.disabled = true;
+    playRecordAllDiv.appendChild(stopAllBtn);
+
+    playHeader.appendChild(playRecordAllDiv);
+
+    function setAllStarted(started) {
+        if (!editor.nodes) return;
+        editor.nodes.forEach(function (n) {
+            var data = n && n.item && n.item.data;
+            if (!data || typeof data.setStarted !== "function") return;
+            data.setStarted(started);
+            if (typeof n.refreshRuntimeButtons === "function") n.refreshRuntimeButtons();
+        });
+        syncRecordAllButtons();
+    }
+
+    function syncRecordAllButtons() {
+        var inPlay = playState.mode === "play";
+        var hasStartable = false;
+        var anyStarted   = false;
+        if (editor.nodes) {
+            editor.nodes.forEach(function (n) {
+                var data = n && n.item && n.item.data;
+                if (data && typeof data.isStarted === "function") {
+                    hasStartable = true;
+                    if (data.isStarted()) anyStarted = true;
+                }
+            });
+        }
+        recordAllBtn.disabled = !inPlay || !hasStartable;
+        stopAllBtn.disabled   = !inPlay || !hasStartable;
+        recordAllBtn.classList.toggle("ne-recording", inPlay && anyStarted);
+    }
+
+    recordAllBtn.addEventListener("click", function () { setAllStarted(true);  });
+    stopAllBtn.addEventListener(  "click", function () { setAllStarted(false); });
+
     // Per-node controls live on the NODE CARDS themselves now, rendered
     // by the editor library when a node's data implements the
     // IRunnableNode (sources) or IToggableNode (faults / env) interface.
@@ -485,21 +632,40 @@ import { ScopeWidget } from "../../js/scope-widget.js";
             // Use the NodeUI's authoritative id (node_N) which is the key
             // the executor uses in _sourceRunning and _instances.
             var nodeUiId = n.id;
-            var isSource = op.kind === "source";
-            var isToggable = op.category === "Fault" || op.category === "Environment";
-            if (!isSource && !isToggable) return;
+            var isSource    = op.kind === "source";
+            var isToggable  = op.category === "Fault" || op.category === "Environment";
+            var isStartable = !!op.startable;
+            if (!isSource && !isToggable && !isStartable) return;
             // Sync the node's local flag from the executor's authoritative
             // initial state (sources start paused; the "start" exec input
             // or the on-node play button activates them).
             if (executor) {
                 var live = executor.isNodeRunning(nodeUiId);
-                if (isSource && data._setRunningLocal) data._setRunningLocal(live);
+                if (isSource   && data._setRunningLocal) data._setRunningLocal(live);
                 if (isToggable && data._setEnabledLocal) data._setEnabledLocal(live);
+                // Startable nodes begin in stopped state when Play enters.
+                if (isStartable && data._setStartedLocal) data._setStartedLocal(false);
             }
-            // Wire the setter to forward to the executor.
-            data._onRuntimeChange = function (running) {
-                if (executor) executor.setNodeRunning(nodeUiId, running);
-            };
+            // Wire IRunnableNode / IToggableNode setter to forward to the executor.
+            if (isSource || isToggable) {
+                data._onRuntimeChange = function (running) {
+                    if (executor) executor.setNodeRunning(nodeUiId, running);
+                };
+            }
+            // Wire IStartableNode setter to call startCapture / stopCapture
+            // on the runtime instance. The executor does not own this state;
+            // capture is user-driven, not graph-clock-driven.
+            if (isStartable && typeof data._onStartChange !== "undefined") {
+                data._onStartChange = function (started) {
+                    var inst = executor && executor.getNodeInstance(nodeUiId);
+                    if (!inst) return;
+                    if (started) {
+                        if (typeof inst.startCapture === "function") inst.startCapture();
+                    } else {
+                        if (typeof inst.stopCapture  === "function") inst.stopCapture();
+                    }
+                };
+            }
         });
     }
 
@@ -507,7 +673,11 @@ import { ScopeWidget } from "../../js/scope-widget.js";
         if (!editor.nodes) return;
         editor.nodes.forEach(function (n) {
             var data = n && n.item && n.item.data;
-            if (data) data._onRuntimeChange = null;
+            if (!data) return;
+            data._onRuntimeChange = null;
+            if (typeof data._onStartChange !== "undefined") data._onStartChange = null;
+            // Reset started state so buttons return to "not recording" in Design mode.
+            if (typeof data._setStartedLocal === "function") data._setStartedLocal(false);
         });
     }
 
@@ -529,43 +699,92 @@ import { ScopeWidget } from "../../js/scope-widget.js";
         });
     }
 
-    // Build the tab strip + ScopeWidget per Scope node in the live graph.
+    // Build the tab strip + widgets for Scope and PWM Driver nodes.
+    // Scope nodes get a ScopeWidget (signal view).
+    // PWM Driver nodes get a PwmWidget (live duty-cycle + frequency sliders).
     function mountPlayScopes() {
         clearPlayBody();
         var graph = playState.executor && playState.executor.graph;
         if (!graph) { showPlayEmpty("No graph to preview."); return; }
-        var scopeNodes = graph.listNodes().filter(function (n) {
-            return n.op === "spk.Scope";
+
+        var widgetNodes = graph.listNodes().filter(function (n) {
+            return n.op === "spk.Scope" || n.op === "spk.PWM"
+                || n.op === "spk.Gauge" || n.op === "spk.DatasetCapture";
         });
-        if (!scopeNodes.length) {
-            showPlayEmpty("Add a Scope node to see live signals here.");
+        if (!widgetNodes.length) {
+            showPlayEmpty("Add a Scope, Gauge, PWM Driver, or Dataset Capture node to see controls here.");
             return;
         }
-        scopeNodes.forEach(function (n, idx) {
-            var streamId = graph.upstreamStreamId(n.id, "in");
+
+        var firstId = null;
+        widgetNodes.forEach(function (n) {
             var tab = document.createElement("button");
             tab.type = "button";
             tab.className = "ne-play-tab";
             tab.textContent = n.label || n.id;
             tab.addEventListener("click", function () { activatePlayTab(n.id); });
             playTabs.appendChild(tab);
+
             var body = document.createElement("div");
             body.className = "ne-play-tab-body";
             playBody.appendChild(body);
-            var widget = new ScopeWidget(body, {
-                bus: playBus,
-                streamId: streamId || null,
-                title: n.label,
-                timeSpanS: (n.config && n.config.timeSpanS) || 0.04,
-                showHeader: true,
-            });
-            widget.start();
+
+            var widget;
+            if (n.op === "spk.Scope") {
+                var streamId = graph.upstreamStreamId(n.id, "in");
+                widget = new ScopeWidget(body, {
+                    bus: playBus,
+                    streamId: streamId || null,
+                    title: n.label,
+                    timeSpanS: (n.config && n.config.timeSpanS) || 0.04,
+                    showHeader: true,
+                });
+                widget.start();
+            } else if (n.op === "spk.DatasetCapture") {
+                widget = new DatasetWidget(body, {
+                    executor: playState.executor,
+                    nodeId:   n.id,
+                    label:    n.label || n.id,
+                    cfg:      n.config || {},
+                });
+            } else if (n.op === "spk.Gauge") {
+                var gcfg     = n.config || {};
+                var streamId = graph.upstreamStreamId(n.id, "in");
+                widget = new GaugeWidget(body, {
+                    bus:       playBus,
+                    streamId:  streamId || null,
+                    label:     n.label || n.id,
+                    unit:      gcfg.unit     || "rps",
+                    min:       gcfg.min      != null ? gcfg.min      : 0,
+                    max:       gcfg.max      != null ? gcfg.max      : 100,
+                    decimals:  gcfg.decimals != null ? gcfg.decimals : 1,
+                });
+            } else {
+                // spk.PWM: build slider widget, wire callbacks to live runtime.
+                var cfg = n.config || {};
+                widget = new PwmWidget(body, {
+                    label: n.label || n.id,
+                    dutyCycle:   cfg.dutyCycle   != null ? cfg.dutyCycle   : 1.0,
+                    frequencyHz: cfg.frequencyHz != null ? cfg.frequencyHz : 10000,
+                    onDutyCycle: function (v) {
+                        var inst = playState.executor && playState.executor.getNodeInstance(n.id);
+                        if (inst && inst.setConfig) inst.setConfig("dutyCycle", v);
+                    },
+                    onFrequency: function (v) {
+                        var inst = playState.executor && playState.executor.getNodeInstance(n.id);
+                        if (inst && inst.setConfig) inst.setConfig("frequencyHz", v);
+                    },
+                });
+            }
+
             playState.widgets.push({
                 nodeId: n.id, label: n.label, widget: widget,
                 body: body, tabBtn: tab,
             });
-            if (idx === 0) activatePlayTab(n.id);
+            if (!firstId) { firstId = n.id; }
         });
+
+        if (firstId) activatePlayTab(firstId);
     }
 
     // ── Mode toggle ──
@@ -641,6 +860,7 @@ import { ScopeWidget } from "../../js/scope-widget.js";
         // (Sources only start after the first tick propagates the BeginPlay
         // pulse; the 250ms poll will catch the transition.)
         syncRuntimeButtonsFromExecutor();
+        syncRecordAllButtons();
         var fs = executor.sampleRateHz;
         playState.widgets.forEach(function (w) { w.widget.setSampleRateHz(fs); });
         setPlayStatus("Play mode (" + fs + " Hz)", "running");
@@ -671,6 +891,7 @@ import { ScopeWidget } from "../../js/scope-widget.js";
         playState.mode = "design";
         setPlayStatus("Design mode");
         showPlayEmpty("Hit Play to preview the graph. Scope nodes will appear as tabs here.");
+        syncRecordAllButtons();
         renderPlayToggle();
     }
 
@@ -686,39 +907,84 @@ import { ScopeWidget } from "../../js/scope-widget.js";
 
     // Initial design-mode state.
     showPlayEmpty("Hit Play to preview the graph. Scope nodes will appear as tabs here.");
+    syncRecordAllButtons();
 
     // ── Auto-rename Scope nodes to reflect their inbound wiring ──
     // E.g. "Scope" becomes "Scope: Sensor.out" once the user wires the
-    // Sensor's output to it. Updates on every graph-state poll. The
-    // editor library does not expose a label setter on NodeUI, so we
+    // Auto-rename sink nodes (Scope, DatasetCapture, Gauge) to reflect the
+    // inbound signal, so the user can quickly identify which node captures
+    // which channel without renaming manually. Updates every 250 ms poll.
+    // The editor library does not expose a label setter on NodeUI, so we
     // reach into the title DOM (class .ne-node-title from the library).
-    function refreshScopeLabels() {
+    function refreshSinkLabels() {
         if (!editor.nodes) return;
         editor.nodes.forEach(function (n) {
             var data = n && n.item && n.item.data;
-            if (!data || data.op !== "spk.Scope") return;
-            // Walk the live edges to find what feeds this scope.
-            var inboundLabel = null;
-            for (var i = 0; i < editor.connections.length; i++) {
-                var c = editor.connections[i];
-                if (n.inputs.indexOf(c.to) >= 0) {
-                    var sourceNode = editor.nodes.find(function (nn) {
-                        return nn.outputs.indexOf(c.from) >= 0;
-                    });
-                    if (sourceNode) {
-                        inboundLabel = (sourceNode.label || sourceNode.id) + "." + c.from.name;
+            if (!data) return;
+            var newTitle = null;
+
+            if (data.op === "spk.Scope") {
+                // Use the first connected input port (there is only one).
+                var inboundLabel = null;
+                for (var i = 0; i < editor.connections.length; i++) {
+                    var c = editor.connections[i];
+                    if (n.inputs.indexOf(c.to) >= 0) {
+                        var sourceNode = editor.nodes.find(function (nn) {
+                            return nn.outputs.indexOf(c.from) >= 0;
+                        });
+                        if (sourceNode) {
+                            inboundLabel = (sourceNode.label || sourceNode.id) + "." + c.from.name;
+                        }
+                        break;
                     }
-                    break;
                 }
+                newTitle = inboundLabel ? "Scope: " + inboundLabel : "Scope";
+
+            } else if (data.op === "spk.DatasetCapture") {
+                // Use the source wired to in_0 (the primary capture channel).
+                var in0Port = n.inputs.find(function (p) { return p.name === "in_0"; });
+                if (in0Port) {
+                    for (var j = 0; j < editor.connections.length; j++) {
+                        var conn = editor.connections[j];
+                        if (conn.to === in0Port) {
+                            var srcNode = editor.nodes.find(function (nn) {
+                                return nn.outputs.indexOf(conn.from) >= 0;
+                            });
+                            if (srcNode) {
+                                newTitle = "Dataset: " + (srcNode.label || srcNode.id) + "." + conn.from.name;
+                            }
+                            break;
+                        }
+                    }
+                }
+                if (!newTitle) newTitle = "Dataset Capture";
+
+            } else if (data.op === "spk.Gauge") {
+                // Use the single input port.
+                var gaugeLabel = null;
+                for (var k = 0; k < editor.connections.length; k++) {
+                    var gc = editor.connections[k];
+                    if (n.inputs.indexOf(gc.to) >= 0) {
+                        var gSrc = editor.nodes.find(function (nn) {
+                            return nn.outputs.indexOf(gc.from) >= 0;
+                        });
+                        if (gSrc) {
+                            gaugeLabel = (gSrc.label || gSrc.id) + "." + gc.from.name;
+                        }
+                        break;
+                    }
+                }
+                newTitle = gaugeLabel ? "Gauge: " + gaugeLabel : "Gauge";
             }
-            var newTitle = inboundLabel ? "Scope: " + inboundLabel : "Scope";
+
+            if (newTitle === null) return;
             // Only touch the DOM if the title actually changed; avoids
             // thrashing on every poll tick.
             var titleEl = n.el && n.el.querySelector(".ne-node-title");
             if (titleEl && titleEl.textContent !== newTitle) {
                 titleEl.textContent = newTitle;
-                // Reflect in the node's logical label too so save/load
-                // round-trips the new name.
+                // Reflect in the node's logical label so save/load round-trips
+                // the auto-assigned name.
                 try { n.label = newTitle; } catch (_e) { /* readonly in some bundles */ }
             }
         });
@@ -728,6 +994,9 @@ import { ScopeWidget } from "../../js/scope-widget.js";
     // controllable data object, so on-node header buttons stay in sync
     // with effects the user did NOT trigger directly (e.g. StartRuntime
     // fan-out, future event-driven toggles, programmatic API calls).
+    // IStartableNode state is mirrored from the runtime instance's
+    // isCapturing() so the node card record button stays in sync with the
+    // DatasetWidget's own Record button.
     function syncRuntimeButtonsFromExecutor() {
         if (!playState.executor || !editor.nodes) return;
         editor.nodes.forEach(function (n) {
@@ -736,18 +1005,33 @@ import { ScopeWidget } from "../../js/scope-widget.js";
             // Use the NodeUI's own id: the executor keys _sourceRunning by n.id,
             // not by data.nodeId (which is an op-scoped generated id).
             var nodeUiId = n.id;
+            var changed = false;
             if (typeof data.isRunning === "function" && typeof data._setRunningLocal === "function") {
                 var live = playState.executor.isNodeRunning(nodeUiId);
                 if (data.isRunning() !== live) {
                     data._setRunningLocal(live);
-                    if (typeof n.refreshRuntimeButtons === "function") n.refreshRuntimeButtons();
+                    changed = true;
                 }
             } else if (typeof data.isEnabled === "function" && typeof data._setEnabledLocal === "function") {
                 var liveE = playState.executor.isNodeRunning(nodeUiId);
                 if (data.isEnabled() !== liveE) {
                     data._setEnabledLocal(liveE);
-                    if (typeof n.refreshRuntimeButtons === "function") n.refreshRuntimeButtons();
+                    changed = true;
                 }
+            }
+            // Sync IStartableNode from the runtime instance's isCapturing().
+            if (typeof data.isStarted === "function" && typeof data._setStartedLocal === "function") {
+                var inst = playState.executor.getNodeInstance(nodeUiId);
+                if (inst && typeof inst.isCapturing === "function") {
+                    var liveS = inst.isCapturing();
+                    if (data.isStarted() !== liveS) {
+                        data._setStartedLocal(liveS);
+                        changed = true;
+                    }
+                }
+            }
+            if (changed && typeof n.refreshRuntimeButtons === "function") {
+                n.refreshRuntimeButtons();
             }
         });
     }
@@ -783,12 +1067,13 @@ import { ScopeWidget } from "../../js/scope-widget.js";
         });
     }
 
-    // Single 250 ms reconciler tick: Scope auto-rename + runtime state
-    // mirror + muted LED. Per-node runtime forwarders are bound lazily at Play start.
+    // Single 250 ms reconciler tick: sink auto-rename + runtime state
+    // mirror + muted LED + record-all button sync.
     setInterval(function () {
-        refreshScopeLabels();
+        refreshSinkLabels();
         syncRuntimeButtonsFromExecutor();
         syncMutedLeds();
+        syncRecordAllButtons();
     }, 250);
 
     // ── Seed demo: atomic motor pipeline ──

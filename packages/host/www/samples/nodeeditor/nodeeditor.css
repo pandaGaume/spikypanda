@@ -216,6 +216,54 @@
     border-color: rgba(248, 113, 113, 0.55);
 }
 
+/* Record button active (IStartableNode capturing): pulsing red dot */
+.ne-node-runtime-btn.ne-rtbtn-record-active {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.55);
+    animation: ne-record-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ne-record-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.45; }
+}
+
+/* Record All / Stop All controls in the play panel header */
+.ne-play-record-all {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.ne-record-all-btn {
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    color: var(--text-muted);
+    padding: 3px 9px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    cursor: pointer;
+    transition: border-color 0.12s, color 0.12s;
+    line-height: 1.5;
+}
+
+.ne-record-all-btn:hover:not(:disabled) {
+    border-color: #f87171;
+    color: #f87171;
+}
+
+.ne-record-all-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.ne-record-all-btn.ne-recording {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.55);
+    animation: ne-record-pulse 1.2s ease-in-out infinite;
+}
+
 .ne-play-source button {
     width: 22px;
     height: 22px;
@@ -669,6 +717,16 @@
     accent-color: var(--primary);
 }
 
+.ne-pp-select {
+    appearance: auto;
+    cursor: pointer;
+    padding-right: 4px;
+}
+.ne-pp-select option {
+    background: #1e2535;
+    color: #e0e0e0;
+}
+
 /* ── Footer (Apply / Reset) ── */
 .ne-pp-footer {
     display: flex;
@@ -729,6 +787,271 @@
     background: rgba(0, 212, 255, 0.08);
     pointer-events: none;
     z-index: 5;
+}
+
+/* ── Dataset Capture widget (play-panel tab) ── */
+.spk-ds-widget {
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 280px;
+}
+.spk-ds-header {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #c66;
+    opacity: 0.85;
+}
+.spk-ds-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.spk-ds-label {
+    width: 80px;
+    font-size: 12px;
+    color: var(--text-muted, #aaa);
+    flex-shrink: 0;
+}
+.spk-ds-input {
+    flex: 1;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 4px;
+    color: var(--text, #eee);
+    padding: 4px 8px;
+    font-size: 12px;
+    outline: none;
+}
+.spk-ds-input:focus {
+    border-color: #c66;
+}
+.spk-ds-count {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text, #eee);
+}
+.spk-ds-table {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 20px;
+}
+.spk-ds-class-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-muted, #aaa);
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.spk-ds-class-name { font-style: italic; }
+.spk-ds-class-count { font-variant-numeric: tabular-nums; color: #eee; }
+.spk-ds-btnrow {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.spk-ds-btn {
+    padding: 6px 14px;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.06);
+    color: var(--text, #eee);
+    transition: background 0.12s, border-color 0.12s;
+}
+.spk-ds-btn:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.3); }
+.spk-ds-btn-start  { border-color: rgba(80,180,120,0.5); color: #8d8; font-weight: 600; }
+.spk-ds-btn-start:hover { background: rgba(80,180,120,0.15); border-color: #4a9; }
+.spk-ds-btn-stop   { border-color: rgba(220,80,80,0.5); color: #f88; font-weight: 600; }
+.spk-ds-btn-stop:hover  { background: rgba(220,80,80,0.15); border-color: #e44; }
+.spk-ds-btn-clear  { border-color: rgba(200,80,80,0.3); color: #c88; }
+.spk-ds-btn-clear:hover { background: rgba(200,80,80,0.1); }
+.spk-ds-btn-export { border-color: rgba(100,140,220,0.4); color: #99c; }
+.spk-ds-btn-export:hover { background: rgba(100,140,220,0.12); border-color: #88b; }
+.spk-ds-active-label {
+    font-weight: 600;
+    color: #eee;
+    font-size: 12px;
+}
+.spk-ds-filename {
+    font-size: 11px;
+    color: rgba(255,255,255,0.35);
+    font-style: italic;
+}
+.spk-ds-count.spk-ds-capturing {
+    color: #8d8;
+    animation: spk-ds-blink 1.2s ease-in-out infinite;
+}
+@keyframes spk-ds-blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+}
+
+/* ── Dataset metrics panel ── */
+.spk-ds-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 4px 0 6px;
+    padding: 6px 8px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.07);
+}
+.spk-ds-metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 11px;
+    line-height: 1.55;
+}
+.spk-ds-metric-key {
+    color: rgba(255,255,255,0.42);
+}
+.spk-ds-metric-val {
+    color: #ccc;
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+}
+
+/* ── Gauge widget (play-panel tab) ──
+   SVG arc gauge + large numeric readout. */
+.spk-gauge-widget {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 18px 16px 12px;
+    gap: 4px;
+}
+
+.spk-gauge-header {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--primary, #4a9);
+    opacity: 0.75;
+    margin-bottom: 6px;
+}
+
+.spk-gauge-svg {
+    overflow: visible;
+}
+
+.spk-gauge-track {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.08);
+    stroke-width: 8;
+    stroke-linecap: round;
+}
+
+.spk-gauge-fill {
+    fill: none;
+    stroke: #4aaeff;
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke 0.25s;
+}
+
+.spk-gauge-number {
+    font-size: 22px;
+    font-weight: 700;
+    fill: #eee;
+    font-variant-numeric: tabular-nums;
+}
+
+.spk-gauge-unit {
+    font-size: 10px;
+    fill: rgba(255, 255, 255, 0.45);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.spk-gauge-minmax {
+    font-size: 9px;
+    fill: rgba(255, 255, 255, 0.3);
+}
+
+/* ── PWM Driver widget (play-panel tab) ──
+   Two-row slider UI, same dark palette as the play panel. */
+.spk-pwm-widget {
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+
+.spk-pwm-header {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--primary, #4a9);
+    opacity: 0.75;
+}
+
+.spk-pwm-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.spk-pwm-label {
+    width: 110px;
+    font-size: 12px;
+    color: var(--text-muted, #aaa);
+    flex-shrink: 0;
+}
+
+.spk-pwm-slider {
+    flex: 1;
+    height: 3px;
+    appearance: none;
+    -webkit-appearance: none;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.spk-pwm-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--primary, #4aaeff);
+    cursor: pointer;
+    box-shadow: 0 0 6px rgba(74, 174, 255, 0.5);
+    transition: box-shadow 0.12s;
+}
+
+.spk-pwm-slider::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 10px rgba(74, 174, 255, 0.8);
+}
+
+.spk-pwm-slider::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    border: none;
+    background: var(--primary, #4aaeff);
+    cursor: pointer;
+}
+
+.spk-pwm-value {
+    width: 80px;
+    text-align: right;
+    font-size: 12px;
+    color: var(--text, #eee);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
 }
 
 /* ── Per-node muted LED ──
