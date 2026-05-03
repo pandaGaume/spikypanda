@@ -7,6 +7,8 @@ const root = resolve(__dirname, "..");
 
 const sources = [
     join(root, "packages/dev/core/bundle"),
+    join(root, "packages/dev/runtime/bundle"),
+    join(root, "packages/dev/sensors/bundle"),
     join(root, "packages/dev/nodeeditor/bundle"),
     join(root, "packages/dev/onnx-editor/bundle"),
 ];

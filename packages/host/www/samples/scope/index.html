@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda - Scope</title>
+    <link rel="stylesheet" href="../../css/common.css" />
+    <link rel="stylesheet" href="scope.css" />
+</head>
+<body>
+    <div class="sample-hero">
+        <div class="sample-hero-overlay">
+            <nav class="nav-bar" style="margin:0; background:none; border:none; padding:10px 0;">
+                <a href="../../index.html" class="nav-logo">SpikyPanda</a>
+                <div class="nav-links">
+                    <a href="../../index.html">Home</a>
+                    <a href="../nodeeditor/">Node Editor</a>
+                    <a href="../graph-runner/">Runner</a>
+                </div>
+            </nav>
+            <h1>Scope</h1>
+            <p class="subtitle">Live time-domain view of a stream from the SharedWorker bus. Bound to a node in a .spikypanda graph via <code>?nodeId=&amp;graph=</code> (the editor's Run button does this). FFT is a Phase 3 follow-up.</p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <div class="panel">
+            <!-- Widget mount point. ScopeWidget injects its own header
+                 (title + span dropdown), canvas, and stats into this div. -->
+            <div id="scopeMount"></div>
+        </div>
+
+        <div class="panel">
+            <h2>Subscription</h2>
+            <div class="metrics-help" style="font-size:0.85em;" id="subInfo">No subscription.</div>
+        </div>
+
+        <div class="panel">
+            <h2>Log</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script type="module" src="scope.js"></script>
+</body>
+</html>

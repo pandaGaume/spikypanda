@@ -1,6 +1,7 @@
 import "reflect-metadata";
 
 export * from "./types";
+export * from "./math";
 export * from "./geometry";
 export * from "./graph";
 export * from "./neuralnetwork";

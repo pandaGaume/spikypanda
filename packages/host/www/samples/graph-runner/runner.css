@@ -1,0 +1,68 @@
+/* Graph runner: minimal status UI. */
+
+.streams-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85em;
+}
+
+.streams-table th,
+.streams-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--panel-border);
+    text-align: left;
+}
+
+.streams-table th {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.78em;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.streams-table td.numeric {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.streams-table tr.live td:first-child {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.streams-table tr.idle td {
+    color: var(--text-muted);
+}
+
+.log {
+    background: var(--log-bg);
+    color: var(--log-text);
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.8em;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid var(--panel-border);
+    height: 180px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
+.capture-status {
+    margin-left: 12px;
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+
+.capture-status.running {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.capture-status.done {
+    color: var(--success);
+}
+
+.capture-status.error {
+    color: var(--error);
+}

@@ -48,4 +48,16 @@ export class Port {
         this.nodeEl = nodeEl;
         container.appendChild(this.el);
     }
+
+    /**
+     * Detach this port's DOM from its parent. The port object itself stays
+     * around so any caller still holding a reference (e.g. an active drag)
+     * does not crash; callers that own the port are expected to drop it
+     * after detach.
+     */
+    detach(): void {
+        if (this.el && this.el.parentNode) {
+            this.el.parentNode.removeChild(this.el);
+        }
+    }
 }

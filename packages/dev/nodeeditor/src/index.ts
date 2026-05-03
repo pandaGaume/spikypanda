@@ -8,8 +8,8 @@ export { Port } from "./port.js";
 export { Connection, ConnectionPreview } from "./connection.js";
 export { Camera } from "./camera.js";
 export { PropertyPanel } from "./property-panel.js";
-export { UIItemBase, isInspectable, isSerializable } from "./inspectable.js";
-export type { Inspectable, Serializable, PropertyEntry } from "./inspectable.js";
+export { UIItemBase, isInspectable, isSerializable, isRunnableNode, isToggableNode } from "./inspectable.js";
+export type { Inspectable, Serializable, PropertyEntry, IRunnableNode, IToggableNode } from "./inspectable.js";
 export { PORT_COLORS, EXPORT_PROFILES } from "./types.js";
 export type {
     PortDirection,

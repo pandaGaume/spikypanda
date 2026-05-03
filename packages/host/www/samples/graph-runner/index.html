@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda - Graph Runner</title>
+    <link rel="stylesheet" href="../../css/common.css" />
+    <link rel="stylesheet" href="runner.css" />
+</head>
+<body>
+    <div class="sample-hero">
+        <div class="sample-hero-overlay">
+            <nav class="nav-bar" style="margin:0; background:none; border:none; padding:10px 0;">
+                <a href="../../index.html" class="nav-logo">SpikyPanda</a>
+                <div class="nav-links">
+                    <a href="../../index.html">Home</a>
+                    <a href="../nodeeditor/">Node Editor</a>
+                    <a href="../dataset/">Dataset</a>
+                </div>
+            </nav>
+            <h1>Graph Runner</h1>
+            <p class="subtitle">Standalone runtime for a .spikypanda graph. Loads sources + processors, ticks them at the source's sample rate, publishes every output stream on the SharedWorker bus so sink tabs (Scope, Dataset Capture, ...) can subscribe.</p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <div class="panel">
+            <h2>Graph</h2>
+            <p class="metrics-help" style="font-size:0.85em; margin-bottom:8px;">Pass <code>?graph=&lt;url&gt;</code> in the address bar (the editor's Run button does this automatically) or pick a file. Reload to re-run.</p>
+            <div class="controls">
+                <input type="file" id="fileInput" accept=".spikypanda,.json" />
+                <button id="btnRun" disabled>Run</button>
+                <button id="btnStop" disabled>Stop</button>
+                <span id="status" class="capture-status"></span>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Active streams</h2>
+            <table class="streams-table" id="streamsTable">
+                <thead>
+                    <tr><th>Stream id</th><th>Op</th><th>Port</th><th>Samples published</th><th>Subs</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div class="panel">
+            <h2>Log</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script src="../../bundle/spikypanda-core.js"></script>
+    <script src="../../bundle/spikypanda-runtime.js"></script>
+    <script src="../../bundle/spikypanda-sensors.js"></script>
+    <script type="module" src="runner.js"></script>
+</body>
+</html>

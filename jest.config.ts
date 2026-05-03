@@ -15,6 +15,8 @@ const config: Config = {
         "^spikypanda-core/(.*)$": "<rootDir>/packages/dev/core/src/$1",
         "^spikypanda-runtime$": "<rootDir>/packages/dev/runtime/src/index.ts",
         "^spikypanda-runtime/(.*)$": "<rootDir>/packages/dev/runtime/src/$1",
+        "^spikypanda-sensors$": "<rootDir>/packages/dev/sensors/src/index.ts",
+        "^spikypanda-sensors/(.*)$": "<rootDir>/packages/dev/sensors/src/$1",
         "^spikypanda-nodeeditor$": "<rootDir>/packages/dev/nodeeditor/src/index.ts",
         "^spikypanda-nodeeditor/(.*)$": "<rootDir>/packages/dev/nodeeditor/src/$1",
     },

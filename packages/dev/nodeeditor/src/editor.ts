@@ -194,6 +194,22 @@ export class NodeEditor {
         this.selectedNodes.delete(node);
     }
 
+    /**
+     * Remove a single port from a node, cleaning up any connections that
+     * touch it first. Useful for nodes whose port count is dynamic
+     * (e.g. variadic Sum / Mux ops). Returns true if the port was found
+     * and removed; false if the port did not belong to the node.
+     */
+    removeNodePort(node: NodeUI, port: Port): boolean {
+        if (!node.inputs.includes(port) && !node.outputs.includes(port)) {
+            return false;
+        }
+        const conns = this.connections.filter((c) => c.containsPort(port));
+        for (const c of conns) this.removeConnection(c);
+        if (port.direction === "input") return node.removeInput(port);
+        return node.removeOutput(port);
+    }
+
     connect(from: Port, to: Port): Connection | null {
         if (from.direction === to.direction) return null;
         if (from.direction === "input") {
@@ -644,6 +660,11 @@ export class NodeEditor {
     }
 
     private selectNode(node: NodeUI, addToSelection = false): void {
+        // Remember visibility before any side effects so we know whether to
+        // update the panel (panel open = keep it updated on every click;
+        // panel closed = do not open it, only a dblclick should open it).
+        const wasVisible = this.propertyPanel.isVisible();
+
         if (!addToSelection) {
             for (const n of this.selectedNodes) {
                 if (n !== node) n.setSelected(false);
@@ -655,7 +676,9 @@ export class NodeEditor {
             node.setSelected(false);
             this.selectedNodes.delete(node);
             if (this.selectedNodes.size === 1) {
-                this.propertyPanel.show([...this.selectedNodes][0].item);
+                if (wasVisible) {
+                    this.propertyPanel.show([...this.selectedNodes][0].item);
+                }
             } else if (this.selectedNodes.size === 0) {
                 this.propertyPanel.hide();
             }
@@ -663,7 +686,9 @@ export class NodeEditor {
             node.setSelected(true);
             this.selectedNodes.add(node);
             if (this.selectedNodes.size === 1) {
-                this.propertyPanel.show(node.item);
+                if (wasVisible) {
+                    this.propertyPanel.show(node.item);
+                }
             } else {
                 this.propertyPanel.hide();
             }
@@ -671,19 +696,25 @@ export class NodeEditor {
     }
 
     private selectNodes(nodes: NodeUI[]): void {
+        // Preserve visibility so rubber-band selection updates the panel when
+        // it is already open, but does not open a closed panel.
+        const wasVisible = this.propertyPanel.isVisible();
         this.clearSelection();
         for (const n of nodes) {
             n.setSelected(true);
             this.selectedNodes.add(n);
         }
-        if (nodes.length === 1) {
+        if (nodes.length === 1 && wasVisible) {
             this.propertyPanel.show(nodes[0].item);
         }
     }
 
     private selectConnection(conn: Connection): void {
+        const wasVisible = this.propertyPanel.isVisible();
         this.clearSelection();
-        this.propertyPanel.show(conn.item);
+        if (wasVisible) {
+            this.propertyPanel.show(conn.item);
+        }
     }
 
     private findNodeByEl(el: HTMLElement): NodeUI | undefined {
@@ -723,6 +754,7 @@ export class NodeEditor {
     private bindEvents(): void {
         this.canvas.addEventListener("wheel", this.onWheel.bind(this), { passive: false });
         this.canvas.addEventListener("mousedown", this.onMouseDown.bind(this));
+        this.canvas.addEventListener("dblclick", this.onDblClick.bind(this));
         window.addEventListener("mousemove", this.onMouseMove.bind(this));
         window.addEventListener("mouseup", this.onMouseUp.bind(this));
         window.addEventListener("keydown", this.onKeyDown.bind(this));
@@ -734,6 +766,24 @@ export class NodeEditor {
         this.camera.zoom(e.deltaY, e.clientX, e.clientY);
         this.camera.apply(this.viewport);
         this.updateConnections();
+    }
+
+    // Double-click on a node opens the property panel.
+    // When the panel is already open, a single click is enough to update its
+    // content (handled in selectNode); this handler only needs to cover the
+    // "panel was closed" case.
+    private onDblClick(e: MouseEvent): void {
+        const target = e.target as HTMLElement;
+        const node = this.findNodeByEl(target);
+        if (!node) return;
+        // Ensure the node is selected (the preceding mousedown will have done
+        // this already in the normal case, but guard for safety).
+        if (!this.selectedNodes.has(node)) {
+            this.selectNode(node, false);
+        }
+        if (this.selectedNodes.size === 1) {
+            this.propertyPanel.show(node.item);
+        }
     }
 
     private onMouseDown(e: MouseEvent): void {

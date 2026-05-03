@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda - Motor Current Source</title>
+    <link rel="stylesheet" href="../../../../../css/common.css" />
+    <link rel="stylesheet" href="source.css" />
+</head>
+<body>
+    <div class="sample-hero">
+        <div class="sample-hero-overlay">
+            <nav class="nav-bar" style="margin:0; background:none; border:none; padding:10px 0;">
+                <a href="../../../../../index.html" class="nav-logo">SpikyPanda</a>
+                <div class="nav-links">
+                    <a href="../../../../../index.html">Home</a>
+                    <a href="../../../../co2-mpc/">CO2</a>
+                    <a href="../../../../kws/">KWS</a>
+                    <a href="../../../">Motor</a>
+                </div>
+            </nav>
+            <h1>Motor Current Source</h1>
+            <p class="subtitle">Configure a DC motor + faults, preview the live current and spectrum, publish the signal as a stream that other pages (capture, live test) can subscribe to.</p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <div class="panel">
+            <h2>What this page does</h2>
+            <div class="metrics-help">
+                <p>Configure a DC motor on the right (preset or custom), stack zero or more faults, watch the resulting current signal and its spectrum live on the left. The motor physics, fault signatures and noise are computed locally with the <code>@spiky-panda/sensors</code> package, the same code that compiles to C++ for the MCU.</p>
+                <p>Hit <strong>Start</strong> in the Stream panel to publish the signal as a labeled stream. Other browser tabs (the labeled-capture page, a live-test page, etc.) can subscribe to it via the shared registry. Pause stops publishing without dropping the registration; Stop unregisters the stream entirely.</p>
+            </div>
+        </div>
+
+        <div class="dataset-layout">
+            <div class="dataset-left">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Live signal (current)</h2>
+                        <button id="btnMotorToggle" title="Start or stop the motor simulation">&#9646; Stop</button>
+                        <label class="span-label">Span
+                            <select id="timeSpan">
+                                <option value="0.005">5 ms</option>
+                                <option value="0.01">10 ms</option>
+                                <option value="0.02">20 ms</option>
+                                <option value="0.04" selected>40 ms</option>
+                                <option value="0.1">100 ms</option>
+                                <option value="0.2">200 ms</option>
+                                <option value="0.5">500 ms</option>
+                            </select>
+                        </label>
+                    </div>
+                    <canvas id="canvasTime" width="700" height="200"></canvas>
+                    <div class="metrics-row" id="signalStats"></div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Spectrum (FFT, Hann window)</h2>
+                        <button id="btnFftScale" title="Switch to logarithmic (dB) scale">dB</button>
+                        <button id="btnFixSpectrum" title="Snapshot the current spectrum as a fixed overlay for comparison">Fix</button>
+                    </div>
+                    <canvas id="canvasFft" width="700" height="200"></canvas>
+                    <div id="fftAccumulator" class="fft-accumulator"></div>
+                </div>
+
+                <div class="panel">
+                    <h2>Faults</h2>
+                    <p class="metrics-help" style="font-size:0.85em; margin-bottom:8px;">Each fault adds its physical contribution on top of the healthy motor signal. Click one to edit, toggle the checkbox to enable/disable.</p>
+                    <ul class="faults-list" id="faultsList"></ul>
+                    <div class="controls" style="margin-top:8px;">
+                        <select id="addFaultType">
+                            <option value="0">Misalignment</option>
+                            <option value="1">Bearing defect</option>
+                            <option value="2">Broken rotor bar</option>
+                            <option value="3">Eccentricity</option>
+                            <option value="4">Brush fault</option>
+                        </select>
+                        <button id="btnAddFault">+ Add fault</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dataset-right">
+                <div class="panel sticky-panel">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="motor">Motor</button>
+                        <button class="tab-btn" data-tab="sensor">Sensor</button>
+                        <button class="tab-btn" data-tab="fault" id="tabFault" disabled>Fault</button>
+                    </div>
+                    <div class="tab-content" id="tabContent">
+                        <!-- populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Stream</h2>
+            <p class="metrics-help" style="font-size:0.85em; margin-bottom:8px;">Publish the live signal on a shared stream so other tabs can subscribe to it. The registration carries the current motor + sensor + fault snapshot as metadata.</p>
+            <div class="controls">
+                <label>Stream name
+                    <input type="text" id="streamName" value="DC Brushed 24V" style="width:200px;" />
+                </label>
+                <button id="btnStreamStart">Start</button>
+                <button id="btnStreamPause" disabled>Pause</button>
+                <button id="btnStreamStop" disabled>Stop</button>
+                <span id="streamStatus" class="capture-status"></span>
+            </div>
+            <div class="metrics-row" id="streamStats" style="margin-top:8px;"></div>
+        </div>
+
+        <div class="panel">
+            <h2>Log</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script src="../../../../../bundle/spikypanda-core.js"></script>
+    <script src="../../../../../bundle/spikypanda-runtime.js"></script>
+    <script src="../../../../../bundle/spikypanda-sensors.js"></script>
+    <script src="../../../../../js/common.js"></script>
+    <script type="module" src="source.js"></script>
+</body>
+</html>

@@ -52,9 +52,17 @@
 
     <div id="editor-container"></div>
 
+    <!-- Play-mode bottom panel. Always visible; expands when Play is hit
+         to show one tab per Scope node in the graph. JS populates the
+         interior dynamically so we do not need additional markup here. -->
+    <div id="ne-play-panel" class="ne-play-panel"></div>
+
     <script src="../../js/common.js"></script>
     <script src="../../bundle/nodeeditor.js"></script>
     <script src="../../bundle/onnx-editor.js"></script>
-    <script src="nodeeditor.js"></script>
+    <!-- Required by the in-editor Play mode: graph executor instantiates
+         Sensors.MotorCurrentSource from this bundle. -->
+    <script src="../../bundle/spikypanda-sensors.js"></script>
+    <script type="module" src="nodeeditor.js"></script>
 </body>
 </html>

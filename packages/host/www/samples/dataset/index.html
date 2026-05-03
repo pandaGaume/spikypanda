@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda - Labeled Dataset Capture</title>
+    <link rel="stylesheet" href="../../css/common.css" />
+    <link rel="stylesheet" href="dataset.css" />
+</head>
+<body>
+    <div class="sample-hero">
+        <div class="sample-hero-overlay">
+            <nav class="nav-bar" style="margin:0; background:none; border:none; padding:10px 0;">
+                <a href="../../index.html" class="nav-logo">SpikyPanda</a>
+                <div class="nav-links">
+                    <a href="../../index.html">Home</a>
+                    <a href="../co2-mpc/">CO2</a>
+                    <a href="../kws/">KWS</a>
+                    <a href="../motor/">Motor</a>
+                </div>
+            </nav>
+            <h1>Labeled Dataset Capture</h1>
+            <p class="subtitle">Subscribe to any stream published on the SharedWorker registry, label its windows, record N of them, download as CSV or JSON.</p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <div class="panel">
+            <h2>What this page does</h2>
+            <div class="metrics-help">
+                <p>This page is a generic dataset recorder. It does not generate data; it consumes whatever stream a producer page is publishing. Open the <a href="../motor/current/DC/source/">Motor current source</a> in another tab and hit Start there, then come back here and pick the stream from the dropdown.</p>
+                <p>Each window is sliced from the stream at the producer's sample rate and tagged with the user-supplied label plus the stream's metadata (motor config, fault config, ...) so the dataset is reproducible and self-describing.</p>
+            </div>
+        </div>
+
+        <div class="dataset-layout">
+            <div class="dataset-left">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Live signal (subscribed stream)</h2>
+                        <button id="btnRefresh" title="Refresh the list of available streams">Refresh</button>
+                    </div>
+                    <canvas id="canvasTime" width="700" height="200"></canvas>
+                    <div class="metrics-row" id="signalStats"></div>
+                </div>
+
+                <div class="panel">
+                    <h2>Stream metadata</h2>
+                    <pre id="streamMeta" class="log" style="height:auto; max-height:240px;"></pre>
+                </div>
+            </div>
+
+            <div class="dataset-right">
+                <div class="panel sticky-panel">
+                    <h2>Subscription</h2>
+                    <div class="form-row">
+                        <label>Stream</label>
+                        <select id="streamPicker"></select>
+                    </div>
+                    <div class="controls" style="margin-top:8px;">
+                        <button id="btnSubscribe" disabled>Subscribe</button>
+                        <span id="subStatus" class="capture-status"></span>
+                    </div>
+                    <p class="help" style="margin-top:6px;">Pick a stream registered by another tab, then Subscribe to start consuming its data. The list refreshes automatically when streams come or go.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Capture</h2>
+            <p class="metrics-help" style="font-size:0.85em; margin-bottom:8px;">Fixed label per session. Windows are cut from the live stream at its native sample rate. Captured windows accumulate until you Stop or hit the count target, then Download writes a single file.</p>
+            <div class="controls">
+                <label>Label
+                    <input type="text" id="capLabel" value="healthy" style="width:140px;" />
+                </label>
+                <label>Window (s)
+                    <input type="number" id="capWindow" value="1.0" step="0.1" min="0.05" style="width:70px;" />
+                </label>
+                <label>Count
+                    <input type="number" id="capCount" value="10" step="1" min="1" style="width:60px;" />
+                </label>
+                <label>Format
+                    <select id="capFormat">
+                        <option value="csv">CSV</option>
+                        <option value="json" selected>JSON</option>
+                    </select>
+                </label>
+                <button id="btnStart">Start</button>
+                <button id="btnStop" disabled>Stop</button>
+                <button id="btnDownload" disabled>Download</button>
+                <span id="captureStatus" class="capture-status"></span>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Log</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script type="module" src="dataset.js"></script>
+</body>
+</html>

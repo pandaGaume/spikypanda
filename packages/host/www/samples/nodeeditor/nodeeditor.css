@@ -1,3 +1,305 @@
+/* ── Menu bar (toolbar replacement) ──
+   The toolbar slot in the page becomes a horizontal menu bar with one
+   menu per op category. Dropdowns are absolutely positioned children
+   that the JS reveals via .ne-menu-open. */
+.ne-menubar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+
+.ne-menu {
+    position: relative;
+}
+
+.ne-menu-btn {
+    background: rgba(22, 33, 62, 0.5);
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.ne-menu-btn:hover,
+.ne-menu.ne-menu-open .ne-menu-btn {
+    background: rgba(22, 33, 62, 0.95);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.ne-menu-caret {
+    font-size: 0.75em;
+    opacity: 0.7;
+}
+
+.ne-menu-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 200px;
+    background: rgba(22, 33, 62, 0.97);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(6px);
+    padding: 4px;
+    display: none;
+    z-index: 50;
+}
+
+.ne-menu.ne-menu-open .ne-menu-dropdown {
+    display: block;
+}
+
+.ne-menu-item {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.85em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ne-menu-item:hover {
+    background: rgba(0, 212, 255, 0.12);
+    color: var(--primary);
+}
+
+.ne-menu-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    flex: 0 0 auto;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+.ne-menu-label {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Play-mode bottom panel ──
+   Always visible below the editor canvas. Header carries the Play /
+   Pause / Stop controls plus per-source run toggles (greyed when no
+   executor is active). Body shows one tab per Scope node in the graph;
+   each tab hosts a ScopeWidget instance. */
+.ne-play-panel {
+    margin: 12px 0;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    background: rgba(22, 33, 62, 0.40);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.ne-play-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.25);
+    border-bottom: 1px solid var(--panel-border);
+    flex-wrap: wrap;
+}
+
+.ne-play-controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.ne-play-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(22, 33, 62, 0.85);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.ne-play-btn:hover:not(:disabled) {
+    background: rgba(22, 33, 62, 1);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.ne-play-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.ne-play-btn.active {
+    color: var(--primary);
+    border-color: var(--primary);
+    background: rgba(0, 212, 255, 0.12);
+}
+
+.ne-play-status {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    flex: 0 0 auto;
+}
+
+.ne-play-status.running {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.ne-play-sep {
+    width: 1px;
+    height: 24px;
+    background: var(--panel-border);
+    align-self: center;
+}
+
+/* On-node runtime buttons (rendered by the editor library when a node's
+   data implements IRunnableNode or IToggableNode). Lives in the node
+   header, not as a floating overlay. Disabled in Design mode by the
+   library; the library inspects data.isRunning() / isEnabled() and the
+   `data._readonly` flag the editor can set. */
+.ne-node-runtime-btn {
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    padding: 0;
+    margin-left: 6px;
+}
+
+.ne-node-runtime-btn:hover:not(:disabled) {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.ne-node-runtime-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+/* Play button active in Play mode: green accent */
+.ne-node-runtime-btn.ne-rtbtn-play-active {
+    color: #4ade80;
+    border-color: rgba(74, 222, 128, 0.55);
+}
+
+/* Stop button active (source is running): red accent */
+.ne-node-runtime-btn.ne-rtbtn-stop-active {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.55);
+}
+
+.ne-play-source button {
+    width: 22px;
+    height: 22px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ne-play-source button:hover:not(:disabled) {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.ne-play-source button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ne-play-source button.running {
+    color: var(--primary);
+}
+
+.ne-play-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 6px 12px 0 12px;
+    background: rgba(0, 0, 0, 0.15);
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.ne-play-tab {
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    color: var(--text-muted);
+    padding: 6px 14px;
+    font-size: 0.85em;
+    cursor: pointer;
+}
+
+.ne-play-tab:hover {
+    color: var(--text);
+}
+
+.ne-play-tab.active {
+    color: var(--primary);
+    border-color: var(--panel-border);
+    border-bottom-color: rgba(22, 33, 62, 0.40);
+    background: rgba(22, 33, 62, 0.40);
+    margin-bottom: -1px;
+}
+
+.ne-play-body {
+    padding: 12px;
+    min-height: 220px;
+    background: rgba(22, 33, 62, 0.40);
+}
+
+.ne-play-empty {
+    color: var(--text-muted);
+    font-size: 0.85em;
+    font-style: italic;
+    text-align: center;
+    padding: 32px 16px;
+}
+
+/* Each tab content slot. We mount all ScopeWidgets up-front and toggle
+   visibility on tab switch so the rAF render loops keep ticking even on
+   inactive tabs (cheap; canvases on hidden elements skip painting). */
+.ne-play-tab-body {
+    display: none;
+}
+
+.ne-play-tab-body.active {
+    display: block;
+}
+
 /* ── Editor container ── */
 #editor-container {
     width: 100%;
@@ -231,6 +533,32 @@
     color: var(--primary) !important;
 }
 
+/* Design/Play mode toggle. Green play in design mode, red stop block when
+   the editor is in Play mode. Always tinted (not just on hover) so the
+   current mode is unambiguous from across the room. */
+.ne-overlay-btn.ne-play-toggle {
+    color: #4ade80;          /* emerald 400 */
+    border-color: rgba(74, 222, 128, 0.55);
+}
+
+.ne-overlay-btn.ne-play-toggle:hover:not(:disabled) {
+    background: rgba(74, 222, 128, 0.18);
+    color: #6ee7a0;
+    border-color: #4ade80;
+}
+
+.ne-overlay-btn.ne-play-toggle.ne-play-toggle-on {
+    color: #ef4444;          /* red 500 */
+    border-color: rgba(239, 68, 68, 0.65);
+    background: rgba(239, 68, 68, 0.18);
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.5);
+}
+
+.ne-overlay-btn.ne-play-toggle.ne-play-toggle-on:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.30);
+    color: #ff6b6b;
+}
+
 .ne-overlay-select {
     height: 32px;
     padding: 0 8px;
@@ -401,4 +729,29 @@
     background: rgba(0, 212, 255, 0.08);
     pointer-events: none;
     z-index: 5;
+}
+
+/* ── Per-node muted LED ──
+   Small circle injected at the end of each runtime node's title bar.
+   Green = live data flowing. Red = output is muted (source stopped / paused).
+   Hidden in Design mode; shown only when the executor is running. */
+.ne-muted-led {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-left: 6px;
+    vertical-align: middle;
+    flex-shrink: 0;
+    transition: background-color 0.2s;
+}
+
+.ne-muted-led.ne-muted-led-green {
+    background: #4ade80;
+    box-shadow: 0 0 5px rgba(74, 222, 128, 0.7);
+}
+
+.ne-muted-led.ne-muted-led-red {
+    background: #f87171;
+    box-shadow: 0 0 5px rgba(248, 113, 113, 0.7);
 }
