@@ -489,8 +489,12 @@ function zeroOutputs(outputDefs, n, dt) {
     outputDefs.forEach((p) => {
         if (p.type === "vec2") {
             out[p.name] = {
-                theta: new Float32Array(n),
-                omega: new Float32Array(n),
+                theta: new Float32Array(n), omega: new Float32Array(n),
+                firstT: 0, dt: dt, muted: true,
+            };
+        } else if (p.type === "vec3") {
+            out[p.name] = {
+                x: new Float32Array(n), y: new Float32Array(n), z: new Float32Array(n),
                 firstT: 0, dt: dt, muted: true,
             };
         } else {

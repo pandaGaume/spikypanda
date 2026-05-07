@@ -36,6 +36,8 @@
 // ---- Shared port types ------------------------------------------------
 // Kinematics: (theta, omega) per sample. vec2 color prevents miswiring to scalars.
 const KINEMATICS = "vec2";
+// Vec3: 3-component spatial vector (gravity direction, mounting axis, etc.).
+const VEC3 = "vec3";
 // Fault: opaque config descriptor injected into a motor's simulation host.
 // The motor runtime reads the op id and config of each connected fault node
 // to build the fault pipeline before the first advance() tick. Not a
@@ -152,8 +154,9 @@ const MOTOR_PMSM = {
     label: "Motor (PMSM / BLDC)",
     color: "#26a",
     inputs: [
-        { name: "speedTarget", type: "float" },
-        { name: "loadTorque",  type: "float" },
+        { name: "speedTarget",   type: "float" },
+        { name: "loadTorque",    type: "float" },
+        { name: "gravityVector", type: VEC3    },
     ],
     // Fault nodes wire here. The reconciler keeps one trailing empty slot;
     // connecting it grows the chain automatically (same pattern as Sum).
@@ -348,6 +351,60 @@ const GRAVITY = {
         { key: "airGap",                 label: "Air gap g0 (m)",       type: "number", min: 1e-6,  step: 0.0001  },
         { key: "bearingRadialStiffness", label: "Bearing k (N/m)",      type: "number", min: 1,     step: 10000   },
         { key: "equivalentCurrent",      label: "I_eq (A)",             type: "number", min: 0,     step: 0.1     },
+    ],
+};
+
+// ---- World Gravity (vec3 source) -------------------------------------
+// Emits a constant gravity vector each tick. Connect to a motor's
+// gravityVector input to override the static orientation config and drive
+// gravity direction from the graph (e.g. tilting fixture simulation).
+// Direction components are automatically normalised at runtime; magnitude
+// sets the g-force in m/s^2 (9.81 = standard Earth).
+const WORLD_GRAVITY = {
+    id: "spk.WorldGravity",
+    domain: "spikypanda.ai",
+    opset: 1,
+    kind: "source",
+    category: "Environment",
+    label: "World Gravity",
+    color: "#467",
+    noStartStop: true,
+    inputs: [],
+    outputs: [{ name: "gravity", type: VEC3 }],
+    defaultConfig: { magnitude: 9.81, dx: 0.0, dy: 0.0, dz: -1.0 },
+    attrSchema: [
+        { key: "magnitude", label: "Magnitude (m/s²)", type: "number", min: 0, step: 0.1 },
+        { key: "dx", label: "Direction X", type: "number", min: -1, max: 1, step: 0.01 },
+        { key: "dy", label: "Direction Y", type: "number", min: -1, max: 1, step: 0.01 },
+        { key: "dz", label: "Direction Z", type: "number", min: -1, max: 1, step: 0.01 },
+    ],
+};
+
+// ---- Body Transform (vec3 assembler) ---------------------------------
+// Assembles a 3-component direction vector from three scalar inputs.
+// Mirrors UE Blueprint's "Make Vector" node. When an input port is not
+// wired the corresponding config default is used each tick, so the node
+// can work fully from config (static mounting axis) or be driven live
+// from e.g. a Ramp to simulate a rotating fixture.
+const BODY_TRANSFORM = {
+    id: "spk.BodyTransform",
+    domain: "spikypanda.ai",
+    opset: 1,
+    kind: "processor",
+    category: "Environment",
+    label: "Body Transform",
+    color: "#467",
+    inputs: [
+        { name: "x", type: "float" },
+        { name: "y", type: "float" },
+        { name: "z", type: "float" },
+    ],
+    outputs: [{ name: "transform", type: VEC3 }],
+    defaultConfig: { x: 0.0, y: 0.0, z: 1.0 },
+    attrSchema: [
+        { key: "x", label: "X (default)", type: "number", min: -1, max: 1, step: 0.01 },
+        { key: "y", label: "Y (default)", type: "number", min: -1, max: 1, step: 0.01 },
+        { key: "z", label: "Z (default)", type: "number", min: -1, max: 1, step: 0.01 },
     ],
 };
 
@@ -783,6 +840,8 @@ export const OPS_V1 = [
     PMSM_FAULT_BEARING_WEAR,
     // Environment
     GRAVITY,
+    WORLD_GRAVITY,
+    BODY_TRANSFORM,
     // DSP
     FFT,
     // Composition / sensing

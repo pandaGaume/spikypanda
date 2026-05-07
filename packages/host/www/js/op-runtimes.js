@@ -1045,6 +1045,46 @@ DatasetCaptureRuntime.prototype.dispose       = function () {
     this._lastFrames.clear();
 };
 
+// ---- WorldGravity runtime ---------------------------------------------
+// Emits a constant gravity vec3 each tick. Direction is normalised at
+// init time; magnitude scales the unit vector.
+function WorldGravityRuntime() { this._x = 0; this._y = 0; this._z = -1; this._mag = 9.81; }
+WorldGravityRuntime.prototype.init = function (cfg) {
+    const dx = cfg.dx || 0, dy = cfg.dy || 0, dz = (cfg.dz !== undefined ? cfg.dz : -1);
+    const len = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
+    this._mag = cfg.magnitude !== undefined ? cfg.magnitude : 9.81;
+    this._x = dx / len * this._mag;
+    this._y = dy / len * this._mag;
+    this._z = dz / len * this._mag;
+};
+WorldGravityRuntime.prototype.process = function (_inputs, n, dt) {
+    const x = new Float32Array(n).fill(this._x);
+    const y = new Float32Array(n).fill(this._y);
+    const z = new Float32Array(n).fill(this._z);
+    return { gravity: { x, y, z, firstT: 0, dt, muted: false } };
+};
+
+// ---- BodyTransform runtime --------------------------------------------
+// Assembles a vec3 from three scalar inputs (x, y, z).
+// Falls back to config defaults for any unwired input.
+function BodyTransformRuntime() { this._cfg = { x: 0, y: 0, z: 1 }; }
+BodyTransformRuntime.prototype.init = function (cfg) { this._cfg = cfg || { x: 0, y: 0, z: 1 }; };
+BodyTransformRuntime.prototype.process = function (inputs, n, dt) {
+    const fill = function (port, def) {
+        const sig = inputs && inputs[port];
+        if (sig && sig.samples && sig.samples.length) return sig.samples;
+        const arr = new Float32Array(n); arr.fill(def); return arr;
+    };
+    return {
+        transform: {
+            x: fill("x", this._cfg.x || 0),
+            y: fill("y", this._cfg.y || 0),
+            z: fill("z", this._cfg.z !== undefined ? this._cfg.z : 1),
+            firstT: 0, dt, muted: false,
+        },
+    };
+};
+
 // ---- Registry ---------------------------------------------------------
 // Keys are op ids; values are constructor functions. The runner does
 // `new OP_RUNTIMES[node.op]()` to get an instance per node.
@@ -1060,6 +1100,8 @@ export const OP_RUNTIMES = {
     "spk.EccentricityFault":    EccentricityFaultRuntime,
     "spk.BrushFault":           BrushFaultRuntime,
     "spk.GravityModulation":    GravityModulationRuntime,
+    "spk.WorldGravity":         WorldGravityRuntime,
+    "spk.BodyTransform":        BodyTransformRuntime,
     "spk.Switch":               SwitchRuntime,
     "spk.Sum":                  SumRuntime,
     "spk.DatasetCapture":       DatasetCaptureRuntime,
