@@ -497,6 +497,10 @@ function zeroOutputs(outputDefs, n, dt) {
                 x: new Float32Array(n), y: new Float32Array(n), z: new Float32Array(n),
                 firstT: 0, dt: dt, muted: true,
             };
+        } else if (p.type === "matrix44") {
+            const m = new Float32Array(16);
+            m[0] = m[5] = m[10] = m[15] = 1;
+            out[p.name] = { m, firstT: 0, dt: dt, muted: true };
         } else {
             out[p.name] = { samples: new Float32Array(n), firstT: 0, dt: dt, muted: true };
         }

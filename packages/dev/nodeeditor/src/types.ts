@@ -1,16 +1,17 @@
 export type PortDirection = "input" | "output";
 
-export type PortType = "float" | "vec2" | "vec3" | "vec4" | "tensor" | "any" | "exec";
+export type PortType = "float" | "vec2" | "vec3" | "vec4" | "tensor" | "any" | "exec" | "matrix44";
 
 export const PORT_COLORS: Record<PortType, string> = {
-    float:  "#8cf",
-    vec2:   "#8f8",
-    vec3:   "#ff8",
-    vec4:   "#f8f",
-    tensor: "#f88",
-    any:    "#ccc",
+    float:    "#8cf",
+    vec2:     "#8f8",
+    vec3:     "#ff8",
+    vec4:     "#f8f",
+    tensor:   "#f88",
+    any:      "#ccc",
+    matrix44: "#c8f",
     // Execution / event ports (white diamond, like UE Blueprint exec pins).
-    exec:   "#e8e8e8",
+    exec:     "#e8e8e8",
 };
 
 export interface PortDef {

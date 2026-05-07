@@ -38,6 +38,8 @@
 const KINEMATICS = "vec2";
 // Vec3: 3-component spatial vector (gravity direction, mounting axis, etc.).
 const VEC3 = "vec3";
+// Matrix44: row-major 4x4 transform. Rotation-only for now (no translation).
+const MATRIX44 = "matrix44";
 // Fault: opaque config descriptor injected into a motor's simulation host.
 // The motor runtime reads the op id and config of each connected fault node
 // to build the fault pipeline before the first advance() tick. Not a
@@ -154,9 +156,10 @@ const MOTOR_PMSM = {
     label: "Motor (PMSM / BLDC)",
     color: "#26a",
     inputs: [
-        { name: "speedTarget",   type: "float" },
-        { name: "loadTorque",    type: "float" },
-        { name: "gravityVector", type: VEC3    },
+        { name: "speedTarget",   type: "float"   },
+        { name: "loadTorque",    type: "float"   },
+        { name: "gravity",       type: VEC3      },
+        { name: "bodyTransform", type: MATRIX44  },
     ],
     // Fault nodes wire here. The reconciler keeps one trailing empty slot;
     // connecting it grows the chain automatically (same pattern as Sum).
@@ -382,10 +385,11 @@ const WORLD_GRAVITY = {
 
 // ---- Body Transform (vec3 assembler) ---------------------------------
 // Assembles a 3-component direction vector from three scalar inputs.
-// Mirrors UE Blueprint's "Make Vector" node. When an input port is not
-// wired the corresponding config default is used each tick, so the node
-// can work fully from config (static mounting axis) or be driven live
-// from e.g. a Ramp to simulate a rotating fixture.
+// Converts ZYX Euler attitude angles (radians) to a 4x4 rotation matrix.
+// Input ports x/y/z are roll, pitch, yaw respectively. When unwired the
+// config defaults are used, so the node works as a static mount orientation.
+// Drive with live Ramp inputs to simulate a rotating fixture.
+// noStartStop: a transform has no concept of running/stopped.
 const BODY_TRANSFORM = {
     id: "spk.BodyTransform",
     domain: "spikypanda.ai",
@@ -394,17 +398,18 @@ const BODY_TRANSFORM = {
     category: "Environment",
     label: "Body Transform",
     color: "#467",
+    noStartStop: true,
     inputs: [
         { name: "x", type: "float" },
         { name: "y", type: "float" },
         { name: "z", type: "float" },
     ],
-    outputs: [{ name: "transform", type: VEC3 }],
-    defaultConfig: { x: 0.0, y: 0.0, z: 1.0 },
+    outputs: [{ name: "transform", type: MATRIX44 }],
+    defaultConfig: { x: 0.0, y: 0.0, z: 0.0 },
     attrSchema: [
-        { key: "x", label: "X (default)", type: "number", min: -1, max: 1, step: 0.01 },
-        { key: "y", label: "Y (default)", type: "number", min: -1, max: 1, step: 0.01 },
-        { key: "z", label: "Z (default)", type: "number", min: -1, max: 1, step: 0.01 },
+        { key: "x", label: "Roll  X (rad)", type: "number", min: -3.1416, max: 3.1416, step: 0.01 },
+        { key: "y", label: "Pitch Y (rad)", type: "number", min: -3.1416, max: 3.1416, step: 0.01 },
+        { key: "z", label: "Yaw   Z (rad)", type: "number", min: -3.1416, max: 3.1416, step: 0.01 },
     ],
 };
 

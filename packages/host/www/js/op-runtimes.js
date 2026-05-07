@@ -114,6 +114,9 @@ MotorPmsmRuntime.prototype.init = function (cfg) {
                     :                                       Sensors.MotorTransform.horizontal();
     const field = cfg.gravityField === "microgravity" ? Sensors.GravityField.microgravity()
                                                       : Sensors.GravityField.earth();
+    // Hold mutable refs so wired gravity/bodyTransform inputs can update them each tick.
+    this._gravityField   = field;
+    this._motorTransform = transform;
 
     const envDefaults = Sensors.MAXON_ECX_PRIME_ENV_DEFAULTS;
 
@@ -204,6 +207,22 @@ MotorPmsmRuntime.prototype.process = function (inputs, n, dt) {
         if (isFinite(v)) this._host.machine.setLoadTorque(v);
     }
 
+    // Live gravity vector override (from WorldGravity node).
+    const gravIn = inputs.get("gravity");
+    if (gravIn && !gravIn.muted && gravIn.x && gravIn.x.length > 0 && this._gravityField) {
+        this._gravityField.setWorldGravity({ x: gravIn.x[0], y: gravIn.y[0], z: gravIn.z[0] });
+    }
+
+    // Live body transform override (from BodyTransform node, row-major 4x4).
+    const btIn = inputs.get("bodyTransform");
+    if (btIn && !btIn.muted && btIn.m && btIn.m.length === 16 && this._motorTransform) {
+        const m = btIn.m;
+        this._motorTransform.setRotationMatrix(
+            [[m[0], m[1], m[2]], [m[4], m[5], m[6]], [m[8], m[9], m[10]]],
+            "live",
+        );
+    }
+
     const ia = new Float32Array(n);
     const ib = new Float32Array(n);
     const ic = new Float32Array(n);
@@ -275,9 +294,11 @@ MotorPmsmRuntime.prototype.getOutputMeta = function (port) {
     return (this._meta && this._meta[port]) || null;
 };
 MotorPmsmRuntime.prototype.dispose = function () {
-    this._source = null;
-    this._host   = null;
-    this._cfg    = null;
+    this._source         = null;
+    this._host           = null;
+    this._cfg            = null;
+    this._gravityField   = null;
+    this._motorTransform = null;
     this._meta   = null;
 };
 
@@ -1065,24 +1086,36 @@ WorldGravityRuntime.prototype.process = function (_inputs, n, dt) {
 };
 
 // ---- BodyTransform runtime --------------------------------------------
-// Assembles a vec3 from three scalar inputs (x, y, z).
+// Converts ZYX Euler angles (roll=x, pitch=y, yaw=z, radians) to a
+// row-major 4x4 rotation matrix. R = Rz(yaw) * Ry(pitch) * Rx(roll).
 // Falls back to config defaults for any unwired input.
-function BodyTransformRuntime() { this._cfg = { x: 0, y: 0, z: 1 }; }
-BodyTransformRuntime.prototype.init = function (cfg) { this._cfg = cfg || { x: 0, y: 0, z: 1 }; };
-BodyTransformRuntime.prototype.process = function (inputs, n, dt) {
-    const fill = function (port, def) {
+function BodyTransformRuntime() { this._cfg = { x: 0, y: 0, z: 0 }; }
+BodyTransformRuntime.prototype.init = function (cfg) { this._cfg = cfg || { x: 0, y: 0, z: 0 }; };
+BodyTransformRuntime.prototype.process = function (inputs, _n, dt) {
+    const scalar = function (port, def) {
         const sig = inputs && inputs[port];
-        if (sig && sig.samples && sig.samples.length) return sig.samples;
-        const arr = new Float32Array(n); arr.fill(def); return arr;
+        if (sig && sig.samples && sig.samples.length) return sig.samples[0];
+        return def;
     };
-    return {
-        transform: {
-            x: fill("x", this._cfg.x || 0),
-            y: fill("y", this._cfg.y || 0),
-            z: fill("z", this._cfg.z !== undefined ? this._cfg.z : 1),
-            firstT: 0, dt, muted: false,
-        },
-    };
+    const roll  = scalar("x", this._cfg.x || 0);
+    const pitch = scalar("y", this._cfg.y || 0);
+    const yaw   = scalar("z", this._cfg.z || 0);
+    const cx = Math.cos(roll),  sx = Math.sin(roll);
+    const cy = Math.cos(pitch), sy = Math.sin(pitch);
+    const cz = Math.cos(yaw),   sz = Math.sin(yaw);
+    // R = Rz * Ry * Rx (row-major 4x4, rotation only).
+    const m = new Float32Array(16);
+    m[0]  = cz * cy;
+    m[1]  = cz * sy * sx - sz * cx;
+    m[2]  = cz * sy * cx + sz * sx;
+    m[4]  = sz * cy;
+    m[5]  = sz * sy * sx + cz * cx;
+    m[6]  = sz * sy * cx - cz * sx;
+    m[8]  = -sy;
+    m[9]  = cy * sx;
+    m[10] = cy * cx;
+    m[15] = 1;
+    return { transform: { m, firstT: 0, dt, muted: false } };
 };
 
 // ---- Registry ---------------------------------------------------------
