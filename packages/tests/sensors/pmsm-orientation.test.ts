@@ -1,3 +1,4 @@
+import { Cartesian3 } from "@spiky-panda/core";
 import { GravityField } from "spikypanda-sensors/sources/motor/pmsm/env/GravityField";
 import { GravityVector } from "spikypanda-sensors/sources/motor/pmsm/env/GravityVector";
 import { MotorTransform } from "spikypanda-sensors/sources/motor/pmsm/env/MotorTransform";
@@ -56,16 +57,16 @@ describe("MotorTransform presets", () => {
     it("projectWorldToBody is consistent with worldToBodyMatrix", () => {
         const t = MotorTransform.fromEulerZyx(0.3, -0.8, 1.1);
         const Rt = t.worldToBodyMatrix();
-        const v: [number, number, number] = [1, 2, 3];
+        const v = new Cartesian3(1, 2, 3);
         const projected = t.projectWorldToBody(v);
         const expected = [
-            Rt[0][0] * v[0] + Rt[0][1] * v[1] + Rt[0][2] * v[2],
-            Rt[1][0] * v[0] + Rt[1][1] * v[1] + Rt[1][2] * v[2],
-            Rt[2][0] * v[0] + Rt[2][1] * v[1] + Rt[2][2] * v[2],
+            Rt[0][0] * v.x + Rt[0][1] * v.y + Rt[0][2] * v.z,
+            Rt[1][0] * v.x + Rt[1][1] * v.y + Rt[1][2] * v.z,
+            Rt[2][0] * v.x + Rt[2][1] * v.y + Rt[2][2] * v.z,
         ];
-        for (let i = 0; i < 3; i++) {
-            expect(projected[i]).toBeCloseTo(expected[i], 12);
-        }
+        expect(projected.x).toBeCloseTo(expected[0], 12);
+        expect(projected.y).toBeCloseTo(expected[1], 12);
+        expect(projected.z).toBeCloseTo(expected[2], 12);
     });
 });
 
@@ -73,30 +74,30 @@ describe("GravityField presets", () => {
     it("earth : 9.80665 m/s^2 along world -Z", () => {
         const f = GravityField.earth();
         const g = f.worldGravity();
-        expect(g[0]).toBeCloseTo(0, 12);
-        expect(g[1]).toBeCloseTo(0, 12);
-        expect(g[2]).toBeCloseTo(-G_EARTH_MAG, 12);
+        expect(g.x).toBeCloseTo(0, 12);
+        expect(g.y).toBeCloseTo(0, 12);
+        expect(g.z).toBeCloseTo(-G_EARTH_MAG, 12);
         expect(f.worldMagnitude()).toBeCloseTo(G_EARTH_MAG, 12);
         expect(f.label).toBe("earth");
     });
 
     it("microgravity : zero vector", () => {
         const f = GravityField.microgravity();
-        expect(f.worldGravity()).toEqual([0, 0, 0]);
+        expect(f.worldGravity()).toMatchObject({ x: 0, y: 0, z: 0 });
         expect(f.worldMagnitude()).toBe(0);
         expect(f.label).toBe("microgravity");
     });
 
     it("custom : caller-provided vector", () => {
-        const f = GravityField.custom([1, 2, 3], "test");
-        expect(f.worldGravity()).toEqual([1, 2, 3]);
+        const f = GravityField.custom(new Cartesian3(1, 2, 3), "test");
+        expect(f.worldGravity()).toMatchObject({ x: 1, y: 2, z: 3 });
         expect(f.label).toBe("test");
     });
 
     it("setWorldGravity allows runtime modulation", () => {
         const f = GravityField.earth();
-        f.setWorldGravity([0, 0, -1.62], "moon");
-        expect(f.worldGravity()[2]).toBeCloseTo(-1.62, 12);
+        f.setWorldGravity(new Cartesian3(0, 0, -1.62), "moon");
+        expect(f.worldGravity().z).toBeCloseTo(-1.62, 12);
         expect(f.label).toBe("moon");
     });
 });
@@ -106,9 +107,9 @@ describe("GravityVector projection (decisive ground test setup)", () => {
         const gv = new GravityVector(GravityField.earth(), MotorTransform.horizontal());
         gv.advance(0);
         const g = gv.motorFrameGravity();
-        expect(near(g[0], G_EARTH_MAG, 1e-6)).toBe(true);
-        expect(near(g[1], 0, 1e-6)).toBe(true);
-        expect(near(g[2], 0, 1e-6)).toBe(true);
+        expect(near(g.x, G_EARTH_MAG, 1e-6)).toBe(true);
+        expect(near(g.y, 0, 1e-6)).toBe(true);
+        expect(near(g.z, 0, 1e-6)).toBe(true);
         expect(near(gv.radialMagnitude(), G_EARTH_MAG, 1e-6)).toBe(true);
         expect(near(gv.axialMagnitude(), 0, 1e-6)).toBe(true);
     });
@@ -117,9 +118,9 @@ describe("GravityVector projection (decisive ground test setup)", () => {
         const gv = new GravityVector(GravityField.earth(), MotorTransform.verticalUp());
         gv.advance(0);
         const g = gv.motorFrameGravity();
-        expect(near(g[0], 0, 1e-6)).toBe(true);
-        expect(near(g[1], 0, 1e-6)).toBe(true);
-        expect(near(g[2], -G_EARTH_MAG, 1e-6)).toBe(true);
+        expect(near(g.x, 0, 1e-6)).toBe(true);
+        expect(near(g.y, 0, 1e-6)).toBe(true);
+        expect(near(g.z, -G_EARTH_MAG, 1e-6)).toBe(true);
         expect(near(gv.radialMagnitude(), 0, 1e-6)).toBe(true);
         expect(near(gv.axialMagnitude(), G_EARTH_MAG, 1e-6)).toBe(true);
     });
@@ -129,9 +130,9 @@ describe("GravityVector projection (decisive ground test setup)", () => {
             const gv = new GravityVector(GravityField.microgravity(), t);
             gv.advance(0);
             const g = gv.motorFrameGravity();
-            expect(near(g[0], 0, 1e-9)).toBe(true);
-            expect(near(g[1], 0, 1e-9)).toBe(true);
-            expect(near(g[2], 0, 1e-9)).toBe(true);
+            expect(near(g.x, 0, 1e-9)).toBe(true);
+            expect(near(g.y, 0, 1e-9)).toBe(true);
+            expect(near(g.z, 0, 1e-9)).toBe(true);
             expect(gv.radialMagnitude()).toBe(0);
             expect(gv.axialMagnitude()).toBe(0);
         }
@@ -157,11 +158,11 @@ describe("GravityVector projection (decisive ground test setup)", () => {
         gv.advance(0);
         expect(gv.radialMagnitude()).toBeGreaterThan(1);
         // Switch the field to microgravity in place.
-        field.setWorldGravity([0, 0, 0], "zerog");
+        field.setWorldGravity(new Cartesian3(0, 0, 0), "zerog");
         gv.advance(0);
         expect(gv.radialMagnitude()).toBeCloseTo(0, 9);
         // Restore and reorient to vertical up.
-        field.setWorldGravity([0, 0, -G_EARTH_MAG], "earth");
+        field.setWorldGravity(new Cartesian3(0, 0, -G_EARTH_MAG), "earth");
         tr.setEulerZyx(0, 0, 0, "vertical");
         gv.advance(0);
         expect(gv.radialMagnitude()).toBeCloseTo(0, 6);

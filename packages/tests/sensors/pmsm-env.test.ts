@@ -115,7 +115,7 @@ describe("BearingPreloadModel", () => {
         gv.advance(0);
         const g = gv.motorFrameGravity();
         const bp = new BearingPreloadModel(REF_CFG, gv);
-        const expectedAxial = REF_CFG.nominalAxialPreload + REF_CFG.rotorMass * g[2];
+        const expectedAxial = REF_CFG.nominalAxialPreload + REF_CFG.rotorMass * g.z;
         expect(bp.effectiveAxialPreload()).toBeCloseTo(expectedAxial, 6);
         expect(bp.effectiveRadialPreload()).toBeCloseTo(REF_CFG.nominalRadialPreload, 6);
     });

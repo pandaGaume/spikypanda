@@ -1,3 +1,4 @@
+import { Cartesian3 } from "@spiky-panda/core";
 import { IPmsmHousingFaultHost } from "../faults/PmsmFaultContracts";
 import { GravityVector } from "./GravityVector";
 import { IPmsmEnvNode } from "./IPmsmEnvNode";
@@ -51,16 +52,16 @@ export class MountingComplianceModel implements IPmsmEnvNode {
         const g = this.gravity.motorFrameGravity();
         const m = this.cfg.motorMass;
         // Static gravitational load on the bracket, body-frame.
-        housing.addForce(0, m * g[0]);
-        housing.addForce(1, m * g[1]);
-        housing.addForce(2, m * g[2]);
+        housing.addForce(0, m * g.x);
+        housing.addForce(1, m * g.y);
+        housing.addForce(2, m * g.z);
     }
 
     // Diagnostic accessor : effective static deflection along an axis,
     // computed by the caller using the housing stiffness on that axis.
-    public staticForce(): [number, number, number] {
+    public staticForce(): Cartesian3 {
         const g = this.gravity.motorFrameGravity();
         const m = this.cfg.motorMass;
-        return [m * g[0], m * g[1], m * g[2]];
+        return g.multiplyByScalar(m);
     }
 }

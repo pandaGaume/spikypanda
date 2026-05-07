@@ -56,7 +56,7 @@ export class BearingPreloadModel implements IPmsmEnvNode {
     // Effective preloads at the current operating point. Read by
     // metadata exporters and (Phase 2) by BearingRaceFault.
     public effectiveAxialPreload(): number {
-        const gAxial = this.gravity.motorFrameGravity()[2];
+        const gAxial = this.gravity.motorFrameGravity().z;
         return this.cfg.nominalAxialPreload + this.cfg.rotorMass * gAxial;
     }
 

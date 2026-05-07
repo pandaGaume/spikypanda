@@ -1,3 +1,4 @@
+import { Cartesian3 } from "@spiky-panda/core";
 import { ISimNode } from "../../../../interfaces/SimNode";
 import { GravityField } from "./GravityField";
 import { MotorTransform } from "./MotorTransform";
@@ -12,12 +13,12 @@ import { MotorTransform } from "./MotorTransform";
 // Caching keeps repeated reads in the same tick free.
 //
 // Conventions :
-//   - motorFrameGravity()[2] is along the shaft axis (Z).
-//   - radialMagnitude() = sqrt(g_x^2 + g_y^2) is the gravity component
+//   - motorFrameGravity().z is along the shaft axis.
+//   - radialMagnitude() = sqrt(gx^2 + gy^2) is the gravity component
 //     perpendicular to the shaft, the driving quantity for rotor sag.
-//   - axialMagnitude() = |g_z| is the component along the shaft, the
+//   - axialMagnitude() = |gz| is the component along the shaft, the
 //     driving quantity for axial bearing preload modulation.
-//   - radialAngle() = atan2(g_y, g_x) is the azimuth of the gravity
+//   - radialAngle() = atan2(gy, gx) is the azimuth of the gravity
 //     vector in the rotor (XY) plane, which fixes the sag direction.
 export class GravityVector implements ISimNode {
     public readonly kind: string = "pmsm.env.gravity-vector";
@@ -25,7 +26,7 @@ export class GravityVector implements ISimNode {
     public readonly field: GravityField;
     public readonly transform: MotorTransform;
 
-    private _gBody: [number, number, number] = [0, 0, 0];
+    private _gBody: Cartesian3 = Cartesian3.Zero() as Cartesian3;
 
     public constructor(field: GravityField, transform: MotorTransform) {
         this.field = field;
@@ -40,27 +41,27 @@ export class GravityVector implements ISimNode {
     }
 
     public reset(): void {
-        this._gBody = [0, 0, 0];
+        this._gBody = Cartesian3.Zero() as Cartesian3;
     }
 
-    public motorFrameGravity(): [number, number, number] {
-        return [this._gBody[0], this._gBody[1], this._gBody[2]];
+    public motorFrameGravity(): Cartesian3 {
+        return this._gBody.clone();
     }
 
     public radialMagnitude(): number {
-        return Math.sqrt(this._gBody[0] ** 2 + this._gBody[1] ** 2);
+        return Math.sqrt(this._gBody.x ** 2 + this._gBody.y ** 2);
     }
 
     public axialMagnitude(): number {
-        return Math.abs(this._gBody[2]);
+        return Math.abs(this._gBody.z);
     }
 
     public radialAngle(): number {
-        return Math.atan2(this._gBody[1], this._gBody[0]);
+        return Math.atan2(this._gBody.y, this._gBody.x);
     }
 
     public magnitude(): number {
-        return Math.sqrt(this._gBody[0] ** 2 + this._gBody[1] ** 2 + this._gBody[2] ** 2);
+        return this._gBody.magnitude();
     }
 
     private _recompute(): void {

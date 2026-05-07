@@ -1,3 +1,4 @@
+import { Cartesian3, ICartesian3 } from "@spiky-panda/core";
 import { ISimNode } from "../../../../interfaces/SimNode";
 
 // Convention :
@@ -99,13 +100,13 @@ export class MotorTransform implements ISimNode {
         ];
     }
 
-    public projectWorldToBody(v: [number, number, number]): [number, number, number] {
+    public projectWorldToBody(v: ICartesian3): Cartesian3 {
         // R_worldToBody * v = R_bodyToWorld^T * v
-        return [
-            this._R[0][0] * v[0] + this._R[1][0] * v[1] + this._R[2][0] * v[2],
-            this._R[0][1] * v[0] + this._R[1][1] * v[1] + this._R[2][1] * v[2],
-            this._R[0][2] * v[0] + this._R[1][2] * v[1] + this._R[2][2] * v[2],
-        ];
+        return new Cartesian3(
+            this._R[0][0] * v.x + this._R[1][0] * v.y + this._R[2][0] * v.z,
+            this._R[0][1] * v.x + this._R[1][1] * v.y + this._R[2][1] * v.z,
+            this._R[0][2] * v.x + this._R[1][2] * v.y + this._R[2][2] * v.z,
+        );
     }
 
     public get label(): string { return this._label; }
