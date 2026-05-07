@@ -135,6 +135,19 @@ export class GraphExecutor {
         });
         if (!this._sampleRateHz) this._sampleRateHz = DEFAULT_SAMPLE_RATE;
 
+        // Fault and Environment nodes have no runtime class, so topoSort
+        // excludes them from _order. Register them in _sourceRunning here
+        // so isNodeRunning() and setNodeRunning() work for the editor's
+        // enable/disable toggle. They start enabled (true).
+        this._graph.listNodes().forEach((n) => {
+            if (this._sourceRunning.has(n.id)) return;
+            const op = findOp(n.op);
+            if (!op) return;
+            if (op.category === "Fault" || op.category === "Environment") {
+                this._sourceRunning.set(n.id, true);
+            }
+        });
+
         // Register one stream per output port. Use the graph's ACTUAL port list
         // (n.outputs from the serialized node) rather than the op descriptor so
         // dynamically-added exec ports (started / stopped) are also registered.
