@@ -219,6 +219,7 @@ const MOTOR_PMSM = {
         },
         {
             key: "gravityField", label: "Gravity field", type: "select",
+            disabledByPort: "gravity",
             options: [
                 { value: "earth",         label: "Earth (1g, world -Z)" },
                 { value: "microgravity",  label: "Microgravity (0g)"     },
@@ -912,6 +913,10 @@ export function buildNodeDef(op, nodeId) {
     const isStartRuntime = op.id === "spk.StartRuntime";
     const isSource    = op.kind === "source" && !isStartRuntime;
     const isToggable  = op.category === "Fault" || op.category === "Environment";
+    // Tracks which input port names currently have a live connection. Used by
+    // getProperties() to disable config fields that would be overridden by a
+    // wired input (e.g. gravityField when the gravity port is wired).
+    const _connectedInputs = new Set();
     const isStartable = !!op.startable;
     // op.noStartStop : a source that always emits and has no run/pause
     // semantics (e.g. Constant). Skip exec pin injection AND the
@@ -947,10 +952,11 @@ export function buildNodeDef(op, nodeId) {
         getDisplayName: function () { return config.label || op.label; },
         getProperties: function () {
             return (op.attrSchema || []).map(function (s) {
+                const portOverridden = s.disabledByPort && _connectedInputs.has(s.disabledByPort);
                 const entry = {
                     key:      s.key,
                     value:    config[s.key],
-                    editable: true,
+                    editable: !portOverridden,
                     // "select" gets a native <select> dropdown in the panel.
                     // "int" maps to "number" with integer validation in setProperty.
                     type: s.type === "boolean" ? "boolean"
@@ -959,8 +965,13 @@ export function buildNodeDef(op, nodeId) {
                         : "number",
                 };
                 if (s.type === "select" && s.options) entry.options = s.options;
+                if (portOverridden) entry.hint = "→ controlled by wired input";
                 return entry;
             });
+        },
+        notifyPortConnected: function (portName, connected) {
+            if (connected) _connectedInputs.add(portName);
+            else           _connectedInputs.delete(portName);
         },
         setProperty: function (key, value) {
             const s = (op.attrSchema || []).find((x) => x.key === key);

@@ -72,6 +72,13 @@ export class PropertyPanel {
         this.visible = true;
     }
 
+    refresh(): void {
+        if (!this.visible || !this.currentItem) return;
+        this.staged.clear();
+        this.render();
+        this.updateButtons();
+    }
+
     hide(): void {
         this.el.style.display = "none";
         this.parentEl.classList.remove("ne-panel-open");
@@ -125,8 +132,14 @@ export class PropertyPanel {
             } else {
                 const valEl = document.createElement("span");
                 valEl.className = "ne-pp-value";
-                valEl.textContent = this.formatValue(entry.value);
-                valEl.title = this.formatValue(entry.value);
+                if (entry.hint) {
+                    valEl.textContent = entry.hint;
+                    valEl.style.fontStyle = "italic";
+                    valEl.style.opacity = "0.55";
+                } else {
+                    valEl.textContent = this.formatValue(entry.value);
+                    valEl.title = this.formatValue(entry.value);
+                }
                 row.appendChild(valEl);
             }
 

@@ -24,6 +24,9 @@ export class NodeEditor {
     readonly propertyPanel: PropertyPanel;
     readonly fileHandlers: FileHandlerRegistry;
 
+    onConnectionAdded: ((conn: Connection) => void) | null = null;
+    onConnectionRemoved: ((conn: Connection) => void) | null = null;
+
     private currentProfile: ExportProfile = EXPORT_PROFILES["dark"];
     private currentProfileName = "dark";
     private layoutStrategy: LayoutStrategy = defaultLayout;
@@ -223,6 +226,7 @@ export class NodeEditor {
 
         const conn = new Connection(from, to, this.svg, this.currentProfile.connectionStroke);
         this.connections.push(conn);
+        if (this.onConnectionAdded) this.onConnectionAdded(conn);
         return conn;
     }
 
@@ -230,6 +234,7 @@ export class NodeEditor {
         const idx = this.connections.indexOf(conn);
         if (idx >= 0) this.connections.splice(idx, 1);
         conn.remove();
+        if (this.onConnectionRemoved) this.onConnectionRemoved(conn);
     }
 
     updateConnections(): void {

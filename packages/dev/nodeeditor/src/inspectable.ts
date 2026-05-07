@@ -10,6 +10,8 @@ export interface PropertyEntry {
     type?: "string" | "number" | "boolean" | "select";
     /** Only meaningful when type === "select". */
     options?: SelectOption[];
+    /** Shown in italics when editable is false, explaining why the field is read-only. */
+    hint?: string;
 }
 
 export interface Inspectable {

@@ -15,6 +15,20 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
     const container = document.getElementById("editor-container");
     const toolbar = document.getElementById("toolbar");
     const editor = new NODEEDITOR.NodeEditor(container);
+    window.__spkEditor = editor;
+
+    // When a connection is added or removed, notify the target node's data so
+    // getProperties() can disable config fields overridden by the wired input.
+    // Also refresh the property panel so the change is visible immediately.
+    function notifyConnection(conn, connected) {
+        const toNode = editor.nodes.find(function (n) { return n.inputs.includes(conn.to); });
+        if (toNode && toNode.item && toNode.item.data && typeof toNode.item.data.notifyPortConnected === "function") {
+            toNode.item.data.notifyPortConnected(conn.to.name, connected);
+        }
+        editor.propertyPanel.refresh();
+    }
+    editor.onConnectionAdded   = function (conn) { notifyConnection(conn, true);  };
+    editor.onConnectionRemoved = function (conn) { notifyConnection(conn, false); };
 
     // Register ONNX file handler (existing).
     var onnxEditor = new ONNX_EDITOR.OnnxEditor(editor);
