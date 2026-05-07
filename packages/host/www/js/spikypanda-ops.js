@@ -399,6 +399,7 @@ const BODY_TRANSFORM = {
     label: "Body Transform",
     color: "#467",
     noStartStop: true,
+    noFlowPins: true,
     inputs: [
         { name: "x", type: "float" },
         { name: "y", type: "float" },
