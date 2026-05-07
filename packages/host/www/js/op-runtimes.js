@@ -1086,20 +1086,21 @@ WorldGravityRuntime.prototype.process = function (_inputs, n, dt) {
 };
 
 // ---- BodyTransform runtime --------------------------------------------
-// Converts ZYX Euler angles (roll=x, pitch=y, yaw=z, radians) to a
-// row-major 4x4 rotation matrix. R = Rz(yaw) * Ry(pitch) * Rx(roll).
+// Converts ZYX Euler angles (roll, pitch, yaw in degrees, Unreal convention)
+// to a row-major 4x4 rotation matrix. R = Rz(yaw) * Ry(pitch) * Rx(roll).
 // Falls back to config defaults for any unwired input.
-function BodyTransformRuntime() { this._cfg = { x: 0, y: 0, z: 0 }; }
-BodyTransformRuntime.prototype.init = function (cfg) { this._cfg = cfg || { x: 0, y: 0, z: 0 }; };
+const DEG2RAD = Math.PI / 180;
+function BodyTransformRuntime() { this._cfg = { roll: 0, pitch: 0, yaw: 0 }; }
+BodyTransformRuntime.prototype.init = function (cfg) { this._cfg = cfg || { roll: 0, pitch: 0, yaw: 0 }; };
 BodyTransformRuntime.prototype.process = function (inputs, _n, dt) {
     const scalar = function (port, def) {
         const sig = inputs && inputs[port];
         if (sig && sig.samples && sig.samples.length) return sig.samples[0];
         return def;
     };
-    const roll  = scalar("x", this._cfg.x || 0);
-    const pitch = scalar("y", this._cfg.y || 0);
-    const yaw   = scalar("z", this._cfg.z || 0);
+    const roll  = scalar("roll",  this._cfg.roll  || 0) * DEG2RAD;
+    const pitch = scalar("pitch", this._cfg.pitch || 0) * DEG2RAD;
+    const yaw   = scalar("yaw",   this._cfg.yaw   || 0) * DEG2RAD;
     const cx = Math.cos(roll),  sx = Math.sin(roll);
     const cy = Math.cos(pitch), sy = Math.sin(pitch);
     const cz = Math.cos(yaw),   sz = Math.sin(yaw);

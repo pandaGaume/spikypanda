@@ -383,13 +383,11 @@ const WORLD_GRAVITY = {
     ],
 };
 
-// ---- Body Transform (vec3 assembler) ---------------------------------
-// Assembles a 3-component direction vector from three scalar inputs.
-// Converts ZYX Euler attitude angles (radians) to a 4x4 rotation matrix.
-// Input ports x/y/z are roll, pitch, yaw respectively. When unwired the
-// config defaults are used, so the node works as a static mount orientation.
-// Drive with live Ramp inputs to simulate a rotating fixture.
-// noStartStop: a transform has no concept of running/stopped.
+// ---- Body Transform ---------------------------------------------------
+// Converts ZYX Euler attitude angles (degrees, Unreal convention) to a
+// 4x4 rotation matrix. Port names match Unreal's Make Rotator node:
+// Roll (X), Pitch (Y), Yaw (Z). When unwired the config defaults are
+// used, so the node works as a static mount orientation.
 const BODY_TRANSFORM = {
     id: "spk.BodyTransform",
     domain: "spikypanda.ai",
@@ -401,16 +399,16 @@ const BODY_TRANSFORM = {
     noStartStop: true,
     noFlowPins: true,
     inputs: [
-        { name: "x", type: "float" },
-        { name: "y", type: "float" },
-        { name: "z", type: "float" },
+        { name: "roll",  type: "float" },
+        { name: "pitch", type: "float" },
+        { name: "yaw",   type: "float" },
     ],
     outputs: [{ name: "transform", type: MATRIX44 }],
-    defaultConfig: { x: 0.0, y: 0.0, z: 0.0 },
+    defaultConfig: { roll: 0.0, pitch: 0.0, yaw: 0.0 },
     attrSchema: [
-        { key: "x", label: "Roll  X (rad)", type: "number", min: -3.1416, max: 3.1416, step: 0.01 },
-        { key: "y", label: "Pitch Y (rad)", type: "number", min: -3.1416, max: 3.1416, step: 0.01 },
-        { key: "z", label: "Yaw   Z (rad)", type: "number", min: -3.1416, max: 3.1416, step: 0.01 },
+        { key: "roll",  label: "Roll  (deg)", type: "number", min: -180, max: 180, step: 1 },
+        { key: "pitch", label: "Pitch (deg)", type: "number", min: -180, max: 180, step: 1 },
+        { key: "yaw",   label: "Yaw   (deg)", type: "number", min: -180, max: 180, step: 1 },
     ],
 };
 
