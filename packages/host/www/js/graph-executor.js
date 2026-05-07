@@ -93,8 +93,16 @@ export class GraphExecutor {
         this._sampleRateHz = 0;
         this._order.forEach((n) => {
             const Ctor = OP_RUNTIMES[n.op];
-            const inst = new Ctor();
-            inst.init(n.config);
+            let inst;
+            if (Ctor) {
+                inst = new Ctor();
+                inst.init(n.config);
+            } else {
+                // Config-only nodes (e.g. fault descriptors) have no runtime.
+                // Provide a passthrough so _sourceRunning gets an entry and
+                // IToggableNode enable/disable works correctly.
+                inst = { init() {}, process() { return {}; } };
+            }
             this._instances.set(n.id, inst);
             const op = findOp(n.op);
             // The "controllable" node set is broader than just sources:
@@ -113,7 +121,12 @@ export class GraphExecutor {
                 // those with autoStart=true. Faults and environment processors
                 // start enabled (true) immediately since they do not produce
                 // data on their own; they only modulate the signal when active.
-                const startPaused = op.kind === "source";
+                //
+                // Sources flagged op.noStartStop (e.g. Constant) are
+                // "always on" : they have no start exec input and are not
+                // expected to receive a BeginPlay trigger. We start them
+                // running so they emit immediately.
+                const startPaused = op.kind === "source" && !op.noStartStop;
                 this._sourceRunning.set(n.id, !startPaused);
             }
             if (n.config && typeof n.config.sampleRateHz === "number" && !this._sampleRateHz) {
