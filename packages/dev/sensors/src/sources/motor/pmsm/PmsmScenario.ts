@@ -82,6 +82,7 @@ export function defaultEcxPrimeEnvBuilder(): (sim: PmsmSimulation, gv: GravityVe
             rotorMass: MAXON_ECX_PRIME_ENV_DEFAULTS.rotorMass,
             bearingRadialStiffness: MAXON_ECX_PRIME_ENV_DEFAULTS.bearingRadialStiffness,
             airGap: MAXON_ECX_PRIME_ENV_DEFAULTS.airGap,
+            umpRadialStiffness: MAXON_ECX_PRIME_ENV_DEFAULTS.umpRadialStiffness,
         }, gv),
         new BearingPreloadModel({
             rotorMass: MAXON_ECX_PRIME_ENV_DEFAULTS.rotorMass,

@@ -209,8 +209,10 @@ MotorPmsmRuntime.prototype.process = function (inputs, n, dt) {
     }
 
     // Live gravity vector override (from WorldGravity node).
+    // When the source is disabled (muted) the executor zeros its output, so
+    // passing the zeroed vector through switches the motor to microgravity.
     const gravIn = inputs.get("gravity");
-    if (gravIn && !gravIn.muted && gravIn.x && gravIn.x.length > 0 && this._gravityField) {
+    if (gravIn && gravIn.x && gravIn.x.length > 0 && this._gravityField) {
         this._gravityField.setWorldGravity([gravIn.x[0], gravIn.y[0], gravIn.z[0]]);
     }
 
@@ -1120,6 +1122,58 @@ BodyTransformRuntime.prototype.process = function (inputs, _n, dt) {
     return { transform: { m, firstT: 0, dt, muted: false } };
 };
 
+// ---- SyncDetect (lock-in amplifier) -----------------------------------
+// Extracts amplitude and phase at a tracked frequency using synchronous
+// demodulation followed by a first-order IIR low-pass filter.
+//
+// When `omega` (rad/s) is wired: f = harmonic * omega / (2*pi).
+// Otherwise uses the `freqHz` config value directly.
+//
+// Scaling: multiply by 2 to recover the true peak amplitude of a sinusoid,
+// because IQ demodulation halves the amplitude (product-to-sum identity).
+function SyncDetectRuntime() {
+    this._phi        = 0;
+    this._I          = 0;
+    this._Q          = 0;
+    this._freqHz     = 50;
+    this._harmonic   = 1;
+    this._lpfCutoff  = 5;
+}
+SyncDetectRuntime.prototype.init = function (cfg) {
+    this._freqHz    = cfg.freqHz     !== undefined ? cfg.freqHz     : 50;
+    this._harmonic  = cfg.harmonic   !== undefined ? cfg.harmonic   : 1;
+    this._lpfCutoff = cfg.lpfCutoffHz !== undefined ? cfg.lpfCutoffHz : 5;
+    this._phi = 0;
+    this._I   = 0;
+    this._Q   = 0;
+};
+SyncDetectRuntime.prototype.process = function (inputs, n, dt) {
+    const sigIn   = inputs.get("signal");
+    const omegaIn = inputs.get("omega");
+    const mag = new Float32Array(n);
+    const phs = new Float32Array(n);
+    const TWO_PI = 2 * Math.PI;
+    const tau   = 1.0 / (TWO_PI * this._lpfCutoff);
+    const alpha = dt / (tau + dt);
+    for (let i = 0; i < n; i++) {
+        const x = (sigIn  && !sigIn.muted  && sigIn.samples)  ? sigIn.samples[i]  : 0;
+        const w = (omegaIn && !omegaIn.muted && omegaIn.samples) ? omegaIn.samples[i] : this._freqHz * TWO_PI;
+        const f = (w / TWO_PI) * this._harmonic;
+        this._phi += TWO_PI * f * dt;
+        if (this._phi >= TWO_PI) this._phi -= TWO_PI;
+        // Demodulate: multiply by reference cosine and sine
+        this._I = alpha * (x * Math.cos(this._phi)) + (1 - alpha) * this._I;
+        this._Q = alpha * (x * Math.sin(this._phi)) + (1 - alpha) * this._Q;
+        // *2 to recover true peak amplitude (product-to-sum halves it)
+        mag[i] = 2 * Math.sqrt(this._I * this._I + this._Q * this._Q);
+        phs[i] = Math.atan2(this._Q, this._I);
+    }
+    return {
+        magnitude: { samples: mag, firstT: 0, dt, muted: false },
+        phase:     { samples: phs, firstT: 0, dt, muted: false },
+    };
+};
+
 // ---- Registry ---------------------------------------------------------
 // Keys are op ids; values are constructor functions. The runner does
 // `new OP_RUNTIMES[node.op]()` to get an instance per node.
@@ -1142,6 +1196,7 @@ export const OP_RUNTIMES = {
     "spk.DatasetCapture":       DatasetCaptureRuntime,
     "spk.Sensor":               SensorRuntime,
     "spk.FFT":                  FftRuntime,
+    "spk.SyncDetect":           SyncDetectRuntime,
 };
 
 export function hasRuntime(opId) {

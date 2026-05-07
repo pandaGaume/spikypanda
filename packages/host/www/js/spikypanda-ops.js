@@ -638,6 +638,57 @@ const FFT = {
     ],
 };
 
+// ---- Sync Detect (lock-in amplifier) ----------------------------------
+// Extracts the amplitude and phase of a signal at a specific frequency
+// using synchronous detection (digital lock-in amplifier).
+//
+// Principle:
+//   I_raw = signal * cos(2*pi*f*t)  -> low-pass -> I
+//   Q_raw = signal * sin(2*pi*f*t)  -> low-pass -> Q
+//   magnitude = 2 * sqrt(I^2 + Q^2)   (peak amplitude estimate)
+//   phase     = atan2(Q, I)            (radians)
+//
+// The frequency tracks the `omega` input (rad/s from motor) in real time:
+//   f = harmonic * omega / (2*pi)
+// When `omega` is not wired, falls back to the `freqHz` config value.
+//
+// The `harmonic` multiplier lets one node track 1x (imbalance / gravity),
+// 2x (eccentricity second harmonic), etc. For bearing frequencies (BPFO,
+// BPFI, BSF), leave `omega` unwired and set `freqHz` to the bearing
+// characteristic frequency derived from geometry and RPM.
+//
+// This output is directly usable as a neural network feature: it produces
+// a compact, low-frequency, physically meaningful signal invariant to
+// speed variation (because f tracks omega). SNR is much better than a
+// raw FFT bin because all off-band noise is rejected by the LPF.
+const SYNC_DETECT = {
+    id: "spk.SyncDetect",
+    domain: "spikypanda.ai",
+    opset: 1,
+    kind: "processor",
+    category: "DSP",
+    label: "Sync Detect",
+    color: "#27a",
+    inputs: [
+        { name: "signal", type: "float" },
+        { name: "omega",  type: "float" },
+    ],
+    outputs: [
+        { name: "magnitude", type: "float" },
+        { name: "phase",     type: "float" },
+    ],
+    defaultConfig: {
+        freqHz:      50.0,
+        harmonic:    1,
+        lpfCutoffHz: 5.0,
+    },
+    attrSchema: [
+        { key: "freqHz",      label: "Freq (Hz)",       type: "number", min: 0.1, max: 4000, step: 0.5, disabledByPort: "omega" },
+        { key: "harmonic",    label: "Harmonic N",      type: "int",    min: 1,   max: 20,   step: 1    },
+        { key: "lpfCutoffHz", label: "LPF cutoff (Hz)", type: "number", min: 0.1, max: 500,  step: 0.5  },
+    ],
+};
+
 // ---- Sensor (ADC) -----------------------------------------------------
 // Takes the analog (continuous) current, applies gain/bias/Gaussian noise,
 // emits a sampled stream at sampleRateHz. The actual "sampling" is implicit
@@ -849,6 +900,7 @@ export const OPS_V1 = [
     BODY_TRANSFORM,
     // DSP
     FFT,
+    SYNC_DETECT,
     // Composition / sensing
     START_RUNTIME,
     SUM,
