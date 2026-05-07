@@ -82,6 +82,11 @@ export const MAXON_ECX_PRIME_ENV_DEFAULTS = Object.freeze({
     rotorMass: 0.03,                  // kg, rotor + shaft assembly
     bearingRadialStiffness: 1e5,      // N/m, paired bearing stack
     airGap: 5e-4,                     // m, nominal magnetic air-gap (0.5 mm)
+    // Electromagnetic radial stiffness for the rotating UMP (N/m).
+    // Estimated from rated torque T=6 mNm, rotor radius r~3 mm, air gap g=0.5 mm:
+    //   k_UMP ~ T / (r * g) = 6e-3 / (3e-3 * 5e-4) = 4000 N/m
+    // This drives the 1x fMech peak in accel_x / accel_y.
+    umpRadialStiffness: 4e3,          // N/m
     // Bearing assembly (used by BearingPreloadModel).
     nominalAxialPreload: 5,           // N
     nominalRadialPreload: 5,          // N

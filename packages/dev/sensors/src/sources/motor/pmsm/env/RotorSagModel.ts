@@ -30,12 +30,19 @@ export interface IRotorSagConfig {
     rotorMass: number;              // kg
     bearingRadialStiffness: number; // N/m
     airGap: number;                 // m, nominal magnetic air-gap
+    // Electromagnetic radial stiffness for the rotating UMP component (N/m).
+    // As the rotor turns through the eccentric air gap, the interaction of
+    // the rotating PM field with the fixed gap asymmetry produces a force
+    // that rotates at fMech. Amplitude = umpRadialStiffness * delta_sag.
+    // Set to 0 (default) to disable; use MAXON_ECX_PRIME_ENV_DEFAULTS.umpRadialStiffness
+    // for a calibrated estimate.
+    umpRadialStiffness?: number;    // N/m, default 0
     label?: string;
 }
 
 export class RotorSagModel implements IPmsmEnvNode {
     public readonly kind: string = "pmsm.env.rotor-sag";
-    public readonly cfg: Required<Omit<IRotorSagConfig, "label">> & { label: string };
+    public readonly cfg: Required<IRotorSagConfig> & { label: string };
     public readonly gravity: GravityVector;
 
     public constructor(cfg: IRotorSagConfig, gravity: GravityVector) {
@@ -46,6 +53,7 @@ export class RotorSagModel implements IPmsmEnvNode {
             rotorMass: cfg.rotorMass,
             bearingRadialStiffness: cfg.bearingRadialStiffness,
             airGap: cfg.airGap,
+            umpRadialStiffness: cfg.umpRadialStiffness ?? 0,
             label: cfg.label ?? "Rotor sag",
         };
         this.gravity = gravity;
@@ -63,6 +71,23 @@ export class RotorSagModel implements IPmsmEnvNode {
         const thetaGrav = this.gravity.radialAngle();
         const envelope = 1 + epsilon * Math.cos(machine.thetaM - thetaGrav);
         machine.addFluxEnvelope(envelope);
+    }
+
+    // Rotating UMP : the interaction of the spinning PM field with the fixed
+    // air-gap asymmetry produces a radial force component that rotates at
+    // fMech. Injected into the housing so accel_x / accel_y carry a 1x peak.
+    // Skipped when umpRadialStiffness is zero (default backward-compat mode).
+    public postStep(_t: number, machine: import("../faults/PmsmFaultContracts").IPmsmMachineFaultHost, housing: import("../faults/PmsmFaultContracts").IPmsmHousingFaultHost): void {
+        if (!this.cfg.umpRadialStiffness) return;
+        const gPerp = this.gravity.radialMagnitude();
+        if (gPerp < 1e-12) return;
+        const delta = this.cfg.rotorMass * gPerp / this.cfg.bearingRadialStiffness;
+        if (delta < 1e-12) return;
+        const F = this.cfg.umpRadialStiffness * delta;
+        const theta = machine.thetaM - this.gravity.radialAngle();
+        // Body frame: Z = shaft axis, X and Y = radial (axes 0 and 1 in housing).
+        housing.addForce(0, F * Math.cos(theta));
+        housing.addForce(1, F * Math.sin(theta));
     }
 
     // Diagnostic accessors used by tests and metadata exporters.

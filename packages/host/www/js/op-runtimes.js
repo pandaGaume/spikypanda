@@ -133,6 +133,7 @@ MotorPmsmRuntime.prototype.init = function (cfg) {
                 rotorMass:              envDefaults.rotorMass,
                 bearingRadialStiffness: envDefaults.bearingRadialStiffness,
                 airGap:                 envDefaults.airGap,
+                umpRadialStiffness:     envDefaults.umpRadialStiffness,
             }, gv));
         }
         if (cfg.enableBearingPreload) {
