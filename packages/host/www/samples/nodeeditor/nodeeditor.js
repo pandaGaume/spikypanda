@@ -505,6 +505,7 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
         sourceChips: new Map(), // nodeId -> { chip, btn }
         connected: false,
         mode: "design",         // "design" | "play"
+        layout: "tabs",         // "tabs" | "stack"
     };
 
     var playPanel = document.getElementById("ne-play-panel");
@@ -538,6 +539,50 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
     playRecordAllDiv.appendChild(stopAllBtn);
 
     playHeader.appendChild(playRecordAllDiv);
+
+    // Layout toggle: Tabs (one at a time) vs Stack (all visible, scrollable).
+    var layoutToggleDiv = document.createElement("div");
+    layoutToggleDiv.className = "ne-layout-toggle";
+
+    var layoutTabsBtn = document.createElement("button");
+    layoutTabsBtn.type = "button";
+    layoutTabsBtn.className = "ne-layout-btn active";
+    layoutTabsBtn.title = "Tab layout: one widget at a time";
+    layoutTabsBtn.textContent = "Tabs";
+
+    var layoutStackBtn = document.createElement("button");
+    layoutStackBtn.type = "button";
+    layoutStackBtn.className = "ne-layout-btn";
+    layoutStackBtn.title = "Stack layout: all widgets visible";
+    layoutStackBtn.textContent = "Stack";
+
+    layoutToggleDiv.appendChild(layoutTabsBtn);
+    layoutToggleDiv.appendChild(layoutStackBtn);
+    playHeader.appendChild(layoutToggleDiv);
+
+    function applyPlayLayout() {
+        var isStack = playState.layout === "stack";
+        playTabs.classList.toggle("layout-hidden", isStack);
+        playBody.classList.toggle("stack-layout", isStack);
+        layoutTabsBtn.classList.toggle("active", !isStack);
+        layoutStackBtn.classList.toggle("active",  isStack);
+        // In tab mode, re-activate the current tab so only one is visible.
+        if (!isStack && playState.activeTabId) {
+            activatePlayTab(playState.activeTabId);
+        }
+    }
+
+    layoutTabsBtn.addEventListener("click", function () {
+        if (playState.layout === "tabs") return;
+        playState.layout = "tabs";
+        applyPlayLayout();
+    });
+
+    layoutStackBtn.addEventListener("click", function () {
+        if (playState.layout === "stack") return;
+        playState.layout = "stack";
+        applyPlayLayout();
+    });
 
     function setAllStarted(started) {
         if (!editor.nodes) return;
@@ -693,9 +738,11 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
 
     function activatePlayTab(nodeId) {
         playState.activeTabId = nodeId;
+        // In stack layout all bodies stay visible; only update the tab highlight.
+        var isStack = playState.layout === "stack";
         playState.widgets.forEach(function (w) {
             w.tabBtn.classList.toggle("active", w.nodeId === nodeId);
-            w.body.classList.toggle("active", w.nodeId === nodeId);
+            if (!isStack) w.body.classList.toggle("active", w.nodeId === nodeId);
         });
     }
 
@@ -735,8 +782,9 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
                 widget = new ScopeWidget(body, {
                     bus: playBus,
                     streamId: streamId || null,
-                    title: n.label,
+                    title: (n.config && n.config.label) || n.label,
                     timeSpanS: (n.config && n.config.timeSpanS) || 0.04,
+                    autoTrigger: !(n.config && n.config.autoTrigger === false),
                     showHeader: true,
                 });
                 widget.start();
@@ -744,7 +792,7 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
                 widget = new DatasetWidget(body, {
                     executor: playState.executor,
                     nodeId:   n.id,
-                    label:    n.label || n.id,
+                    label:    (n.config && n.config.label) || n.label || n.id,
                     cfg:      n.config || {},
                 });
             } else if (n.op === "spk.Gauge") {
@@ -753,7 +801,7 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
                 widget = new GaugeWidget(body, {
                     bus:       playBus,
                     streamId:  streamId || null,
-                    label:     n.label || n.id,
+                    label:     gcfg.label || n.label || n.id,
                     unit:      gcfg.unit     || "rps",
                     min:       gcfg.min      != null ? gcfg.min      : 0,
                     max:       gcfg.max      != null ? gcfg.max      : 100,
@@ -785,6 +833,7 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
         });
 
         if (firstId) activatePlayTab(firstId);
+        applyPlayLayout();
     }
 
     // ── Mode toggle ──
@@ -924,21 +973,38 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
             var newTitle = null;
 
             if (data.op === "spk.Scope") {
-                // Use the first connected input port (there is only one).
-                var inboundLabel = null;
-                for (var i = 0; i < editor.connections.length; i++) {
-                    var c = editor.connections[i];
-                    if (n.inputs.indexOf(c.to) >= 0) {
-                        var sourceNode = editor.nodes.find(function (nn) {
-                            return nn.outputs.indexOf(c.from) >= 0;
-                        });
-                        if (sourceNode) {
-                            inboundLabel = (sourceNode.label || sourceNode.id) + "." + c.from.name;
+                // User-set label wins; skip auto-rename.
+                if (data.config && data.config.label) {
+                    newTitle = data.config.label;
+                } else {
+                    // Auto-name from the upstream output port ("Scope.i_a", etc.).
+                    var inboundPort = null;
+                    for (var i = 0; i < editor.connections.length; i++) {
+                        var c = editor.connections[i];
+                        if (n.inputs.indexOf(c.to) >= 0) {
+                            inboundPort = c.from.name;
+                            break;
                         }
-                        break;
                     }
+                    newTitle = inboundPort ? "Scope." + inboundPort : "Scope";
                 }
-                newTitle = inboundLabel ? "Scope: " + inboundLabel : "Scope";
+
+            } else if (data.op === "spk.Sensor") {
+                // Auto-name: "Sensor.{upstream port}" e.g. "Sensor.i_a".
+                // User-set label (config.label) wins.
+                if (data.config && data.config.label) {
+                    newTitle = data.config.label;
+                } else {
+                    var sensorPort = null;
+                    for (var si = 0; si < editor.connections.length; si++) {
+                        var sc = editor.connections[si];
+                        if (n.inputs.indexOf(sc.to) >= 0) {
+                            sensorPort = sc.from.name;
+                            break;
+                        }
+                    }
+                    newTitle = sensorPort ? "Sensor." + sensorPort : "Sensor";
+                }
 
             } else if (data.op === "spk.DatasetCapture") {
                 // Use the source wired to in_0 (the primary capture channel).
@@ -960,21 +1026,19 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
                 if (!newTitle) newTitle = "Dataset Capture";
 
             } else if (data.op === "spk.Gauge") {
-                // Use the single input port.
-                var gaugeLabel = null;
-                for (var k = 0; k < editor.connections.length; k++) {
-                    var gc = editor.connections[k];
-                    if (n.inputs.indexOf(gc.to) >= 0) {
-                        var gSrc = editor.nodes.find(function (nn) {
-                            return nn.outputs.indexOf(gc.from) >= 0;
-                        });
-                        if (gSrc) {
-                            gaugeLabel = (gSrc.label || gSrc.id) + "." + gc.from.name;
+                if (data.config && data.config.label) {
+                    newTitle = data.config.label;
+                } else {
+                    var gaugePort = null;
+                    for (var k = 0; k < editor.connections.length; k++) {
+                        var gc = editor.connections[k];
+                        if (n.inputs.indexOf(gc.to) >= 0) {
+                            gaugePort = gc.from.name;
+                            break;
                         }
-                        break;
                     }
+                    newTitle = gaugePort ? "Gauge." + gaugePort : "Gauge";
                 }
-                newTitle = gaugeLabel ? "Gauge: " + gaugeLabel : "Gauge";
             }
 
             if (newTitle === null) return;
@@ -1067,54 +1131,140 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
         });
     }
 
+    // ── StartRuntime is a system anchor : always present in the graph ──
+    // Without a StartRuntime, sources never receive their BeginPlay event
+    // and the simulation stays paused. We treat it as a singleton system
+    // node : if missing (deleted by user, or loaded from a graph that
+    // never had one) we recreate it so Play always works.
+    function ensureStartRuntime() {
+        if (!editor.nodes) return;
+        var found = false;
+        editor.nodes.forEach(function (n) {
+            var d = n && n.item && n.item.data;
+            if (!d) return;
+            if (d.op === "spk.StartRuntime" || d["@type"] === "spk.StartRuntime") {
+                found = true;
+            }
+        });
+        if (!found) {
+            // Spawn at a stable location so it does not stack with the
+            // user's own nodes. The user is free to drag it.
+            spawnRef("spk.StartRuntime", -260, 380);
+        }
+    }
+    // Forward declaration (spawnRef is defined later in this IIFE, after
+    // the editor wiring helpers it depends on). The reconciler tick below
+    // calls ensureStartRuntime once spawnRef is defined.
+    var spawnRef = null;
+
     // Single 250 ms reconciler tick: sink auto-rename + runtime state
-    // mirror + muted LED + record-all button sync.
+    // mirror + muted LED + record-all button sync + StartRuntime anchor.
     setInterval(function () {
         refreshSinkLabels();
         syncRuntimeButtonsFromExecutor();
         syncMutedLeds();
         syncRecordAllButtons();
+        if (spawnRef) ensureStartRuntime();
     }, 250);
 
-    // ── Seed demo: atomic motor pipeline ──
-    // Phase 2 hero graph: shows the decomposition explicitly.
-    //   MotorDC  ──current──┐
-    //            └─kinematics─→ MisalignmentFault ──current─┐
-    //                                                       Sum ──→ Sensor ──→ Scope
-    // Faults read kinematics from the motor and emit a current contribution;
-    // Sum combines all contributions into the analog signal that the Sensor
-    // (ADC) samples for the Scope. Adding more faults = drag another fault
-    // node, wire kinematics in, wire current to a free Sum input.
-    function spawn(opId, x, y) {
+    // ── Seed demo: PMSM / BLDC monitoring rig ──
+    //
+    // Speed control (start-up ramp then steady-state hand-off) :
+    //   Ramp(0 → 50 rps over 5 s) ──out───┐
+    //                                     ├──→ Switch.a
+    //   Constant(50 rps) ─────────────────────→ Switch.b
+    //                            Ramp.ended ──→ Switch.select
+    //
+    //   Switch.out ──speedTarget──→ MotorPMSM
+    //
+    // Monitoring (3 phases + speed gauge) :
+    //   MotorPMSM ──i_a──→ Sensor (ADC) ──→ Scope (phase A)
+    //             ──i_b──→ Sensor (ADC) ──→ Scope (phase B)
+    //             ──i_c──→ Sensor (ADC) ──→ Scope (phase C)
+    //             ──omega→ Gauge (mechanical speed, rad/s)
+    //
+    // The PMSM source wraps the full simulation : machine (dq state-space),
+    // FOC controller, SVPWM modulator, 3-phase inverter, housing mechanics,
+    // gravity context (Earth + horizontal by default), env nodes (RotorSag,
+    // BearingPreload, MountingCompliance) and any active faults. Configure
+    // orientation, gravity field, env enables and faults via the property
+    // panel ; the PMSM port outputs surface the consequences directly.
+    //
+    // Click Play : Ramp drives MotorPMSM up to 50 rps over 5 seconds, then
+    // Ramp.ended flips Switch over to Constant and the motor holds its
+    // setpoint. The three phase scopes show the i_a / i_b / i_c sinusoids
+    // 120 degrees apart and the gauge displays the live mechanical speed.
+    function spawn(opId, x, y, overrides) {
         var op = findOp(opId);
         if (!op) return null;
         var nodeUI = editor.addNode(buildNodeDef(op, generateNodeId(opId)), x, y);
+        if (overrides && nodeUI && nodeUI.item && nodeUI.item.data && nodeUI.item.data.config) {
+            Object.keys(overrides).forEach(function (k) {
+                nodeUI.item.data.config[k] = overrides[k];
+            });
+        }
         syncNodeId(nodeUI);
         return nodeUI;
     }
-    var startN  = spawn("spk.StartRuntime", -160, 200);
-    var motorN  = spawn("spk.MotorDC", 60, 200);
-    var faultN  = spawn("spk.MisalignmentFault", 320, 80);
-    var sumN    = spawn("spk.Sum", 580, 200);
-    var sensorN = spawn("spk.Sensor", 820, 200);
-    var scopeN  = spawn("spk.Scope", 1060, 200);
-    if (startN && motorN && faultN && sumN && sensorN && scopeN) {
-        // StartRuntime.started → Motor.start (BeginPlay pulse starts the motor)
+    // Publish spawn upward so the 250 ms reconciler's ensureStartRuntime()
+    // can re-spawn the system anchor on demand.
+    spawnRef = spawn;
+
+    // Tight per-phase ADC profile : 5 kHz sample rate (well above PMSM
+    // electrical content at 50 Hz fundamental), low noise so the scope
+    // shows the clean three-phase shape on the seed run. Increase noiseStd
+    // in the property panel if you want a more realistic ADC trace.
+    var sensorAdcCfg = { sampleRateHz: 5000, noiseStd: 0.0005, gain: 1, bias: 0 };
+    // Time span : 60 ms = 3 mechanical periods at 50 rps. Long enough for
+    // the eye to see the 120-degree phase relationship between i_a / i_b / i_c.
+    var scopeCfg = { timeSpanS: 0.06 };
+
+    var startN    = spawn("spk.StartRuntime", -260, 380);
+    var rampN     = spawn("spk.Ramp",         -260,  20, { start: 0, end: 50, durationS: 5, loop: false });
+    var constN    = spawn("spk.Constant",     -260, 200, { value: 50 });
+    var switchN   = spawn("spk.Switch",          0, 110, { threshold: 0.5 });
+    var motorN    = spawn("spk.MotorPMSM",     220, 110);
+    var sensorIaN = spawn("spk.Sensor",        560,  20, sensorAdcCfg);
+    var scopeIaN  = spawn("spk.Scope",         780,  20, scopeCfg);
+    var sensorIbN = spawn("spk.Sensor",        560, 180, sensorAdcCfg);
+    var scopeIbN  = spawn("spk.Scope",         780, 180, scopeCfg);
+    var sensorIcN = spawn("spk.Sensor",        560, 340, sensorAdcCfg);
+    var scopeIcN  = spawn("spk.Scope",         780, 340, scopeCfg);
+    var gaugeN    = spawn("spk.Gauge",         560, 500, { unit: "rad/s", min: 0, max: 400, decimals: 1 });
+
+    if (startN && rampN && constN && switchN && motorN
+        && sensorIaN && scopeIaN
+        && sensorIbN && scopeIbN
+        && sensorIcN && scopeIcN
+        && gaugeN) {
+        // StartRuntime.started → start input of each runnable source
+        // (auto-injected at index [0] when isRunnable). Fires once on
+        // entering Play mode so Ramp and MotorPMSM activate together.
+        // Constant has noStartStop : it always emits its value, no
+        // wiring required.
+        editor.connect(startN.outputs[0], rampN.inputs[0]);
         editor.connect(startN.outputs[0], motorN.inputs[0]);
-        // motor.kinematics → fault.kinematics
-        editor.connect(motorN.outputs[1], faultN.inputs[0]);
-        // motor.current → sum.in_0 (Sum starts variadic-empty with one slot)
-        editor.connect(motorN.outputs[0], sumN.inputs[0]);
-        // The variadic reconciler grows Sum to expose a fresh trailing slot
-        // each time a previously-trailing one gets wired. Run it sync so the
-        // next connect can target the freshly added in_1.
-        reconcileVariadicInputs();
-        // fault.current → sum.in_1
-        editor.connect(faultN.outputs[0], sumN.inputs[1]);
-        reconcileVariadicInputs();
-        // sum.out → sensor.in
-        editor.connect(sumN.outputs[0], sensorN.inputs[0]);
-        // sensor.out → scope.in
-        editor.connect(sensorN.outputs[0], scopeN.inputs[0]);
+        // Speed-target chain : Ramp.out → Switch.a, Constant.out → Switch.b,
+        // Ramp.ended (0.0 -> 1.0 at end) → Switch.select. With the default
+        // threshold of 0.5, Switch passes Ramp during the start-up phase
+        // then hands off to Constant once the ramp completes.
+        editor.connect(rampN.outputs[0],  switchN.inputs[0]);   // a
+        editor.connect(constN.outputs[0], switchN.inputs[1]);   // b
+        editor.connect(rampN.outputs[1],  switchN.inputs[2]);   // select
+        // Switch.out → MotorPMSM.speedTarget. Source nodes have auto-injected
+        // start / stop exec inputs at indices [0] and [1] ; user inputs
+        // (speedTarget, loadTorque) follow at [2] and [3].
+        editor.connect(switchN.outputs[0], motorN.inputs[2]);
+
+        // Motor outputs → 3 phase scopes + 1 speed gauge. MotorPMSM output
+        // order : [0]=i_a, [1]=i_b, [2]=i_c, [3]=i_d, [4]=i_q, [5]=omega,
+        // [6]=theta, [7]=torque_em, [8..10]=accel_xyz, [11]=v_bus.
+        editor.connect(motorN.outputs[0],   sensorIaN.inputs[0]);
+        editor.connect(sensorIaN.outputs[0], scopeIaN.inputs[0]);
+        editor.connect(motorN.outputs[1],   sensorIbN.inputs[0]);
+        editor.connect(sensorIbN.outputs[0], scopeIbN.inputs[0]);
+        editor.connect(motorN.outputs[2],   sensorIcN.inputs[0]);
+        editor.connect(sensorIcN.outputs[0], scopeIcN.inputs[0]);
+        editor.connect(motorN.outputs[5],   gaugeN.inputs[0]);
     }
 })();

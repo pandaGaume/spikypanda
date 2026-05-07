@@ -33,10 +33,14 @@
 //   "nodeId" : instance id assigned by the editor (node_N).
 //   "config" : snapshot of the mutable attribute values.
 
-// ---- Shared port type for kinematic streams ---------------------------
-// Kinematics carries (theta, omega) per sample. Encoded as vec2 so the
-// editor draws the port in vec2 color and prevents miswiring to scalars.
+// ---- Shared port types ------------------------------------------------
+// Kinematics: (theta, omega) per sample. vec2 color prevents miswiring to scalars.
 const KINEMATICS = "vec2";
+// Fault: opaque config descriptor injected into a motor's simulation host.
+// The motor runtime reads the op id and config of each connected fault node
+// to build the fault pipeline before the first advance() tick. Not a
+// streaming signal — no data flows at sample rate through this port.
+const FAULT = "fault";
 
 // ---- MotorDC (atomic healthy motor) -----------------------------------
 // Healthy DC motor with optional PWM driver. Two outputs:
@@ -67,6 +71,9 @@ const MOTOR_DC = {
         { name: "dutyCycle",    type: "float" },
         { name: "pwmFrequency", type: "float" },
     ],
+    // Fault nodes wire here. The reconciler keeps one trailing empty slot;
+    // connecting it grows the chain automatically (same pattern as Sum).
+    variadicInput: { prefix: "fault_", type: FAULT },
     outputs: [
         { name: "current",    type: "float" },
         { name: "kinematics", type: KINEMATICS },
@@ -111,18 +118,131 @@ const MOTOR_DC = {
     ],
 };
 
+// ---- MotorPMSM (whole PMSM simulation as one source node) -------------
+// Wraps the entire PmsmSimulation host : machine (dq state-space), FOC
+// controller, SVPWM modulator, 3-phase inverter, housing mechanics,
+// gravity context (field + transform + projection vector), env nodes
+// (RotorSag, BearingPreload, MountingCompliance) and faults (Imbalance,
+// Eccentricity).
+//
+// Unlike the brushed DC pattern (where faults are downstream processors
+// on the kinematics stream), PMSM faults perturb the simulation's internal
+// state (flux envelope, housing forces) inside the closed FOC loop. There
+// is no clean way to extract a fault-only contribution from outside the
+// loop. The pragmatic v1 exposes one configurable source node ; finer-
+// grained ops will follow once the host pattern stabilises.
+//
+// Outputs (12 channels) :
+//   i_a, i_b, i_c       : stator phase currents (A)
+//   i_d, i_q            : rotor frame currents (A)
+//   omega               : mechanical speed (rad/s)
+//   theta               : mechanical angle (rad, unwrapped)
+//   torque_em           : electromagnetic torque (N.m)
+//   accel_x, accel_y, accel_z : housing acceleration (m/s^2)
+//   v_bus               : DC bus voltage (V)
+//
+// Inputs : optional speedTarget and loadTorque overrides (when wired,
+// they override the static config each tick).
+const MOTOR_PMSM = {
+    id: "spk.MotorPMSM",
+    domain: "spikypanda.ai",
+    opset: 1,
+    kind: "source",
+    category: "Source",
+    label: "Motor (PMSM / BLDC)",
+    color: "#26a",
+    inputs: [
+        { name: "speedTarget", type: "float" },
+        { name: "loadTorque",  type: "float" },
+    ],
+    // Fault nodes wire here. The reconciler keeps one trailing empty slot;
+    // connecting it grows the chain automatically (same pattern as Sum).
+    variadicInput: { prefix: "fault_", type: FAULT },
+    outputs: [
+        { name: "i_a",       type: "float" },
+        { name: "i_b",       type: "float" },
+        { name: "i_c",       type: "float" },
+        { name: "i_d",       type: "float" },
+        { name: "i_q",       type: "float" },
+        { name: "omega",     type: "float" },
+        { name: "theta",     type: "float" },
+        { name: "torque_em", type: "float" },
+        { name: "accel_x",   type: "float" },
+        { name: "accel_y",   type: "float" },
+        { name: "accel_z",   type: "float" },
+        { name: "v_bus",     type: "float" },
+    ],
+    defaultConfig: {
+        // Machine preset. Currently only ECX PRIME ; more presets land
+        // alongside Phase 3 calibration.
+        preset: "ecxPrime",
+        // Operating point.
+        speedTargetRps: 50.0,
+        loadTorque:     0.0,
+        // Inverter / SVPWM.
+        vBus:           24.0,
+        pwmFrequencyHz: 20000,
+        // Gravity context.
+        orientation:  "horizontal",   // horizontal | verticalUp | verticalDown
+        gravityField: "earth",         // earth | microgravity
+        // Env enables (full Phase 1 pipeline by default).
+        enableRotorSag:           true,
+        enableBearingPreload:     true,
+        enableMountingCompliance: true,
+        // Faults are now injected via the variadic fault_* input ports.
+        // Connect a spk.FaultPmsm.* node to fault_0..fault_3 to activate.
+    },
+    attrSchema: [
+        {
+            key: "preset", label: "Machine preset", type: "select",
+            options: [
+                { value: "ecxPrime", label: "Maxon ECX PRIME 6 M / 16 L" },
+            ],
+        },
+        { key: "speedTargetRps",   label: "Speed target (rps)",     type: "number", min: 0,    step: 1     },
+        { key: "loadTorque",       label: "Load torque (N.m)",       type: "number", min: 0,    step: 1e-5  },
+        { key: "vBus",             label: "DC bus (V)",              type: "number", min: 1,    step: 0.5   },
+        { key: "pwmFrequencyHz",   label: "PWM freq (Hz)",           type: "int",    min: 1000, step: 1000  },
+        {
+            key: "orientation", label: "Motor orientation", type: "select",
+            options: [
+                { value: "horizontal",   label: "Horizontal (shaft along world X)" },
+                { value: "verticalUp",   label: "Vertical, shaft up"                },
+                { value: "verticalDown", label: "Vertical, shaft down"              },
+            ],
+        },
+        {
+            key: "gravityField", label: "Gravity field", type: "select",
+            options: [
+                { value: "earth",         label: "Earth (1g, world -Z)" },
+                { value: "microgravity",  label: "Microgravity (0g)"     },
+            ],
+        },
+        { key: "enableRotorSag",            label: "Env: rotor sag",            type: "boolean" },
+        { key: "enableBearingPreload",      label: "Env: bearing preload",      type: "boolean" },
+        { key: "enableMountingCompliance",  label: "Env: mounting compliance",  type: "boolean" },
+    ],
+};
+
 // ---- Fault ops --------------------------------------------------------
-// All faults share the same shape: kinematics in, current contribution out.
-// The fault-specific attrs differ. Each contribution is summed onto the
-// motor's clean current downstream by spk.Sum.
+// Faults are config-injection nodes: they carry no streaming signal.
+// Each fault node outputs a single `fault` typed port that connects to
+// one of the motor's variadic `fault_*` input slots. At Play start the
+// executor collects every connected fault node and passes its op id +
+// config to the motor simulation before the first tick.
+//
+// Fault nodes are IToggableNode (enable/disable toggle button on the
+// card) so the user can flip a fault on/off at runtime. noFlowPins
+// suppresses the generic pause/resume pins (semantically wrong here).
 function faultOp(id, label, color, defaults, schema) {
     return {
         id, domain: "spikypanda.ai", opset: 1,
         kind: "processor",
         category: "Fault",
         label, color,
-        inputs:  [{ name: "kinematics", type: KINEMATICS }],
-        outputs: [{ name: "current",    type: "float" }],
+        noFlowPins: true,
+        inputs:  [],
+        outputs: [{ name: "fault", type: FAULT }],
         defaultConfig: defaults,
         attrSchema: schema,
     };
@@ -166,6 +286,40 @@ const BRUSH_FAULT      = faultOp("spk.BrushFault",         "Fault: Brush",      
         { key: "faultyBrushIndex", label: "Faulty brush idx", type: "int", min: 0, step: 1 },
     ]);
 
+// ---- PMSM fault ops ---------------------------------------------------
+// Same config-injection shape as the DC faults above. These map directly
+// to the IPmsmFaultNode implementations in the sensors package:
+//   D1 Imbalance      → RotorImbalance    (centrifugal housing force)
+//   D2 Eccentricity   → RotorEccentricity (static air-gap variation)
+//   D3 WindingShort   → WindingShortCircuit (phase resistance drop)
+//   D4 BearingWear    → BearingDegradation (radial force + stiffness loss)
+const PMSM_FAULT_IMBALANCE = faultOp(
+    "spk.FaultPmsm.Imbalance",
+    "PMSM Fault: Imbalance (D1)", "#b46",
+    { severity: 0.5 },
+    [SEVERITY_ATTR]);
+
+const PMSM_FAULT_ECCENTRICITY = faultOp(
+    "spk.FaultPmsm.Eccentricity",
+    "PMSM Fault: Eccentricity (D2)", "#b66",
+    { severity: 0.5 },
+    [SEVERITY_ATTR]);
+
+const PMSM_FAULT_WINDING_SHORT = faultOp(
+    "spk.FaultPmsm.WindingShort",
+    "PMSM Fault: Winding Short (D3)", "#b86",
+    { severity: 0.5, phase: 0 },
+    [
+        SEVERITY_ATTR,
+        { key: "phase", label: "Phase (0=A 1=B 2=C)", type: "int", min: 0, max: 2, step: 1 },
+    ]);
+
+const PMSM_FAULT_BEARING_WEAR = faultOp(
+    "spk.FaultPmsm.BearingWear",
+    "PMSM Fault: Bearing Wear (D4)", "#9b6",
+    { severity: 0.5 },
+    [SEVERITY_ATTR]);
+
 // ---- Gravity modulation (also kinematics-driven) ----------------------
 // Encodes the horizontal-axis gravity sag that modulates the air gap at
 // 1 x fMech. Same input/output shape as faults but conceptually environment
@@ -202,6 +356,12 @@ const GRAVITY = {
 // control inputs (e.g. dutyCycle on MotorDC) with a static setpoint so
 // the user can change it via the property panel without re-wiring. Wire
 // Constant.out → MotorDC.dutyCycle to override the motor's duty cycle live.
+//
+// noStartStop : a Constant has nothing to "start" or "stop" — it always
+// emits its configured value. Skip the auto-injected start / stop /
+// started / stopped exec pins so the node stays minimal, and skip the
+// IRunnableNode interface (no on-node play button) since pausing makes
+// no sense for a constant.
 const CONSTANT = {
     id: "spk.Constant",
     domain: "spikypanda.ai",
@@ -210,6 +370,7 @@ const CONSTANT = {
     category: "Source",
     label: "Constant",
     color: "#556",
+    noStartStop: true,
     inputs: [],
     outputs: [{ name: "out", type: "float" }],
     defaultConfig: { value: 1.0 },
@@ -292,6 +453,8 @@ const SWITCH = {
     kind: "processor",
     category: "Composition",
     label: "Switch (A/B)",
+    // Pure combinational mux: no internal state, no pause semantics.
+    noFlowPins: true,
     color: "#446",
     inputs: [
         { name: "a",      type: "float" },
@@ -432,6 +595,7 @@ const SENSOR = {
     // The executor picks up sampleRateHz from any node's config; placing it
     // here means the ADC sets the acquisition cadence for the whole chain.
     defaultConfig: {
+        label: "",
         sampleRateHz: 5000,
         gain: 1.0,
         bias: 0.0,
@@ -439,6 +603,7 @@ const SENSOR = {
         rngSeed: 1,
     },
     attrSchema: [
+        { key: "label",        label: "Name",             type: "string" },
         { key: "sampleRateHz", label: "Sample rate (Hz)", type: "int",    min: 100, step: 100 },
         { key: "gain",         label: "Gain",             type: "number",           step: 0.05 },
         { key: "bias",         label: "Bias (A)",         type: "number",           step: 0.01 },
@@ -463,12 +628,14 @@ const GAUGE = {
     inputs:  [{ name: "in", type: "float" }],
     outputs: [],
     defaultConfig: {
+        label:    "",
         unit:     "rps",
         min:      0,
         max:      100,
         decimals: 1,
     },
     attrSchema: [
+        { key: "label",    label: "Name",     type: "string" },
         { key: "unit",     label: "Unit",     type: "string" },
         { key: "min",      label: "Min",      type: "number",           step: 1   },
         { key: "max",      label: "Max",      type: "number",           step: 1   },
@@ -493,10 +660,19 @@ const SCOPE = {
     outputs: [],
     detailPage: "scope/",  // built in Phase 3
     defaultConfig: {
+        label: "",
         timeSpanS: 0.04,
+        // Auto-trigger : align the visible window to a rising mid-line
+        // crossing so a periodic signal appears stationary. Default ON
+        // because the typical use-case is monitoring a periodic motor
+        // signal (current, vibration). Turn off to fall back to the
+        // classic free-running rolling window (latest n samples).
+        autoTrigger: true,
     },
     attrSchema: [
-        { key: "timeSpanS", label: "Time span (s)", type: "number", min: 0.001, step: 0.005 },
+        { key: "label",       label: "Name",           type: "string" },
+        { key: "timeSpanS",   label: "Time span (s)", type: "number", min: 0.001, step: 0.005 },
+        { key: "autoTrigger", label: "Auto-trigger (zero-crossing)", type: "boolean" },
     ],
 };
 
@@ -588,17 +764,23 @@ const DATASET_CAPTURE = {
 export const OPS_V1 = [
     // Motor + composite shortcut
     MOTOR_DC,
+    MOTOR_PMSM,
     MOTOR_CURRENT_DC_COMPOSITE,
     // Signal sources (feed control inputs)
     CONSTANT,
     RAMP,
     PWM,
-    // Faults
+    // Faults — DC brushed motor
     MISALIGNMENT,
     BEARING_DEFECT,
     BROKEN_BAR,
     ECCENTRICITY,
     BRUSH_FAULT,
+    // Faults — PMSM / BLDC
+    PMSM_FAULT_IMBALANCE,
+    PMSM_FAULT_ECCENTRICITY,
+    PMSM_FAULT_WINDING_SHORT,
+    PMSM_FAULT_BEARING_WEAR,
     // Environment
     GRAVITY,
     // DSP
@@ -668,6 +850,10 @@ export function buildNodeDef(op, nodeId) {
     const isSource    = op.kind === "source" && !isStartRuntime;
     const isToggable  = op.category === "Fault" || op.category === "Environment";
     const isStartable = !!op.startable;
+    // op.noStartStop : a source that always emits and has no run/pause
+    // semantics (e.g. Constant). Skip exec pin injection AND the
+    // IRunnableNode interface so no on-node play button is rendered.
+    const isRunnable  = isSource && !op.noStartStop;
     // Sources always start paused; the "start" exec input (wired from
     // StartRuntime or triggered by the on-node play button) activates them.
     let _running = false;
@@ -695,7 +881,7 @@ export function buildNodeDef(op, nodeId) {
         // Inspectable interface: drives the editor property panel. Each
         // schema entry becomes one editable row. We also expose op label
         // as the panel header so the user knows what they are editing.
-        getDisplayName: function () { return op.label; },
+        getDisplayName: function () { return config.label || op.label; },
         getProperties: function () {
             return (op.attrSchema || []).map(function (s) {
                 const entry = {
@@ -771,9 +957,9 @@ export function buildNodeDef(op, nodeId) {
             }
         },
     };
-    // IRunnableNode: only sources (excluding the event-emitter
-    // StartRuntime which has no runtime to control).
-    if (isSource) {
+    // IRunnableNode: only sources (excluding StartRuntime which has no
+    // runtime to control, and "always-on" sources flagged noStartStop).
+    if (isRunnable) {
         data.isRunning = function () { return _running; };
         data.setRunning = function (r) {
             _running = !!r;
@@ -810,15 +996,15 @@ export function buildNodeDef(op, nodeId) {
     // already live). "paused" fires on entry; "resumed" fires on exit.
     // Variadic nodes (Sum) are excluded: their dynamic port lists would
     // interfere with index-based wiring in the editor.
-    const execInputsPrefix = isSource
+    const execInputsPrefix = isRunnable
         ? [{ name: "start", type: "exec" }, { name: "stop", type: "exec" }]
         : [];
-    const needsFlowPins = !isStartRuntime && !isSource && !op.variadicInput;
+    const needsFlowPins = !isStartRuntime && !isSource && !op.variadicInput && !op.noFlowPins;
     const execInputsSuffix  = needsFlowPins
         ? [{ name: "pause", type: "exec" }, { name: "resume", type: "exec" }]
         : [];
     const execOutputsSuffix = [
-        ...(isSource      ? [{ name: "started", type: "exec" }, { name: "stopped", type: "exec" }] : []),
+        ...(isRunnable    ? [{ name: "started", type: "exec" }, { name: "stopped", type: "exec" }] : []),
         ...(needsFlowPins ? [{ name: "paused",  type: "exec" }, { name: "resumed", type: "exec" }] : []),
     ];
 

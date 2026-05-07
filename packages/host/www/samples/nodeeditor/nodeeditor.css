@@ -348,6 +348,54 @@
     display: block;
 }
 
+/* Stack layout: all widget bodies visible simultaneously in a scrollable
+   column. Tab strip is hidden; each ScopeWidget shows its own title. */
+.ne-play-tabs.layout-hidden {
+    display: none;
+}
+
+.ne-play-body.stack-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    max-height: 70vh;
+}
+
+.ne-play-body.stack-layout .ne-play-tab-body {
+    display: block;
+}
+
+/* Layout toggle buttons in the play header */
+.ne-layout-toggle {
+    display: flex;
+    gap: 3px;
+    margin-left: auto;
+}
+
+.ne-layout-btn {
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 3px 8px;
+    font-size: 0.78em;
+    line-height: 1.4;
+    transition: background 0.15s, color 0.15s;
+}
+
+.ne-layout-btn:hover {
+    color: var(--text);
+    border-color: var(--text-muted);
+}
+
+.ne-layout-btn.active {
+    background: rgba(90, 130, 220, 0.25);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
 /* ── Editor container ── */
 #editor-container {
     width: 100%;

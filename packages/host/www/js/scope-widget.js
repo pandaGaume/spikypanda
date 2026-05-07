@@ -38,6 +38,11 @@ export class ScopeWidget {
      * @param {string} [opts.units]          - rendered next to min/max labels.
      * @param {boolean} [opts.showHeader=true] - hide the title + span dropdown for tighter embeds.
      * @param {number}  [opts.bufLen=8192]   - internal ring-buffer length.
+     * @param {boolean} [opts.autoTrigger=true] - align the visible window to a
+     *                  rising mid-line zero-crossing so a periodic signal
+     *                  appears stationary instead of rolling. Falls back to
+     *                  "latest n samples" when no crossing is found in the
+     *                  search range (DC, transient, very small window).
      */
     constructor(container, opts = {}) {
         this._container = container;
@@ -49,6 +54,7 @@ export class ScopeWidget {
         this._units = opts.units || "";
         this._showHeader = opts.showHeader !== false;
         this._bufLen = opts.bufLen || BUF_LEN_DEFAULT;
+        this._autoTrigger = opts.autoTrigger !== false;
 
         // Ring buffer (raw scalar samples).
         this._buf = new Float32Array(this._bufLen);
@@ -75,6 +81,11 @@ export class ScopeWidget {
         if (this._running) return;
         this._running = true;
         this._tick();
+    }
+
+    /** Enable / disable auto-trigger alignment at runtime. */
+    setAutoTrigger(on) {
+        this._autoTrigger = !!on;
     }
 
     /** Stop the render loop; the canvas keeps its last frame. */
@@ -294,10 +305,47 @@ export class ScopeWidget {
             return;
         }
 
-        // Pull the most recent n samples in chronological order.
+        // Pull a sliding window large enough to allow the auto-trigger
+        // search to look one full window backwards from "newest" without
+        // running out of samples. We always render the most recent n
+        // samples by default, and shift the start backwards to a rising
+        // mid-line crossing when one is available within the search range.
+        const searchN = Math.min(this._bufFilled, this._bufLen, 2 * n);
+        const searchBuf = new Float32Array(searchN);
+        const searchStart = (this._bufPos - searchN + this._bufLen) % this._bufLen;
+        for (let i = 0; i < searchN; i++) {
+            searchBuf[i] = this._buf[(searchStart + i) % this._bufLen];
+        }
+
+        // Auto-trigger : align the visible window to the most recent
+        // rising zero-crossing of the AC component, so a periodic signal
+        // appears stationary even while the buffer rolls in continuously.
+        // Falls back to "render the latest n samples" when disabled, or
+        // when no crossing is found (DC, transient, very short window).
+        let triggerOffset = -1;
+        if (this._autoTrigger) {
+            let mean = 0;
+            for (let k = 0; k < searchN; k++) mean += searchBuf[k];
+            mean /= searchN;
+            // Walk backwards from the newest end, looking for the most
+            // recent sample that crosses upward through the mean. Stop
+            // as soon as we find one whose start-of-window leaves enough
+            // room for n samples.
+            for (let k = searchN - 2; k > 0; k--) {
+                if (searchBuf[k] >= mean && searchBuf[k - 1] < mean) {
+                    if (k + n <= searchN) { triggerOffset = k; break; }
+                }
+            }
+        }
         const buf = new Float32Array(n);
-        const start = (this._bufPos - n + this._bufLen) % this._bufLen;
-        for (let i = 0; i < n; i++) buf[i] = this._buf[(start + i) % this._bufLen];
+        if (triggerOffset >= 0) {
+            for (let i = 0; i < n; i++) buf[i] = searchBuf[triggerOffset + i];
+        } else {
+            // Fallback : latest n samples (the classic rolling window).
+            const tailStart = searchN - n;
+            for (let i = 0; i < n; i++) buf[i] = searchBuf[tailStart + i];
+        }
+
         let lo = Infinity, hi = -Infinity;
         for (let k = 0; k < n; k++) {
             const v = buf[k];

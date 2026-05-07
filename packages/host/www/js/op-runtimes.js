@@ -91,6 +91,196 @@ MotorDcRuntime.prototype.getOutputMeta = function (port) {
 };
 MotorDcRuntime.prototype.dispose = function () { this._motor = null; this._cfg = null; this._meta = null; };
 
+// ---- MotorPMSM --------------------------------------------------------
+// Wraps the full PmsmSimulation host (machine + FOC + SVPWM + inverter +
+// housing + gravity context + env nodes + faults) and emits 12 output
+// streams. Built via Sensors.buildPmsmSource so the orchestration order
+// (env.preStep -> faults.preStep -> FOC -> modulator -> inverter ->
+// machine -> faults.postStep -> env.postStep -> housing) is the exact
+// same path the unit / integration tests exercise.
+function MotorPmsmRuntime() {
+    this._source = null;
+    this._host   = null;
+    this._t      = 0;
+    this._meta   = null;
+    this._cfg    = null;
+}
+MotorPmsmRuntime.prototype.init = function (cfg) {
+    this._cfg = cfg;
+    this._t   = 0;
+
+    const transform = cfg.orientation === "verticalUp"   ? Sensors.MotorTransform.verticalUp()
+                    : cfg.orientation === "verticalDown" ? Sensors.MotorTransform.verticalDown()
+                    :                                       Sensors.MotorTransform.horizontal();
+    const field = cfg.gravityField === "microgravity" ? Sensors.GravityField.microgravity()
+                                                      : Sensors.GravityField.earth();
+
+    const envDefaults = Sensors.MAXON_ECX_PRIME_ENV_DEFAULTS;
+
+    // Fault nodes are injected via setFaultNodes() after all graph nodes are
+    // initialized. The executor calls it in Phase C once it can look up which
+    // fault_* input slots are connected. Until then the motor runs fault-free.
+    this._pendingFaultConfigs = [];
+    const faultsBuilder = () => this._buildFaults();
+
+    const envBuilder = function (_sim, gv) {
+        const env = [];
+        if (cfg.enableRotorSag) {
+            env.push(new Sensors.RotorSagModel({
+                rotorMass:              envDefaults.rotorMass,
+                bearingRadialStiffness: envDefaults.bearingRadialStiffness,
+                airGap:                 envDefaults.airGap,
+            }, gv));
+        }
+        if (cfg.enableBearingPreload) {
+            env.push(new Sensors.BearingPreloadModel({
+                rotorMass:            envDefaults.rotorMass,
+                nominalAxialPreload:  envDefaults.nominalAxialPreload,
+                nominalRadialPreload: envDefaults.nominalRadialPreload,
+            }, gv));
+        }
+        if (cfg.enableMountingCompliance) {
+            env.push(new Sensors.MountingComplianceModel({
+                motorMass: envDefaults.motorMass,
+            }, gv));
+        }
+        return env;
+    };
+
+    this._source = Sensors.buildPmsmSource({
+        label:           "node",
+        motorTransform:  transform,
+        gravityField:    field,
+        speedTargetRps:  cfg.speedTargetRps,
+        loadTorque:      cfg.loadTorque,
+        inverter:        { vBus: cfg.vBus },
+        svpwm:           { pwmFrequencyHz: cfg.pwmFrequencyHz },
+        envBuilder:      envBuilder,
+        faultsBuilder:   faultsBuilder,
+    });
+    this._host = this._source.host;
+};
+// Called by the executor (Phase C) after all fault_* inputs are resolved.
+// faultNodes: [{ op: string, config: object, enabled: boolean }, ...]
+MotorPmsmRuntime.prototype.setFaultNodes = function (faultNodes) {
+    this._pendingFaultConfigs = faultNodes || [];
+};
+MotorPmsmRuntime.prototype._buildFaults = function () {
+    const faults = [];
+    for (const fn of this._pendingFaultConfigs) {
+        if (!fn.enabled) continue;
+        const cfg = fn.config;
+        switch (fn.op) {
+            case "spk.FaultPmsm.Imbalance":
+                if (Sensors.ImbalanceFault)
+                    faults.push(new Sensors.ImbalanceFault({ severity: cfg.severity }));
+                break;
+            case "spk.FaultPmsm.Eccentricity":
+                if (Sensors.EccentricityFault)
+                    faults.push(new Sensors.EccentricityFault({ severity: cfg.severity }));
+                break;
+            case "spk.FaultPmsm.WindingShort":
+                if (Sensors.WindingShortFault)
+                    faults.push(new Sensors.WindingShortFault({ severity: cfg.severity, phase: cfg.phase || 0 }));
+                break;
+            case "spk.FaultPmsm.BearingWear":
+                if (Sensors.BearingWearFault)
+                    faults.push(new Sensors.BearingWearFault({ severity: cfg.severity }));
+                break;
+        }
+    }
+    return faults;
+};
+MotorPmsmRuntime.prototype.process = function (inputs, n, dt) {
+    // Optional live overrides : speed target (rps) and load torque (N.m).
+    const stIn = inputs.get("speedTarget");
+    if (stIn && stIn.samples && stIn.samples.length > 0) {
+        const v = stIn.samples[0];
+        if (isFinite(v)) this._host.setSpeedTarget(2 * Math.PI * v);
+    }
+    const lIn = inputs.get("loadTorque");
+    if (lIn && lIn.samples && lIn.samples.length > 0) {
+        const v = lIn.samples[0];
+        if (isFinite(v)) this._host.machine.setLoadTorque(v);
+    }
+
+    const ia = new Float32Array(n);
+    const ib = new Float32Array(n);
+    const ic = new Float32Array(n);
+    const id = new Float32Array(n);
+    const iq = new Float32Array(n);
+    const om = new Float32Array(n);
+    const th = new Float32Array(n);
+    const tq = new Float32Array(n);
+    const ax = new Float32Array(n);
+    const ay = new Float32Array(n);
+    const az = new Float32Array(n);
+    const vb = new Float32Array(n);
+
+    const firstT  = this._t;
+    const machine = this._host.machine;
+    const housing = this._host.housing;
+    const inverter = this._host.inverter;
+
+    for (let i = 0; i < n; i++) {
+        const t = this._t + i * dt;
+        this._host.advance(t);
+        const iAbc = machine.iAbc();
+        ia[i] = iAbc[0]; ib[i] = iAbc[1]; ic[i] = iAbc[2];
+        id[i] = machine.iD; iq[i] = machine.iQ;
+        om[i] = machine.omegaM; th[i] = machine.thetaM;
+        tq[i] = machine.electromagneticTorque();
+        ax[i] = housing.acceleration(0);
+        ay[i] = housing.acceleration(1);
+        az[i] = housing.acceleration(2);
+        vb[i] = inverter.vBus;
+    }
+    this._t += n * dt;
+
+    if (!this._meta && dt > 0) {
+        const sr = Math.round(1 / dt);
+        this._meta = {
+            i_a:       { kind: "signal", label: "i_a",       unit: "A",     sampleRate: sr },
+            i_b:       { kind: "signal", label: "i_b",       unit: "A",     sampleRate: sr },
+            i_c:       { kind: "signal", label: "i_c",       unit: "A",     sampleRate: sr },
+            i_d:       { kind: "signal", label: "i_d",       unit: "A",     sampleRate: sr },
+            i_q:       { kind: "signal", label: "i_q",       unit: "A",     sampleRate: sr },
+            omega:     { kind: "signal", label: "omega",     unit: "rad/s", sampleRate: sr },
+            theta:     { kind: "signal", label: "theta",     unit: "rad",   sampleRate: sr },
+            torque_em: { kind: "signal", label: "torque_em", unit: "N.m",   sampleRate: sr },
+            accel_x:   { kind: "signal", label: "accel_x",   unit: "m/s2",  sampleRate: sr },
+            accel_y:   { kind: "signal", label: "accel_y",   unit: "m/s2",  sampleRate: sr },
+            accel_z:   { kind: "signal", label: "accel_z",   unit: "m/s2",  sampleRate: sr },
+            v_bus:     { kind: "signal", label: "v_bus",     unit: "V",     sampleRate: sr },
+        };
+    }
+
+    const wrap = function (samples) { return { samples: samples, firstT: firstT, dt: dt }; };
+    return {
+        i_a:       wrap(ia),
+        i_b:       wrap(ib),
+        i_c:       wrap(ic),
+        i_d:       wrap(id),
+        i_q:       wrap(iq),
+        omega:     wrap(om),
+        theta:     wrap(th),
+        torque_em: wrap(tq),
+        accel_x:   wrap(ax),
+        accel_y:   wrap(ay),
+        accel_z:   wrap(az),
+        v_bus:     wrap(vb),
+    };
+};
+MotorPmsmRuntime.prototype.getOutputMeta = function (port) {
+    return (this._meta && this._meta[port]) || null;
+};
+MotorPmsmRuntime.prototype.dispose = function () {
+    this._source = null;
+    this._host   = null;
+    this._cfg    = null;
+    this._meta   = null;
+};
+
 // ---- MisalignmentFault ------------------------------------------------
 // Reads the motor's kinematics stream and emits a current contribution at
 // 1x and 2x mechanical frequency. Using theta directly (not fMech*t) so
@@ -863,6 +1053,7 @@ export const OP_RUNTIMES = {
     "spk.Ramp":                 RampRuntime,
     "spk.PWM":                  PwmRuntime,
     "spk.MotorDC":              MotorDcRuntime,
+    "spk.MotorPMSM":            MotorPmsmRuntime,
     "spk.MisalignmentFault":    MisalignmentFaultRuntime,
     "spk.BearingFault":         BearingFaultRuntime,
     "spk.BrokenBarFault":       BrokenBarFaultRuntime,
