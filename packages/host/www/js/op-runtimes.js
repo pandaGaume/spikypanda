@@ -210,7 +210,7 @@ MotorPmsmRuntime.prototype.process = function (inputs, n, dt) {
     // Live gravity vector override (from WorldGravity node).
     const gravIn = inputs.get("gravity");
     if (gravIn && !gravIn.muted && gravIn.x && gravIn.x.length > 0 && this._gravityField) {
-        this._gravityField.setWorldGravity({ x: gravIn.x[0], y: gravIn.y[0], z: gravIn.z[0] });
+        this._gravityField.setWorldGravity([gravIn.x[0], gravIn.y[0], gravIn.z[0]]);
     }
 
     // Live body transform override (from BodyTransform node, row-major 4x4).
