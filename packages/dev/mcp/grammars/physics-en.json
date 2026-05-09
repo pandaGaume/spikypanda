@@ -1,0 +1,72 @@
+{
+    "scenario_configure_node": {
+        "description": "Updates the configuration of a node in the active SpikyPanda graph. Read spk://scenario first to learn the node ids, then pass nodeId (or opId) and a `config` whose keys match the target op's attrSchema. Values are written both to the persisted config and to the live executor instance.",
+        "properties": {
+            "nodeId": "Instance id (e.g. 'node_3'). Wins over opId. Discover via spk://scenario.",
+            "opId":   "Op id (e.g. 'spk.MotorPMSM', 'spk.FaultPmsm.Imbalance'). Resolves to the first node in the graph with that op.",
+            "config": "Map of attrSchema keys. Example: { speedTargetRps: 50 } sets target speed to 50 rps (= 50 Hz mechanical, omega = 2*pi*50 rad/s, period 20 ms)."
+        }
+    },
+    "scenario_describe_op": {
+        "description": "Returns the full op definition: input/output ports, attrSchema with units and bounds, defaultConfig. Call before configure to validate keys.",
+        "properties": {
+            "opId": "Op id to inspect (e.g. 'spk.MotorPMSM')."
+        }
+    },
+    "sim_run": {
+        "description": "Advances the simulation by `seconds` seconds. Enters play mode if needed. Allow at least 3 s before the first read: FOC settling < 0.3 s, then 5*tau of the SyncDetect LPF (at 5 Hz, tau = 200 ms, so 1 s for 5 tau).",
+        "properties": {
+            "seconds": "Wall-clock duration. Minimum 3 s. Budget 5 to 10 s when averaging the lock-in beat caused by FOC speed ripple."
+        }
+    },
+    "sim_toggle_gravity": {
+        "description": "Enables or disables the spk.WorldGravity source. Discriminative test: a signal that collapses to zero at OFF and returns at ON is entirely gravity-driven. This is how the gravitational signature on accel_x was confirmed in gravity_sync_detect_results.md.",
+        "properties": {
+            "enabled": "true = Earth gravity (1 g), false = microgravity (0 g)."
+        }
+    },
+    "measure_read_amplitudes": {
+        "description": "Returns the latest sample of every active float stream, keyed by '<label>.<port>'. This is where SyncDetect magnitude is read: a stable value matching theory means the lock-in is correctly locked."
+    },
+    "measure_read_fft_peak": {
+        "description": "Reads the magnitude of the FFT bin closest to freqHz. Resolution = Fs / N: at Fs = 5000 Hz, N = 8192, df = 0.61 Hz. Increase windowHz to absorb 1 to 3 neighbouring bins when the peak shifts due to speed ripple.",
+        "properties": {
+            "channel":  "FFT node label or stream key (e.g. 'FFT.spectrum').",
+            "freqHz":   "Target frequency. At 50 rps: f_mech = 50 Hz, 2*f_mech = 100 Hz (static eccentricity), BPFO ~ 87.3 Hz (5-ball bearing, 0 deg contact angle).",
+            "windowHz": "Half-width window in Hz. Default = one bin. Safe value: 2*df = 1.2 Hz."
+        }
+    },
+    "measure_export_data": {
+        "description": "Returns the full Float32Array contents of every stream, serialized as JSON. Heavy payload (megabytes possible); call once per experiment, never in a tight loop."
+    },
+    "log_experiment": {
+        "description": "Persists one experiment record under ~/spikypanda-research/experiments/: scenario (motor config, gravity, faults), measurements (amplitudes, FFT peaks, deltas), notes. Primary trace feeding both the DotVision dataset and reports.",
+        "properties": {
+            "scenario":     "Exact configuration snapshot: motor preset, target speed, gravity state, active faults (id + severity).",
+            "measurements": "Numeric readouts. Convention: { 'accel_x_1x_mag': 0.0035, 'iq_1x_mag': 0.0008, 'fft_peak_50hz': 0.042, ... }.",
+            "notes":        "Free text: observations, biases detected, special conditions."
+        }
+    },
+    "write_hypothesis": {
+        "description": "Creates or replaces a hypothesis markdown document. Use to track an open question: what is assumed, how to verify, which result would settle it.",
+        "properties": {
+            "name":    "Short document name (no extension).",
+            "content": "Full markdown body. Include a 'verification' section with the experiment plan."
+        }
+    },
+    "write_report": {
+        "description": "Creates or replaces a markdown report under ~/spikypanda-research/reports/. Authored by the agent from experiments and hypotheses; the MCP is a store, never a writer.",
+        "properties": {
+            "name":    "Short report name (no extension).",
+            "content": "Full markdown body. Recommended layout: title, context, protocol, results table, interpretation, next step."
+        }
+    },
+    "add_dataset_entry": {
+        "description": "Appends one row to the dataset manifest (~/spikypanda-research/dataset/manifest.json). One entry = one labeled sample ready for NN training.",
+        "properties": {
+            "label":    "Sample class (e.g. 'D1_imbalance_0p5_gravity_on'). Convention: <fault>_<severity>_gravity_<on|off>.",
+            "features": "Scalar feature vector: { accel_x_1x_mag: 0.0035, iq_1x_mag: 0.0008, accel_x_2x_mag: 0.0001, ... }.",
+            "source":   "Pointer back to the raw measurement (experiment id, file path)."
+        }
+    }
+}

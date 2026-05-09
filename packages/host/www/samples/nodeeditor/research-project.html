@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda - Research Project</title>
+    <link rel="stylesheet" href="research-project.css" />
+    <link rel="stylesheet" href="nodeeditor.css" />
+</head>
+<body>
+    <header class="pj-header">
+        <h1 id="pj-name">(loading...)</h1>
+        <span class="id" id="pj-id"></span>
+        <span id="pj-status" class="pj-status-badge draft">draft</span>
+        <span class="spacer"></span>
+        <a href="research-projects.html">&larr; Back to projects</a>
+        <a href="nodeeditor-mcp.html" target="_blank" rel="noopener">Scratch console</a>
+    </header>
+
+    <main class="pj-main">
+
+        <div class="pj-card">
+            <div class="pj-card-title">
+                Goal
+                <span class="right" id="pj-meta"></span>
+            </div>
+            <div class="pj-card-body">
+                <div class="pj-goal" id="pj-goal">(empty)</div>
+            </div>
+        </div>
+
+        <div class="pj-card">
+            <div class="pj-card-title">
+                Prerequisites
+                <span class="right">
+                    <button id="pj-run-all" type="button">Run all auto checks</button>
+                </span>
+            </div>
+            <div class="pj-card-body" id="pj-prereqs">
+                <div class="pj-empty">No prerequisite defined yet. Ask the agent to call project_define_prerequisites.</div>
+            </div>
+            <div class="pj-actions">
+                <button id="pj-refresh" type="button">Refresh</button>
+                <button id="pj-set-ready"  type="button">Mark as ready</button>
+                <button id="pj-set-active" type="button" class="primary">Activate</button>
+                <button id="pj-set-closed" type="button">Close</button>
+            </div>
+        </div>
+
+        <div class="pj-card">
+            <div class="pj-card-title">Hypotheses</div>
+            <div class="pj-card-body" id="pj-hypotheses">
+                <div class="pj-empty">No hypothesis yet.</div>
+            </div>
+        </div>
+
+        <div class="pj-card">
+            <div class="pj-card-title">Matrix &middot; stats</div>
+            <div class="pj-card-body" id="pj-matrix">
+                <div class="pj-empty">No matrix defined yet.</div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Hidden DOM required by nodeeditor.js -->
+    <div id="editor-container"></div>
+    <div id="toolbar"></div>
+    <div id="ne-play-panel" class="ne-play-panel"></div>
+
+    <!-- Common helpers + node editor stack (provides window.__spk and window.__spkOps) -->
+    <script src="../../js/common.js"></script>
+    <script src="../../bundle/nodeeditor.js"></script>
+    <script src="../../bundle/onnx-editor.js"></script>
+    <script src="../../bundle/spikypanda-sensors.js"></script>
+    <script type="module" src="nodeeditor.js"></script>
+
+    <!-- Browser-side prereq check registry -->
+    <script src="../../js/prereq-checks.js"></script>
+
+    <!-- Project page bootstrap -->
+    <script src="research-project.js"></script>
+</body>
+</html>

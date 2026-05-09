@@ -9,13 +9,17 @@ const MODEL_PATH = path.resolve(
     "../CyanMycelium/models/imu/model_embed.onnx",
 );
 
-describe("ONNX Editor", () => {
+// The fixture lives in the sibling CyanMycelium repo, which is not part of
+// SpikyPanda's working tree. Skip the suite cleanly when the file is absent
+// so a fresh checkout does not red-flag the test runner; the assertions only
+// make sense when the artifact is present.
+const HAS_MODEL = fs.existsSync(MODEL_PATH);
+const describeIf = HAS_MODEL ? describe : describe.skip;
+
+describeIf("ONNX Editor", () => {
     let modelBytes: Uint8Array;
 
     beforeAll(() => {
-        if (!fs.existsSync(MODEL_PATH)) {
-            throw new Error(`Test model not found: ${MODEL_PATH}`);
-        }
         modelBytes = new Uint8Array(fs.readFileSync(MODEL_PATH));
     });
 

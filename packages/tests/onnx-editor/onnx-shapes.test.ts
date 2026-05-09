@@ -6,7 +6,11 @@ const MODEL_PATH = path.resolve(
     __dirname, "../../../", "../CyanMycelium/models/imu/model_embed.onnx",
 );
 
-describe("ONNX Shape Analysis", () => {
+// External fixture (sibling CyanMycelium repo). Skip cleanly when absent.
+const HAS_MODEL = fs.existsSync(MODEL_PATH);
+const describeIf = HAS_MODEL ? describe : describe.skip;
+
+describeIf("ONNX Shape Analysis", () => {
     it("should dump all shapes", () => {
         const bytes = new Uint8Array(fs.readFileSync(MODEL_PATH));
         const result = OnnxParser.parse(bytes)!;

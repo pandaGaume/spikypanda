@@ -1,0 +1,244 @@
+/* SpikyPanda MCP Agent UI                                              *
+ *                                                                      *
+ * Layout: a fixed header, a two-column main area (Scenario/Sim/Measure *
+ * panels on the left, Agent Log on the right), and a collapsible       *
+ * Graph View panel at the bottom that hosts the (otherwise hidden)     *
+ * #editor-container, #toolbar and #ne-play-panel needed by             *
+ * nodeeditor.js.                                                       */
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #0d1117;
+    color: #d0d7de;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+    overflow: hidden;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Header ───────────────────────────────────────────────────────── */
+.mcp-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 16px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+}
+
+.mcp-header h1 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #c9d1d9;
+}
+
+.mcp-header .spacer { flex: 1; }
+
+.mcp-header .field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.mcp-header label {
+    font-size: 11px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mcp-header input,
+.mcp-header select {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+}
+
+.mcp-header button {
+    background: #238636;
+    color: #fff;
+    border: none;
+    padding: 5px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.mcp-header button:hover { background: #2ea043; }
+.mcp-header button.disconnect { background: #da3633; }
+.mcp-header button.disconnect:hover { background: #f85149; }
+.mcp-header button.btn-secondary { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 4px 10px; }
+.mcp-header button.btn-secondary:hover { background: #30363d; color: #fff; }
+
+.mcp-status-badge {
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mcp-status-badge.disconnected { background: #21262d; color: #f85149; }
+.mcp-status-badge.connecting   { background: #21262d; color: #d29922; }
+.mcp-status-badge.connected    { background: #21262d; color: #3fb950; }
+
+/* ── Main two-column layout ───────────────────────────────────────── */
+.mcp-main {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: minmax(360px, 420px) 1fr;
+    gap: 12px;
+    padding: 12px;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.mcp-left, .mcp-right {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.mcp-panel {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.mcp-panel-title {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    background: #1c2128;
+    border-bottom: 1px solid #30363d;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #8b949e;
+}
+
+.mcp-panel-body {
+    flex: 1 1 auto;
+    padding: 10px 12px;
+    overflow: auto;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.mcp-kv {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+}
+
+.mcp-kv .k { color: #8b949e; }
+.mcp-kv .v { color: #c9d1d9; text-align: right; font-variant-numeric: tabular-nums; }
+
+.mcp-empty {
+    color: #6e7681;
+    font-style: italic;
+}
+
+/* ── Agent log ─────────────────────────────────────────────────────── */
+.mcp-log {
+    flex: 1 1 auto;
+    padding: 10px 12px;
+    overflow: auto;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 11.5px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.mcp-log .row { margin-bottom: 4px; }
+.mcp-log .ts { color: #6e7681; }
+.mcp-log .lvl-info  { color: #58a6ff; }
+.mcp-log .lvl-ok    { color: #3fb950; }
+.mcp-log .lvl-warn  { color: #d29922; }
+.mcp-log .lvl-error { color: #f85149; }
+.mcp-log .lvl-tool  { color: #a371f7; }
+
+/* ── Graph View panel (collapsible bottom) ────────────────────────── */
+.mcp-graph {
+    flex: 0 0 auto;
+    background: #161b22;
+    border-top: 1px solid #30363d;
+    display: flex;
+    flex-direction: column;
+    transition: max-height 0.2s ease-out;
+    max-height: 38px;
+    overflow: hidden;
+}
+
+.mcp-graph.expanded { max-height: 60vh; }
+
+.mcp-graph-header {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #8b949e;
+    user-select: none;
+    background: #1c2128;
+}
+
+.mcp-graph-header:hover { color: #c9d1d9; }
+
+.mcp-graph-body {
+    flex: 1 1 auto;
+    overflow: hidden;
+    position: relative;
+}
+
+#editor-container {
+    width: 100%;
+    height: 100%;
+    background: #0d1117;
+}
+
+/* The toolbar is required by nodeeditor.js but never shown in MCP mode. *
+ * It is positioned absolutely so the menu items it injects do not push  *
+ * the layout around when the node editor boots.                         */
+#toolbar {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    pointer-events: none;
+    visibility: hidden;
+}
+
+/* Play panel from nodeeditor.js: hidden by default, the agent does not  *
+ * use it directly; it lives inside the graph view when the editor      *
+ * needs it.                                                             */
+#ne-play-panel {
+    display: none;
+}

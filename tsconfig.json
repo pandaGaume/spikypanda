@@ -6,6 +6,8 @@
         { "path": "packages/dev/sensors/tsconfig.build.json" },
         { "path": "packages/dev/bestioles/tsconfig.build.json" },
         { "path": "packages/dev/babylonjs/tsconfig.build.json" },
+        { "path": "packages/dev/mcp/tsconfig.build.json" },
+        { "path": "packages/dev/mcp/tsconfig.research.json" },
         { "path": "packages/tests/tsconfig.json" }
     ]
 }

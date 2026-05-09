@@ -17,6 +17,12 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
     const editor = new NODEEDITOR.NodeEditor(container);
     window.__spkEditor = editor;
 
+    // Expose the full op registry so the MCP simulation adapter can build
+    // tool schemas dynamically from OPS_V1. Adding a new op in
+    // spikypanda-ops.js automatically extends every MCP tool that iterates
+    // window.__spkOps; no edits to the MCP package are required.
+    window.__spkOps = OPS_V1;
+
     // When a connection is added or removed, notify the target node's data so
     // getProperties() can disable config fields overridden by the wired input.
     // Also refresh the property panel so the change is visible immediately.
@@ -1281,4 +1287,349 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
         editor.connect(sensorIcN.outputs[0], scopeIcN.inputs[0]);
         editor.connect(motorN.outputs[5],   gaugeN.inputs[0]);
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // window.__spk — SpikyPanda Control API
+    //
+    // Exposes simulation control to external callers: browser console,
+    // MCP bridge (McpSpikypandaBehavior), or any LLM agent that has
+    // access to a WebSocket tunnel into this tab.
+    //
+    // All methods are synchronous except run() and reset() which return
+    // Promises so callers can await stabilisation before reading results.
+    //
+    // Usage from console:
+    //   await window.__spk.run(3);
+    //   window.__spk.toggleGravity(false);
+    //   await new Promise(r => setTimeout(r, 3500));
+    //   window.__spk.readAmplitudes();
+    // ══════════════════════════════════════════════════════════════════════
+    window.__spk = (function () {
+
+        // Fault shorthand to full op-id map.
+        var FAULT_MAP = {
+            'D1': 'spk.FaultPmsm.Imbalance',
+            'D2': 'spk.FaultPmsm.Eccentricity',
+            'D3': 'spk.FaultPmsm.WindingShort',
+            'D4': 'spk.FaultPmsm.BearingWear',
+        };
+
+        // ── Node lookup helpers ──────────────────────────────────────────
+
+        function nodeByOp(opId) {
+            if (!editor.nodes) return null;
+            for (var i = 0; i < editor.nodes.length; i++) {
+                var n = editor.nodes[i];
+                var d = n && n.item && n.item.data;
+                if (d && (d.op === opId || d['@type'] === opId)) return n;
+            }
+            return null;
+        }
+
+        function nodesByOp(opId) {
+            if (!editor.nodes) return [];
+            return editor.nodes.filter(function (n) {
+                var d = n && n.item && n.item.data;
+                return d && (d.op === opId || d['@type'] === opId);
+            });
+        }
+
+        // ── configure(scenario) ──────────────────────────────────────────
+        // Apply scenario settings to graph node configs without restarting.
+        // If the executor is running, live updates are forwarded to the
+        // runtime instances so changes take effect on the next tick.
+        //
+        // scenario: {
+        //   gravityEnabled   : bool
+        //   gravityMagnitude : float          (m/s^2, default 9.81)
+        //   gravityDir       : { dx, dy, dz } (normalised internally)
+        //   speedRpm         : float          (converted to rad/s)
+        //   speedTarget      : float          (rad/s, overrides speedRpm)
+        //   faults           : [ { id: "D1"|"D2"|"D3"|"D4"|full-op-id,
+        //                          severity: 0..1 } ]
+        // }
+        function configure(scenario) {
+            if (!scenario) return false;
+
+            var exec = playState.executor;
+
+            // Gravity vector config.
+            var gNode = nodeByOp('spk.WorldGravity');
+            if (gNode && gNode.item && gNode.item.data) {
+                var gcfg = gNode.item.data.config;
+                if (gcfg) {
+                    if (scenario.gravityMagnitude !== undefined) gcfg.magnitude = scenario.gravityMagnitude;
+                    if (scenario.gravityDir) {
+                        if (scenario.gravityDir.dx !== undefined) gcfg.dx = scenario.gravityDir.dx;
+                        if (scenario.gravityDir.dy !== undefined) gcfg.dy = scenario.gravityDir.dy;
+                        if (scenario.gravityDir.dz !== undefined) gcfg.dz = scenario.gravityDir.dz;
+                    }
+                }
+                // Live gravity toggle: route through executor.setNodeRunning so
+                // the muted-vector path in MotorPmsmRuntime takes effect.
+                if (scenario.gravityEnabled !== undefined && exec) {
+                    exec.setNodeRunning(gNode.id, !!scenario.gravityEnabled);
+                }
+            }
+
+            // Speed: find the Constant node wired as the steady-state target.
+            // In the default demo graph that is the Constant(50 rad/s) connected
+            // to Switch.b. We locate any Constant with a positive value.
+            var speedTarget = scenario.speedTarget;
+            if (speedTarget === undefined && scenario.speedRpm !== undefined) {
+                speedTarget = scenario.speedRpm * 2 * Math.PI / 60;
+            }
+            if (speedTarget !== undefined) {
+                var cNodes = nodesByOp('spk.Constant');
+                for (var ci = 0; ci < cNodes.length; ci++) {
+                    var cData = cNodes[ci].item && cNodes[ci].item.data;
+                    if (cData && cData.config && (cData.config.value || 0) > 0) {
+                        cData.config.value = speedTarget;
+                        var cinst = exec && exec.getNodeInstance(cNodes[ci].id);
+                        if (cinst && cinst.setConfig) cinst.setConfig('value', speedTarget);
+                        break;
+                    }
+                }
+            }
+
+            // Faults: update config.severity and toggle runtime enable state.
+            if (scenario.faults) {
+                scenario.faults.forEach(function (f) {
+                    var opId = FAULT_MAP[f.id] || f.id;
+                    var fNode = nodeByOp(opId);
+                    if (!fNode) return;
+                    var sev = (f.severity != null) ? f.severity : 0.5;
+                    var fData = fNode.item && fNode.item.data;
+                    if (fData && fData.config) fData.config.severity = sev;
+                    var finst = exec && exec.getNodeInstance(fNode.id);
+                    if (finst && finst.setConfig) finst.setConfig('severity', sev);
+                    if (exec) exec.setNodeRunning(fNode.id, sev > 0);
+                });
+            }
+
+            // Generic per-node config path used by the MCP scenario behavior.
+            // scenario.nodes is an array of { id?, op?, config } entries; each
+            // entry resolves to a single node (id wins, op falls back to the
+            // first node with that op id) and merges the supplied keys both
+            // into data.config (persisted) and the live runtime instance.
+            if (scenario.nodes && scenario.nodes.length) {
+                scenario.nodes.forEach(function (spec) {
+                    if (!spec || !spec.config) return;
+                    var node = null;
+                    if (spec.id) {
+                        for (var i = 0; i < editor.nodes.length; i++) {
+                            if (editor.nodes[i].id === spec.id) { node = editor.nodes[i]; break; }
+                        }
+                    }
+                    if (!node && spec.op) node = nodeByOp(spec.op);
+                    if (!node) return;
+                    var data = node.item && node.item.data;
+                    var inst = exec && exec.getNodeInstance(node.id);
+                    Object.keys(spec.config).forEach(function (k) {
+                        var v = spec.config[k];
+                        if (data && data.config) data.config[k] = v;
+                        if (inst && typeof inst.setConfig === 'function') inst.setConfig(k, v);
+                    });
+                });
+            }
+
+            return true;
+        }
+
+        // ── run(seconds) ─────────────────────────────────────────────────
+        // Enter play mode (if not already in it), wait `seconds` seconds,
+        // then resolve. Awaiting this call guarantees the simulation has
+        // been running for at least `seconds` seconds when the Promise
+        // resolves (motor transients typically settle within 0.3 s; LPF
+        // settling adds 1/cutoffHz more — budget 3 s for 5 Hz LPF).
+        function run(seconds) {
+            return new Promise(function (resolve, reject) {
+                if (playState.mode !== 'play') {
+                    try {
+                        enterPlayMode();
+                    } catch (e) {
+                        reject(e);
+                        return;
+                    }
+                    if (playState.mode !== 'play') {
+                        reject(new Error('enterPlayMode failed — check bus connection'));
+                        return;
+                    }
+                }
+                setTimeout(resolve, Math.max(0, (seconds || 0) * 1000));
+            });
+        }
+
+        // ── readAmplitudes() ─────────────────────────────────────────────
+        // Returns a flat object mapping "<node-label>.<port>" to the last
+        // sample value for every live float stream in the graph.
+        // Muted (zero / stopped) streams are excluded.
+        // Useful for reading SyncDetect magnitude/phase outputs.
+        function readAmplitudes() {
+            var exec = playState.executor;
+            if (!exec) return null;
+            var result = {};
+            exec.streams.forEach(function (s) {
+                var allOut = exec._lastOutputs.get(s.nodeId);
+                if (!allOut) return;
+                var payload = allOut[s.port];
+                if (!payload || payload.muted) return;
+                if (!payload.samples || !payload.samples.length) return;
+                var node = exec.graph && exec.graph.getNode(s.nodeId);
+                var label = (node && (node.label || node.id)) || s.nodeId;
+                result[label + '.' + s.port] = payload.samples[payload.samples.length - 1];
+            });
+            return result;
+        }
+
+        // ── readFftPeak(channel, freqHz, windowHz) ────────────────────────
+        // Searches the FFT node whose label or id contains `channel`, then
+        // returns the peak magnitude within +/- (windowHz/2) of freqHz.
+        // `windowHz` defaults to 5 Hz.
+        function readFftPeak(channel, freqHz, windowHz) {
+            var exec = playState.executor;
+            if (!exec) return null;
+            var targetId = null;
+            if (editor.nodes) {
+                for (var ni = 0; ni < editor.nodes.length; ni++) {
+                    var n = editor.nodes[ni];
+                    var d = n && n.item && n.item.data;
+                    if (!d || (d.op !== 'spk.FFT' && d['@type'] !== 'spk.FFT')) continue;
+                    var lbl = n.label || n.id;
+                    if (n.id === channel || lbl === channel || lbl.indexOf(channel) >= 0) {
+                        targetId = n.id;
+                        break;
+                    }
+                }
+            }
+            if (!targetId) return null;
+            var allOut = exec._lastOutputs.get(targetId);
+            if (!allOut) return null;
+            var spec = allOut['spectrum'] || allOut['magnitude'] || allOut['out'];
+            if (!spec || !spec.samples || !spec.samples.length) return null;
+            var bins   = spec.samples;
+            var binHz  = exec.sampleRateHz / (bins.length * 2);
+            var half   = ((windowHz != null ? windowHz : 5) / 2);
+            var center = Math.round(freqHz / binHz);
+            var span   = Math.max(1, Math.ceil(half / binHz));
+            var lo     = Math.max(0, center - span);
+            var hi     = Math.min(bins.length - 1, center + span);
+            var peak   = 0;
+            for (var bi = lo; bi <= hi; bi++) {
+                if (bins[bi] > peak) peak = bins[bi];
+            }
+            return peak;
+        }
+
+        // ── exportData() ─────────────────────────────────────────────────
+        // Returns a JSON string containing the last payload for every stream.
+        // Float32Array buffers are serialised as plain arrays for JSON compat.
+        function exportData() {
+            var exec = playState.executor;
+            if (!exec) return null;
+            var snap = { timestamp: Date.now(), sampleRateHz: exec.sampleRateHz, streams: {} };
+            exec.streams.forEach(function (s) {
+                var allOut = exec._lastOutputs.get(s.nodeId);
+                if (!allOut) return;
+                var payload = allOut[s.port];
+                if (!payload) return;
+                var node = exec.graph && exec.graph.getNode(s.nodeId);
+                var label = (node && (node.label || node.id)) || s.nodeId;
+                var key = label + '.' + s.port;
+                if (payload.samples) {
+                    snap.streams[key] = {
+                        type: 'float', muted: !!payload.muted,
+                        samples: Array.from(payload.samples),
+                    };
+                } else if (payload.x !== undefined) {
+                    snap.streams[key] = {
+                        type: 'vec3', muted: !!payload.muted,
+                        x: Array.from(payload.x),
+                        y: Array.from(payload.y),
+                        z: Array.from(payload.z),
+                    };
+                }
+            });
+            return JSON.stringify(snap);
+        }
+
+        // ── toggleGravity(enabled) ────────────────────────────────────────
+        // Enable or disable the WorldGravity node. When disabled the motor
+        // receives a zero gravity vector (microgravity). Instant effect.
+        function toggleGravity(enabled) {
+            var gNode = nodeByOp('spk.WorldGravity');
+            if (!gNode) return false;
+            var exec = playState.executor;
+            if (exec) exec.setNodeRunning(gNode.id, !!enabled);
+            return true;
+        }
+
+        // ── setFault(faultId, severity) ───────────────────────────────────
+        // faultId: "D1"|"D2"|"D3"|"D4" or full op id (spk.FaultPmsm.*)
+        // severity: 0..1  (0 disables the fault node)
+        function setFault(faultId, severity) {
+            var opId = FAULT_MAP[faultId] || faultId;
+            var fNode = nodeByOp(opId);
+            if (!fNode) return false;
+            var sev = (severity != null) ? severity : 0.5;
+            var fData = fNode.item && fNode.item.data;
+            if (fData && fData.config) fData.config.severity = sev;
+            var exec = playState.executor;
+            var finst = exec && exec.getNodeInstance(fNode.id);
+            if (finst && finst.setConfig) finst.setConfig('severity', sev);
+            if (exec) exec.setNodeRunning(fNode.id, sev > 0);
+            return true;
+        }
+
+        // ── reset() ───────────────────────────────────────────────────────
+        // Exit play mode and return a Promise that resolves once the executor
+        // has fully stopped (one animation frame after the RAF cancellation).
+        function reset() {
+            exitPlayMode();
+            return new Promise(function (resolve) { setTimeout(resolve, 100); });
+        }
+
+        // ── graphStatus() ─────────────────────────────────────────────────
+        // Returns a snapshot of the current mode, sample rate, and per-node
+        // running/muted state. Useful for an agent to inspect graph health
+        // before reading measurements.
+        function graphStatus() {
+            var exec = playState.executor;
+            var status = {
+                mode: playState.mode,
+                sampleRateHz: exec ? exec.sampleRateHz : 0,
+                nodes: [],
+                streams: exec ? exec.streams.map(function (s) {
+                    return { nodeId: s.nodeId, port: s.port, count: s.count, subs: s.subs };
+                }) : [],
+            };
+            if (editor.nodes) {
+                editor.nodes.forEach(function (n) {
+                    var d = n && n.item && n.item.data;
+                    status.nodes.push({
+                        id:      n.id,
+                        label:   n.label || n.id,
+                        op:      d ? (d.op || d['@type'] || '') : '',
+                        running: exec ? exec.isNodeRunning(n.id) : null,
+                        muted:   exec ? exec.isNodeMuted(n.id)   : null,
+                        config:  (d && d.config) ? Object.assign({}, d.config) : null,
+                    });
+                });
+            }
+            return status;
+        }
+
+        return {
+            configure:     configure,
+            run:           run,
+            readAmplitudes: readAmplitudes,
+            readFftPeak:   readFftPeak,
+            exportData:    exportData,
+            toggleGravity: toggleGravity,
+            setFault:      setFault,
+            reset:         reset,
+            graphStatus:   graphStatus,
+        };
+    })();
+
 })();

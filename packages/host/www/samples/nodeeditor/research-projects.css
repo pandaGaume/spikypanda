@@ -1,0 +1,105 @@
+/* SpikyPanda research projects: list + create form */
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0; padding: 0;
+    background: #0d1117; color: #d0d7de;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+    min-height: 100%;
+}
+
+.rp-header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 18px;
+    background: #161b22; border-bottom: 1px solid #30363d;
+}
+.rp-header h1 { margin: 0; font-size: 14px; font-weight: 600; color: #c9d1d9; }
+.rp-header .spacer { flex: 1; }
+.rp-header a {
+    color: #58a6ff; text-decoration: none; font-size: 12px;
+    padding: 4px 10px; border: 1px solid #30363d; border-radius: 4px;
+}
+.rp-header a:hover { background: #21262d; }
+
+.rp-main { padding: 18px; max-width: 1200px; margin: 0 auto; }
+
+.rp-section-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: #8b949e; margin: 18px 0 8px 0;
+}
+
+/* ── Project list table ─────────────────────────────────────────── */
+
+.rp-table {
+    width: 100%; border-collapse: collapse;
+    background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+    overflow: hidden;
+}
+.rp-table th, .rp-table td {
+    padding: 8px 12px; text-align: left; font-size: 12px;
+    border-bottom: 1px solid #21262d;
+}
+.rp-table th {
+    background: #1c2128; color: #8b949e;
+    font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px;
+}
+.rp-table tr:last-child td { border-bottom: none; }
+.rp-table tr:hover td { background: #1c2128; }
+.rp-table a.proj-link { color: #58a6ff; text-decoration: none; font-weight: 500; }
+.rp-table a.proj-link:hover { text-decoration: underline; }
+
+.rp-table-empty { color: #6e7681; font-style: italic; padding: 16px; }
+
+.rp-status {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.rp-status.draft  { background: #21262d; color: #8b949e; }
+.rp-status.ready  { background: #1f3a1f; color: #3fb950; }
+.rp-status.active { background: #1c3163; color: #58a6ff; }
+.rp-status.closed { background: #2f1c2f; color: #d29922; }
+
+.rp-progress-bar {
+    display: inline-block; width: 120px; height: 6px;
+    background: #21262d; border-radius: 3px; overflow: hidden;
+    vertical-align: middle; margin-right: 6px;
+}
+.rp-progress-bar > span {
+    display: block; height: 100%;
+    background: linear-gradient(90deg, #3fb950 0%, #58a6ff 100%);
+}
+
+/* ── Create form ────────────────────────────────────────────────── */
+
+.rp-form {
+    background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+    padding: 16px; max-width: 720px;
+}
+.rp-form .row { margin-bottom: 12px; }
+.rp-form label {
+    display: block; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.5px; color: #8b949e; margin-bottom: 4px;
+}
+.rp-form input[type="text"], .rp-form textarea {
+    width: 100%; background: #0d1117;
+    border: 1px solid #30363d; color: #c9d1d9;
+    padding: 7px 10px; border-radius: 4px;
+    font-family: inherit; font-size: 13px;
+}
+.rp-form textarea { min-height: 84px; resize: vertical; font-family: ui-monospace, "SF Mono", Consolas, monospace; }
+.rp-form .actions { display: flex; gap: 8px; }
+.rp-form button {
+    background: #238636; color: #fff; border: none;
+    padding: 7px 16px; border-radius: 4px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.rp-form button:hover { background: #2ea043; }
+
+.rp-feedback {
+    margin-top: 10px; font-size: 12px;
+    padding: 8px 10px; border-radius: 4px;
+}
+.rp-feedback.ok    { background: #1f3a1f; color: #3fb950; }
+.rp-feedback.error { background: #3a1f1f; color: #f85149; }

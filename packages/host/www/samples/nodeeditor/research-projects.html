@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpikyPanda - Research Projects</title>
+    <link rel="stylesheet" href="research-projects.css" />
+</head>
+<body>
+    <header class="rp-header">
+        <h1>SpikyPanda &middot; Research Projects</h1>
+        <span class="spacer"></span>
+        <a href="nodeeditor-mcp.html">Scratch console</a>
+        <a href="index.html">Node editor</a>
+    </header>
+
+    <main class="rp-main">
+        <div class="rp-section-title">Existing projects</div>
+        <div id="rp-list-container">
+            <div class="rp-table-empty">Loading...</div>
+        </div>
+
+        <div class="rp-section-title">Create a new project</div>
+        <form id="rp-create-form" class="rp-form" autocomplete="off">
+            <div class="row">
+                <label for="rp-name">Name</label>
+                <input id="rp-name" type="text" required maxlength="120" placeholder="e.g. gravity-sensitivity-atlas-Q2-2026" />
+            </div>
+            <div class="row">
+                <label for="rp-goal">Goal (one paragraph)</label>
+                <textarea id="rp-goal" required maxlength="2000"
+                          placeholder="What this project must establish, in one paragraph. The agent will derive prerequisites and hypotheses from this."></textarea>
+            </div>
+            <div class="row">
+                <label for="rp-notes">Notes (optional)</label>
+                <textarea id="rp-notes" maxlength="4000"
+                          placeholder="Priors, references, motivation, links to previous reports..."></textarea>
+            </div>
+            <div class="actions">
+                <button type="submit">Create &rarr;</button>
+            </div>
+            <div id="rp-feedback" class="rp-feedback" style="display: none;"></div>
+        </form>
+    </main>
+
+    <script src="research-projects.js"></script>
+</body>
+</html>

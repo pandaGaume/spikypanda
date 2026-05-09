@@ -1,0 +1,72 @@
+{
+    "scenario_configure_node": {
+        "description": "Met a jour la configuration d'un noeud du graphe SpikyPanda. Lire d'abord spk://scenario pour connaitre les noeuds actifs, puis fournir nodeId (ou opId) et un objet config dont les cles correspondent a l'attrSchema de l'op cible. Les valeurs sont propagees a la fois dans la config persistee et dans l'instance live de l'executeur.",
+        "properties": {
+            "nodeId":         "Identifiant d'instance (ex. 'node_3'). Prioritaire sur opId. Lire spk://scenario pour le decouvrir.",
+            "opId":           "Identifiant d'op (ex. 'spk.MotorPMSM', 'spk.FaultPmsm.Imbalance'). Resout vers le premier noeud du graphe ayant cet op.",
+            "config":         "Objet de cles attrSchema. Exemples : { speedTargetRps: 50 } pour fixer la vitesse cible a 50 rps (= f_mech 50 Hz, omega = 2*pi*50 rad/s, T = 20 ms)."
+        }
+    },
+    "scenario_describe_op": {
+        "description": "Renvoie la definition complete d'un type d'op : ports d'entree/sortie, attrSchema avec unites et bornes, defaultConfig. A appeler avant configure pour eviter d'envoyer une cle invalide.",
+        "properties": {
+            "opId": "Identifiant d'op a inspecter (ex. 'spk.MotorPMSM')."
+        }
+    },
+    "sim_run": {
+        "description": "Avance la simulation pendant `seconds` secondes. Entre en mode play si necessaire. Compter au minimum 3 s avant la premiere lecture : stabilisation FOC < 0.3 s, puis 5*tau du LPF SyncDetect (a 5 Hz, tau = 200 ms, donc 1 s pour 5 tau).",
+        "properties": {
+            "seconds": "Duree d'avance en secondes. Minimum 3 s. Pour moyenner le battement de phase d'un lock-in causes par le ripple FOC, prevoir 5 a 10 s."
+        }
+    },
+    "sim_toggle_gravity": {
+        "description": "Active ou desactive la source spk.WorldGravity. Test discriminant : un signal qui s'annule a OFF et reapparait a ON est entierement gravitaire. C'est ainsi que la signature gravitationnelle a ete confirmee sur accel_x dans gravity_sync_detect_results.md.",
+        "properties": {
+            "enabled": "true = gravite terrestre (1 g), false = microgravite (0 g)."
+        }
+    },
+    "measure_read_amplitudes": {
+        "description": "Renvoie la derniere valeur (instantanee) de chaque flux float actif, indexee par '<label>.<port>'. C'est ici qu'on lit la magnitude d'un SyncDetect : une valeur stable autour de la theorie indique un capteur correctement verrouille."
+    },
+    "measure_read_fft_peak": {
+        "description": "Lit l'amplitude du bin FFT le plus proche de freqHz. Resolution = Fs / N : a Fs = 5000 Hz et N = 8192, df = 0.61 Hz. Pour un battement de vitesse, augmenter windowHz pour ratisser les 1 a 3 bins voisins.",
+        "properties": {
+            "channel":  "Label du noeud FFT ou cle de stream (ex. 'FFT.spectrum').",
+            "freqHz":   "Frequence cible. Reperes utiles a 50 rps : f_mech = 50 Hz, 2*f_mech = 100 Hz (excentricite statique), BPFO ~ 87.3 Hz (defaut roulement avec 5 billes, angle de contact 0).",
+            "windowHz": "Demi-largeur de fenetre en Hz. Defaut = un bin. Valeur sure : 2*df = 1.2 Hz."
+        }
+    },
+    "measure_export_data": {
+        "description": "Sortie complete des Float32Array de chaque stream, serialisee en JSON. Charge importante (plusieurs Mo possibles) ; appeler une fois par experience, jamais en boucle."
+    },
+    "log_experiment": {
+        "description": "Enregistre durablement une experience dans ~/spikypanda-research/experiments/ : scenario (config moteur, gravite, defauts), measurements (amplitudes, pics FFT, deltas), notes. C'est la trace primaire qui alimente le dataset DotVision et les rapports.",
+        "properties": {
+            "scenario":     "Snapshot exact de la configuration : preset moteur, vitesse cible, etat gravite, defauts actifs (id + severity).",
+            "measurements": "Mesures numeriques. Convention : { 'accel_x_1x_mag': 0.0035, 'iq_1x_mag': 0.0008, 'fft_peak_50hz': 0.042, ... }.",
+            "notes":        "Texte libre : observations, biais detectes, conditions particulieres."
+        }
+    },
+    "write_hypothesis": {
+        "description": "Cree ou remplace un document d'hypothese en markdown. Utiliser pour tracer une question ouverte : ce qu'on suppose, comment on prevoit de la verifier, quels resultats trancheraient.",
+        "properties": {
+            "name":    "Nom court du document (sans extension).",
+            "content": "Corps complet en markdown. Inclure une section 'verification' avec le plan d'experience."
+        }
+    },
+    "write_report": {
+        "description": "Cree ou remplace un rapport en markdown sous ~/spikypanda-research/reports/. Genere par l'agent a partir des experiments et hypotheses ; le MCP n'est qu'un store, jamais le redacteur.",
+        "properties": {
+            "name":    "Nom court du rapport (sans extension).",
+            "content": "Corps complet en markdown. Format conseille : titre, contexte, protocole, tableau de resultats, interpretation, prochaine etape."
+        }
+    },
+    "add_dataset_entry": {
+        "description": "Ajoute une ligne au manifest dataset (~/spikypanda-research/dataset/manifest.json). Une entree = un echantillon labellise pret pour entrainement NN.",
+        "properties": {
+            "label":    "Classe de l'echantillon (ex. 'D1_imbalance_0p5_gravity_on'). Convention : <defaut>_<severity>_gravity_<on|off>.",
+            "features": "Vecteur de features scalaires : { accel_x_1x_mag: 0.0035, iq_1x_mag: 0.0008, accel_x_2x_mag: 0.0001, ... }.",
+            "source":   "Pointeur retour vers la donnee brute (id d'experience, chemin de fichier)."
+        }
+    }
+}
