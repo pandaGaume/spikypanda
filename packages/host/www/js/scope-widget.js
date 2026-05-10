@@ -14,6 +14,38 @@
 // container; styling is largely inline so the widget drops cleanly into
 // any host without requiring external CSS.
 
+// Compute nice round frequency tick positions for the FFT frequency axis.
+function _niceFreqTicks(fMin, fMax, maxCount) {
+    const range = fMax - fMin;
+    const steps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+    let step = steps[steps.length - 1];
+    for (const s of steps) {
+        if (range / s <= maxCount) { step = s; break; }
+    }
+    const out = [];
+    for (let f = Math.ceil(fMin / step) * step; f <= fMax + 1e-6; f += step) out.push(f);
+    return out;
+}
+
+// Format a frequency for axis labels.
+function _formatFreq(hz) {
+    if (hz >= 1000) return (hz / 1000).toFixed(hz >= 10000 ? 0 : 1) + "k";
+    if (hz >= 100)  return hz.toFixed(0);
+    if (hz >= 10)   return hz.toFixed(1);
+    return hz.toFixed(2);
+}
+
+// Format an amplitude value compactly.
+function _formatVal(v) {
+    if (!isFinite(v)) return "?";
+    const a = Math.abs(v);
+    if (a === 0) return "0";
+    if (a >= 1000 || (a < 0.001 && a > 0)) return v.toExponential(2);
+    if (a >= 100) return v.toFixed(1);
+    if (a >= 10)  return v.toFixed(2);
+    return v.toFixed(3);
+}
+
 const DEFAULT_SPAN_OPTIONS = [
     { value: 0.005, label: "5 ms" },
     { value: 0.01,  label: "10 ms" },
@@ -56,6 +88,10 @@ export class ScopeWidget {
         this._bufLen = opts.bufLen || BUF_LEN_DEFAULT;
         this._autoTrigger = opts.autoTrigger !== false;
 
+        // Frame-mode state (set by feed() when payload.frame is true).
+        this._frameDt = 0;
+        this._isFrameMode = false;
+
         // Ring buffer (raw scalar samples).
         this._buf = new Float32Array(this._bufLen);
         this._bufPos = 0;
@@ -72,6 +108,13 @@ export class ScopeWidget {
 
         this._buildDom();
         if (this._bus && this._streamId) this._wireBus();
+
+        // Register in the global scope-widget registry so window.__spk.captureScope()
+        // can look up widgets by title without needing a direct module reference.
+        if (this._title) {
+            if (!window._spkScopeWidgets) window._spkScopeWidgets = new Map();
+            window._spkScopeWidgets.set(this._title, this);
+        }
     }
 
     // ---- Public API -----------------------------------------------------
@@ -104,7 +147,138 @@ export class ScopeWidget {
         if (this._bus && this._streamId) {
             try { this._bus.unsubscribe(this._streamId); } catch (_e) { /* ignore */ }
         }
+        if (this._title && window._spkScopeWidgets) window._spkScopeWidgets.delete(this._title);
         this._container.innerHTML = "";
+    }
+
+    /**
+     * Capture the current canvas frame as a PNG data URL (base64-encoded).
+     * Returns null if the canvas has not been rendered yet (zero dimensions).
+     * Used by window.__spk.captureScope() for the MCP measure_capture_scope tool.
+     */
+    getSnapshot() {
+        if (!this._canvas || !this._canvas.width || !this._canvas.height) return null;
+        return this._canvas.toDataURL("image/png");
+    }
+
+    /**
+     * Render the current buffer as a self-contained SVG string.
+     * Resolution-independent vector equivalent of _renderTime(). Uses a fixed
+     * 600x200 viewBox; colours and layout match the canvas renderer exactly.
+     * Returns null when there is no data to display.
+     */
+    getSvg() {
+        const W = 600, H = 200;
+        const ML = 48, MR = 6, MT = 6;
+        const MB = this._isFrameMode ? 22 : 8;
+        const PW = W - ML - MR;
+        const PH = H - MT - MB;
+
+        const lines = [];
+        const e = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+        lines.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`);
+        lines.push(`<rect width="${W}" height="${H}" fill="#0a0a1a"/>`);
+
+        const wantedN = this._isFrameMode
+            ? this._bufFilled
+            : (this._sampleRateHz > 0
+                ? Math.round(this._timeSpanS * this._sampleRateHz)
+                : this._bufFilled);
+        const n = Math.min(this._bufFilled, wantedN, this._bufLen);
+
+        if (this._muted || n < 2) {
+            const cy = MT + PH / 2;
+            lines.push(`<line x1="${ML}" y1="${cy}" x2="${ML + PW}" y2="${cy}" stroke="rgba(0,212,255,0.25)" stroke-width="1" stroke-dasharray="6 6"/>`);
+            lines.push(`<text x="${ML + PW / 2}" y="${cy - 6}" text-anchor="middle" font-family="sans-serif" font-size="11" fill="rgba(255,255,255,0.3)">— paused —</text>`);
+            lines.push(`</svg>`);
+            return lines.join("\n");
+        }
+
+        // Build display buffer (same logic as _renderTime).
+        let buf;
+        if (this._isFrameMode) {
+            buf = this._buf.subarray(0, n);
+        } else {
+            const searchN = Math.min(this._bufFilled, this._bufLen, 2 * n);
+            const searchBuf = new Float32Array(searchN);
+            const searchStart = (this._bufPos - searchN + this._bufLen) % this._bufLen;
+            for (let i = 0; i < searchN; i++) {
+                searchBuf[i] = this._buf[(searchStart + i) % this._bufLen];
+            }
+            let triggerOffset = -1;
+            if (this._autoTrigger) {
+                let mean = 0;
+                for (let k = 0; k < searchN; k++) mean += searchBuf[k];
+                mean /= searchN;
+                for (let k = searchN - 2; k > 0; k--) {
+                    if (searchBuf[k] >= mean && searchBuf[k - 1] < mean) {
+                        if (k + n <= searchN) { triggerOffset = k; break; }
+                    }
+                }
+            }
+            buf = new Float32Array(n);
+            const tailStart = searchN - n;
+            const src = triggerOffset >= 0 ? triggerOffset : tailStart;
+            for (let i = 0; i < n; i++) buf[i] = searchBuf[src + i];
+        }
+
+        // Amplitude range with padding.
+        let lo = Infinity, hi = -Infinity;
+        for (let k = 0; k < n; k++) {
+            if (buf[k] < lo) lo = buf[k];
+            if (buf[k] > hi) hi = buf[k];
+        }
+        if (!isFinite(lo) || hi - lo < 1e-6) {
+            const mid = isFinite(lo) ? lo : 0;
+            lo = mid - 1; hi = mid + 1;
+        }
+        const pad = (hi - lo) * 0.08;
+        lo -= pad; hi += pad;
+        const range = hi - lo;
+        const u = this._units ? " " + this._units : "";
+
+        // Y axis: 3 labeled levels.
+        const yLevels = [hi, (hi + lo) / 2, lo];
+        for (const lv of yLevels) {
+            const gy = Math.round(MT + PH * (1 - (lv - lo) / range));
+            lines.push(`<line x1="${ML}" y1="${gy}" x2="${ML + PW}" y2="${gy}" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>`);
+            lines.push(`<line x1="${ML - 4}" y1="${gy}" x2="${ML}" y2="${gy}" stroke="rgba(160,160,160,0.5)" stroke-width="1"/>`);
+            const labelY = Math.max(MT + 9, Math.min(H - 2, gy + 4));
+            lines.push(`<text x="${ML - 6}" y="${labelY}" text-anchor="end" font-family="monospace" font-size="10" fill="rgba(160,160,160,0.85)">${e(_formatVal(lv) + u)}</text>`);
+        }
+
+        // Signal trace.
+        const pts = [];
+        for (let j = 0; j < n; j++) {
+            const x = (ML + (j / (n - 1)) * PW).toFixed(1);
+            const y = (MT + PH * (1 - (buf[j] - lo) / range)).toFixed(1);
+            pts.push(x + "," + y);
+        }
+        lines.push(`<polyline points="${pts.join(" ")}" fill="none" stroke="#00d4ff" stroke-width="1.5" stroke-linejoin="round"/>`);
+
+        // Frequency axis (frame / FFT mode).
+        if (this._isFrameMode && this._frameDt > 0) {
+            const sr = 1 / this._frameDt;
+            const fftSize = 2 * (n + 1);
+            const fMin = sr / fftSize;
+            const fMax = n * sr / fftSize;
+            const ticks = _niceFreqTicks(fMin, fMax, 8);
+            for (const f of ticks) {
+                const xFrac = (f - fMin) / (fMax - fMin);
+                if (xFrac < -0.01 || xFrac > 1.01) continue;
+                const x = Math.round(ML + xFrac * PW);
+                lines.push(`<line x1="${x}" y1="${MT}" x2="${x}" y2="${MT + PH}" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>`);
+                lines.push(`<line x1="${x}" y1="${MT + PH}" x2="${x}" y2="${MT + PH + 4}" stroke="rgba(160,160,160,0.5)" stroke-width="1"/>`);
+                lines.push(`<text x="${x}" y="${MT + PH + 15}" text-anchor="middle" font-family="monospace" font-size="9" fill="rgba(160,160,160,0.8)">${_formatFreq(f)}</text>`);
+            }
+            lines.push(`<text x="${W - MR}" y="${H - 2}" text-anchor="end" font-family="monospace" font-size="9" fill="rgba(100,100,100,0.7)">Hz</text>`);
+        } else if (!this._isFrameMode) {
+            lines.push(`<text x="${W - MR}" y="${H - 2}" text-anchor="end" font-family="monospace" font-size="10" fill="rgba(160,160,160,0.7)">${this._timeSpanS.toFixed(3)} s</text>`);
+        }
+
+        lines.push(`</svg>`);
+        return lines.join("\n");
     }
 
     /** Switch to a different stream. Auto-subscribes if a bus is bound. */
@@ -124,8 +298,14 @@ export class ScopeWidget {
     setSampleRateHz(rate) { this._sampleRateHz = rate || 0; }
     setTimeSpanS(span) { if (isFinite(span) && span > 0) this._timeSpanS = span; }
     setTitle(title) {
+        // Keep the registry in sync when the title changes.
+        if (this._title && window._spkScopeWidgets) window._spkScopeWidgets.delete(this._title);
         this._title = title || "";
         if (this._titleEl) this._titleEl.textContent = this._title;
+        if (this._title) {
+            if (!window._spkScopeWidgets) window._spkScopeWidgets = new Map();
+            window._spkScopeWidgets.set(this._title, this);
+        }
     }
     setUnits(u) { this._units = u || ""; }
 
@@ -166,6 +346,8 @@ export class ScopeWidget {
             this._bufFilled = m;
             if (m > 0) this._lastValue = samples[m - 1];
             this._isFrameMode = true;
+            // Store the sample interval so _renderTime() can compute frequencies.
+            if (payload.dt && payload.dt > 0) this._frameDt = payload.dt;
         } else {
             for (let i = 0; i < n; i++) {
                 const v = samples[i];
@@ -230,8 +412,8 @@ export class ScopeWidget {
 
         const canvas = document.createElement("canvas");
         canvas.className = "scope-widget-canvas";
-        canvas.width = 900;
-        canvas.height = 200;
+        // Pixel buffer dimensions are set dynamically by _renderTime() using
+        // clientWidth * devicePixelRatio to avoid blur on HiDPI displays.
         canvas.style.cssText =
             "display:block; width:100%; height:200px; " +
             "background:var(--log-bg, #0a0a1a); " +
@@ -267,18 +449,36 @@ export class ScopeWidget {
 
     _renderTime() {
         const c = this._canvas;
-        const w = c.width, h = c.height;
         const ctx = c.getContext("2d");
-        ctx.fillStyle = "#0a0a1a";
-        ctx.fillRect(0, 0, w, h);
+        const dpr = window.devicePixelRatio || 1;
 
-        // Grid lines.
-        ctx.strokeStyle = "rgba(255,255,255,0.07)";
-        ctx.lineWidth = 1;
-        for (let g = 0; g <= 4; g++) {
-            const gy = (g / 4) * h;
-            ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
+        // Resize the canvas pixel buffer to match the CSS layout size * DPR.
+        // This prevents bilinear upscaling blur on HiDPI / Retina displays.
+        const cssW = c.clientWidth  || 600;
+        const cssH = c.clientHeight || 200;
+        const bufW = Math.round(cssW * dpr);
+        const bufH = Math.round(cssH * dpr);
+        if (c.width !== bufW || c.height !== bufH) {
+            c.width  = bufW;
+            c.height = bufH;
         }
+
+        // All drawing coordinates below are in CSS pixels; the DPR scale is
+        // applied once via setTransform so every measurement stays readable.
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const W = cssW, H = cssH;
+
+        // Layout margins. Left is wide enough for Y-axis labels; bottom
+        // grows in frame mode to make room for the frequency axis.
+        const ML = 48;
+        const MR = 6;
+        const MT = 6;
+        const MB = this._isFrameMode ? 22 : 8;
+        const PW = W - ML - MR;   // plot area width  (CSS px)
+        const PH = H - MT - MB;   // plot area height (CSS px)
+
+        ctx.fillStyle = "#0a0a1a";
+        ctx.fillRect(0, 0, W, H);
 
         const wantedN = this._isFrameMode
             ? this._bufFilled
@@ -287,97 +487,144 @@ export class ScopeWidget {
                 : this._bufFilled);
         const n = Math.min(this._bufFilled, wantedN, this._bufLen);
 
-        // Muted (source paused): draw a dim flat line at zero centre.
+        // Muted or no data: draw a dim flat centre line.
         if (this._muted || n < 2) {
             ctx.strokeStyle = "rgba(0,212,255,0.25)";
             ctx.lineWidth = 1;
             ctx.setLineDash([6, 6]);
             ctx.beginPath();
-            ctx.moveTo(0, h / 2);
-            ctx.lineTo(w, h / 2);
+            ctx.moveTo(ML, MT + PH / 2);
+            ctx.lineTo(ML + PW, MT + PH / 2);
             ctx.stroke();
             ctx.setLineDash([]);
             ctx.fillStyle = "rgba(255,255,255,0.3)";
             ctx.font = "11px sans-serif";
             ctx.textAlign = "center";
-            ctx.fillText("— paused —", w / 2, h / 2 - 6);
+            ctx.fillText("— paused —", ML + PW / 2, MT + PH / 2 - 6);
             ctx.textAlign = "left";
             return;
         }
 
-        // Pull a sliding window large enough to allow the auto-trigger
-        // search to look one full window backwards from "newest" without
-        // running out of samples. We always render the most recent n
-        // samples by default, and shift the start backwards to a rising
-        // mid-line crossing when one is available within the search range.
-        const searchN = Math.min(this._bufFilled, this._bufLen, 2 * n);
-        const searchBuf = new Float32Array(searchN);
-        const searchStart = (this._bufPos - searchN + this._bufLen) % this._bufLen;
-        for (let i = 0; i < searchN; i++) {
-            searchBuf[i] = this._buf[(searchStart + i) % this._bufLen];
-        }
+        // Build the display buffer.
+        let buf;
+        if (this._isFrameMode) {
+            // Frame data sits at _buf[0..n-1] with no circular wrapping.
+            buf = this._buf.subarray(0, n);
+        } else {
+            // Rolling mode: optionally align to a rising AC zero-crossing so
+            // a periodic signal appears stationary while the buffer rolls.
+            const searchN = Math.min(this._bufFilled, this._bufLen, 2 * n);
+            const searchBuf = new Float32Array(searchN);
+            const searchStart = (this._bufPos - searchN + this._bufLen) % this._bufLen;
+            for (let i = 0; i < searchN; i++) {
+                searchBuf[i] = this._buf[(searchStart + i) % this._bufLen];
+            }
 
-        // Auto-trigger : align the visible window to the most recent
-        // rising zero-crossing of the AC component, so a periodic signal
-        // appears stationary even while the buffer rolls in continuously.
-        // Falls back to "render the latest n samples" when disabled, or
-        // when no crossing is found (DC, transient, very short window).
-        let triggerOffset = -1;
-        if (this._autoTrigger) {
-            let mean = 0;
-            for (let k = 0; k < searchN; k++) mean += searchBuf[k];
-            mean /= searchN;
-            // Walk backwards from the newest end, looking for the most
-            // recent sample that crosses upward through the mean. Stop
-            // as soon as we find one whose start-of-window leaves enough
-            // room for n samples.
-            for (let k = searchN - 2; k > 0; k--) {
-                if (searchBuf[k] >= mean && searchBuf[k - 1] < mean) {
-                    if (k + n <= searchN) { triggerOffset = k; break; }
+            let triggerOffset = -1;
+            if (this._autoTrigger) {
+                let mean = 0;
+                for (let k = 0; k < searchN; k++) mean += searchBuf[k];
+                mean /= searchN;
+                for (let k = searchN - 2; k > 0; k--) {
+                    if (searchBuf[k] >= mean && searchBuf[k - 1] < mean) {
+                        if (k + n <= searchN) { triggerOffset = k; break; }
+                    }
                 }
             }
-        }
-        const buf = new Float32Array(n);
-        if (triggerOffset >= 0) {
-            for (let i = 0; i < n; i++) buf[i] = searchBuf[triggerOffset + i];
-        } else {
-            // Fallback : latest n samples (the classic rolling window).
-            const tailStart = searchN - n;
-            for (let i = 0; i < n; i++) buf[i] = searchBuf[tailStart + i];
+            buf = new Float32Array(n);
+            if (triggerOffset >= 0) {
+                for (let i = 0; i < n; i++) buf[i] = searchBuf[triggerOffset + i];
+            } else {
+                const tailStart = searchN - n;
+                for (let i = 0; i < n; i++) buf[i] = searchBuf[tailStart + i];
+            }
         }
 
+        // Compute the visible amplitude range with a small padding.
         let lo = Infinity, hi = -Infinity;
         for (let k = 0; k < n; k++) {
-            const v = buf[k];
-            if (v < lo) lo = v;
-            if (v > hi) hi = v;
+            if (buf[k] < lo) lo = buf[k];
+            if (buf[k] > hi) hi = buf[k];
         }
-        // Flat or empty signal: use a symmetric ±1 range centred on the value.
         if (!isFinite(lo) || hi - lo < 1e-6) {
             const mid = isFinite(lo) ? lo : 0;
             lo = mid - 1; hi = mid + 1;
         }
         const pad = (hi - lo) * 0.08;
         lo -= pad; hi += pad;
+        const range = hi - lo;
 
+        // Y axis: 3 labeled levels (top / mid / bottom).
+        const yLevels = [hi, (hi + lo) / 2, lo];
+        const u = this._units ? " " + this._units : "";
+        ctx.font = "10px monospace";
+        ctx.textAlign = "right";
+        for (const lv of yLevels) {
+            const gy = Math.round(MT + PH * (1 - (lv - lo) / range));
+            // Horizontal grid line spanning the plot area.
+            ctx.strokeStyle = "rgba(255,255,255,0.07)";
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ML, gy); ctx.lineTo(ML + PW, gy); ctx.stroke();
+            // Short tick mark to the left of the plot.
+            ctx.strokeStyle = "rgba(160,160,160,0.5)";
+            ctx.beginPath(); ctx.moveTo(ML - 4, gy); ctx.lineTo(ML, gy); ctx.stroke();
+            // Label, clamped so it stays within the canvas at the extremes.
+            const labelY = Math.max(MT + 9, Math.min(H - 2, gy + 4));
+            ctx.fillStyle = "rgba(160,160,160,0.85)";
+            ctx.fillText(_formatVal(lv) + u, ML - 6, labelY);
+        }
+        ctx.textAlign = "left";
+
+        // Signal trace.
         ctx.strokeStyle = "#00d4ff";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         for (let j = 0; j < n; j++) {
-            const x = (j / (n - 1)) * w;
-            const y = h - ((buf[j] - lo) / (hi - lo)) * h;
+            const x = ML + (j / (n - 1)) * PW;
+            const y = MT + PH * (1 - (buf[j] - lo) / range);
             if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.stroke();
 
-        // Y labels: top and bottom amplitude, time span bottom-right.
-        ctx.fillStyle = "rgba(160,160,160,0.85)";
-        ctx.font = "10px monospace";
-        const u = this._units ? " " + this._units : "";
-        ctx.fillText(hi.toFixed(3) + u, 4, 11);
-        ctx.fillText(lo.toFixed(3) + u, 4, h - 4);
-        if (!this._isFrameMode) {
-            ctx.fillText(this._timeSpanS.toFixed(3) + " s", w - 60, h - 4);
+        // Frequency axis (FFT / frame mode only).
+        if (this._isFrameMode && this._frameDt > 0) {
+            // SpikyPanda FFT convention: n bins, bin k has frequency (k+1)*sr/fftSize,
+            // with fftSize = 2*(n+1). Bin 0 is at fMin, bin n-1 is at fMax.
+            const sr = 1 / this._frameDt;
+            const fftSize = 2 * (n + 1);
+            const fMin = sr / fftSize;
+            const fMax = n * sr / fftSize;
+            const ticks = _niceFreqTicks(fMin, fMax, 8);
+
+            ctx.font = "9px monospace";
+            ctx.textAlign = "center";
+            for (const f of ticks) {
+                const xFrac = (f - fMin) / (fMax - fMin);
+                if (xFrac < -0.01 || xFrac > 1.01) continue;
+                const x = Math.round(ML + xFrac * PW);
+                // Faint vertical grid line through the plot area.
+                ctx.strokeStyle = "rgba(255,255,255,0.05)";
+                ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(x, MT); ctx.lineTo(x, MT + PH); ctx.stroke();
+                // Short tick mark below the plot.
+                ctx.strokeStyle = "rgba(160,160,160,0.5)";
+                ctx.beginPath(); ctx.moveTo(x, MT + PH); ctx.lineTo(x, MT + PH + 4); ctx.stroke();
+                // Frequency label.
+                ctx.fillStyle = "rgba(160,160,160,0.8)";
+                ctx.fillText(_formatFreq(f), x, MT + PH + 15);
+            }
+            // Unit hint at far right.
+            ctx.textAlign = "right";
+            ctx.fillStyle = "rgba(100,100,100,0.7)";
+            ctx.fillText("Hz", W - MR, H - 2);
+            ctx.textAlign = "left";
+        } else if (!this._isFrameMode) {
+            // Time span label in the bottom-right corner.
+            ctx.fillStyle = "rgba(160,160,160,0.7)";
+            ctx.font = "10px monospace";
+            ctx.textAlign = "right";
+            ctx.fillText(this._timeSpanS.toFixed(3) + " s", W - MR, H - 2);
+            ctx.textAlign = "left";
         }
     }
 

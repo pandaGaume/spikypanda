@@ -155,23 +155,25 @@ export class SpkResearchAdapter extends McpAdapterBase {
         const ts = (entry["timestamp"] as string | undefined) ?? new Date().toISOString();
         const id = (entry["id"] as string | undefined) ?? this._isoToId(ts);
         const safeId = this._safeName(id);
-        const path = this._resolveSafe(this._experimentsDir, safeId + ".json");
         const payload = { id: safeId, timestamp: ts, ...entry };
-        await writeFile(path, JSON.stringify(payload, null, 2), "utf8");
 
-        // When the entry references a project, dual-write into the project's
-        // own experiments/ folder so the project workspace can render its
-        // experiments without scanning the global directory.
-        let projectPath: string | undefined;
+        // When the entry references a project, write exclusively into the
+        // project's own experiments/ folder. Writing to the global root as
+        // well would create duplicates; consumers that need all experiments
+        // for a project should scope their query to the project directory.
         const projectId = entry["projectId"] as string | undefined;
         if (projectId) {
             const safeProjectId = this._safeName(projectId);
             const projDir = join(this._root, "projects", safeProjectId, "experiments");
             await mkdir(projDir, { recursive: true });
-            projectPath = join(projDir, safeId + ".json");
+            const projectPath = join(projDir, safeId + ".json");
             await writeFile(projectPath, JSON.stringify(payload, null, 2), "utf8");
+            return { id: safeId, path: projectPath, projectPath };
         }
-        return { id: safeId, path, projectPath };
+
+        const path = this._resolveSafe(this._experimentsDir, safeId + ".json");
+        await writeFile(path, JSON.stringify(payload, null, 2), "utf8");
+        return { id: safeId, path };
     }
 
     public async getExperiments(limit?: number, since?: string): Promise<Array<Record<string, unknown>>> {
@@ -245,6 +247,58 @@ export class SpkResearchAdapter extends McpAdapterBase {
     public async listReports(): Promise<Array<{ name: string; modifiedIso: string; sizeBytes: number }>> {
         await this.ensureInitialized();
         return this._listDir(this._reportsDir, ".md");
+    }
+
+    public async saveFigure(
+        name: string,
+        dataUrl: string,
+        projectId?: string,
+    ): Promise<{ name: string; path: string; relativePath: string }> {
+        await this.ensureInitialized();
+        const safe = this._safeName(name);
+        // Strip the data URI prefix (data:image/png;base64,<data> or data:image/...;base64,<data>).
+        const commaIdx = dataUrl.indexOf(",");
+        if (commaIdx === -1) throw new Error("dataUrl does not contain a valid data URI comma separator.");
+        const b64 = dataUrl.slice(commaIdx + 1);
+        const buf = Buffer.from(b64, "base64");
+
+        let figuresDir: string;
+        let relativePath: string;
+        if (projectId) {
+            const safeProjectId = this._safeName(projectId);
+            figuresDir = join(this._root, "projects", safeProjectId, "reports", "figures");
+            relativePath = "figures/" + safe + ".png";
+        } else {
+            figuresDir = join(this._reportsDir, "figures");
+            relativePath = "figures/" + safe + ".png";
+        }
+        await mkdir(figuresDir, { recursive: true });
+        const path = join(figuresDir, safe + ".png");
+        await writeFile(path, buf);
+        return { name: safe, path, relativePath };
+    }
+
+    public async saveSvg(
+        name: string,
+        content: string,
+        projectId?: string,
+    ): Promise<{ name: string; path: string; relativePath: string }> {
+        await this.ensureInitialized();
+        const safe = this._safeName(name);
+        let figuresDir: string;
+        let relativePath: string;
+        if (projectId) {
+            const safeProjectId = this._safeName(projectId);
+            figuresDir   = join(this._root, "projects", safeProjectId, "reports", "figures");
+            relativePath = "figures/" + safe + ".svg";
+        } else {
+            figuresDir   = join(this._reportsDir, "figures");
+            relativePath = "figures/" + safe + ".svg";
+        }
+        await mkdir(figuresDir, { recursive: true });
+        const path = join(figuresDir, safe + ".svg");
+        await writeFile(path, content, "utf8");
+        return { name: safe, path, relativePath };
     }
 
     public async addDatasetEntry(entry: Record<string, unknown>): Promise<{ count: number }> {

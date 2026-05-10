@@ -26,12 +26,12 @@
         }
     },
     "measure_read_amplitudes": {
-        "description": "Returns the latest sample of every active float stream, keyed by '<label>.<port>'. This is where SyncDetect magnitude is read: a stable value matching theory means the lock-in is correctly locked."
+        "description": "Returns the latest sample of every active float stream, keyed by '<node_id>.<port>'. node_id is the only canonical reference; labels are user-facing display strings and not unique. Cross-reference with scenario_list_nodes (id, op, label) to map ids to semantic meaning."
     },
     "measure_read_fft_peak": {
-        "description": "Reads the magnitude of the FFT bin closest to freqHz. Resolution = Fs / N: at Fs = 5000 Hz, N = 8192, df = 0.61 Hz. Increase windowHz to absorb 1 to 3 neighbouring bins when the peak shifts due to speed ripple.",
+        "description": "Reads the magnitude of the FFT bin closest to freqHz for a specific spk.FFT node. Resolution = Fs / N: at Fs = 5000 Hz, N = 8192, df = 0.61 Hz. Increase windowHz to absorb speed-ripple drift.",
         "properties": {
-            "channel":  "FFT node label or stream key (e.g. 'FFT.spectrum').",
+            "nodeId":   "Target spk.FFT node id (e.g. 'node_22'). Resolve via scenario_list_nodes filtered by op = spk.FFT. Labels are NEVER accepted as keys: they are not unique.",
             "freqHz":   "Target frequency. At 50 rps: f_mech = 50 Hz, 2*f_mech = 100 Hz (static eccentricity), BPFO ~ 87.3 Hz (5-ball bearing, 0 deg contact angle).",
             "windowHz": "Half-width window in Hz. Default = one bin. Safe value: 2*df = 1.2 Hz."
         }

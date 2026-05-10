@@ -22,6 +22,9 @@
     var grammarSel   = document.getElementById("mcp-grammar");
     var researchInp  = document.getElementById("mcp-research-dir");
     var researchBtn  = document.getElementById("mcp-research-apply");
+    var loadBtn      = document.getElementById("mcp-load-btn");
+    var loadInput    = document.getElementById("mcp-load-input");
+    var loadStatus   = document.getElementById("mcp-load-status");
     var graphView    = document.getElementById("graph-view");
     var graphToggle  = document.getElementById("graph-toggle");
     var logEl        = document.getElementById("agent-log");
@@ -301,6 +304,66 @@
     researchInp.addEventListener("keydown", function (ev) {
         if (ev.key === "Enter") { ev.preventDefault(); void applyResearchDir(); }
     });
+
+    // ── Load graph (.spikypanda) ────────────────────────────────────
+
+    function setLoadStatus(level, msg) {
+        if (!loadStatus) return;
+        var color = level === "ok" ? "#3fb950" : level === "error" ? "#f85149" : "#8b949e";
+        loadStatus.style.color = color;
+        loadStatus.textContent = msg || "";
+    }
+
+    function loadGraphFromText(text, sourceLabel) {
+        if (!window.__spk || typeof window.__spk.loadGraph !== "function") {
+            setLoadStatus("error", "Editor not ready (window.__spk.loadGraph missing).");
+            log("error", "Cannot load: editor not ready.");
+            return;
+        }
+        try {
+            window.__spk.loadGraph(text);
+            var nodes = window.__spk.graphStatus && window.__spk.graphStatus().nodes;
+            var n = nodes ? nodes.length : 0;
+            setLoadStatus("ok", "Loaded " + n + " nodes from " + sourceLabel);
+            log("ok", "Graph loaded: " + sourceLabel + " (" + n + " nodes)");
+        } catch (e) {
+            setLoadStatus("error", "Load failed: " + ((e && e.message) || String(e)));
+            log("error", "Graph load failed: " + ((e && e.message) || String(e)));
+        }
+    }
+
+    loadBtn.addEventListener("click", function () { loadInput.click(); });
+    loadInput.addEventListener("change", function () {
+        var f = loadInput.files && loadInput.files[0];
+        if (!f) return;
+        var reader = new FileReader();
+        reader.onload  = function () { loadGraphFromText(String(reader.result), f.name); };
+        reader.onerror = function () { setLoadStatus("error", "FileReader error"); };
+        reader.readAsText(f);
+        // Reset value so picking the same file twice still triggers change.
+        loadInput.value = "";
+    });
+
+    // ── Auto-load via ?graph=<name> (looks under /data/graphs/) ─────
+    var autoGraph = new URLSearchParams(window.location.search).get("graph");
+    if (autoGraph) {
+        var url = "/data/graphs/" + encodeURIComponent(autoGraph) + ".spikypanda";
+        window.addEventListener("DOMContentLoaded", function () {
+            // Wait one frame for nodeeditor.js to install window.__spk.
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                    fetch(url).then(function (r) {
+                        if (!r.ok) throw new Error("HTTP " + r.status);
+                        return r.text();
+                    }).then(function (text) {
+                        loadGraphFromText(text, "library/" + autoGraph);
+                    }).catch(function (e) {
+                        setLoadStatus("error", "Auto-load failed: " + ((e && e.message) || String(e)));
+                    });
+                });
+            });
+        });
+    }
 
     connectBtn.addEventListener("click", function () {
         (server ? disconnect() : connect()).catch(function (e) {

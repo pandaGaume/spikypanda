@@ -2,18 +2,18 @@
     "mcpServers": {
         "spikypanda-sim": {
             "type": "sse",
-            "url": "http://localhost:8080/nodeeditor/mcp",
-            "description": "Live SpikyPanda graph executor (browser-side). Requires `npm run server` and a connected nodeeditor-mcp.html (or research-project.html) page."
+            "url": "http://localhost:8080/nodeeditor/sse",
+            "description": "Live SpikyPanda graph executor (browser-side). Requires npm run server and a connected nodeeditor-mcp.html page."
         },
         "spikypanda-research": {
             "type": "sse",
-            "url": "http://localhost:8080/research/mcp",
-            "description": "Persistent research store (filesystem). Root directory editable at runtime via the page UI; in-process provider hosted by `npm run server`."
+            "url": "http://localhost:8080/research/sse",
+            "description": "Persistent research store (filesystem). In-process provider hosted by npm run server."
         },
         "spikypanda-projects": {
             "type": "sse",
-            "url": "http://localhost:8080/projects/mcp",
-            "description": "Research project lifecycle: create, define prerequisites and hypotheses, drive the matrix, record artifacts. The agent composes prerequisites from the project_list_check_kinds catalogue."
+            "url": "http://localhost:8080/projects/sse",
+            "description": "Research project lifecycle: prerequisites, hypotheses, matrix, artifacts."
         }
     }
 }

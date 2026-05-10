@@ -138,14 +138,51 @@ export class GraphExecutor {
         // Fault and Environment nodes have no runtime class, so topoSort
         // excludes them from _order. Register them in _sourceRunning here
         // so isNodeRunning() and setNodeRunning() work for the editor's
-        // enable/disable toggle. They start enabled (true).
+        // enable/disable toggle. Use the design-time enabled state saved in
+        // the graph JSON so the simulation starts in the pre-configured state.
         this._graph.listNodes().forEach((n) => {
             if (this._sourceRunning.has(n.id)) return;
             const op = findOp(n.op);
             if (!op) return;
             if (op.category === "Fault" || op.category === "Environment") {
-                this._sourceRunning.set(n.id, true);
+                // n.enabled defaults to true for graphs saved before this
+                // field was introduced (backward compatible).
+                this._sourceRunning.set(n.id, n.enabled !== false);
             }
+        });
+
+        // Phase C: wire fault nodes into each MotorPMSM runtime.
+        // The MotorPMSM defers fault instantiation to build time so that
+        // configure_node changes to fault severity take effect on the next
+        // sim_reset without needing to reload the graph.
+        // For each MotorPMSM node, collect all nodes connected to its
+        // fault_* input ports and pass their op + config to setFaultNodes().
+        this._graph.listNodes().forEach((motorNode) => {
+            if (motorNode.op !== "spk.MotorPMSM") return;
+            const motorRuntime = this._instances.get(motorNode.id);
+            if (!motorRuntime || typeof motorRuntime.setFaultNodes !== "function") return;
+
+            const faultNodes = [];
+            // fault_0 … fault_3 are the variadic input slots.
+            for (let slot = 0; slot <= 3; slot++) {
+                const inbound = this._graph.getInbound(motorNode.id, "fault_" + slot);
+                for (const edge of inbound) {
+                    const faultNode = this._graph.getNode(edge.from.nodeId);
+                    if (!faultNode) continue;
+                    // Use a live getter so executor.setNodeRunning() on a fault
+                    // node takes effect immediately without rebuilding the sim.
+                    // _buildFaults wraps each fault's postStep to check this
+                    // flag on every physics tick.
+                    const faultNodeId = faultNode.id;
+                    const executorRef = this;
+                    faultNodes.push({
+                        op: faultNode.op,
+                        config: faultNode.config,
+                        get enabled() { return executorRef._sourceRunning.get(faultNodeId) !== false; },
+                    });
+                }
+            }
+            motorRuntime.setFaultNodes(faultNodes);
         });
 
         // Register one stream per output port. Use the graph's ACTUAL port list

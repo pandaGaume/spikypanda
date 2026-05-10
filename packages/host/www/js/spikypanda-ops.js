@@ -190,7 +190,7 @@ const MOTOR_PMSM = {
         pwmFrequencyHz: 20000,
         // Gravity context.
         orientation:  "horizontal",   // horizontal | verticalUp | verticalDown
-        gravityField: "earth",         // earth | microgravity
+        gravityField: "none",           // display-only; wired WorldGravity overrides each tick
         // Env enables (full Phase 1 pipeline by default).
         enableRotorSag:           true,
         enableBearingPreload:     true,
@@ -211,6 +211,7 @@ const MOTOR_PMSM = {
         { key: "pwmFrequencyHz",   label: "PWM freq (Hz)",           type: "int",    min: 1000, step: 1000  },
         {
             key: "orientation", label: "Motor orientation", type: "select",
+            disabledByPort: "bodyTransform",
             options: [
                 { value: "horizontal",   label: "Horizontal (shaft along world X)" },
                 { value: "verticalUp",   label: "Vertical, shaft up"                },
@@ -218,12 +219,14 @@ const MOTOR_PMSM = {
             ],
         },
         {
-            key: "gravityField", label: "Gravity field", type: "select",
+            // Display-only: gravity source is determined by the wired WorldGravity
+            // input, not by this config field. Not editable by the user.
+            // Shows "none (microgravity)" when no wire is connected,
+            // or "→ connected" (via disabledByPort hint) when a wire is present.
+            key: "gravityField", label: "Gravity source", type: "string",
+            editable: false,
             disabledByPort: "gravity",
-            options: [
-                { value: "earth",         label: "Earth (1g, world -Z)" },
-                { value: "microgravity",  label: "Microgravity (0g)"     },
-            ],
+            default: "none (microgravity)",
         },
         { key: "enableRotorSag",            label: "Env: rotor sag",            type: "boolean" },
         { key: "enableBearingPreload",      label: "Env: bearing preload",      type: "boolean" },
@@ -1003,12 +1006,30 @@ export function buildNodeDef(op, nodeId) {
         // as the panel header so the user knows what they are editing.
         getDisplayName: function () { return config.label || op.label; },
         getProperties: function () {
-            return (op.attrSchema || []).map(function (s) {
-                const portOverridden = s.disabledByPort && _connectedInputs.has(s.disabledByPort);
+            // Every node gets a top-of-panel rename row. An empty value
+            // falls back to the op label (default behavior). Ops that
+            // declare their own "label" entry in attrSchema (some sinks)
+            // override this generic row.
+            const hasOwnLabelRow = (op.attrSchema || []).some(function (s) { return s.key === "label"; });
+            const labelRow = hasOwnLabelRow ? null : {
+                key:      "label",
+                value:    config.label || op.label,
+                editable: true,
+                type:     "string",
+                hint:     "Optional rename. Empty = " + op.label + ".",
+            };
+            const userRows = (op.attrSchema || []).map(function (s) {
+                const portOverridden  = s.disabledByPort && _connectedInputs.has(s.disabledByPort);
+                const alwaysReadOnly  = s.editable === false;
+                // Display value: wired port wins (shows hint instead), then static
+                // default for read-only schema fields, then the live config value.
+                const displayValue = portOverridden  ? null
+                                   : alwaysReadOnly  ? (s.default !== undefined ? s.default : "")
+                                   :                   config[s.key];
                 const entry = {
                     key:      s.key,
-                    value:    config[s.key],
-                    editable: !portOverridden,
+                    value:    displayValue,
+                    editable: !portOverridden && !alwaysReadOnly,
                     // "select" gets a native <select> dropdown in the panel.
                     // "int" maps to "number" with integer validation in setProperty.
                     type: s.type === "boolean" ? "boolean"
@@ -1020,6 +1041,7 @@ export function buildNodeDef(op, nodeId) {
                 if (portOverridden) entry.hint = "→ controlled by wired input";
                 return entry;
             });
+            return labelRow ? [labelRow].concat(userRows) : userRows;
         },
         notifyPortConnected: function (portName, connected) {
             if (connected) _connectedInputs.add(portName);
@@ -1028,6 +1050,9 @@ export function buildNodeDef(op, nodeId) {
         setProperty: function (key, value) {
             const s = (op.attrSchema || []).find((x) => x.key === key);
             if (!s) { config[key] = value; return; }
+            // Read-only schema fields (editable: false) are display-only.
+            // Silently ignore writes so callers get no false impression of control.
+            if (s.editable === false) return;
             let v = value;
             if (s.type === "number" || s.type === "int") {
                 v = (typeof v === "number") ? v : parseFloat(v);
@@ -1058,7 +1083,7 @@ export function buildNodeDef(op, nodeId) {
         // loader can reconstruct the exact node class without any other
         // context.  "op" is kept for backward compatibility with older files.
         serialize: function () {
-            return {
+            const blob = {
                 "@type": this.op,   // type discriminant — primary key for deserialization
                 op:      this.op,   // kept for backward compat + human readability
                 domain:  this.domain,
@@ -1066,6 +1091,11 @@ export function buildNodeDef(op, nodeId) {
                 nodeId:  this.nodeId,
                 config:  JSON.parse(JSON.stringify(this.config)),
             };
+            // Persist design-time enabled state for IToggableNode (faults,
+            // environment processors) so the simulation can start with nodes
+            // already disabled without requiring manual toggling after Play.
+            if (isToggable) blob.enabled = _enabled;
+            return blob;
         },
         deserialize: function (blob) {
             if (!blob || typeof blob !== "object") return;
@@ -1080,6 +1110,10 @@ export function buildNodeDef(op, nodeId) {
                 // Replace, not merge: avoids stale keys from older versions.
                 Object.keys(this.config).forEach((k) => delete this.config[k]);
                 Object.assign(this.config, blob.config);
+            }
+            // Restore design-time enabled state persisted by serialize().
+            if (isToggable && typeof blob.enabled === "boolean") {
+                _enabled = blob.enabled;
             }
         },
     };

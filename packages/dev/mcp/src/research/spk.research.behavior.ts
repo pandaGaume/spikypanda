@@ -20,6 +20,8 @@ export class SpkResearchBehavior extends McpBehavior {
     public static readonly ToolListReports        = "list_reports";
     public static readonly ToolAddDatasetEntry    = "add_dataset_entry";
     public static readonly ToolGetDatasetManifest = "get_dataset_manifest";
+    public static readonly ToolSaveFigure         = "save_figure";
+    public static readonly ToolSaveSvg            = "save_svg";
 
     private readonly _researchAdapter: SpkResearchAdapter;
 
@@ -176,6 +178,48 @@ export class SpkResearchBehavior extends McpBehavior {
                 description: "Returns the full dataset manifest (every entry ever appended).",
                 inputSchema: { type: "object", properties: {}, required: [], additionalProperties: false },
             },
+            {
+                name: SpkResearchBehavior.ToolSaveFigure,
+                description:
+                    "Saves a base64 PNG data URL returned by measure_capture_scope (format='png') as a PNG file under " +
+                    "~/spikypanda-research/reports/figures/ (or the project equivalent). " +
+                    "Returns { name, path, relativePath } where relativePath (e.g. 'figures/fft_accelx_D1.png') " +
+                    "can be embedded directly in a markdown report: ![label](figures/name.png). " +
+                    "Typical workflow: measure_capture_scope (png) -> save_figure -> reference in write_report.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        name:      { type: "string",  description: "File name without extension (e.g. 'fft_accelx_D1_gravity_on')." },
+                        dataUrl:   { type: "string",  description: "Base64 PNG data URL from measure_capture_scope (data:image/png;base64,...)." },
+                        projectId: { type: "string",  description: "If set, save under projects/<id>/reports/figures/ instead of the global folder." },
+                    },
+                    required: ["name", "dataUrl"],
+                    additionalProperties: false,
+                },
+            },
+            {
+                name: SpkResearchBehavior.ToolSaveSvg,
+                description:
+                    "Saves an SVG string returned by measure_capture_scope (format='svg') or " +
+                    "measure_export_graph_svg as an SVG file under " +
+                    "~/spikypanda-research/reports/figures/ (or the project equivalent). " +
+                    "Returns { name, path, relativePath } where relativePath (e.g. 'figures/fft_accelx_D1.svg') " +
+                    "can be embedded directly in a markdown report: ![label](figures/name.svg). " +
+                    "SVG files are resolution-independent and preferred for printed reports. " +
+                    "Typical workflows: " +
+                    "measure_capture_scope (svg) -> save_svg -> reference in write_report; " +
+                    "measure_export_graph_svg -> save_svg -> reference in write_report.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        name:      { type: "string", description: "File name without extension (e.g. 'fft_accelx_D1_gravity_on')." },
+                        content:   { type: "string", description: "SVG string from measure_capture_scope (format=svg) or measure_export_graph_svg." },
+                        projectId: { type: "string", description: "If set, save under projects/<id>/reports/figures/ instead of the global folder." },
+                    },
+                    required: ["name", "content"],
+                    additionalProperties: false,
+                },
+            },
         ];
     }
 
@@ -234,6 +278,26 @@ export class SpkResearchBehavior extends McpBehavior {
                 case SpkResearchBehavior.ToolGetDatasetManifest: {
                     const m = await this._researchAdapter.getDatasetManifest();
                     return McpToolResults.json(m);
+                }
+                case SpkResearchBehavior.ToolSaveFigure: {
+                    const name      = args["name"]      as string | undefined;
+                    const dataUrl   = args["dataUrl"]   as string | undefined;
+                    const projectId = args["projectId"] as string | undefined;
+                    if (!name)    return McpToolResults.error("Missing required argument: name.");
+                    if (!dataUrl) return McpToolResults.error("Missing required argument: dataUrl.");
+                    if (!dataUrl.startsWith("data:")) return McpToolResults.error("dataUrl must be a valid data URI (starts with 'data:').");
+                    const out = await this._researchAdapter.saveFigure(name, dataUrl, projectId);
+                    return McpToolResults.json(out);
+                }
+                case SpkResearchBehavior.ToolSaveSvg: {
+                    const name      = args["name"]      as string | undefined;
+                    const content   = args["content"]   as string | undefined;
+                    const projectId = args["projectId"] as string | undefined;
+                    if (!name)    return McpToolResults.error("Missing required argument: name.");
+                    if (!content) return McpToolResults.error("Missing required argument: content.");
+                    if (!content.includes("<svg")) return McpToolResults.error("content does not look like an SVG string (expected '<svg' element).");
+                    const out = await this._researchAdapter.saveSvg(name, content, projectId);
+                    return McpToolResults.json(out);
                 }
                 default:
                     return McpToolResults.error(`Unknown tool: "${toolName}"`);

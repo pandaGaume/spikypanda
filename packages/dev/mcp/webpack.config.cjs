@@ -20,7 +20,7 @@ module.exports = (env, argv) => {
         entry: "./src/browser-index.ts",
         output: {
             filename: "mcp-spikypanda.js",
-            path: path.resolve(__dirname, "bundle"),
+            path: path.resolve(__dirname, "../../host/www/bundle"),
             library: {
                 name: "McpSpikyPanda",
                 type: "umd",

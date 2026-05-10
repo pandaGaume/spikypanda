@@ -26,12 +26,12 @@
         }
     },
     "measure_read_amplitudes": {
-        "description": "Renvoie la derniere valeur (instantanee) de chaque flux float actif, indexee par '<label>.<port>'. C'est ici qu'on lit la magnitude d'un SyncDetect : une valeur stable autour de la theorie indique un capteur correctement verrouille."
+        "description": "Renvoie la derniere valeur instantanee de chaque flux float actif, indexee par '<node_id>.<port>'. node_id est l'unique reference canonique : les labels (display) ne sont pas uniques. Pour mapper id -> sens metier, lire d'abord scenario_list_nodes (id, op, label) et garder cette correspondance."
     },
     "measure_read_fft_peak": {
-        "description": "Lit l'amplitude du bin FFT le plus proche de freqHz. Resolution = Fs / N : a Fs = 5000 Hz et N = 8192, df = 0.61 Hz. Pour un battement de vitesse, augmenter windowHz pour ratisser les 1 a 3 bins voisins.",
+        "description": "Lit l'amplitude du bin FFT le plus proche de freqHz pour un noeud spk.FFT cible. Resolution = Fs / N : a Fs = 5000 Hz et N = 8192, df = 0.61 Hz. Augmenter windowHz pour absorber le ripple de vitesse.",
         "properties": {
-            "channel":  "Label du noeud FFT ou cle de stream (ex. 'FFT.spectrum').",
+            "nodeId":   "Identifiant du noeud spk.FFT cible (ex. 'node_22'). A resoudre via scenario_list_nodes filtre sur op = spk.FFT. Les labels ne sont JAMAIS acceptes en cle : ils ne sont pas uniques.",
             "freqHz":   "Frequence cible. Reperes utiles a 50 rps : f_mech = 50 Hz, 2*f_mech = 100 Hz (excentricite statique), BPFO ~ 87.3 Hz (defaut roulement avec 5 billes, angle de contact 0).",
             "windowHz": "Demi-largeur de fenetre en Hz. Defaut = un bin. Valeur sure : 2*df = 1.2 Hz."
         }

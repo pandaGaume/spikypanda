@@ -65,10 +65,14 @@ export class SpikypandaGraph {
         return {
             id: n.id,
             label: n.label,
-            op: d.op || null,
+            op: d["@type"] || d.op || null,
             domain: d.domain || null,
             opset: d.opset || null,
             config: d.config || {},
+            // Design-time enabled state for IToggableNode (faults, env).
+            // Defaults to true so graphs saved before this field was added
+            // keep all nodes enabled.
+            enabled: d.enabled !== false,
             // Actual port lists from the saved graph (direction is "input"/"output").
             inputs:  (n.inputs  || []).map((p) => ({ name: p.name, type: p.type })),
             outputs: (n.outputs || []).map((p) => ({ name: p.name, type: p.type })),

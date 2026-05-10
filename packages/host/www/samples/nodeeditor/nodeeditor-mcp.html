@@ -11,6 +11,9 @@
     <header class="mcp-header">
         <h1>SpikyPanda &middot; MCP Agent Interface</h1>
         <a href="research-projects.html" style="color:#58a6ff;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:4px;">Projects &rarr;</a>
+        <button id="mcp-load-btn" type="button" class="btn-secondary" title="Load a .spikypanda graph file into the editor">Load graph</button>
+        <input  id="mcp-load-input" type="file" accept=".spikypanda,application/json,.json" style="display:none;" />
+        <span id="mcp-load-status" style="font-size:11px;color:#8b949e;"></span>
         <span class="spacer"></span>
         <div class="field">
             <label for="mcp-research-dir">Research dir</label>

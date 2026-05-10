@@ -36,6 +36,15 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
     editor.onConnectionAdded   = function (conn) { notifyConnection(conn, true);  };
     editor.onConnectionRemoved = function (conn) { notifyConnection(conn, false); };
 
+    // Replay every live connection through notifyPortConnected so that
+    // disabledByPort fields correctly show "controlled by wired input" after
+    // any graph load. Uses editor.connections directly (not the file-handler
+    // `ed` parameter) so it works from all three load code paths. Idempotent:
+    // adding the same port name to the Set multiple times is harmless.
+    function replayConnections() {
+        (editor.connections || []).forEach(function (conn) { notifyConnection(conn, true); });
+    }
+
     // Register ONNX file handler (existing).
     var onnxEditor = new ONNX_EDITOR.OnnxEditor(editor);
 
@@ -58,6 +67,12 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
                     reattachNodeMethods(n);
                 });
             }
+            // Re-notify port connections so disabledByPort fields correctly
+            // show "controlled by wired input" for ports that were already
+            // wired in the saved graph. Without this, _connectedInputs is
+            // empty after load because onConnectionAdded never fires for
+            // connections restored from JSON.
+            replayConnections();
         },
         save: function (ed) {
             return {
@@ -133,7 +148,41 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
             });
         }
 
+        // Restore design-time enabled state for IToggableNode (faults, env).
+        // deserialize() is not called during graph load (it is only used when
+        // the editor library re-hydrates a node from its own internal format),
+        // so we apply the saved "enabled" field directly here so the checkbox
+        // reflects the correct state immediately after load.
+        if (typeof data.enabled === 'boolean' && typeof freshData._setEnabledLocal === 'function') {
+            freshData._setEnabledLocal(data.enabled);
+        }
+
         nodeUI.item.data = freshData;
+
+        // If the user renamed this node, the canvas title (NodeUI.label) still
+        // holds the op default (set during load, never updated). Sync it now.
+        if (freshData.config && freshData.config.label) {
+            if (typeof nodeUI.setTitle === 'function') {
+                nodeUI.setTitle(freshData.config.label);
+            } else if (nodeUI.label !== undefined) {
+                nodeUI.label = freshData.config.label;
+            }
+        }
+
+        // The editor library builds per-node runtime buttons (play/stop,
+        // enable/disable toggle) in _installRuntimeButtons(), which is called
+        // once at NodeUI construction time and captures the data reference.
+        // At that point data was a plain JSON blob (no setRunning/setEnabled),
+        // so no buttons were created. Now that data is replaced with a live
+        // closure, call _installRuntimeButtons() again so the correct buttons
+        // appear. The method is idempotent for this case: the first call
+        // created nothing (all interface checks failed), so no duplicates.
+        if (typeof nodeUI._installRuntimeButtons === 'function') {
+            nodeUI._installRuntimeButtons();
+        }
+
+        // Allow the enable/disable toggle to work in design mode.
+        activateDesignToggle(nodeUI);
     }
 
     function spawnNode(op) {
@@ -145,9 +194,51 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
         const def = buildNodeDef(op, nodeId);
         const nodeUI = editor.addNode(def, worldPos.x + (nextX % 200), worldPos.y + (nextY % 200));
         syncNodeId(nodeUI);
+        activateDesignToggle(nodeUI);
         nextX += 40;
         nextY += 30;
     }
+
+    // Allow the IToggableNode enable/disable checkbox to work at design time.
+    // refreshRuntimeButtons() (a) disables the button when _inPlayMode=false
+    // and (b) only shows the active CSS class in play mode. We patch the
+    // method on the instance to keep toggleBtn always interactive and always
+    // visually reflecting the current _enabled state.
+    function activateDesignToggle(nodeUI) {
+        if (!nodeUI || !nodeUI.toggleBtn) return;
+        if (typeof nodeUI.refreshRuntimeButtons !== 'function') return;
+        if (nodeUI._designTogglePatched) return; // already patched
+        nodeUI._designTogglePatched = true;
+        var orig = nodeUI.refreshRuntimeButtons.bind(nodeUI);
+        nodeUI.refreshRuntimeButtons = function () {
+            orig();
+            if (!this.toggleBtn) return;
+            this.toggleBtn.disabled = false;
+            // Show the active state at design time too, not just in play mode.
+            var d = this.item && this.item.data;
+            var enabled = d && typeof d.isEnabled === 'function' ? d.isEnabled() : true;
+            this.toggleBtn.classList.toggle("ne-rtbtn-play-active", enabled);
+            // Gray out the whole node card when disabled so the canvas gives
+            // clear visual feedback without needing to open the property panel.
+            if (this.el) this.el.classList.toggle("spk-node-disabled", !enabled);
+        };
+        nodeUI.toggleBtn.disabled = false;
+        // Trigger an immediate visual refresh so the loaded state is visible.
+        nodeUI.refreshRuntimeButtons();
+    }
+
+    // Inject disabled-node style once per page. Disabled nodes are grayed out
+    // on the canvas so the user can see at a glance which nodes are off.
+    (function () {
+        if (document.getElementById("spk-node-disabled-style")) return;
+        var s = document.createElement("style");
+        s.id = "spk-node-disabled-style";
+        s.textContent = [
+            ".spk-node-disabled { opacity: 0.4; }",
+            ".spk-node-disabled .ne-node-header { filter: saturate(0.15); }",
+        ].join("\n");
+        document.head.appendChild(s);
+    }());
 
     toolbar.classList.add("ne-menubar");
     var openMenu = null; // currently expanded dropdown element, if any
@@ -292,6 +383,7 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
                         reattachNodeMethods(n);
                     });
                 }
+                replayConnections();
             } catch (err) {
                 alert("Failed to load: " + err.message);
             }
@@ -774,7 +866,19 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
         var graph = playState.executor && playState.executor.graph;
         if (!graph) { showPlayEmpty("No graph to preview."); return; }
 
-        var widgetNodes = graph.listNodes().filter(function (n) {
+        // Build the node list from editor.nodes (same source as graphStatus) so
+        // the op field is always resolved correctly whether the save format uses
+        // "@type" (current) or "op" (legacy). executor.graph.listNodes() returns
+        // op:null for "@type"-based saves because SpikypandaGraph only reads "op".
+        var widgetNodes = (editor.nodes || []).map(function (en) {
+            var d = en && en.item && en.item.data;
+            return {
+                id:     en.id,
+                label:  en.label,
+                op:     d ? (d.op || d["@type"] || "") : "",
+                config: (d && d.config) ? d.config : {},
+            };
+        }).filter(function (n) {
             return n.op === "spk.Scope" || n.op === "spk.PWM"
                 || n.op === "spk.Gauge" || n.op === "spk.DatasetCapture";
         });
@@ -802,7 +906,7 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
                 widget = new ScopeWidget(body, {
                     bus: playBus,
                     streamId: streamId || null,
-                    title: (n.config && n.config.label) || n.label,
+                    title: (n.config && n.config.label) || n.id,
                     timeSpanS: (n.config && n.config.timeSpanS) || 0.04,
                     autoTrigger: !(n.config && n.config.autoTrigger === false),
                     showHeader: true,
@@ -978,53 +1082,52 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
     showPlayEmpty("Hit Play to preview the graph. Scope nodes will appear as tabs here.");
     syncRecordAllButtons();
 
-    // ── Auto-rename Scope nodes to reflect their inbound wiring ──
-    // E.g. "Scope" becomes "Scope: Sensor.out" once the user wires the
-    // Auto-rename sink nodes (Scope, DatasetCapture, Gauge) to reflect the
-    // inbound signal, so the user can quickly identify which node captures
-    // which channel without renaming manually. Updates every 250 ms poll.
+    // ── Refresh node header titles ──
+    // Two layers of resolution applied every poll tick (250 ms):
+    //   1. data.config.label (user-supplied via the property panel) wins
+    //      for ANY node type. This is the generic rename mechanism.
+    //   2. Sinks (Scope, Sensor, DatasetCapture, Gauge) get an auto-derived
+    //      title from the inbound port when no user label is set, so the
+    //      user can quickly identify channels without typing.
+    // Every other op keeps its default op label until renamed.
+    //
     // The editor library does not expose a label setter on NodeUI, so we
     // reach into the title DOM (class .ne-node-title from the library).
-    function refreshSinkLabels() {
+    function refreshNodeLabels() {
         if (!editor.nodes) return;
         editor.nodes.forEach(function (n) {
             var data = n && n.item && n.item.data;
             if (!data) return;
             var newTitle = null;
 
-            if (data.op === "spk.Scope") {
-                // User-set label wins; skip auto-rename.
-                if (data.config && data.config.label) {
-                    newTitle = data.config.label;
-                } else {
-                    // Auto-name from the upstream output port ("Scope.i_a", etc.).
-                    var inboundPort = null;
-                    for (var i = 0; i < editor.connections.length; i++) {
-                        var c = editor.connections[i];
-                        if (n.inputs.indexOf(c.to) >= 0) {
-                            inboundPort = c.from.name;
-                            break;
-                        }
+            // Layer 1 : user-supplied rename (generic, all ops).
+            if (data.config && typeof data.config.label === "string" && data.config.label.trim()) {
+                newTitle = data.config.label.trim();
+            }
+
+            // Layer 2 : sink-specific auto-naming (only when no user label).
+            // Each branch derives a title from the inbound wiring.
+            else if (data.op === "spk.Scope") {
+                var inboundPort = null;
+                for (var i = 0; i < editor.connections.length; i++) {
+                    var c = editor.connections[i];
+                    if (n.inputs.indexOf(c.to) >= 0) {
+                        inboundPort = c.from.name;
+                        break;
                     }
-                    newTitle = inboundPort ? "Scope." + inboundPort : "Scope";
                 }
+                newTitle = inboundPort ? "Scope." + inboundPort : "Scope";
 
             } else if (data.op === "spk.Sensor") {
-                // Auto-name: "Sensor.{upstream port}" e.g. "Sensor.i_a".
-                // User-set label (config.label) wins.
-                if (data.config && data.config.label) {
-                    newTitle = data.config.label;
-                } else {
-                    var sensorPort = null;
-                    for (var si = 0; si < editor.connections.length; si++) {
-                        var sc = editor.connections[si];
-                        if (n.inputs.indexOf(sc.to) >= 0) {
-                            sensorPort = sc.from.name;
-                            break;
-                        }
+                var sensorPort = null;
+                for (var si = 0; si < editor.connections.length; si++) {
+                    var sc = editor.connections[si];
+                    if (n.inputs.indexOf(sc.to) >= 0) {
+                        sensorPort = sc.from.name;
+                        break;
                     }
-                    newTitle = sensorPort ? "Sensor." + sensorPort : "Sensor";
                 }
+                newTitle = sensorPort ? "Sensor." + sensorPort : "Sensor";
 
             } else if (data.op === "spk.DatasetCapture") {
                 // Use the source wired to in_0 (the primary capture channel).
@@ -1046,19 +1149,15 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
                 if (!newTitle) newTitle = "Dataset Capture";
 
             } else if (data.op === "spk.Gauge") {
-                if (data.config && data.config.label) {
-                    newTitle = data.config.label;
-                } else {
-                    var gaugePort = null;
-                    for (var k = 0; k < editor.connections.length; k++) {
-                        var gc = editor.connections[k];
-                        if (n.inputs.indexOf(gc.to) >= 0) {
-                            gaugePort = gc.from.name;
-                            break;
-                        }
+                var gaugePort = null;
+                for (var k = 0; k < editor.connections.length; k++) {
+                    var gc = editor.connections[k];
+                    if (n.inputs.indexOf(gc.to) >= 0) {
+                        gaugePort = gc.from.name;
+                        break;
                     }
-                    newTitle = gaugePort ? "Gauge." + gaugePort : "Gauge";
                 }
+                newTitle = gaugePort ? "Gauge." + gaugePort : "Gauge";
             }
 
             if (newTitle === null) return;
@@ -1180,7 +1279,7 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
     // Single 250 ms reconciler tick: sink auto-rename + runtime state
     // mirror + muted LED + record-all button sync + StartRuntime anchor.
     setInterval(function () {
-        refreshSinkLabels();
+        refreshNodeLabels();
         syncRuntimeButtonsFromExecutor();
         syncMutedLeds();
         syncRecordAllButtons();
@@ -1427,11 +1526,22 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
                     var inst = exec && exec.getNodeInstance(node.id);
                     Object.keys(spec.config).forEach(function (k) {
                         var v = spec.config[k];
-                        if (data && data.config) data.config[k] = v;
+                        // Route through setProperty when available: it handles
+                        // type coercion, range clamping, and read-only guards.
+                        // Falls back to a direct config write for legacy nodes.
+                        if (data && typeof data.setProperty === 'function') {
+                            data.setProperty(k, v);
+                        } else if (data && data.config) {
+                            data.config[k] = v;
+                        }
                         if (inst && typeof inst.setConfig === 'function') inst.setConfig(k, v);
                     });
                 });
             }
+
+            // Refresh the property panel so any open panel reflects the new
+            // config values immediately (MCP calls, programmatic configure, etc.).
+            editor.propertyPanel.refresh();
 
             return true;
         }
@@ -1455,6 +1565,12 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
                         reject(new Error('enterPlayMode failed — check bus connection'));
                         return;
                     }
+                } else {
+                    // Already in play mode: scope widgets may not have been
+                    // mounted yet (e.g. play mode was entered before the page
+                    // fully initialised, or after a hot-reload). Remount to
+                    // ensure _spkScopeWidgets is populated.
+                    mountPlayScopes();
                 }
                 setTimeout(resolve, Math.max(0, (seconds || 0) * 1000));
             });
@@ -1468,6 +1584,10 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
         function readAmplitudes() {
             var exec = playState.executor;
             if (!exec) return null;
+            // Keys are formatted as "<node_id>.<port>". node_id is the
+            // single canonical reference: labels are user-supplied display
+            // strings and not unique. Agents that need a human-readable
+            // name correlate ids against scenario_list_nodes / graphStatus.
             var result = {};
             exec.streams.forEach(function (s) {
                 var allOut = exec._lastOutputs.get(s.nodeId);
@@ -1475,9 +1595,7 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
                 var payload = allOut[s.port];
                 if (!payload || payload.muted) return;
                 if (!payload.samples || !payload.samples.length) return;
-                var node = exec.graph && exec.graph.getNode(s.nodeId);
-                var label = (node && (node.label || node.id)) || s.nodeId;
-                result[label + '.' + s.port] = payload.samples[payload.samples.length - 1];
+                result[s.nodeId + '.' + s.port] = payload.samples[payload.samples.length - 1];
             });
             return result;
         }
@@ -1486,24 +1604,18 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
         // Searches the FFT node whose label or id contains `channel`, then
         // returns the peak magnitude within +/- (windowHz/2) of freqHz.
         // `windowHz` defaults to 5 Hz.
-        function readFftPeak(channel, freqHz, windowHz) {
+        function readFftPeak(nodeId, freqHz, windowHz) {
+            // nodeId is the canonical reference. We do not try to match by
+            // label or substring : labels are not unique. The caller learns
+            // the right nodeId via scenario_list_nodes (filtered to op
+            // spk.FFT) and passes it explicitly here.
             var exec = playState.executor;
-            if (!exec) return null;
-            var targetId = null;
-            if (editor.nodes) {
-                for (var ni = 0; ni < editor.nodes.length; ni++) {
-                    var n = editor.nodes[ni];
-                    var d = n && n.item && n.item.data;
-                    if (!d || (d.op !== 'spk.FFT' && d['@type'] !== 'spk.FFT')) continue;
-                    var lbl = n.label || n.id;
-                    if (n.id === channel || lbl === channel || lbl.indexOf(channel) >= 0) {
-                        targetId = n.id;
-                        break;
-                    }
-                }
-            }
-            if (!targetId) return null;
-            var allOut = exec._lastOutputs.get(targetId);
+            if (!exec || !nodeId) return null;
+            var n = editor.nodes && editor.nodes.find(function (x) { return x.id === nodeId; });
+            if (!n) return null;
+            var d = n.item && n.item.data;
+            if (!d || (d.op !== 'spk.FFT' && d['@type'] !== 'spk.FFT')) return null;
+            var allOut = exec._lastOutputs.get(nodeId);
             if (!allOut) return null;
             var spec = allOut['spectrum'] || allOut['magnitude'] || allOut['out'];
             if (!spec || !spec.samples || !spec.samples.length) return null;
@@ -1533,9 +1645,10 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
                 if (!allOut) return;
                 var payload = allOut[s.port];
                 if (!payload) return;
-                var node = exec.graph && exec.graph.getNode(s.nodeId);
-                var label = (node && (node.label || node.id)) || s.nodeId;
-                var key = label + '.' + s.port;
+                // Stream key is "<node_id>.<port>". node_id is the
+                // canonical reference; labels are not unique and never
+                // used as keys in the export.
+                var key = s.nodeId + '.' + s.port;
                 if (payload.samples) {
                     snap.streams[key] = {
                         type: 'float', muted: !!payload.muted,
@@ -1589,6 +1702,46 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
             return new Promise(function (resolve) { setTimeout(resolve, 100); });
         }
 
+        // ── loadGraph(jsonString) ─────────────────────────────────────────
+        // Replace the active graph with a serialized .spikypanda JSON. This
+        // is the same path the editor's file handler uses : after editor.load
+        // we re-attach the Inspectable closures (getProperties, setProperty,
+        // IRunnableNode...) that are erased during the JSON round-trip, then
+        // sync each NodeUI's id back into data.nodeId.
+        //
+        // Returns true on success, throws on parse / load error so the caller
+        // can surface the message in its own UI.
+        function loadGraph(jsonString) {
+            if (typeof jsonString !== "string" || !jsonString.trim()) {
+                throw new Error("loadGraph: empty payload");
+            }
+            // Make sure we are in edit mode before mutating the graph; the
+            // executor would otherwise hold stale references.
+            try { exitPlayMode(); } catch (_e) { /* already in edit mode */ }
+            editor.load(jsonString);
+            if (editor.nodes) {
+                editor.nodes.forEach(function (n) {
+                    syncNodeId(n);
+                    reattachNodeMethods(n);
+                });
+            }
+            replayConnections();
+            return true;
+        }
+
+        // ── loadGraphFromUrl(url) ─────────────────────────────────────────
+        // Fetch a .spikypanda file from the static server and load it. Used
+        // by pages that auto-load a graph at boot from /data/graphs/<name>.
+        function loadGraphFromUrl(url) {
+            return fetch(url).then(function (r) {
+                if (!r.ok) throw new Error("loadGraphFromUrl: HTTP " + r.status);
+                return r.text();
+            }).then(function (text) {
+                loadGraph(text);
+                return true;
+            });
+        }
+
         // ── graphStatus() ─────────────────────────────────────────────────
         // Returns a snapshot of the current mode, sample rate, and per-node
         // running/muted state. Useful for an agent to inspect graph health
@@ -1606,9 +1759,16 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
             if (editor.nodes) {
                 editor.nodes.forEach(function (n) {
                     var d = n && n.item && n.item.data;
+                    // Resolution order : user-supplied data.config.label
+                    // (set via the property panel) > op default label
+                    // attached to the NodeUI > nodeId. The agent sees the
+                    // user-chosen label first, which makes
+                    // measure_read_amplitudes keys deterministic when
+                    // several nodes share the same op.
+                    var label = (d && d.config && d.config.label) || n.label || n.id;
                     status.nodes.push({
                         id:      n.id,
-                        label:   n.label || n.id,
+                        label:   label,
                         op:      d ? (d.op || d['@type'] || '') : '',
                         running: exec ? exec.isNodeRunning(n.id) : null,
                         muted:   exec ? exec.isNodeMuted(n.id)   : null,
@@ -1619,16 +1779,65 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
             return status;
         }
 
+        // ── captureScope(label) ────────────────────────────────────────────
+        // Returns a base64 PNG data URL of the scope widget whose title
+        // matches `label`, or null when no such widget is found. Scope widgets
+        // self-register into window._spkScopeWidgets (keyed by title) when
+        // they are created and remove themselves on destroy(). Used by the MCP
+        // measure_capture_scope tool to snapshot FFT / time-domain canvases
+        // without requiring a Chrome browser connection.
+        function captureScope(label) {
+            var reg = window._spkScopeWidgets;
+            if (!reg || !label) return null;
+            var w = reg.get(label);
+            return (w && typeof w.getSnapshot === 'function') ? w.getSnapshot() : null;
+        }
+
+        // ── captureScopeSvg(label) ─────────────────────────────────────────
+        // Returns a self-contained SVG string for the scope widget whose title
+        // matches `label`, or null when no such widget is found. The SVG uses a
+        // fixed 600x200 viewBox and mirrors the canvas renderer exactly — same
+        // colours, axis labels, and signal trace. Resolution-independent, so it
+        // prints and scales cleanly in reports. Used by the MCP
+        // measure_capture_scope tool when format="svg".
+        function captureScopeSvg(label) {
+            var reg = window._spkScopeWidgets;
+            if (!reg || !label) return null;
+            var w = reg.get(label);
+            return (w && typeof w.getSvg === 'function') ? w.getSvg() : null;
+        }
+
+        // ── exportGraphSvg(profile) ────────────────────────────────────────
+        // Returns an SVG string representation of the current node graph via
+        // editor.exportSVG(). `profile` is an optional theme name: "dark"
+        // (default), "light", "transparent_dark", "transparent_light". Returns
+        // null when no editor instance is available. Used by the MCP
+        // measure_export_graph_svg tool.
+        function exportGraphSvg(profile) {
+            var ed = window.__spkEditor;
+            if (!ed || typeof ed.exportSVG !== 'function') return null;
+            try {
+                return ed.exportSVG(profile || 'dark');
+            } catch (_e) {
+                return null;
+            }
+        }
+
         return {
-            configure:     configure,
-            run:           run,
-            readAmplitudes: readAmplitudes,
-            readFftPeak:   readFftPeak,
-            exportData:    exportData,
-            toggleGravity: toggleGravity,
-            setFault:      setFault,
-            reset:         reset,
-            graphStatus:   graphStatus,
+            configure:        configure,
+            run:              run,
+            readAmplitudes:   readAmplitudes,
+            readFftPeak:      readFftPeak,
+            exportData:       exportData,
+            toggleGravity:    toggleGravity,
+            setFault:         setFault,
+            reset:            reset,
+            graphStatus:      graphStatus,
+            captureScope:     captureScope,
+            captureScopeSvg:  captureScopeSvg,
+            exportGraphSvg:   exportGraphSvg,
+            loadGraph:        loadGraph,
+            loadGraphFromUrl: loadGraphFromUrl,
         };
     })();
 

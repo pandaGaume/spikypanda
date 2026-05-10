@@ -279,3 +279,26 @@ Aucun changement requis sur les behaviors existants. Tout ce qui est pose au-des
 - Les ops du graphe sont **toujours** identifies par leur opId (`spk.MotorPMSM`, `spk.FaultPmsm.Imbalance`, ...) ; aucune indirection moteur dans le framework
 - Une experience peut etre **globale** (sans projectId) ou **liee** a un projet (avec projectId, dual-write en v1) ; l'agent decide
 - Les grammars sont **donnees pures**, jamais du code ; modifiables a chaud via `grammar_set` ou en editant le JSON et reconnectant
+
+### Reference d'instance de noeud : `node_id` uniquement
+
+Regle d'architecture fondamentale : **le `node_id` est la seule reference canonique d'un noeud du graphe**. Les `label` sont du texte utilisateur (display only) et ne sont **jamais** garantis uniques (l'editeur permet plusieurs noeuds avec le meme label par defaut).
+
+Consequences appliquees partout :
+
+- `measure_read_amplitudes` retourne un map keyed `<node_id>.<port>` (jamais par label)
+- `measure_read_fft_peak` exige le `nodeId` du noeud FFT cible ; le matching par label est explicitement rejete dans la grammar et l'inputSchema
+- `measure_export_data` clef ses streams par `<node_id>.<port>`
+- `scenario_configure_node` accepte `nodeId` (prioritaire) ou `opId` (fallback unique-par-op uniquement)
+- `graphStatus()` renvoie `{ id, label, op, ... }` ou `id` est l'identifiant et `label` est purement informatif
+- Les agents resolvent les ids via `scenario_list_nodes` au debut d'une session et conservent la correspondance `id -> { op, label, role-metier }` dans leur memoire de travail
+
+Cette regle protege contre :
+- Les collisions de labels quand plusieurs SyncDetect ou FFT coexistent dans un graphe
+- Le bug de "mauvaise mesure lue" silencieux quand un utilisateur renomme un noeud en cours de session
+- L'ambiguite des regex / matching partiel sur des chaines (autrefois `lbl.indexOf(channel) >= 0` dans `readFftPeak` : supprime)
+
+Les labels servent uniquement :
+- A l'humain dans l'editeur (titre du noeud, lecture du graphe)
+- Au reporting de l'agent (rapport markdown) pour rendre les ids lisibles
+- Comme aide a l'inference quand l'agent decide quel noeud cibler (mais la decision finale est toujours par id)

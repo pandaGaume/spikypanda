@@ -85,12 +85,23 @@ export interface SpkControlApi {
     configure(scenario: SpkScenarioConfig): boolean;
     run(seconds: number): Promise<void>;
     readAmplitudes(): Record<string, number> | null;
-    readFftPeak(channel: string, freqHz: number, windowHz?: number): number | null;
+    readFftPeak(nodeId: string, freqHz: number, windowHz?: number): number | null;
     exportData(): string | null;
     toggleGravity(enabled: boolean): boolean;
     setFault(faultId: string, severity: number): boolean;
     reset(): Promise<void>;
     graphStatus(): SpkGraphStatus | null;
+    /** Returns a base64 PNG data URL of the scope widget with the given title,
+     *  or null when no matching widget is found or the canvas is empty. */
+    captureScope(label: string): string | null;
+    /** Returns a self-contained SVG string for the scope widget with the given
+     *  title (600x200 viewBox, same colours as the canvas renderer), or null
+     *  when no matching widget is found. */
+    captureScopeSvg(label: string): string | null;
+    /** Returns an SVG string representation of the current node graph, using
+     *  the specified theme profile ("dark" | "light" | "transparent_dark" |
+     *  "transparent_light"). Returns null when the editor is not available. */
+    exportGraphSvg(profile?: string): string | null;
 }
 
 declare global {

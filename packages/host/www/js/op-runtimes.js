@@ -112,11 +112,22 @@ MotorPmsmRuntime.prototype.init = function (cfg) {
     const transform = cfg.orientation === "verticalUp"   ? Sensors.MotorTransform.verticalUp()
                     : cfg.orientation === "verticalDown" ? Sensors.MotorTransform.verticalDown()
                     :                                       Sensors.MotorTransform.horizontal();
-    const field = cfg.gravityField === "microgravity" ? Sensors.GravityField.microgravity()
-                                                      : Sensors.GravityField.earth();
+    // Always start with microgravity. The gravityField config key is now
+    // display-only (not user-editable). If a WorldGravity node is wired to the
+    // "gravity" input, it overrides _gravityField each tick via setWorldGravity.
+    const field = Sensors.GravityField.microgravity();
     // Hold mutable refs so wired gravity/bodyTransform inputs can update them each tick.
     this._gravityField   = field;
     this._motorTransform = transform;
+    // Cache the init-time 3x3 rotation (row-major) so process() can revert
+    // to it when a live BodyTransform wire is disabled (executor sends muted:true).
+    // Rows match the BodyTransformRuntime R = Rz*Ry*Rx matrix layout:
+    //   horizontal  (pitch 90deg) : [[0,0,1],[0,1,0],[-1,0,0]]
+    //   verticalUp  (identity)    : [[1,0,0],[0,1,0],[0,0,1]]
+    //   verticalDown (roll 180deg): [[1,0,0],[0,-1,0],[0,0,-1]]
+    this._btInitMatrix = cfg.orientation === "verticalDown" ? [[1,0,0],[0,-1,0],[0,0,-1]]
+                       : cfg.orientation === "verticalUp"   ? [[1,0,0],[0,1,0],[0,0,1]]
+                       :                                       [[0,0,1],[0,1,0],[-1,0,0]];
 
     const envDefaults = Sensors.MAXON_ECX_PRIME_ENV_DEFAULTS;
 
@@ -172,26 +183,38 @@ MotorPmsmRuntime.prototype.setFaultNodes = function (faultNodes) {
 MotorPmsmRuntime.prototype._buildFaults = function () {
     const faults = [];
     for (const fn of this._pendingFaultConfigs) {
-        if (!fn.enabled) continue;
         const cfg = fn.config;
+        let fault = null;
         switch (fn.op) {
             case "spk.FaultPmsm.Imbalance":
                 if (Sensors.ImbalanceFault)
-                    faults.push(new Sensors.ImbalanceFault({ severity: cfg.severity }));
+                    fault = new Sensors.ImbalanceFault({ severity: cfg.severity });
                 break;
             case "spk.FaultPmsm.Eccentricity":
                 if (Sensors.EccentricityFault)
-                    faults.push(new Sensors.EccentricityFault({ severity: cfg.severity }));
+                    fault = new Sensors.EccentricityFault({ severity: cfg.severity });
                 break;
             case "spk.FaultPmsm.WindingShort":
                 if (Sensors.WindingShortFault)
-                    faults.push(new Sensors.WindingShortFault({ severity: cfg.severity, phase: cfg.phase || 0 }));
+                    fault = new Sensors.WindingShortFault({ severity: cfg.severity, phase: cfg.phase || 0 });
                 break;
             case "spk.FaultPmsm.BearingWear":
                 if (Sensors.BearingWearFault)
-                    faults.push(new Sensors.BearingWearFault({ severity: cfg.severity }));
+                    fault = new Sensors.BearingWearFault({ severity: cfg.severity });
                 break;
         }
+        if (!fault) continue;
+        // Wrap postStep so executor.setNodeRunning() toggles the fault in real
+        // time. fn.enabled is a live getter (set up by Phase C in graph-executor)
+        // that reads _sourceRunning on every call, so the gate is dynamic.
+        if (typeof fault.postStep === "function") {
+            const orig = fault.postStep.bind(fault);
+            const faultRef = fn;
+            fault.postStep = function (...args) {
+                if (faultRef.enabled) orig(...args);
+            };
+        }
+        faults.push(fault);
     }
     return faults;
 };
@@ -213,17 +236,30 @@ MotorPmsmRuntime.prototype.process = function (inputs, n, dt) {
     // passing the zeroed vector through switches the motor to microgravity.
     const gravIn = inputs.get("gravity");
     if (gravIn && gravIn.x && gravIn.x.length > 0 && this._gravityField) {
+        // The compiled bundle stores gravity as a numeric array [x, y, z]
+        // and reads it via t[0]/t[1]/t[2]. Passing a plain {x,y,z} object
+        // gives undefined at those indices, producing NaN. Use an Array so
+        // index 0/1/2 are valid regardless of the Cartesian3 backing type.
         this._gravityField.setWorldGravity([gravIn.x[0], gravIn.y[0], gravIn.z[0]]);
     }
 
     // Live body transform override (from BodyTransform node, row-major 4x4).
+    // When the BodyTransform node is disabled, the executor zeroes its output
+    // and sets muted:true. In that case, revert to the init-time orientation
+    // so gravity effects return to the configured baseline immediately.
     const btIn = inputs.get("bodyTransform");
-    if (btIn && !btIn.muted && btIn.m && btIn.m.length === 16 && this._motorTransform) {
-        const m = btIn.m;
-        this._motorTransform.setRotationMatrix(
-            [[m[0], m[1], m[2]], [m[4], m[5], m[6]], [m[8], m[9], m[10]]],
-            "live",
-        );
+    if (btIn && this._motorTransform) {
+        if (!btIn.muted && btIn.m && btIn.m.length === 16) {
+            const m = btIn.m;
+            this._motorTransform.setRotationMatrix(
+                [[m[0], m[1], m[2]], [m[4], m[5], m[6]], [m[8], m[9], m[10]]],
+                "live",
+            );
+        } else if (btIn.muted) {
+            // BodyTransform disabled: restore the init-time rotation so the
+            // motor returns to its configured horizontal (or vertical) attitude.
+            this._motorTransform.setRotationMatrix(this._btInitMatrix, "live");
+        }
     }
 
     const ia = new Float32Array(n);
@@ -302,7 +338,8 @@ MotorPmsmRuntime.prototype.dispose = function () {
     this._cfg            = null;
     this._gravityField   = null;
     this._motorTransform = null;
-    this._meta   = null;
+    this._btInitMatrix   = null;
+    this._meta           = null;
 };
 
 // ---- MisalignmentFault ------------------------------------------------
