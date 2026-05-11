@@ -83,33 +83,33 @@ describe("PMSM scenarios end-to-end", () => {
         expect(ptp(iq) / Math.max(1e-12, Math.abs(mean(iq)))).toBeLessThan(0.05);
     });
 
-    it("D1 imbalance : vibration RMS on x and y is non-zero and scales with severity", () => {
+    it("D1 imbalance : vibration RMS on y and z is non-zero and scales with severity", () => {
         const skip = Math.floor(SETTLE_S / ORCH_DT_S);
 
         const scMild = pmsmImbalanceScenario(0.3);
         const srcMild = scMild.factory();
-        const out1 = runScenario(srcMild, SETTLE_S + WINDOW_S, ORCH_DT_S, ["accel_x", "accel_y"]);
-        const ax1 = out1.series.get("accel_x")!.slice(skip);
+        const out1 = runScenario(srcMild, SETTLE_S + WINDOW_S, ORCH_DT_S, ["accel_y", "accel_z"]);
         const ay1 = out1.series.get("accel_y")!.slice(skip);
-        const rmsXY1 = Math.sqrt(rms(ax1) ** 2 + rms(ay1) ** 2);
+        const az1 = out1.series.get("accel_z")!.slice(skip);
+        const rmsYZ1 = Math.sqrt(rms(ay1) ** 2 + rms(az1) ** 2);
 
         const scHigh = pmsmImbalanceScenario(0.9);
         const srcHigh = scHigh.factory();
-        const out2 = runScenario(srcHigh, SETTLE_S + WINDOW_S, ORCH_DT_S, ["accel_x", "accel_y"]);
-        const ax2 = out2.series.get("accel_x")!.slice(skip);
+        const out2 = runScenario(srcHigh, SETTLE_S + WINDOW_S, ORCH_DT_S, ["accel_y", "accel_z"]);
         const ay2 = out2.series.get("accel_y")!.slice(skip);
-        const rmsXY2 = Math.sqrt(rms(ax2) ** 2 + rms(ay2) ** 2);
+        const az2 = out2.series.get("accel_z")!.slice(skip);
+        const rmsYZ2 = Math.sqrt(rms(ay2) ** 2 + rms(az2) ** 2);
 
         // Vibration is non-zero at both severities.
-        expect(rmsXY1).toBeGreaterThan(1e-3);
-        expect(rmsXY2).toBeGreaterThan(1e-3);
+        expect(rmsYZ1).toBeGreaterThan(1e-3);
+        expect(rmsYZ2).toBeGreaterThan(1e-3);
         // The 0.9 severity has stronger vibration than 0.3 (force scales
         // linearly with severity, so RMS does too at fixed omega).
-        expect(rmsXY2 / rmsXY1).toBeGreaterThan(2.0);
-        expect(rmsXY2 / rmsXY1).toBeLessThan(4.5);  // ~3x with some bench tolerance
+        expect(rmsYZ2 / rmsYZ1).toBeGreaterThan(2.0);
+        expect(rmsYZ2 / rmsYZ1).toBeLessThan(4.5);  // ~3x with some bench tolerance
     });
 
-    it("D1 imbalance : force is in-plane (x, y) only, z stays clean", () => {
+    it("D1 imbalance : force is in radial plane (y, z) only, x (shaft axis) stays clean", () => {
         const sc = pmsmImbalanceScenario(0.8);
         const src = sc.factory();
         const skip = Math.floor(SETTLE_S / ORCH_DT_S);
@@ -117,10 +117,10 @@ describe("PMSM scenarios end-to-end", () => {
         const ax = out.series.get("accel_x")!.slice(skip);
         const ay = out.series.get("accel_y")!.slice(skip);
         const az = out.series.get("accel_z")!.slice(skip);
-        // RMS on x and y is significant; z stays at the noise floor.
-        expect(rms(ax)).toBeGreaterThan(1e-3);
+        // RMS on y and z is significant; x (shaft axis) stays at the noise floor.
         expect(rms(ay)).toBeGreaterThan(1e-3);
-        expect(rms(az)).toBeLessThan(1e-6);
+        expect(rms(az)).toBeGreaterThan(1e-3);
+        expect(rms(ax)).toBeLessThan(1e-6);
     });
 
     it("D4 eccentricity : i_q develops AC content absent from the healthy baseline", () => {

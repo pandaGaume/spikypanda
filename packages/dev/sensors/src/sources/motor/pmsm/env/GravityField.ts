@@ -1,4 +1,4 @@
-import { Cartesian3, ICartesian3 } from "@spiky-panda/core";
+import { Cartesian3, ICartesian3 } from "spikypanda-core";
 import { ISimNode } from "../../../../interfaces/SimNode";
 
 // World-frame gravity vector. Phase 1 uses a constant per scenario;

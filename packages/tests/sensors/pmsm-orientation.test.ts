@@ -21,23 +21,32 @@ describe("MotorTransform presets", () => {
         expect(t.label).toBe("identity");
     });
 
-    it("horizontal : body Z lies along world +X", () => {
+    it("horizontal : body X lies along world +X (identity)", () => {
         const t = MotorTransform.horizontal();
         const R = t.bodyToWorldMatrix();
-        // Body Z = column 2 of R_bodyToWorld.
-        const zInWorld: [number, number, number] = [R[0][2], R[1][2], R[2][2]];
-        expect(zInWorld[0]).toBeCloseTo(1, 9);
-        expect(zInWorld[1]).toBeCloseTo(0, 9);
-        expect(zInWorld[2]).toBeCloseTo(0, 9);
+        // Body X = column 0 of R_bodyToWorld.
+        const xInWorld: [number, number, number] = [R[0][0], R[1][0], R[2][0]];
+        expect(xInWorld[0]).toBeCloseTo(1, 9);
+        expect(xInWorld[1]).toBeCloseTo(0, 9);
+        expect(xInWorld[2]).toBeCloseTo(0, 9);
     });
 
-    it("verticalDown : body Z along world -Z", () => {
+    it("verticalDown : body X along world -Z", () => {
         const t = MotorTransform.verticalDown();
         const R = t.bodyToWorldMatrix();
-        const zInWorld: [number, number, number] = [R[0][2], R[1][2], R[2][2]];
-        expect(zInWorld[0]).toBeCloseTo(0, 9);
-        expect(zInWorld[1]).toBeCloseTo(0, 9);
-        expect(zInWorld[2]).toBeCloseTo(-1, 9);
+        const xInWorld: [number, number, number] = [R[0][0], R[1][0], R[2][0]];
+        expect(xInWorld[0]).toBeCloseTo(0, 9);
+        expect(xInWorld[1]).toBeCloseTo(0, 9);
+        expect(xInWorld[2]).toBeCloseTo(-1, 9);
+    });
+
+    it("verticalUp : body X along world +Z", () => {
+        const t = MotorTransform.verticalUp();
+        const R = t.bodyToWorldMatrix();
+        const xInWorld: [number, number, number] = [R[0][0], R[1][0], R[2][0]];
+        expect(xInWorld[0]).toBeCloseTo(0, 9);
+        expect(xInWorld[1]).toBeCloseTo(0, 9);
+        expect(xInWorld[2]).toBeCloseTo(1, 9);
     });
 
     it("rotation matrix is orthonormal (R * R^T = I) for arbitrary Euler angles", () => {
@@ -103,24 +112,24 @@ describe("GravityField presets", () => {
 });
 
 describe("GravityVector projection (decisive ground test setup)", () => {
-    it("horizontal earth : g_body = [9.81, 0, 0], radial magnitude full, axial zero", () => {
+    it("horizontal earth : g_body = [0, 0, -9.81], radial magnitude full, axial zero", () => {
         const gv = new GravityVector(GravityField.earth(), MotorTransform.horizontal());
-        gv.advance(0);
-        const g = gv.motorFrameGravity();
-        expect(near(g.x, G_EARTH_MAG, 1e-6)).toBe(true);
-        expect(near(g.y, 0, 1e-6)).toBe(true);
-        expect(near(g.z, 0, 1e-6)).toBe(true);
-        expect(near(gv.radialMagnitude(), G_EARTH_MAG, 1e-6)).toBe(true);
-        expect(near(gv.axialMagnitude(), 0, 1e-6)).toBe(true);
-    });
-
-    it("vertical up earth : g_body = [0, 0, -9.81], radial zero, axial full", () => {
-        const gv = new GravityVector(GravityField.earth(), MotorTransform.verticalUp());
         gv.advance(0);
         const g = gv.motorFrameGravity();
         expect(near(g.x, 0, 1e-6)).toBe(true);
         expect(near(g.y, 0, 1e-6)).toBe(true);
         expect(near(g.z, -G_EARTH_MAG, 1e-6)).toBe(true);
+        expect(near(gv.radialMagnitude(), G_EARTH_MAG, 1e-6)).toBe(true);
+        expect(near(gv.axialMagnitude(), 0, 1e-6)).toBe(true);
+    });
+
+    it("vertical up earth : g_body = [-9.81, 0, 0], radial zero, axial full", () => {
+        const gv = new GravityVector(GravityField.earth(), MotorTransform.verticalUp());
+        gv.advance(0);
+        const g = gv.motorFrameGravity();
+        expect(near(g.x, -G_EARTH_MAG, 1e-6)).toBe(true);
+        expect(near(g.y, 0, 1e-6)).toBe(true);
+        expect(near(g.z, 0, 1e-6)).toBe(true);
         expect(near(gv.radialMagnitude(), 0, 1e-6)).toBe(true);
         expect(near(gv.axialMagnitude(), G_EARTH_MAG, 1e-6)).toBe(true);
     });
@@ -163,7 +172,7 @@ describe("GravityVector projection (decisive ground test setup)", () => {
         expect(gv.radialMagnitude()).toBeCloseTo(0, 9);
         // Restore and reorient to vertical up.
         field.setWorldGravity(new Cartesian3(0, 0, -G_EARTH_MAG), "earth");
-        tr.setEulerZyx(0, 0, 0, "vertical");
+        tr.setEulerZyx(0, -Math.PI / 2, 0, "verticalUp");
         gv.advance(0);
         expect(gv.radialMagnitude()).toBeCloseTo(0, 6);
         expect(gv.axialMagnitude()).toBeCloseTo(G_EARTH_MAG, 6);

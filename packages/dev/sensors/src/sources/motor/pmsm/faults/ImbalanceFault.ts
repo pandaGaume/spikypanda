@@ -27,8 +27,8 @@ export interface IImbalanceFaultConfig {
 // preStep  : noop in Phase 1. Phase 2 will modulate the load torque to
 //            inject the balourd signature into i_q.
 // postStep : injects the centripetal force F = m*r*omega^2 onto housing
-//            axes x and y, in quadrature to produce a 1x f_mech rotating
-//            force. Axis z (shaft axis) sees no force.
+//            axes y and z, in quadrature to produce a 1x f_mech rotating
+//            force. Axis x (shaft axis) sees no force.
 export class ImbalanceFault implements IPmsmFaultNode {
     public readonly kind: string = "pmsm.fault.imbalance";
     public readonly type: PmsmFaultType.IMBALANCE = PmsmFaultType.IMBALANCE;
@@ -64,7 +64,7 @@ export class ImbalanceFault implements IPmsmFaultNode {
         const omega = machine.omegaM;
         const theta = machine.thetaM;
         const F = mr * omega * omega;
-        housing.addForce(0, F * Math.cos(theta));
-        housing.addForce(1, F * Math.sin(theta));
+        housing.addForce(1, F * Math.cos(theta));
+        housing.addForce(2, F * Math.sin(theta));
     }
 }

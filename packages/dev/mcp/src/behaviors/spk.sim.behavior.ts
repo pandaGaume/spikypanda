@@ -3,20 +3,24 @@ import { SpkSimulationAdapter } from "../adapters/spk.simulation.adapter.js";
 
 /**
  * Behavior covering simulation lifecycle: enter play mode, advance time,
- * reset back to edit, toggle the world gravity source.
+ * and reset back to edit.
  *
  * Time advances internally through a `setTimeout` wrapped in a Promise inside
  * `window.__spk.run`. The MCP server returns synchronously when the timeout
  * resolves, so callers can chain `sim_run` then `measure_*` without manual
  * waits.
+ *
+ * Enabling/disabling nodes (gravity, faults, environment processors) is handled
+ * uniformly by `scenario_configure_node` with `config: { enabled: bool }`.
+ * There is no dedicated gravity-toggle tool; use
+ * `scenario_configure_node(opId="spk.WorldGravity", config={ enabled: false })`.
  */
 export class SpkSimBehavior extends McpBehavior {
     public static readonly NAMESPACE = "sim";
 
-    public static readonly ToolStatus        = "sim_status";
-    public static readonly ToolRun           = "sim_run";
-    public static readonly ToolReset         = "sim_reset";
-    public static readonly ToolToggleGravity = "sim_toggle_gravity";
+    public static readonly ToolStatus = "sim_status";
+    public static readonly ToolRun    = "sim_run";
+    public static readonly ToolReset  = "sim_reset";
 
     private readonly _spkAdapter: SpkSimulationAdapter;
 
@@ -26,7 +30,7 @@ export class SpkSimBehavior extends McpBehavior {
             domain: options.domain ?? SpkSimulationAdapter.DOMAIN,
             namespace: options.namespace ?? SpkSimBehavior.NAMESPACE,
             name: options.name ?? "Simulation Lifecycle",
-            description: options.description ?? "Run, reset and inspect the live simulation; toggle the world gravity source.",
+            description: options.description ?? "Run, reset and inspect the live simulation.",
             mimeType: options.mimeType ?? JsonRpcMimeType,
         });
         this._spkAdapter = adapter;
@@ -86,23 +90,6 @@ export class SpkSimBehavior extends McpBehavior {
                 description: "Exits play mode and clears the executor state. Use between experiments to start from a clean baseline.",
                 inputSchema: { type: "object", properties: {}, required: [], additionalProperties: false },
             },
-            {
-                name: SpkSimBehavior.ToolToggleGravity,
-                description:
-                    "Enables or disables the WorldGravity source. Disabling makes accel_x lock-in collapse to zero, " +
-                    "which is the cleanest way to verify that a measurement is gravity-induced.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        enabled: {
-                            type: "boolean",
-                            description: "true to enable gravity, false to disable it.",
-                        },
-                    },
-                    required: ["enabled"],
-                    additionalProperties: false,
-                },
-            },
         ];
     }
 
@@ -145,13 +132,6 @@ export class SpkSimBehavior extends McpBehavior {
                     const msg = err instanceof Error ? err.message : String(err);
                     return McpToolResults.error(`reset() failed: ${msg}`);
                 }
-            }
-
-            case SpkSimBehavior.ToolToggleGravity: {
-                const enabled = !!args["enabled"];
-                const ok = spk.toggleGravity(enabled);
-                if (!ok) return McpToolResults.error("toggleGravity returned false (no spk.WorldGravity node in graph?).");
-                return McpToolResults.json({ gravityEnabled: enabled });
             }
 
             default:

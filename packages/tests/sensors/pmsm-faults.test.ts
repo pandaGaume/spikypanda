@@ -42,7 +42,7 @@ describe("ImbalanceFault (D1)", () => {
         expect(f.cfg.description.length).toBeGreaterThan(0);
     });
 
-    it("postStep injects a rotating force F = m*r*omega^2 on x and y", () => {
+    it("postStep injects a rotating force F = m*r*omega^2 on y and z", () => {
         const fault = new ImbalanceFault({ severity: 1, kImbalanceMax: 1e-3 });
         const machine = new StubMachineHost();
         const housing = new StubHousingHost();
@@ -50,11 +50,11 @@ describe("ImbalanceFault (D1)", () => {
         machine.thetaM = 0;
         fault.postStep!(0, machine, housing);
         const expectedF = 1 * 1e-3 * 100 * 100;
-        // theta = 0 -> all force on x, none on y.
+        // theta = 0 -> all force on y (axis 1), none on z (axis 2).
         expect(housing.forces).toHaveLength(2);
-        expect(housing.forces[0][0]).toBe(0);
+        expect(housing.forces[0][0]).toBe(1);
         expect(housing.forces[0][1]).toBeCloseTo(expectedF, 9);
-        expect(housing.forces[1][0]).toBe(1);
+        expect(housing.forces[1][0]).toBe(2);
         expect(housing.forces[1][1]).toBeCloseTo(0, 9);
     });
 

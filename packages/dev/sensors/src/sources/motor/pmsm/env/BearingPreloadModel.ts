@@ -5,8 +5,8 @@ import { IPmsmEnvNode } from "./IPmsmEnvNode";
 // (F_a_0 axial, F_r_0 radial) is augmented by the gravitational load
 // projected onto the bearing axes :
 //
-//   F_a_eff = F_a_0 + m_rotor * g_axial      (axial : along shaft / body Z)
-//   F_r_eff = F_r_0 + m_rotor * g_radial     (radial : in body XY plane)
+//   F_a_eff = F_a_0 + m_rotor * g_axial      (axial : along shaft / body X)
+//   F_r_eff = F_r_0 + m_rotor * g_radial     (radial : in body YZ plane)
 //
 // Phase 1 has no consumer (bearing race fault D2 is Phase 2). The model
 // is in place so :
@@ -56,7 +56,7 @@ export class BearingPreloadModel implements IPmsmEnvNode {
     // Effective preloads at the current operating point. Read by
     // metadata exporters and (Phase 2) by BearingRaceFault.
     public effectiveAxialPreload(): number {
-        const gAxial = this.gravity.motorFrameGravity().z;
+        const gAxial = this.gravity.motorFrameGravity().x;
         return this.cfg.nominalAxialPreload + this.cfg.rotorMass * gAxial;
     }
 

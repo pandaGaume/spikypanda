@@ -56,3 +56,10 @@ export function isCartesian4(b: unknown): b is ICartesian4 {
     if (!isCartesian3(b)) return false;
     return "w" in b;
 }
+
+export interface IQuaternion {
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+}

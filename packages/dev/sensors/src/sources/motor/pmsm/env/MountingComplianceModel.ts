@@ -1,4 +1,4 @@
-import { Cartesian3 } from "@spiky-panda/core";
+import { Cartesian3 } from "spikypanda-core";
 import { IPmsmHousingFaultHost } from "../faults/PmsmFaultContracts";
 import { GravityVector } from "./GravityVector";
 import { IPmsmEnvNode } from "./IPmsmEnvNode";

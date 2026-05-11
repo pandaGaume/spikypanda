@@ -59,17 +59,19 @@ describe("RotorSagModel", () => {
         const gv = new GravityVector(GravityField.earth(), MotorTransform.horizontal());
         gv.advance(0);
         const sag = new RotorSagModel(REF_CFG, gv);
-        // theta_grav = atan2(0, 9.81) = 0 in horizontal earth (gravity along body +X).
+        // In horizontal earth (identity), g_body = (0, 0, -9.81). With
+        // shaft along body X, the radial plane is (Y, Z) and
+        // theta_grav = atan2(g.z, g.y) = atan2(-9.81, 0) = -pi/2.
         // Expected epsilon = 0.03 * 9.81 / (1e5 * 5e-4) = 5.88e-3.
         const expectedEpsilon = (REF_CFG.rotorMass * G) / (REF_CFG.bearingRadialStiffness * REF_CFG.airGap);
         expect(sag.currentEpsilon()).toBeCloseTo(expectedEpsilon, 6);
 
         const m = new StubMachine();
-        m.thetaM = 0;
+        m.thetaM = -Math.PI / 2; // aligned with gravity azimuth in body frame
         sag.preStep(0, m);
         expect(m.envelopes[0]).toBeCloseTo(1 + expectedEpsilon, 6);
 
-        m.thetaM = Math.PI;
+        m.thetaM = Math.PI / 2; // opposite : trough
         sag.preStep(0, m);
         expect(m.envelopes[1]).toBeCloseTo(1 - expectedEpsilon, 6);
     });
@@ -107,15 +109,14 @@ describe("BearingPreloadModel", () => {
     });
 
     it("verticalDown earth : axial augmented (downward gravity adds to axial preload), radial unchanged", () => {
-        // verticalDown : body Z along world -Z. Earth gravity along world -Z.
-        // g_body = R^T * g_world. Compute :
-        //   R_body_to_world = Ry(pi) -> body Z = (sin(pi),0,cos(pi)) = (0,0,-1).
-        //   R^T * [0,0,-9.81] = ... let's just trust the projection.
+        // verticalDown : body X (shaft) along world -Z (pitch = +pi/2).
+        // Earth gravity along world -Z, so g_body = (+9.81, 0, 0) :
+        // full axial along body +X, no radial.
         const gv = new GravityVector(GravityField.earth(), MotorTransform.verticalDown());
         gv.advance(0);
         const g = gv.motorFrameGravity();
         const bp = new BearingPreloadModel(REF_CFG, gv);
-        const expectedAxial = REF_CFG.nominalAxialPreload + REF_CFG.rotorMass * g.z;
+        const expectedAxial = REF_CFG.nominalAxialPreload + REF_CFG.rotorMass * g.x;
         expect(bp.effectiveAxialPreload()).toBeCloseTo(expectedAxial, 6);
         expect(bp.effectiveRadialPreload()).toBeCloseTo(REF_CFG.nominalRadialPreload, 6);
     });
@@ -133,7 +134,8 @@ describe("MountingComplianceModel", () => {
         for (const [, f] of h.forces) expect(Math.abs(f)).toBeLessThan(1e-9);
     });
 
-    it("horizontal earth : injects m * g on body x axis only", () => {
+    it("horizontal earth : injects m * g on body z axis only", () => {
+        // horizontal = identity, so g_body = g_world = (0, 0, -9.81).
         const gv = new GravityVector(GravityField.earth(), MotorTransform.horizontal());
         gv.advance(0);
         const mc = new MountingComplianceModel({ motorMass: 0.1 }, gv);
@@ -141,21 +143,23 @@ describe("MountingComplianceModel", () => {
         const h = new StubHousing();
         mc.postStep!(0, m, h);
         expect(h.forces[0][0]).toBe(0);
-        expect(h.forces[0][1]).toBeCloseTo(0.1 * G, 6);
-        expect(h.forces[1][1]).toBeCloseTo(0, 9);
-        expect(h.forces[2][1]).toBeCloseTo(0, 9);
+        expect(Math.abs(h.forces[0][1])).toBeLessThan(1e-9);
+        expect(Math.abs(h.forces[1][1])).toBeLessThan(1e-9);
+        expect(h.forces[2][1]).toBeCloseTo(-0.1 * G, 6);
     });
 
-    it("verticalUp earth : injects m * g on body z axis only", () => {
+    it("verticalUp earth : injects m * g on body x axis only", () => {
+        // verticalUp : shaft along world +Z. g_body = (-9.81, 0, 0) :
+        // gravity along body -X (axial).
         const gv = new GravityVector(GravityField.earth(), MotorTransform.verticalUp());
         gv.advance(0);
         const mc = new MountingComplianceModel({ motorMass: 0.1 }, gv);
         const m = new StubMachine();
         const h = new StubHousing();
         mc.postStep!(0, m, h);
-        expect(Math.abs(h.forces[0][1])).toBeLessThan(1e-9);
+        expect(h.forces[0][1]).toBeCloseTo(-0.1 * G, 6);
         expect(Math.abs(h.forces[1][1])).toBeLessThan(1e-9);
-        expect(h.forces[2][1]).toBeCloseTo(-0.1 * G, 6);
+        expect(Math.abs(h.forces[2][1])).toBeLessThan(1e-9);
     });
 
     it("rejects invalid configuration", () => {

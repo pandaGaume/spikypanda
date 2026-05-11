@@ -1,11 +1,12 @@
-import { Cartesian3, ICartesian3 } from "@spiky-panda/core";
+import { Cartesian3, ICartesian3 } from "spikypanda-core";
 import { ISimNode } from "../../../../interfaces/SimNode";
 
 // Convention :
-//   - The motor body frame has its Z axis aligned with the rotor shaft.
-//     X and Y span the rotor radial plane, with the rotor angle theta_m
-//     measured around +Z (right-hand rule).
-//   - "World" is the inertial reference frame in which gravity is defined.
+//   - The motor body frame has its X axis aligned with the rotor shaft
+//     (aircraft "forward" / axial direction). Y and Z span the rotor
+//     radial plane, with the rotor angle theta_m measured around +X
+//     (right-hand rule, theta_m = 0 along body +Y).
+//   - "World" is the inertial reference frame (ENU : Z up, gravity along -Z).
 //   - Internally we store R_bodyToWorld : a 3x3 rotation matrix that maps
 //     a vector expressed in the motor body frame to the same vector
 //     expressed in the world frame.
@@ -13,8 +14,12 @@ import { ISimNode } from "../../../../interfaces/SimNode";
 //     we use R_bodyToWorld^T (transpose).
 //
 // Euler convention : intrinsic ZYX (yaw around world Z, then pitch around
-// the new Y, then roll around the new X). This matches aerospace use and
-// the BlueNode UE5 default. All angles are in radians.
+// the new Y, then roll around the new X). R = Rz(yaw) * Ry(pitch) * Rx(roll).
+// All angles are in radians. With this body convention :
+//   - pitch = 0     : shaft horizontal along world +X         (= horizontal)
+//   - pitch = -pi/2 : shaft vertical along world +Z           (= verticalUp)
+//   - pitch = +pi/2 : shaft vertical along world -Z           (= verticalDown)
+// Aerospace "fuselage horizontal" maps to pitch = 0.
 type Mat3 = [
     [number, number, number],
     [number, number, number],
@@ -57,7 +62,7 @@ export class MotorTransform implements ISimNode {
     public readonly kind: string = "pmsm.env.transform";
 
     // Stored : R_bodyToWorld. Default : identity (body axes aligned with
-    // world axes).
+    // world axes, shaft along world +X = horizontal).
     private _R: Mat3 = identityMatrix3();
     private _label: string = "identity";
 
@@ -113,36 +118,41 @@ export class MotorTransform implements ISimNode {
 
     // Presets -------------------------------------------------------------
 
-    // Identity : body axes aligned with world axes. Body Z (shaft) points
-    // along world +Z, so this represents the motor mounted vertically with
-    // its shaft pointing "up" if world gravity points along -Z.
+    // Identity : body axes aligned with world axes. Body X (shaft) along
+    // world +X, so this represents the motor mounted with its shaft
+    // horizontal (aerospace pitch = 0 = fuselage level). Under earth
+    // gravity (g_world = [0, 0, -9.81]) gravity is fully radial.
     public static identity(): MotorTransform {
         const t = new MotorTransform();
         t._label = "identity";
         return t;
     }
 
-    // Shaft horizontal : body Z (shaft) lies along world +X. Achieved by
-    // pitching the body 90 degrees around world Y. Under earth gravity
-    // (g_world = [0, 0, -9.81]) this yields g_body = [9.81, 0, 0],
-    // so gravity is fully radial (perpendicular to the shaft) : the
-    // baseline orientation for Model A in the proposal section 4.3.
+    // Shaft horizontal : body X (shaft) along world +X. Same as identity.
+    // Under earth gravity (g_world = [0, 0, -9.81]) this yields
+    // g_body = [0, 0, -9.81], so gravity is fully radial (perpendicular
+    // to the shaft) : the baseline orientation for Model A in the proposal
+    // section 4.3.
     public static horizontal(): MotorTransform {
         const t = new MotorTransform();
-        t.setEulerZyx(0, Math.PI / 2, 0, "horizontal");
+        t._label = "horizontal";
         return t;
     }
 
-    // Shaft vertical, pointing "up" along world +Z. Under earth gravity
-    // g_body = [0, 0, -9.81] (fully axial). Sag mechanism vanishes here.
+    // Shaft vertical, pointing "up" along world +Z. Achieved by pitching
+    // the body by -pi/2 around Y. Under earth gravity g_body = [-9.81, 0, 0]
+    // (fully axial, along body -X). Sag mechanism vanishes here.
     public static verticalUp(): MotorTransform {
-        return MotorTransform.identity();
+        const t = new MotorTransform();
+        t.setEulerZyx(0, -Math.PI / 2, 0, "verticalUp");
+        return t;
     }
 
-    // Shaft vertical, pointing "down" along world -Z. Pitch 180 around Y.
+    // Shaft vertical, pointing "down" along world -Z. Pitch +pi/2 around Y.
+    // Under earth gravity g_body = [9.81, 0, 0] (fully axial along body +X).
     public static verticalDown(): MotorTransform {
         const t = new MotorTransform();
-        t.setEulerZyx(0, Math.PI, 0, "verticalDown");
+        t.setEulerZyx(0, Math.PI / 2, 0, "verticalDown");
         return t;
     }
 

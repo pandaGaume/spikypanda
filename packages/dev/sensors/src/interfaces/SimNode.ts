@@ -14,9 +14,31 @@
 // contracts (electrical, mechanical, chemical, thermal, ...) live next to
 // the modules they belong to (e.g. sources/motor/pmsm/faults/PmsmFaultContracts.ts
 // for PMSM-typed fault hosts), and extend ISimNode with their own typed
+
+import { ICartesian3, IQuaternion } from "spikypanda-core/geometry";
+
 // pre / post step signatures.
 export interface ISimNode {
     readonly kind: string;
     advance(t: number): void;
     reset(): void;
+}
+
+// X forward
+// Y right
+// Z up
+// Right-handed 
+export interface ISimTransformNode extends ISimNode {
+    position: ICartesian3;
+    rotation: IQuaternion;
+}
+
+// roll  arround X
+// pitch arround Y
+// yaw   arround Z 
+export interface ISimAttitude {
+    yaw: number;
+    pitch: number;
+    roll: number;
+    toQuaternion():IQuaternion;
 }

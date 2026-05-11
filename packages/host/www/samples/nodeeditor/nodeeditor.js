@@ -1526,6 +1526,16 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
                     var inst = exec && exec.getNodeInstance(node.id);
                     Object.keys(spec.config).forEach(function (k) {
                         var v = spec.config[k];
+                        // "enabled" is an IToggableNode runtime flag, not a
+                        // config schema key. Route it through setEnabled() so
+                        // the on-card toggle and the executor both update.
+                        if (k === 'enabled') {
+                            if (data && typeof data.setEnabled === 'function') {
+                                data.setEnabled(!!v);
+                            }
+                            if (exec) exec.setNodeRunning(node.id, !!v);
+                            return;
+                        }
                         // Route through setProperty when available: it handles
                         // type coercion, range clamping, and read-only guards.
                         // Falls back to a direct config write for legacy nodes.
@@ -1566,11 +1576,14 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
                         return;
                     }
                 } else {
-                    // Already in play mode: scope widgets may not have been
-                    // mounted yet (e.g. play mode was entered before the page
-                    // fully initialised, or after a hot-reload). Remount to
-                    // ensure _spkScopeWidgets is populated.
-                    mountPlayScopes();
+                    // Already in play mode: mount scopes only if none exist yet
+                    // (first call after hot-reload or deferred play-mode entry).
+                    // Do NOT remount when widgets are already live: that would
+                    // call clearPlayBody() and destroy active stream subscriptions,
+                    // which produces corrupted FFT output on subsequent captures.
+                    if (!playState.widgets || playState.widgets.length === 0) {
+                        mountPlayScopes();
+                    }
                 }
                 setTimeout(resolve, Math.max(0, (seconds || 0) * 1000));
             });
@@ -1669,9 +1682,13 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
         // ── toggleGravity(enabled) ────────────────────────────────────────
         // Enable or disable the WorldGravity node. When disabled the motor
         // receives a zero gravity vector (microgravity). Instant effect.
+        // Kept as a console convenience; the MCP uses scenario_configure_node
+        // with config={ enabled: bool } which goes through the same path.
         function toggleGravity(enabled) {
             var gNode = nodeByOp('spk.WorldGravity');
             if (!gNode) return false;
+            var data = gNode.item && gNode.item.data;
+            if (data && typeof data.setEnabled === 'function') data.setEnabled(!!enabled);
             var exec = playState.executor;
             if (exec) exec.setNodeRunning(gNode.id, !!enabled);
             return true;

@@ -21,6 +21,8 @@
         "bundle:dev": "npm run bundle:dev --workspace=@spiky-panda/core",
         "bundle:mcp": "npm run bundle --workspace=@spiky-panda/mcp",
         "bundle:mcp:dev": "npm run bundle:dev --workspace=@spiky-panda/mcp",
+        "bundle:sensors": "npm run bundle --workspace=@spiky-panda/sensors",
+        "bundle:sensors:dev": "npm run bundle:dev --workspace=@spiky-panda/sensors",
         "build:mcp:research": "npm run compile:research --workspace=@spiky-panda/mcp",
         "deploy:bundles": "node scripts/deploy-bundles.mjs",
         "deploy:mcp-bundles": "node scripts/deploy-mcp-bundles.mjs",
@@ -29,6 +31,8 @@
         "build:all": "npm run build:dev && npm run bundle && npm run deploy:bundles",
         "build:all:dev": "npm run build:dev && npm run bundle:dev && npm run deploy:bundles",
         "build:mcp": "npm run build:dev && npm run bundle:mcp && npm run deploy:bundles && npm run deploy:mcp-bundles",
+        "build:sensors": "npm run build:dev && npm run bundle:sensors && npm run deploy:bundles",
+        "build:sensors:dev": "npm run build:dev && npm run bundle:sensors:dev && npm run deploy:bundles",
         "server": "node --import ./packages/host/loader-register.mjs packages/host/server.mjs",
         "test": "jest --passWithNoTests",
         "test:watch": "jest --watch"

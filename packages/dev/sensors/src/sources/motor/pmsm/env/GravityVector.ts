@@ -1,4 +1,4 @@
-import { Cartesian3 } from "@spiky-panda/core";
+import { Cartesian3 } from "spikypanda-core";
 import { ISimNode } from "../../../../interfaces/SimNode";
 import { GravityField } from "./GravityField";
 import { MotorTransform } from "./MotorTransform";
@@ -13,13 +13,14 @@ import { MotorTransform } from "./MotorTransform";
 // Caching keeps repeated reads in the same tick free.
 //
 // Conventions :
-//   - motorFrameGravity().z is along the shaft axis.
-//   - radialMagnitude() = sqrt(gx^2 + gy^2) is the gravity component
+//   - motorFrameGravity().x is along the shaft axis.
+//   - radialMagnitude() = sqrt(gy^2 + gz^2) is the gravity component
 //     perpendicular to the shaft, the driving quantity for rotor sag.
-//   - axialMagnitude() = |gz| is the component along the shaft, the
+//   - axialMagnitude() = |gx| is the component along the shaft, the
 //     driving quantity for axial bearing preload modulation.
-//   - radialAngle() = atan2(gy, gx) is the azimuth of the gravity
-//     vector in the rotor (XY) plane, which fixes the sag direction.
+//   - radialAngle() = atan2(gz, gy) is the azimuth of the gravity
+//     vector in the rotor (YZ) plane, which fixes the sag direction.
+//     theta = 0 along body +Y (the same reference as theta_m = 0).
 export class GravityVector implements ISimNode {
     public readonly kind: string = "pmsm.env.gravity-vector";
 
@@ -49,15 +50,15 @@ export class GravityVector implements ISimNode {
     }
 
     public radialMagnitude(): number {
-        return Math.sqrt(this._gBody.x ** 2 + this._gBody.y ** 2);
+        return Math.sqrt(this._gBody.y ** 2 + this._gBody.z ** 2);
     }
 
     public axialMagnitude(): number {
-        return Math.abs(this._gBody.z);
+        return Math.abs(this._gBody.x);
     }
 
     public radialAngle(): number {
-        return Math.atan2(this._gBody.y, this._gBody.x);
+        return Math.atan2(this._gBody.z, this._gBody.y);
     }
 
     public magnitude(): number {

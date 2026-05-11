@@ -9,13 +9,13 @@ import { IPmsmEnvNode } from "./IPmsmEnvNode";
 //   delta_sag = m_rotor * g_perp / k_radial
 //
 // where g_perp is the magnitude of the body-frame gravity in the rotor
-// (XY) plane and k_radial is the radial bearing stiffness. The deflection
+// (YZ) plane and k_radial is the radial bearing stiffness. The deflection
 // shifts the rotor center off the magnetic axis ; the resulting air-gap
 // modulation amounts to a static eccentricity in the rotor frame oriented
-// along the projection of gravity in the XY plane :
+// along the projection of gravity in the YZ plane :
 //
 //   epsilon = delta_sag / g_0           (fractional gap modulation)
-//   theta_grav = atan2(g_y, g_x)        (azimuth of the sag in body frame)
+//   theta_grav = atan2(g_z, g_y)        (azimuth of the sag in body frame)
 //   flux_envelope(theta_m) = 1 + epsilon * cos(theta_m - theta_grav)
 //
 // This produces a 1x f_mech sideband on i_d / i_q after the FOC controller
@@ -75,7 +75,7 @@ export class RotorSagModel implements IPmsmEnvNode {
 
     // Rotating UMP : the interaction of the spinning PM field with the fixed
     // air-gap asymmetry produces a radial force component that rotates at
-    // fMech. Injected into the housing so accel_x / accel_y carry a 1x peak.
+    // fMech. Injected into the housing so accel_y / accel_z carry a 1x peak.
     // Skipped when umpRadialStiffness is zero (default backward-compat mode).
     public postStep(_t: number, machine: import("../faults/PmsmFaultContracts").IPmsmMachineFaultHost, housing: import("../faults/PmsmFaultContracts").IPmsmHousingFaultHost): void {
         if (!this.cfg.umpRadialStiffness) return;
@@ -85,9 +85,9 @@ export class RotorSagModel implements IPmsmEnvNode {
         if (delta < 1e-12) return;
         const F = this.cfg.umpRadialStiffness * delta;
         const theta = machine.thetaM - this.gravity.radialAngle();
-        // Body frame: Z = shaft axis, X and Y = radial (axes 0 and 1 in housing).
-        housing.addForce(0, F * Math.cos(theta));
-        housing.addForce(1, F * Math.sin(theta));
+        // Body frame: X = shaft axis, Y and Z = radial (axes 1 and 2 in housing).
+        housing.addForce(1, F * Math.cos(theta));
+        housing.addForce(2, F * Math.sin(theta));
     }
 
     // Diagnostic accessors used by tests and metadata exporters.
