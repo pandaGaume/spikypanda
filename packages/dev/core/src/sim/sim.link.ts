@@ -12,10 +12,18 @@ import { ISimLink } from "./sim.interfaces";
 export class SimLink extends GraphOLink implements ISimLink {
     @cloneable public slot: string | number;
     @cloneable public delayed: boolean;
+    @cloneable public enabled: boolean;
 
-    public constructor(oini?: INode, ofin?: INode, slot: string | number = 0, delayed: boolean = false) {
+    public constructor(
+        oini?: INode,
+        ofin?: INode,
+        slot: string | number = 0,
+        delayed: boolean = false,
+        enabled: boolean = true
+    ) {
         super(oini, ofin);
         this.slot = slot;
         this.delayed = delayed;
+        this.enabled = enabled;
     }
 }

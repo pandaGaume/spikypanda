@@ -15,15 +15,18 @@ import { ISimNode, SimPhase } from "./sim.interfaces";
  */
 export class SimNode extends GraphNode implements ISimNode {
     @cloneable public phases: ReadonlyArray<SimPhase>;
+    @cloneable public enabled: boolean;
 
     public constructor(
         onsc: Nullable<IOlink[]> = null,
         opsc: Nullable<IOlink[]> = null,
         position?: ICartesian,
-        phases: ReadonlyArray<SimPhase> = [SimPhase.Step]
+        phases: ReadonlyArray<SimPhase> = [SimPhase.Step],
+        enabled: boolean = true
     ) {
         super(onsc, opsc, position);
         this.phases = phases;
+        this.enabled = enabled;
     }
 
     public advance(_t: number, _phase: SimPhase): void {

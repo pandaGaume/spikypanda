@@ -1,4 +1,4 @@
-import { IGraph, INode, IOlink, isGraph, isNode, isOlink } from "../graph/graph.interfaces";
+import { IEnableable, IGraph, INode, IOlink, isEnableable, isGraph, isNode, isOlink } from "../graph/graph.interfaces";
 
 /**
  * Named scheduling phases. The scheduler runs nodes phase-by-phase in
@@ -23,7 +23,7 @@ export enum SimPhase {
  * invokes advance once per declared phase per tick, in graph-phase order.
  * Stateless single-phase nodes (e.g. ONNX compute ops) declare [Step].
  */
-export interface ISimNode extends INode {
+export interface ISimNode extends INode, IEnableable {
     readonly phases: ReadonlyArray<SimPhase>;
     advance(t: number, phase: SimPhase): void;
     reset(): void;
@@ -46,7 +46,7 @@ export interface ISimNode extends INode {
  * closed-loop topologies (e.g. an FOC controller reading machine state
  * from t-1).
  */
-export interface ISimLink extends IOlink {
+export interface ISimLink extends IOlink, IEnableable {
     readonly slot: string | number;
     readonly delayed: boolean;
 }
@@ -58,7 +58,15 @@ export interface ISimLink extends IOlink {
  * declare a subset of its parent's phases (e.g. an ONNX subgraph that
  * only runs in Step).
  */
-export interface ISimGraph<N extends ISimNode, L extends ISimLink> extends IGraph<N, L>, ISimNode {}
+export interface ISimGraph<N extends ISimNode, L extends ISimLink> extends IGraph<N, L>, ISimNode {
+    /**
+     * Run one full tick: iterate self.phases in declaration order and
+     * call advance(t, phase) for each. Convenience for the outermost
+     * graph driver; nested subgraphs are driven phase-by-phase by their
+     * parent via advance() and do not call tick() on themselves.
+     */
+    tick(t: number): void;
+}
 
 /**
  * Type guard for ISimNode.
@@ -66,6 +74,7 @@ export interface ISimGraph<N extends ISimNode, L extends ISimLink> extends IGrap
 export function isSimNode<N extends ISimNode>(obj: unknown): obj is N {
     return (
         isNode(obj) &&
+        isEnableable(obj) &&
         "phases" in obj &&
         Array.isArray((obj as ISimNode).phases) &&
         "advance" in obj &&
@@ -79,7 +88,7 @@ export function isSimNode<N extends ISimNode>(obj: unknown): obj is N {
  * Type guard for ISimLink.
  */
 export function isSimLink<L extends ISimLink>(obj: unknown): obj is L {
-    if (!isOlink(obj)) {
+    if (!isOlink(obj) || !isEnableable(obj)) {
         return false;
     }
     const slot = (obj as ISimLink).slot;
@@ -95,5 +104,5 @@ export function isSimLink<L extends ISimLink>(obj: unknown): obj is L {
  * Type guard for ISimGraph.
  */
 export function isSimGraph<N extends ISimNode, L extends ISimLink>(obj: unknown): obj is ISimGraph<N, L> {
-    return isGraph<N, L>(obj) && isSimNode<N>(obj);
+    return isGraph<N, L>(obj) && isSimNode<N>(obj) && "tick" in obj && typeof (obj as ISimGraph<N, L>).tick === "function";
 }

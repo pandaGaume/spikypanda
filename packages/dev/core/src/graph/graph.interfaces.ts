@@ -47,6 +47,23 @@ export interface IHasBag {
     bag?: unknown;
 }
 
+/**
+ * Toggleable runtime state. When enabled is false, the consumer (e.g.
+ * the sim scheduler) treats the bearer as inert: skipped during
+ * execution, ignored for dependency calculations. The bearer remains in
+ * place so topology and identity are preserved.
+ */
+export interface IEnableable {
+    enabled: boolean;
+}
+
+/**
+ * Type guard for IEnableable.
+ */
+export function isEnableable(obj: unknown): obj is IEnableable {
+    return typeof obj === "object" && obj !== null && "enabled" in obj && typeof (obj as IEnableable).enabled === "boolean";
+}
+
 export interface IGraphItem extends IDisposable, ICloneable, ITaggable, IIDentifiable, IHasBag {}
 
 export interface INode extends IGraphItem {
