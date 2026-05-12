@@ -1,4 +1,4 @@
-import { ICnnGraph, ICnnNeuron, ICnnSynapse, IKernel, ICnnLayerDescriptor } from "spikypanda-core";
+import { ICnnGraph, ICnnNeuron, ICnnSynapse, IConvKernel, ICnnLayerDescriptor } from "spikypanda-core";
 
 /// <summary>
 /// Branch identifier for stereo neurons.
@@ -56,8 +56,8 @@ export interface IStereoCnnGraph extends ICnnGraph {
     leftLayerDescriptors: ICnnLayerDescriptor[];
     rightLayerDescriptors: ICnnLayerDescriptor[];
     mergeLayerDescriptor: ICnnLayerDescriptor;
-    sharedKernels: IKernel[];
-    crossKernels: IKernel[];
+    sharedKernels: IConvKernel[];
+    crossKernels: IConvKernel[];
 }
 
 export function isStereoCnnNeuron(obj: unknown): obj is IStereoCnnNeuron {

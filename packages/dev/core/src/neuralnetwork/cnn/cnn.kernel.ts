@@ -1,12 +1,12 @@
 import { IWeightInitializer, He } from "../nn.weights";
-import { IKernel } from "./cnn.interfaces";
+import { IConvKernel } from "./cnn.interfaces";
 
 /// <summary>
 /// A convolutional kernel (filter) holding shared weights.
 /// Size = height × width × inputChannels.
 /// Multiple synapses across spatial positions share these weights.
 /// </summary>
-export class Kernel implements IKernel {
+export class ConvKernel implements IConvKernel {
     public readonly weights: number[];
     public bias: number;
 

@@ -1,4 +1,4 @@
-import { ComputeGraph, ComputeNodeBase, DataLink, IComputeNode, ITensor } from "spikypanda-core";
+import { ComputeGraph, Kernel, DataLink, IKernel, ITensor } from "spikypanda-core";
 import type { OnnxParseResult } from "./onnx-parser";
 import type { OnnxValueInfo } from "./onnx-types";
 import type { OnnxTensorInfo } from "./onnx-types";
@@ -7,7 +7,7 @@ import { OnnxOpRegistry, getInitializerData, makeTensor } from "./registry";
 /**
  * Source node that provides a constant tensor (from an ONNX initializer).
  */
-class InitializerNode extends ComputeNodeBase {
+class InitializerNode extends Kernel {
     readonly nodeType = "onnx_initializer";
     readonly outputShapes: number[][];
     private readonly tensor: ITensor;
@@ -27,7 +27,7 @@ class InitializerNode extends ComputeNodeBase {
 /**
  * Source node for external graph inputs.
  */
-class InputNode extends ComputeNodeBase {
+class InputNode extends Kernel {
     readonly nodeType = "onnx_input";
     readonly outputShapes: number[][];
     readonly inputName: string;
@@ -58,14 +58,14 @@ export class OnnxGraphBuilder {
     }
 
     build(model: OnnxParseResult): { graph: ComputeGraph; inputNames: string[]; outputNames: string[] } {
-        const nodes: IComputeNode[] = [];
+        const nodes: IKernel[] = [];
         const links: DataLink[] = [];
 
         // Map tensor name -> the node that produces it + output index
-        const tensorProducer = new Map<string, { node: IComputeNode; outputIndex: number }>();
+        const tensorProducer = new Map<string, { node: IKernel; outputIndex: number }>();
 
         // Map tensor name -> list of consumers (node + input index)
-        const tensorConsumers: { tensorName: string; node: IComputeNode; inputIndex: number }[] = [];
+        const tensorConsumers: { tensorName: string; node: IKernel; inputIndex: number }[] = [];
 
         // Build initializer map
         const initMap = new Map<string, OnnxTensorInfo>();
@@ -125,8 +125,8 @@ export class OnnxGraphBuilder {
                 continue;
             }
             const link = new DataLink(
-                producer.node as IComputeNode,
-                consumer.node as IComputeNode,
+                producer.node as IKernel,
+                consumer.node as IKernel,
                 consumer.inputIndex,
             );
             links.push(link);

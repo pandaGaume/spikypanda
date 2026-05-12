@@ -203,7 +203,7 @@ export class AutoencoderBuilder {
 
     /// <summary>
     /// Initial weight sync between encoder and autoencoder dense layers.
-    /// Kernel weights are shared by reference. Dense weights need explicit sync after training.
+    /// ConvKernel weights are shared by reference. Dense weights need explicit sync after training.
     /// </summary>
     private _shareDenseWeights(_encoder: ICnnGraph, _autoencoder: ICnnGraph): void {
         // Kernels are already shared by reference (assigned above).

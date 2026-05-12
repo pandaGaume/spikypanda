@@ -43,12 +43,12 @@ export interface IIDentifiable {
     id?: any;
 }
 
-export interface IHasBag {
+export interface IHasBag<T=unknown> {
     /**
      * Runtime-only container for execution context.
      * Can be safely overwritten between runs.
      */
-    bag?: unknown;
+    bag?: T;
 }
 
 /**
@@ -72,9 +72,9 @@ export function isEnableable(obj: unknown): obj is IEnableable {
     return typeof candidate.enabled === "boolean";
 }
 
-export interface IGraphItem extends IDisposable, ICloneable, ITaggable, IIDentifiable, IHasBag {}
+export interface IGraphItem<B=unknown> extends IDisposable, ICloneable, ITaggable, IIDentifiable, IHasBag<B> {}
 
-export interface INode extends IGraphItem {
+export interface INode<B=unknown> extends IGraphItem<B> {
     position?: ICartesian;
     onsc<L extends IOlink>(): Array<L>;
     opsc<L extends IOlink>(): Array<L>;
@@ -85,7 +85,7 @@ export interface INode extends IGraphItem {
 // or attach specific properties to a group of nodes or links.
 export interface INodeSet<N extends INode> extends Array<N> {}
 
-export interface IOlink extends IGraphItem {
+export interface IOlink<B=unknown> extends IGraphItem<B> {
     oini: Nullable<INode>;
     ofin: Nullable<INode>;
 }

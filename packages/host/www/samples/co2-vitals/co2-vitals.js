@@ -641,7 +641,7 @@ function controllerMPC(co2, crewSize, scrubberRate) {
 // ── MPC adapter (identical to sample 1) ───────────────────────────────
 function createMpcAdapter() {
     if (!RT) return null;
-    class AdapterNode extends RT.ComputeNodeBase {
+    class AdapterNode extends RT.Kernel {
         constructor() {
             super();
             this.id = "mpc_adapter_input";

@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // Compute graph interfaces : ONNX-like configurable data flow pipeline
 //
-// Specialisation of core/execution for tensor-flow graphs. IComputeNode
+// Specialisation of core/execution for tensor-flow graphs. IKernel
 // extends IRuntimeNode with the kernel-style execute(inputs[]):outputs[]
 // contract; IDataLink narrows IChannel<ITensor> to a numeric slot
 // (matches ONNX positional input indexing). ComputeGraph defaults to
@@ -58,7 +58,7 @@ export interface IDataLink extends IChannel<ITensor> {
  * fire(). `lastOutputs` lets sink collectors retrieve the per-node
  * output set without re-reading channel state.
  */
-export interface IComputeNodeBag {
+export interface IKernelBag {
     /** Cached output tensors from the last fire(). */
     lastOutputs?: ITensor[];
     /** Pre-injected external input tensor for source nodes (set by ComputeGraph.run before session.run). */
@@ -69,7 +69,7 @@ export interface IComputeNodeBag {
  * A processing stage in the compute graph.
  *
  * Extends IRuntimeNode with the kernel-style execute(inputs[]):outputs[]
- * contract. ComputeNodeBase provides the fire(session, t) adapter that
+ * contract. Kernel provides the fire(session, t) adapter that
  * gathers inputs from incoming channels (via session.consume), calls
  * execute(), and publishes outputs to outgoing channels (via session
  * .publish), so concrete ops stay agnostic of the session API.
@@ -81,7 +81,7 @@ export interface IComputeNodeBag {
  *   Inputs are gathered from opsc() in slot-sorted order.
  * - **Sink**: terminal node whose lastOutputs are collected by run().
  */
-export interface IComputeNode extends IRuntimeNode {
+export interface IKernel extends IRuntimeNode<IKernelBag> {
     /**
      * Human-readable node type for debugging (e.g., "lidar_source", "convolution").
      */
@@ -109,13 +109,13 @@ export interface IComputeNode extends IRuntimeNode {
 
     /**
      * Optional async execution for nodes that require it (GPU, ONNX
-     * runtime, Web Workers). When present, ComputeNodeBase.fireAsync
+     * runtime, Web Workers). When present, Kernel.fireAsync
      * awaits this; CPU-only nodes do not need to implement it.
      */
     executeAsync?(inputs: ITensor[]): Promise<ITensor[]>;
 
     // fireAsync is inherited from IRuntimeNode (mandatory there) and
-    // overridden by ComputeNodeBase to route through executeAsync.
+    // overridden by Kernel to route through executeAsync.
 }
 
 // ─── Compute graph ───────────────────────────────────────────────────────────
@@ -123,11 +123,11 @@ export interface IComputeNode extends IRuntimeNode {
 /**
  * A directed acyclic graph of compute nodes connected by data links.
  *
- * Pure typing narrow of IRuntimeGraph<IComputeNode, IDataLink>: no own
+ * Pure typing narrow of IRuntimeGraph<IKernel, IDataLink>: no own
  * members. run() / runAsync() come from IRunnable via IRuntimeGraph; the
  * named-tensor convenience (infer / inferAsync, returning Map<string,
  * ITensor>) lives on the concrete ComputeGraph class only.
  */
-export interface IComputeGraph extends IRuntimeGraph<IComputeNode, IDataLink> {
+export interface IComputeGraph extends IRuntimeGraph<IKernel, IDataLink> {
     // no own members; pure typing narrow.
 }

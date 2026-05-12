@@ -1,4 +1,4 @@
-import { CnnSynapse, IKernel, INode } from "spikypanda-core";
+import { CnnSynapse, IConvKernel, INode } from "spikypanda-core";
 import { IStereoCnnSynapse } from "./stereo.interfaces";
 
 /// <summary>
@@ -13,7 +13,7 @@ export class StereoCnnSynapse extends CnnSynapse implements IStereoCnnSynapse {
     public constructor(
         oini: INode,
         ofin: INode,
-        kernel: IKernel | null = null,
+        kernel: IConvKernel | null = null,
         kernelIndex: number = -1,
         directWeight: number = 0,
         cross: boolean = false,

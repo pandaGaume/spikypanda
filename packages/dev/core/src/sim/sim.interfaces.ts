@@ -33,6 +33,16 @@ export interface ISimSession extends ISession {
 }
 
 /**
+ * Per-node session-bag for phased nodes. Marker interface for now:
+ * subclasses extending PhasedNode that need richer temporal state
+ * (last-fired timestamp per phase, integrator accumulators, etc.)
+ * declare their own interface extending this and re-parameterise
+ * `PhasedNode<B extends IPhasedNodeBag = IPhasedNodeBag>`.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface IPhasedNodeBag {}
+
+/**
  * Opt-in marker for nodes that gate themselves on the current phase.
  * Nodes not implementing this fire whenever their inputs are ready,
  * regardless of phase (pure KPN behaviour). Nodes implementing this

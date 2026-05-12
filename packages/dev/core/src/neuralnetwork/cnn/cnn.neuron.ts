@@ -4,8 +4,9 @@ import { Nullable } from "../../types";
 import { Neuron } from "../nn.neuron";
 import { CnnLayerType, ICnnNeuron, PoolingType } from "./cnn.interfaces";
 import type { IActivationFunction } from "../ann/mlp/mlp.interfaces";
+import type { ICnnBackpropNeuronContext } from "./training/cnn.training.interfaces";
 
-export class CnnNeuron extends Neuron implements ICnnNeuron {
+export class CnnNeuron extends Neuron<ICnnBackpropNeuronContext> implements ICnnNeuron {
     @cloneable public layerType: CnnLayerType;
     @cloneable public bias: number;
     @cloneable public activationFn?: IActivationFunction;

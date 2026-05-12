@@ -1,27 +1,25 @@
-import { IMlpNeuron, IMlpSynapse, IInferenceNeuronContext, isMlpNeuron } from "./mlp.interfaces";
-import { IBackpropNeuronContext, IBackpropSynapseContext } from "./training";
+import { IMlpNeuron, IMlpSynapse, isMlpNeuron } from "./mlp.interfaces";
 
 export class MLPRuntimeUtils {
     public static resetInferenceContext(neuron: IMlpNeuron): void {
+        const numInputs = neuron.opsc<IMlpSynapse>()?.length ?? 0;
         if (!neuron.bag) {
-            const numInputs = neuron.opsc<IMlpSynapse>()?.length ?? 0;
             neuron.bag = { sum: 0, activation: 0, remainingInputs: numInputs, totalInputs: numInputs };
         } else {
-            const bag = neuron.bag as IInferenceNeuronContext;
-            bag.sum = 0;
-            bag.activation = 0;
-            bag.remainingInputs = bag.totalInputs;
+            neuron.bag.sum = 0;
+            neuron.bag.activation = 0;
+            neuron.bag.remainingInputs = neuron.bag.totalInputs;
         }
     }
 
     public static resetBackpropContext(item: IMlpNeuron | IMlpSynapse): void {
         if (isMlpNeuron(item)) {
-            if (!item.bag) {
-                item.bag = { error: 0, gradient: 0 };
-            } else {
-                const bag = item.bag as IBackpropNeuronContext;
-                bag.error = 0;
-                bag.gradient = 0;
+            // Backprop fields are optional in IBackpropNeuronContext; reset
+            // them on existing bag. A fresh bag is initialized by the
+            // inference pass via resetInferenceContext().
+            if (item.bag) {
+                item.bag.error = 0;
+                item.bag.gradient = 0;
             }
             return;
         }
@@ -35,13 +33,12 @@ export class MLPRuntimeUtils {
                 weightDelta: 0,
             };
         } else {
-            const bag = item.bag as IBackpropSynapseContext;
-            bag.gradient = 0;
-            bag.velocity = 0;
-            bag.m = 0;
-            bag.v = 0;
-            bag.prelookedWeight = 0;
-            bag.weightDelta = 0;
+            item.bag.gradient = 0;
+            item.bag.velocity = 0;
+            item.bag.m = 0;
+            item.bag.v = 0;
+            item.bag.prelookedWeight = 0;
+            item.bag.weightDelta = 0;
         }
     }
 }

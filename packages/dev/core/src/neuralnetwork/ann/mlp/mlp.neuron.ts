@@ -3,8 +3,9 @@ import { cloneable, IOlink } from "../../../graph";
 import { Nullable } from "../../../types";
 import { Neuron } from "../../nn.neuron";
 import { IActivationFunction, IMlpNeuron } from "./mlp.interfaces";
+import type { IBackpropNeuronContext } from "./training/mlp.training.interfaces";
 
-export class MlpNeuron extends Neuron implements IMlpNeuron {
+export class MlpNeuron extends Neuron<IBackpropNeuronContext> implements IMlpNeuron {
     @cloneable public bias: number = 0;
     @cloneable activationFn?: IActivationFunction | undefined;
 

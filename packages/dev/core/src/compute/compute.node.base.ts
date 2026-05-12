@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// ComputeNodeBase : abstract base for tensor-flow compute nodes.
+// Kernel : abstract base for tensor-flow compute nodes.
 //
 // Adapts the kernel-style `execute(inputs[]):outputs[]` contract to the
 // runtime fire(session, t) contract: gathers inputs from opsc channels
@@ -11,9 +11,9 @@
 
 import { ISession } from "../execution/execution.interfaces";
 import { RuntimeNode } from "../execution/execution.node";
-import { IComputeNode, IComputeNodeBag, IDataLink, ITensor } from "./compute.interfaces";
+import { IKernel, IKernelBag, IDataLink, ITensor } from "./compute.interfaces";
 
-export abstract class ComputeNodeBase extends RuntimeNode implements IComputeNode {
+export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel {
     public abstract readonly nodeType: string;
     public abstract readonly outputShapes: number[][];
 
@@ -51,7 +51,7 @@ export abstract class ComputeNodeBase extends RuntimeNode implements IComputeNod
             // Source node: pull the pre-injected external tensor from
             // bag.pendingInput. ComputeGraph.run stashes it before
             // running the session.
-            const bag = this.bag as IComputeNodeBag | undefined;
+            const bag = this.bag as IKernelBag | undefined;
             return bag?.pendingInput ? [bag.pendingInput] : [];
         }
 
@@ -80,7 +80,7 @@ export abstract class ComputeNodeBase extends RuntimeNode implements IComputeNod
 
     private _publishOutputs(session: ISession, outputs: ITensor[]): void {
         // Stash for sink collection by ComputeGraph._collectResults.
-        const bag = (this.bag ?? {}) as IComputeNodeBag;
+        const bag = (this.bag ?? {}) as IKernelBag;
         bag.lastOutputs = outputs;
         this.bag = bag;
 

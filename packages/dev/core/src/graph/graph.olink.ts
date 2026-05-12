@@ -2,7 +2,7 @@ import { Nullable } from "../types";
 import { GraphItem } from "./graph.graphItem";
 import { INode, IOlink } from "./graph.interfaces";
 
-export class GraphOLink extends GraphItem implements IOlink {
+export class GraphOLink<B = unknown> extends GraphItem<B> implements IOlink<B> {
     private _oini: Nullable<INode>;
     public _ofin: Nullable<INode>;
 

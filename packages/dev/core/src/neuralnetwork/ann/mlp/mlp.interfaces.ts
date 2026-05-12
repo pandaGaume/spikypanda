@@ -1,5 +1,7 @@
 import { IGraph } from "../../../graph";
 import { INeuron, ISynapse } from "../../nn.interfaces";
+import type { IBackpropNeuronContext } from "./training/mlp.training.interfaces";
+import type { IBackpropSynapseContext } from "../../nn.training";
 
 /// <summary>
 /// Represents an activation function and its derivative.
@@ -21,7 +23,7 @@ export interface IInferenceNeuronContext {
 /// Represents a neuron in a Multi-Layer Perceptron (MLP).
 /// It exposes its own state directly and includes a configurable bias.
 /// </summary>
-export interface IMlpNeuron extends INeuron {
+export interface IMlpNeuron extends INeuron<IBackpropNeuronContext> {
     /// <summary>Bias added before applying the activation function</summary>
     bias: number;
     /// <summary>Optional activation function (default = ReLU)</summary>
@@ -38,7 +40,7 @@ export function isMlpNeuron(obj: unknown): obj is IMlpNeuron {
 /// <summary>
 /// Represents a synapse (connection) in an MLP network.
 /// </summary>
-export interface IMlpSynapse extends ISynapse {}
+export interface IMlpSynapse extends ISynapse<IBackpropSynapseContext> {}
 
 /// <summary>
 /// A complete MLP graph composed of neurons and synapses.

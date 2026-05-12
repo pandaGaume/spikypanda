@@ -3,7 +3,7 @@ import { GraphNode, IOlink } from "../graph";
 import { Nullable } from "../types";
 import { INeuron } from "./nn.interfaces";
 
-export class Neuron extends GraphNode implements INeuron {
+export class Neuron<B = unknown> extends GraphNode<B> implements INeuron<B> {
 
     constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian){
         super(onsc,opsc,position);

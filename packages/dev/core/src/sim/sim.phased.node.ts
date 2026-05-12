@@ -4,7 +4,7 @@ import { cloneable } from "../graph/graph.interfaces";
 import { ISession } from "../execution/execution.interfaces";
 import { RuntimeNode } from "../execution/execution.node";
 import { Nullable } from "../types";
-import { isSimSession, ISupportsPhasing, SimPhase } from "./sim.interfaces";
+import { IPhasedNodeBag, isSimSession, ISupportsPhasing, SimPhase } from "./sim.interfaces";
 
 /**
  * Base class for nodes that gate themselves on the current sim phase.
@@ -21,7 +21,7 @@ import { isSimSession, ISupportsPhasing, SimPhase } from "./sim.interfaces";
  * phase-awareness as a node-side concern, matching our separation
  * between core/execution (pure dataflow) and core/sim (phase concept).
  */
-export class PhasedNode extends RuntimeNode implements ISupportsPhasing {
+export class PhasedNode<B extends IPhasedNodeBag = IPhasedNodeBag> extends RuntimeNode<B> implements ISupportsPhasing {
     @cloneable public phases: ReadonlyArray<SimPhase>;
 
     public constructor(

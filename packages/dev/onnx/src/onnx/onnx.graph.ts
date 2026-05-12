@@ -10,10 +10,10 @@
 // pacing).
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { ComputeGraph, IComputeNode, IDataLink } from "spikypanda-core";
+import { ComputeGraph, IKernel, IDataLink } from "spikypanda-core";
 
 export class OnnxGraph extends ComputeGraph {
-    public constructor(nodes: IComputeNode[], links: IDataLink[]) {
+    public constructor(nodes: IKernel[], links: IDataLink[]) {
         super(nodes, links, "static");
     }
 }

@@ -10,7 +10,7 @@ import { IChannel, IRuntimeNode, ISession } from "./execution.interfaces";
  * subclasses override. State lives in the session, not on the node, so
  * one instance is safe across N parallel sessions.
  */
-export class RuntimeNode extends GraphNode implements IRuntimeNode {
+export class RuntimeNode<B = unknown> extends GraphNode<B> implements IRuntimeNode<B> {
     @cloneable public enabled: boolean;
 
     public constructor(

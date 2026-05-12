@@ -1,9 +1,9 @@
 import { CloneMetadataKey, IGraphItem, IsCloneable, ITaggable } from "./graph.interfaces";
 
-export class GraphItem implements IGraphItem {
+export class GraphItem<B = unknown> implements IGraphItem<B> {
     private _id?:any;
     private _tag?: string;
-    private _bag?: unknown;
+    private _bag?: B;
 
     public get tag(): string | undefined {
         return this._tag;
@@ -17,11 +17,11 @@ export class GraphItem implements IGraphItem {
         this._id = v;
     }
 
-    public get bag() : unknown | undefined{
+    public get bag() : B | undefined{
         return this._bag;
     }
 
-    public set bag(v:unknown) {
+    public set bag(v: B | undefined) {
         this._bag = v;
     }
 

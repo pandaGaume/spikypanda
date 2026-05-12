@@ -1,11 +1,11 @@
-import { ComputeNodeBase, ITensor } from "spikypanda-core";
+import { Kernel, ITensor } from "spikypanda-core";
 import { OnnxDataType } from "./onnx-types";
 import type { OnnxNodeInfo, OnnxTensorInfo } from "./onnx-types";
 
 /**
- * Factory function that creates a ComputeNodeBase from an ONNX node definition.
+ * Factory function that creates a Kernel from an ONNX node definition.
  */
-export type OnnxOpFactory = (nodeInfo: OnnxNodeInfo, initializers: Map<string, OnnxTensorInfo>) => ComputeNodeBase;
+export type OnnxOpFactory = (nodeInfo: OnnxNodeInfo, initializers: Map<string, OnnxTensorInfo>) => Kernel;
 
 export interface OnnxOpEntry {
     factory: OnnxOpFactory;
@@ -51,7 +51,7 @@ export class OnnxOpRegistry {
     /**
      * Create a node using the highest-priority factory.
      */
-    create(nodeInfo: OnnxNodeInfo, initializers: Map<string, OnnxTensorInfo>): ComputeNodeBase {
+    create(nodeInfo: OnnxNodeInfo, initializers: Map<string, OnnxTensorInfo>): Kernel {
         const list = this.entries.get(nodeInfo.opType);
         if (!list || list.length === 0) {
             throw new Error(`No ONNX op implementation for: ${nodeInfo.opType}`);
@@ -99,7 +99,7 @@ export class OnnxOpRegistry {
 /**
  * Base class for ONNX op nodes. Provides attribute access helpers.
  */
-export abstract class OnnxOpNode extends ComputeNodeBase {
+export abstract class OnnxOpNode extends Kernel {
     readonly opType: string;
     protected readonly attributes: Map<string, number>;
     protected readonly tensorAttributes: Map<string, OnnxTensorInfo>;

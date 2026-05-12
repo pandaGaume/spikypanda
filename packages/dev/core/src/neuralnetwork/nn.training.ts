@@ -5,7 +5,7 @@ import { ISynapse } from "./nn.interfaces";
 /// </summary>
 export interface IBackpropSynapseContext {
     /// <summary>Gradient of the loss with respect to the synaptic weight</summary>
-    gradient: number;
+    gradient?: number;
 
     /// <summary>Velocity term used in momentum-based optimizers (e.g., SGD with momentum, NAG)</summary>
     velocity?: number;

@@ -7,7 +7,7 @@ describe("CnnInferenceRuntime", () => {
         const graph = new CnnBuilder().addInputLayer(2, 2, 1).addConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.linear }).build();
 
         // Set kernel weights manually: [1, 2, 3, 4] (row-major)
-        // Kernel index layout: ic*kH*kW + kr*kW + kc
+        // ConvKernel index layout: ic*kH*kW + kr*kW + kc
         // For 1 input channel, 2×2 kernel: [0,0]=0, [0,1]=1, [1,0]=2, [1,1]=3
         const kernel = graph.kernels[0];
         kernel.weights[0] = 1;

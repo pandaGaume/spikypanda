@@ -4,7 +4,7 @@ import {
     ICnnGraph,
     ICnnNeuron,
     ICnnSynapse,
-    IKernel,
+    IConvKernel,
     PoolingType,
 } from "../cnn.interfaces";
 import { CnnInferenceRuntime } from "../cnn.inference";
@@ -18,10 +18,10 @@ export class CnnTrainingRuntime {
     private _context: ITrainingContext = { iteration: 0 };
 
     // Pre-allocated optimizer proxy slots for kernel weights and biases
-    private _kernelWeightSlots: Map<IKernel, KernelWeightSlot[]> = new Map();
-    private _kernelBiasSlots: Map<IKernel, KernelBiasSlot> = new Map();
+    private _kernelWeightSlots: Map<IConvKernel, KernelWeightSlot[]> = new Map();
+    private _kernelBiasSlots: Map<IConvKernel, KernelBiasSlot> = new Map();
     // Maps each kernel to the conv neurons that use it (for bias sync)
-    private _kernelNeuronMap: Map<IKernel, ICnnNeuron[]> = new Map();
+    private _kernelNeuronMap: Map<IConvKernel, ICnnNeuron[]> = new Map();
 
     public constructor(
         public readonly graph: ICnnGraph,
@@ -151,7 +151,7 @@ export class CnnTrainingRuntime {
 
             // If this neuron feeds into pool layers, its gradient was already set by _backpropPool
             // We add the downstream sum from non-pool targets
-            const poolGrad = bag.gradient; // may have been set by pool backprop
+            const poolGrad = bag.gradient ?? 0; // may have been set by pool backprop
             bag.gradient = activationPrime(activation) * downstreamSum + poolGrad;
         }
     }
@@ -216,7 +216,7 @@ export class CnnTrainingRuntime {
                 // Route entire gradient to max input
                 if (maxNeuron) {
                     const maxBag = maxNeuron.bag as ICnnBackpropNeuronContext;
-                    maxBag.gradient += bag.gradient;
+                    maxBag.gradient = (maxBag.gradient ?? 0) + (bag.gradient ?? 0);
                 }
             } else {
                 // Avg pool: distribute gradient equally
@@ -224,14 +224,14 @@ export class CnnTrainingRuntime {
                 for (const syn of inSynapses) {
                     const src = syn.oini as ICnnNeuron;
                     const srcBag = src.bag as ICnnBackpropNeuronContext;
-                    srcBag.gradient += bag.gradient / n;
+                    srcBag.gradient = (srcBag.gradient ?? 0) + (bag.gradient ?? 0) / n;
                 }
             }
         }
     }
 
     private _applyGradients(): void {
-        // 1. Kernel weight gradients — accumulate and apply
+        // 1. ConvKernel weight gradients — accumulate and apply
         for (const kernel of this.graph.kernels) {
             const slots = this._kernelWeightSlots.get(kernel)!;
             const neurons = this._kernelNeuronMap.get(kernel)!;
@@ -242,14 +242,15 @@ export class CnnTrainingRuntime {
 
             for (const neuron of neurons) {
                 const neuronBag = neuron.bag as ICnnBackpropNeuronContext;
-                biasGrad += neuronBag.gradient;
+                const neuronGrad = neuronBag.gradient ?? 0;
+                biasGrad += neuronGrad;
 
                 // Each incoming conv synapse contributes to the kernel weight gradient
                 for (const syn of neuron.opsc<ICnnSynapse>() ?? []) {
                     if (syn.kernel === kernel) {
                         const src = syn.oini as ICnnNeuron;
                         const srcBag = src.bag as ICnnBackpropNeuronContext;
-                        weightGrads[syn.kernelIndex] += neuronBag.gradient * srcBag.activation;
+                        weightGrads[syn.kernelIndex] += neuronGrad * srcBag.activation;
                     }
                 }
             }
@@ -278,7 +279,7 @@ export class CnnTrainingRuntime {
             const srcBag = src.bag as ICnnBackpropNeuronContext;
             const targetBag = target.bag as ICnnBackpropNeuronContext;
 
-            const gradient = targetBag.gradient * srcBag.activation;
+            const gradient = (targetBag.gradient ?? 0) * srcBag.activation;
             const synBag = (syn.bag ??= {}) as IBackpropSynapseContext;
             synBag.gradient = gradient;
 

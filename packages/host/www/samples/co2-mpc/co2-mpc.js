@@ -211,8 +211,8 @@ function createMpcAdapter() {
 
     // The adapter node wraps the trained dynamics graph and applies the
     // known scrubber lag analytically. Implemented as an ES6 class because
-    // ComputeNodeBase is an ES6 class and cannot be called with .call(this).
-    class AdapterNode extends RT.ComputeNodeBase {
+    // Kernel is an ES6 class and cannot be called with .call(this).
+    class AdapterNode extends RT.Kernel {
         constructor() {
             super();
             this.id = "mpc_adapter_input";

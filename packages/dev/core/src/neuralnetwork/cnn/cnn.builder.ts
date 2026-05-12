@@ -1,11 +1,11 @@
 import { Cartesian3 } from "../../geometry";
 import { ActivationFunctions } from "../ann/mlp/mlp.activation";
 import { IWeightInitializer, He, Uniform } from "../nn.weights";
-import { CnnLayerType, IActivationFunction, ICnnGraph, ICnnLayerDescriptor, ICnnNeuron, ICnnSynapse, IKernel, PaddingType, PoolingType } from "./cnn.interfaces";
+import { CnnLayerType, IActivationFunction, ICnnGraph, ICnnLayerDescriptor, ICnnNeuron, ICnnSynapse, IConvKernel, PaddingType, PoolingType } from "./cnn.interfaces";
 import { CnnGraph } from "./cnn.graph";
 import { CnnNeuron } from "./cnn.neuron";
 import { CnnSynapse } from "./cnn.synapse";
-import { Kernel } from "./cnn.kernel";
+import { ConvKernel } from "./cnn.kernel";
 
 export interface ConvLayerConfig {
     filters: number;
@@ -120,7 +120,7 @@ export class CnnBuilder {
 
         const allNeurons: ICnnNeuron[] = [];
         const allSynapses: ICnnSynapse[] = [];
-        const allKernels: IKernel[] = [];
+        const allKernels: IConvKernel[] = [];
         const layerDescriptors: ICnnLayerDescriptor[] = [];
 
         let prevDescriptor: ICnnLayerDescriptor | null = null;
@@ -190,7 +190,7 @@ export class CnnBuilder {
         prev: ICnnLayerDescriptor,
         allNeurons: ICnnNeuron[],
         allSynapses: ICnnSynapse[],
-        allKernels: IKernel[],
+        allKernels: IConvKernel[],
         layerDescriptors: ICnnLayerDescriptor[],
         layerDepth: number
     ): ICnnLayerDescriptor {
@@ -208,11 +208,11 @@ export class CnnBuilder {
         const neurons: ICnnNeuron[] = [];
 
         // Create one kernel per output filter — each kernel has shape (kH × kW × inputChannels)
-        const kernels: Kernel[] = [];
+        const kernels: ConvKernel[] = [];
         for (let f = 0; f < config.filters; f++) {
             const fanIn = kH * kW * prev.channels;
             const initializer = config.weightInitializer ?? new He(fanIn);
-            const kernel = new Kernel(kH, kW, prev.channels, initializer, biasInit);
+            const kernel = new ConvKernel(kH, kW, prev.channels, initializer, biasInit);
             kernels.push(kernel);
             allKernels.push(kernel);
         }

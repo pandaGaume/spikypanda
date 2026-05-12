@@ -7,7 +7,7 @@
  */
 import {
     ComputeGraph,
-    ComputeNodeBase,
+    Kernel,
     ITensor,
 } from "spikypanda-core";
 import {
@@ -22,7 +22,7 @@ import {
  * Treats the concatenated [state, action] input and produces the delta.
  * Used to make unit tests deterministic without requiring a trained model.
  */
-class AdderDynamicsNode extends ComputeNodeBase {
+class AdderDynamicsNode extends Kernel {
     public readonly nodeType = "adder_dynamics";
     public readonly outputShapes: number[][] = [[1]];
 

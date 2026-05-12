@@ -66,7 +66,7 @@ export interface IChannel<T = unknown> extends IOlink, IEnableable {
  * sessions; all mutable state lives in the session's nodeStates entry
  * for this node.
  */
-export interface IRuntimeNode extends INode, IEnableable {
+export interface IRuntimeNode<B=unknown> extends INode<B>, IEnableable {
     isReady(session: ISession): boolean;
     fire(session: ISession, t: number): void;
     /**

@@ -12,7 +12,7 @@
 // These nodes let you run full MPC loops on a microcontroller using the
 // same inference engine as the perception (past graph).
 // ═══════════════════════════════════════════════════════════════════════════
-import { ComputeGraph, ComputeNodeBase, ITensor } from "spikypanda-core";
+import { ComputeGraph, Kernel, ITensor } from "spikypanda-core";
 
 // ─── RolloutNode ─────────────────────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ import { ComputeGraph, ComputeNodeBase, ITensor } from "spikypanda-core";
  * output tensor of shape [stateDim] (the state delta OR the next state,
  * controlled by the `deltaMode` flag).
  */
-export class RolloutNode extends ComputeNodeBase {
+export class RolloutNode extends Kernel {
     public readonly nodeType = "mpc_rollout";
     public readonly outputShapes: number[][];
 
@@ -141,7 +141,7 @@ export type TrajectoryCostFn = (
     horizon: number,
 ) => number;
 
-export class ObjectiveNode extends ComputeNodeBase {
+export class ObjectiveNode extends Kernel {
     public readonly nodeType = "mpc_objective";
     public readonly outputShapes: number[][] = [[1]];
 
@@ -200,7 +200,7 @@ export type ActionSamplerFn = (
     rng: () => number,
 ) => Float32Array;
 
-export class ShootingSelectorNode extends ComputeNodeBase {
+export class ShootingSelectorNode extends Kernel {
     public readonly nodeType = "mpc_shooting";
     public readonly outputShapes: number[][];
 

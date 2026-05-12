@@ -1,11 +1,11 @@
-import { ICnnInferenceContext, IKernel } from "../cnn.interfaces";
+import { ICnnInferenceContext, IConvKernel } from "../cnn.interfaces";
 
 /// <summary>
 /// Extends inference context with backpropagation fields for CNN neurons.
 /// </summary>
 export interface ICnnBackpropNeuronContext extends ICnnInferenceContext {
-    error: number;
-    gradient: number;
+    error?: number;
+    gradient?: number;
 }
 
 /// <summary>
@@ -16,7 +16,7 @@ export class KernelWeightSlot {
     public bag: unknown;
 
     public constructor(
-        private readonly kernel: IKernel,
+        private readonly kernel: IConvKernel,
         private readonly index: number
     ) {}
 
@@ -35,7 +35,7 @@ export class KernelWeightSlot {
 export class KernelBiasSlot {
     public bag: unknown;
 
-    public constructor(private readonly kernel: IKernel) {}
+    public constructor(private readonly kernel: IConvKernel) {}
 
     public get weight(): number {
         return this.kernel.bias;

@@ -4,7 +4,7 @@ import {
     ICnnBackpropNeuronContext,
     ICnnNeuron,
     ICnnSynapse,
-    IKernel,
+    IConvKernel,
     ILossFunction,
     IOptimizer,
     ITrainingContext,
@@ -24,9 +24,9 @@ import { StereoInferenceRuntime } from "./stereo.inference";
 export class StereoTrainingRuntime {
     private _context: ITrainingContext = { iteration: 0 };
 
-    private _kernelWeightSlots: Map<IKernel, KernelWeightSlot[]> = new Map();
-    private _kernelBiasSlots: Map<IKernel, KernelBiasSlot> = new Map();
-    private _kernelNeuronMap: Map<IKernel, ICnnNeuron[]> = new Map();
+    private _kernelWeightSlots: Map<IConvKernel, KernelWeightSlot[]> = new Map();
+    private _kernelBiasSlots: Map<IConvKernel, KernelBiasSlot> = new Map();
+    private _kernelNeuronMap: Map<IConvKernel, ICnnNeuron[]> = new Map();
 
     public constructor(
         public readonly graph: IStereoCnnGraph,
@@ -157,7 +157,7 @@ export class StereoTrainingRuntime {
                 downstreamSum += syn.weight * (targetBag.gradient ?? 0);
             }
 
-            const poolGrad = bag.gradient;
+            const poolGrad = bag.gradient ?? 0;
             bag.gradient = activationPrime(activation) * downstreamSum + poolGrad;
         }
     }
@@ -217,21 +217,21 @@ export class StereoTrainingRuntime {
                 }
                 if (maxNeuron) {
                     const maxBag = maxNeuron.bag as ICnnBackpropNeuronContext;
-                    maxBag.gradient += bag.gradient;
+                    maxBag.gradient = (maxBag.gradient ?? 0) + (bag.gradient ?? 0);
                 }
             } else {
                 const n = inSynapses.length;
                 for (const syn of inSynapses) {
                     const src = syn.oini as ICnnNeuron;
                     const srcBag = src.bag as ICnnBackpropNeuronContext;
-                    srcBag.gradient += bag.gradient / n;
+                    srcBag.gradient = (srcBag.gradient ?? 0) + (bag.gradient ?? 0) / n;
                 }
             }
         }
     }
 
     private _applyGradients(): void {
-        // 1. Kernel weight gradients -- accumulate and apply
+        // 1. ConvKernel weight gradients -- accumulate and apply
         for (const kernel of this.graph.kernels) {
             const slots = this._kernelWeightSlots.get(kernel)!;
             const neurons = this._kernelNeuronMap.get(kernel)!;
@@ -241,13 +241,14 @@ export class StereoTrainingRuntime {
 
             for (const neuron of neurons) {
                 const neuronBag = neuron.bag as ICnnBackpropNeuronContext;
-                biasGrad += neuronBag.gradient;
+                const neuronGrad = neuronBag.gradient ?? 0;
+                biasGrad += neuronGrad;
 
                 for (const syn of neuron.opsc<ICnnSynapse>() ?? []) {
                     if (syn.kernel === kernel) {
                         const src = syn.oini as ICnnNeuron;
                         const srcBag = src.bag as ICnnBackpropNeuronContext;
-                        weightGrads[syn.kernelIndex] += neuronBag.gradient * srcBag.activation;
+                        weightGrads[syn.kernelIndex] += neuronGrad * srcBag.activation;
                     }
                 }
             }
@@ -276,7 +277,7 @@ export class StereoTrainingRuntime {
             const srcBag = src.bag as ICnnBackpropNeuronContext;
             const targetBag = target.bag as ICnnBackpropNeuronContext;
 
-            const gradient = targetBag.gradient * srcBag.activation;
+            const gradient = (targetBag.gradient ?? 0) * srcBag.activation;
             const synBag = (syn.bag ??= {}) as IBackpropSynapseContext;
             synBag.gradient = gradient;
 

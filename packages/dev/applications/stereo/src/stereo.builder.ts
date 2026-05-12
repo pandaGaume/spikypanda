@@ -7,8 +7,8 @@ import {
     ICnnLayerDescriptor,
     ICnnNeuron,
     ICnnSynapse,
-    IKernel,
-    Kernel,
+    IConvKernel,
+    ConvKernel,
     PaddingType,
 } from "spikypanda-core";
 import { IStereoConfig, IStereoCnnGraph, IStereoCnnNeuron, IStereoCnnSynapse, MergeStrategy } from "./stereo.interfaces";
@@ -46,8 +46,8 @@ export class StereoCnnBuilder {
         const config = this._config;
         const allNeurons: IStereoCnnNeuron[] = [];
         const allSynapses: IStereoCnnSynapse[] = [];
-        const sharedKernels: IKernel[] = [];
-        const crossKernels: IKernel[] = [];
+        const sharedKernels: IConvKernel[] = [];
+        const crossKernels: IConvKernel[] = [];
         const leftDescriptors: ICnnLayerDescriptor[] = [];
         const rightDescriptors: ICnnLayerDescriptor[] = [];
 
@@ -69,13 +69,13 @@ export class StereoCnnBuilder {
             const kernelSize = config.kernelSizes[i];
 
             // Create shared kernels for this conv layer (one per filter)
-            const layerKernels: Kernel[] = [];
+            const layerKernels: ConvKernel[] = [];
             const kH = kernelSize;
             const kW = kernelSize;
             for (let f = 0; f < filters; f++) {
                 const fanIn = kH * kW * prevLeft.channels;
                 const initializer = new He(fanIn);
-                const kernel = new Kernel(kH, kW, prevLeft.channels, initializer, 0);
+                const kernel = new ConvKernel(kH, kW, prevLeft.channels, initializer, 0);
                 layerKernels.push(kernel);
                 sharedKernels.push(kernel);
             }
@@ -101,7 +101,7 @@ export class StereoCnnBuilder {
                 const crossChannels = leftConvDesc.channels;
                 const crossFanIn = crossChannels * (config.maxDisparity + 1);
                 const crossInitializer = new He(crossFanIn);
-                const crossKernel = new Kernel(1, 1, crossChannels, crossInitializer, 0);
+                const crossKernel = new ConvKernel(1, 1, crossChannels, crossInitializer, 0);
                 crossKernels.push(crossKernel);
 
                 this._buildCrossSynapses(
@@ -229,7 +229,7 @@ export class StereoCnnBuilder {
     private _buildConvLayer(
         branch: "left" | "right",
         prev: ICnnLayerDescriptor,
-        kernels: Kernel[],
+        kernels: ConvKernel[],
         filters: number,
         kernelSize: number,
         allNeurons: IStereoCnnNeuron[],
@@ -298,7 +298,7 @@ export class StereoCnnBuilder {
     private _buildCrossSynapses(
         leftDesc: ICnnLayerDescriptor,
         rightDesc: ICnnLayerDescriptor,
-        crossKernel: Kernel,
+        crossKernel: ConvKernel,
         maxDisparity: number,
         allSynapses: IStereoCnnSynapse[]
     ): void {

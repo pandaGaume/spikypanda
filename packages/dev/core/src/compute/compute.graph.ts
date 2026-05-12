@@ -1,14 +1,14 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // ComputeGraph : DAG of compute nodes executed via core/execution.
 //
-// Thin specialisation of RuntimeGraph<IComputeNode, IDataLink> that
+// Thin specialisation of RuntimeGraph<IKernel, IDataLink> that
 //   - defaults to mode="static" (DAG of pure kernels = Kahn topo),
 //   - injects externalInputs onto source nodes' bag.pendingInput before
-//     running, so ComputeNodeBase.fire can pick them up,
+//     running, so Kernel.fire can pick them up,
 //   - collects the named-output Map from sink nodes' bag.lastOutputs.
 //
 // Concrete op nodes (ONNX ops, MLP/CNN/RNN/Conv/Concat/etc.) only
-// implement execute(); the fire(session, t) adapter in ComputeNodeBase
+// implement execute(); the fire(session, t) adapter in Kernel
 // handles the session-side wiring.
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -16,7 +16,7 @@ import { Channel } from "../execution/execution.channel";
 import { RuntimeGraph } from "../execution/execution.graph";
 import { SchedulingMode } from "../execution/execution.interfaces";
 import { INode } from "../graph/graph.interfaces";
-import { IComputeGraph, IComputeNode, IComputeNodeBag, IDataLink, ITensor } from "./compute.interfaces";
+import { IComputeGraph, IKernel, IDataLink, ITensor } from "./compute.interfaces";
 
 // ─── DataLink implementation ─────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ import { IComputeGraph, IComputeNode, IComputeNodeBag, IDataLink, ITensor } from
 export class DataLink extends Channel<ITensor> implements IDataLink {
     public override readonly slot: number;
 
-    public constructor(from?: IComputeNode, to?: IComputeNode, inputIndex = -1) {
+    public constructor(from?: IKernel, to?: IKernel, inputIndex = -1) {
         super(from as INode | undefined, to as INode | undefined, inputIndex);
         this.slot = inputIndex;
     }
@@ -39,7 +39,7 @@ export class DataLink extends Channel<ITensor> implements IDataLink {
 /**
  * Executable compute graph.
  *
- * Extends RuntimeGraph<IComputeNode, IDataLink>, inheriting the
+ * Extends RuntimeGraph<IKernel, IDataLink>, inheriting the
  * autonomous run() / runAsync() pair (IRunnable) from there. Adds the
  * named-tensor convenience: infer(inputs) / inferAsync(inputs) inject
  * named external tensors onto source nodes' bag, drive one tick, and
@@ -63,8 +63,8 @@ export class DataLink extends Channel<ITensor> implements IDataLink {
  * const out = graph.session.getOutput(outIdx);
  * ```
  */
-export class ComputeGraph extends RuntimeGraph<IComputeNode, IDataLink> implements IComputeGraph {
-    public constructor(nodes: IComputeNode[], links: IDataLink[], mode: SchedulingMode = "static") {
+export class ComputeGraph extends RuntimeGraph<IKernel, IDataLink> implements IComputeGraph {
+    public constructor(nodes: IKernel[], links: IDataLink[], mode: SchedulingMode = "static") {
         super(nodes, links, mode);
     }
 
@@ -93,7 +93,7 @@ export class ComputeGraph extends RuntimeGraph<IComputeNode, IDataLink> implemen
 
     /**
      * Pre-inject external tensors onto source nodes' bag.pendingInput.
-     * ComputeNodeBase.fire pulls from bag.pendingInput when the node
+     * Kernel.fire pulls from bag.pendingInput when the node
      * has no incoming channels.
      */
     private _injectExternalInputs(externalInputs?: Map<string, ITensor>): void {
@@ -103,7 +103,7 @@ export class ComputeGraph extends RuntimeGraph<IComputeNode, IDataLink> implemen
         for (const node of this.inputs) {
             const key = (node.id as string) ?? node.tag;
             if (key && externalInputs.has(key)) {
-                const bag = (node.bag ?? {}) as IComputeNodeBag;
+                const bag = node.bag ?? {};
                 bag.pendingInput = externalInputs.get(key);
                 node.bag = bag;
             }
@@ -118,7 +118,7 @@ export class ComputeGraph extends RuntimeGraph<IComputeNode, IDataLink> implemen
     private _collectResults(): Map<string, ITensor> {
         const result = new Map<string, ITensor>();
         for (const node of this.outputs) {
-            const bag = node.bag as IComputeNodeBag | undefined;
+            const bag = node.bag ;
             if (!bag?.lastOutputs) {
                 continue;
             }
