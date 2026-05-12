@@ -1,0 +1,22 @@
+{
+    "name": "@spiky-panda/applications-stereo",
+    "version": "0.1.0",
+    "description": "Stereo CNN application (disparity map from left/right image pairs)",
+    "private": true,
+    "main": "dist/index",
+    "module": "dist/index",
+    "esnext": "dist/index",
+    "types": "dist/index",
+    "files": ["dist", "src"],
+    "scripts": {
+        "build": "npm run clean && npm run compile",
+        "clean": "rimraf dist bundle && rimraf tsconfig.build.tsbuildinfo",
+        "compile": "npm run compile:source",
+        "compile:source": "tsc -b tsconfig.build.json",
+        "watch:source": "tsc -b tsconfig.build.json -w"
+    },
+    "sideEffects": false,
+    "devDependencies": {
+        "rimraf": "~6.0.1"
+    }
+}

@@ -1,9 +1,13 @@
-import type { ICartesian } from "../../geometry";
-import { cloneable, IOlink } from "../../graph";
-import { Nullable } from "../../types";
-import { CnnNeuron } from "../../neuralnetwork/cnn/cnn.neuron";
-import { CnnLayerType, PoolingType } from "../../neuralnetwork/cnn/cnn.interfaces";
-import type { IActivationFunction } from "../../neuralnetwork/ann/mlp/mlp.interfaces";
+import {
+    cloneable,
+    CnnLayerType,
+    CnnNeuron,
+    IActivationFunction,
+    ICartesian,
+    IOlink,
+    Nullable,
+    PoolingType,
+} from "spikypanda-core";
 import { IStereoCnnNeuron, IStereoCnnSynapse, StereoBranch } from "./stereo.interfaces";
 
 /// <summary>

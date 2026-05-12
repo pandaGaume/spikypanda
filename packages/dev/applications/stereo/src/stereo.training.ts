@@ -1,12 +1,17 @@
-import { IBackpropSynapseContext, ILossFunction, IOptimizer, ITrainingContext } from "../../neuralnetwork/nn.training";
 import {
     CnnLayerType,
+    IBackpropSynapseContext,
+    ICnnBackpropNeuronContext,
     ICnnNeuron,
     ICnnSynapse,
     IKernel,
+    ILossFunction,
+    IOptimizer,
+    ITrainingContext,
+    KernelBiasSlot,
+    KernelWeightSlot,
     PoolingType,
-} from "../../neuralnetwork/cnn/cnn.interfaces";
-import { ICnnBackpropNeuronContext, KernelWeightSlot, KernelBiasSlot } from "../../neuralnetwork/cnn/training/cnn.training.interfaces";
+} from "spikypanda-core";
 import { IStereoCnnGraph } from "./stereo.interfaces";
 import { StereoInferenceRuntime } from "./stereo.inference";
 

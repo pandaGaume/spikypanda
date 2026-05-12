@@ -6,7 +6,6 @@ export * from "./geometry";
 export * from "./graph";
 export * from "./sim";
 export * from "./neuralnetwork";
-export * from "./applications";
 export * from "./utils";
 export * from "./metrics";
 

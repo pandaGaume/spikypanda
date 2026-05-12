@@ -1,16 +1,16 @@
-import { Cartesian3 } from "../../geometry";
-import { ActivationFunctions } from "../../neuralnetwork/ann/mlp/mlp.activation";
-import { He } from "../../neuralnetwork/nn.weights";
 import {
+    ActivationFunctions,
+    Cartesian3,
+    CnnGraph,
     CnnLayerType,
+    He,
     ICnnLayerDescriptor,
     ICnnNeuron,
     ICnnSynapse,
     IKernel,
+    Kernel,
     PaddingType,
-} from "../../neuralnetwork/cnn/cnn.interfaces";
-import { CnnGraph } from "../../neuralnetwork/cnn/cnn.graph";
-import { Kernel } from "../../neuralnetwork/cnn/cnn.kernel";
+} from "spikypanda-core";
 import { IStereoConfig, IStereoCnnGraph, IStereoCnnNeuron, IStereoCnnSynapse, MergeStrategy } from "./stereo.interfaces";
 import { StereoCnnNeuron } from "./stereo.neuron";
 import { StereoCnnSynapse } from "./stereo.synapse";

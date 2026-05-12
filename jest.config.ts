@@ -19,6 +19,8 @@ const config: Config = {
         "^spikypanda-sensors/(.*)$":    "<rootDir>/packages/dev/sensors/src/$1",
         "^spikypanda-nodeeditor$":      "<rootDir>/packages/dev/nodeeditor/src/index.ts",
         "^spikypanda-nodeeditor/(.*)$": "<rootDir>/packages/dev/nodeeditor/src/$1",
+        "^spikypanda-applications-stereo$":      "<rootDir>/packages/dev/applications/stereo/src/index.ts",
+        "^spikypanda-applications-stereo/(.*)$": "<rootDir>/packages/dev/applications/stereo/src/$1",
         // Some sensors source files import the published package name
         // "@spiky-panda/core" instead of the path alias spikypanda-core. The
         // node-resolved dist/index.js ships ESM syntax and lives under

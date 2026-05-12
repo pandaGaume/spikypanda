@@ -44,7 +44,9 @@
             "spikypanda-sensors": ["dev/sensors/src/index.ts"],
             "spikypanda-sensors/*": ["dev/sensors/src/*"],
             "spikypanda-nodeeditor": ["dev/nodeeditor/src/index.ts"],
-            "spikypanda-nodeeditor/*": ["dev/nodeeditor/src/*"]
+            "spikypanda-nodeeditor/*": ["dev/nodeeditor/src/*"],
+            "spikypanda-applications-stereo": ["dev/applications/stereo/src/index.ts"],
+            "spikypanda-applications-stereo/*": ["dev/applications/stereo/src/*"]
         },
 
         "types": ["reflect-metadata", "jest", "node"]

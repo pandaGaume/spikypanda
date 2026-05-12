@@ -1,6 +1,4 @@
-import { INode } from "../../graph";
-import { CnnSynapse } from "../../neuralnetwork/cnn/cnn.synapse";
-import { IKernel } from "../../neuralnetwork/cnn/cnn.interfaces";
+import { CnnSynapse, IKernel, INode } from "spikypanda-core";
 import { IStereoCnnSynapse } from "./stereo.interfaces";
 
 /// <summary>
