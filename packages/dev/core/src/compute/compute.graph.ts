@@ -14,9 +14,7 @@
 
 import { Channel } from "../execution/execution.channel";
 import { RuntimeGraph } from "../execution/execution.graph";
-import { Scheduler } from "../execution/execution.scheduler";
 import { SchedulingMode } from "../execution/execution.interfaces";
-import { Session } from "../execution/execution.session";
 import { INode } from "../graph/graph.interfaces";
 import { IComputeGraph, IComputeNode, IComputeNodeBag, IDataLink, ITensor } from "./compute.interfaces";
 
@@ -41,17 +39,28 @@ export class DataLink extends Channel<ITensor> implements IDataLink {
 /**
  * Executable compute graph.
  *
- * Extends RuntimeGraph<IComputeNode, IDataLink> with the named-input /
- * named-output API expected by callers (MPC, ONNX runtime, samples).
+ * Extends RuntimeGraph<IComputeNode, IDataLink>, inheriting the
+ * autonomous run() / runAsync() pair (IRunnable) from there. Adds the
+ * named-tensor convenience: infer(inputs) / inferAsync(inputs) inject
+ * named external tensors onto source nodes' bag, drive one tick, and
+ * collect named outputs from sink nodes' bag.
+ *
  * Defaults to mode="static" because a compute graph is by construction
  * an acyclic DAG of pure kernels; pass another mode if you have a use
  * case for it.
  *
- * **Usage:**
+ * **Usage (named-tensor, ONNX-style):**
  * ```typescript
  * const graph = new ComputeGraph(nodes, links);
- * const result = graph.run(new Map([["pose", poseTensor]]));
+ * const result = graph.infer(new Map([["pose", poseTensor]]));
  * const command = result.get("command");
+ * ```
+ *
+ * **Usage (generic, via inherited run()):**
+ * ```typescript
+ * graph.session.setInput(idx, tensor);
+ * graph.run(0);
+ * const out = graph.session.getOutput(outIdx);
  * ```
  */
 export class ComputeGraph extends RuntimeGraph<IComputeNode, IDataLink> implements IComputeGraph {
@@ -60,38 +69,23 @@ export class ComputeGraph extends RuntimeGraph<IComputeNode, IDataLink> implemen
     }
 
     /**
-     * Execute the full graph synchronously.
+     * Named-tensor inference convenience: inject inputs by source-node
+     * id/tag, drive one tick on the default session, collect outputs
+     * keyed by tensor.name (or sink id/tag/nodeType fallback).
      */
-    public run(externalInputs?: Map<string, ITensor>): Map<string, ITensor> {
+    public infer(externalInputs?: Map<string, ITensor>): Map<string, ITensor> {
         this._injectExternalInputs(externalInputs);
-        const session = new Session(this);
-        session.run(0);
+        this.run(0);
         return this._collectResults();
     }
 
     /**
-     * Execute the full graph asynchronously, awaiting per-node
-     * fireAsync. Walks the static topological order outside of the
-     * scheduler so each node's promise can be awaited in turn.
+     * Async variant of infer(). Walks the topological order awaiting
+     * each node's fireAsync (falling back to fire when not provided).
      */
-    public async runAsync(externalInputs?: Map<string, ITensor>): Promise<Map<string, ITensor>> {
+    public async inferAsync(externalInputs?: Map<string, ITensor>): Promise<Map<string, ITensor>> {
         this._injectExternalInputs(externalInputs);
-        const session = new Session(this);
-        const order = Scheduler.GetStaticOrder(this);
-        for (const node of order) {
-            if (!node.enabled) {
-                continue;
-            }
-            if (!node.isReady(session)) {
-                continue;
-            }
-            const computeNode = node as IComputeNode;
-            if (computeNode.fireAsync) {
-                await computeNode.fireAsync(session, 0);
-            } else {
-                node.fire(session, 0);
-            }
-        }
+        await this.runAsync(0);
         return this._collectResults();
     }
 

@@ -69,7 +69,7 @@ describe("KWS model pipeline", () => {
                     name: inputNames[0],
                 });
 
-                const results = graph.run(externalInputs);
+                const results = graph.infer(externalInputs);
                 expect(results.size).toBeGreaterThan(0);
 
                 const output = [...results.values()][0];
@@ -100,7 +100,7 @@ describe("KWS model pipeline", () => {
                     name: inputNames[0],
                 });
 
-                const results = graph.run(externalInputs);
+                const results = graph.infer(externalInputs);
                 expect(results.size).toBeGreaterThan(0);
 
                 const output = [...results.values()][0];

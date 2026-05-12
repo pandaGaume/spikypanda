@@ -92,7 +92,7 @@ export class RolloutNode extends ComputeNodeBase {
             externalInputs.clear();
             externalInputs.set(this._dynamicsInputName, input);
 
-            const results = this._dynamics.run(externalInputs);
+            const results = this._dynamics.infer(externalInputs);
             const outTensor = results.values().next().value as ITensor;
 
             const nextOff = (t + 1) * S;

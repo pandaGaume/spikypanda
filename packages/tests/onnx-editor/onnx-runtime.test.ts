@@ -90,7 +90,7 @@ describeIf("ONNX Runtime POC", () => {
         externalInputs.set(inputNames[0], dummyInput);
 
         // Execute
-        const results = graph.run(externalInputs);
+        const results = graph.infer(externalInputs);
         expect(results).toBeDefined();
         expect(results.size).toBeGreaterThan(0);
 

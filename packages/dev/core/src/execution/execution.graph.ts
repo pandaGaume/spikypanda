@@ -11,6 +11,7 @@ import {
     ISession,
     SchedulingMode,
 } from "./execution.interfaces";
+import { Scheduler } from "./execution.scheduler";
 import { Session } from "./execution.session";
 
 /**
@@ -38,6 +39,14 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
     @cloneable public enabled: boolean;
     @cloneable public inputBindings: Map<string | number, number>;
     @cloneable public outputBindings: Map<string | number, number>;
+
+    /**
+     * Lazy default Session for autonomous run() / runAsync() calls.
+     * Implementation detail, not exposed via the interface. Callers that
+     * need explicit Session control pass their own via the optional
+     * `session` argument of run/runAsync.
+     */
+    private _defaultSession?: Session;
 
     public constructor(
         nodes: N[] = [],
@@ -94,14 +103,39 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
     }
 
     public fire(parentSession: ISession, t: number): void {
-        const inner = this._internalSessionIn(parentSession);
+        const inner = this._routeInputsFromParent(parentSession);
         if (!inner) {
             return;
         }
+        inner.run(t);
+        this._routeOutputsToParent(parentSession, inner);
+    }
 
-        // 1. Route incoming external channels into internal link states.
-        // Use parent.consume to clear-and-decrement the parent counter,
-        // then inner.publish to write-and-bump the internal counter.
+    /**
+     * Async embedding variant of fire(): same I/O routing but drives
+     * the sub-graph's internal topology via this graph's own
+     * runAsync() on the internal session, so async nodes inside the
+     * sub-graph are awaited rather than skipped.
+     */
+    public async fireAsync(parentSession: ISession, t: number): Promise<void> {
+        const inner = this._routeInputsFromParent(parentSession);
+        if (!inner) {
+            return;
+        }
+        await this.runAsync(t, inner);
+        this._routeOutputsToParent(parentSession, inner);
+    }
+
+    /**
+     * Route incoming external channels into the internal session.
+     * Returns the internal session (or undefined if this graph is not
+     * embedded in the given parent session's graph).
+     */
+    private _routeInputsFromParent(parentSession: ISession): ISession | undefined {
+        const inner = this._internalSessionIn(parentSession);
+        if (!inner) {
+            return undefined;
+        }
         const parentLinks = parentSession.graph.links as ReadonlyArray<IChannel>;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) {
@@ -116,11 +150,15 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
             const value = parentSession.consume(parentIdx);
             inner.publish(internalIdx, value);
         }
+        return inner;
+    }
 
-        // 2. Run the internal scheduler.
-        inner.run(t);
-
-        // 3. Route internal output link states back to external channels.
+    /**
+     * Route internal output link states back to external channels in
+     * the parent session.
+     */
+    private _routeOutputsToParent(parentSession: ISession, inner: ISession): void {
+        const parentLinks = parentSession.graph.links as ReadonlyArray<IChannel>;
         for (const link of this.onsc<IChannel>()) {
             if (!link.enabled) {
                 continue;
@@ -145,6 +183,42 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
         // internal session, which cascades to our internal nodes.
         const inner = this._internalSessionIn(parentSession);
         inner?.reset();
+    }
+
+    // ── IRunnable: autonomous drive on the default (or caller-provided) session ──
+
+    public run(t: number, session?: ISession): void {
+        const target = session ?? this._ensureDefaultSession();
+        target.run(t);
+    }
+
+    public async runAsync(t: number, session?: ISession): Promise<void> {
+        const target = session ?? this._ensureDefaultSession();
+        // Walk the static topological order so each node's promise can
+        // be awaited in turn. fireAsync is mandatory on IRuntimeNode,
+        // so no cast or capability check is needed; nodes with no
+        // async work inherit the default (sync) implementation.
+        const order = Scheduler.GetStaticOrder(this);
+        for (const node of order) {
+            if (!node.enabled || !node.isReady(target)) {
+                continue;
+            }
+            await node.fireAsync(target, t);
+        }
+    }
+
+    /**
+     * Reset the default Session if one has been lazily allocated.
+     * Class-only convenience; not part of any interface. Callers using
+     * their own Session via run(t, session) manage its lifecycle
+     * themselves.
+     */
+    public resetSession(): void {
+        this._defaultSession?.reset();
+    }
+
+    private _ensureDefaultSession(): Session {
+        return (this._defaultSession ??= new Session(this));
     }
 
     /**

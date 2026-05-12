@@ -69,6 +69,15 @@ export interface IChannel<T = unknown> extends IOlink, IEnableable {
 export interface IRuntimeNode extends INode, IEnableable {
     isReady(session: ISession): boolean;
     fire(session: ISession, t: number): void;
+    /**
+     * Async variant of fire(). Nodes whose execution is genuinely
+     * synchronous (most pure compute kernels) inherit the default
+     * RuntimeNode implementation, which simply awaits fire(). Nodes
+     * that wrap real async work (GPU, WebWorker, ONNX runtime) override
+     * to await their async primitive instead. RuntimeGraph.runAsync
+     * calls fireAsync uniformly without runtime introspection.
+     */
+    fireAsync(session: ISession, t: number): Promise<void>;
     reset(session: ISession): void;
     createNodeState?(): INodeState;
 }
@@ -96,6 +105,23 @@ export interface IRuntimeNode extends INode, IEnableable {
 export type SchedulingMode = "static" | "dynamic";
 
 /**
+ * Autonomous-run contract. A graph that is IRunnable can drive itself
+ * without the caller having to construct a Session explicitly: it lazily
+ * allocates a default Session whose state persists across run() calls
+ * (so delayed channels and counters survive between ticks). Callers that
+ * need explicit Session control (concurrent inferences, custom state
+ * lifecycle) pass their own Session via the optional second parameter,
+ * in which case the default session is bypassed entirely.
+ *
+ * The default Session is an implementation detail and is intentionally
+ * not part of this contract.
+ */
+export interface IRunnable {
+    run(t: number, session?: ISession): void;
+    runAsync(t: number, session?: ISession): Promise<void>;
+}
+
+/**
  * Runtime graph: an IGraph of IRuntimeNode + IChannel that is itself an
  * IRuntimeNode (composition fractale).
  *
@@ -118,7 +144,7 @@ export type SchedulingMode = "static" | "dynamic";
  * drives via `new Session(graph)` as usual.
  */
 export interface IRuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChannel = IChannel>
-    extends IGraph<N, L>, IRuntimeNode {
+    extends IGraph<N, L>, IRuntimeNode, IRunnable {
     readonly mode: SchedulingMode;
     readonly inputBindings: ReadonlyMap<string | number, number>;
     readonly outputBindings: ReadonlyMap<string | number, number>;

@@ -47,6 +47,16 @@ export class RuntimeNode extends GraphNode implements IRuntimeNode {
         // Concrete nodes override.
     }
 
+    /**
+     * Default async fire: delegates to the sync fire(). Nodes that wrap
+     * genuinely async work (GPU, WebWorker, ONNX runtime) override to
+     * await their async primitive. RuntimeGraph.runAsync invokes this
+     * uniformly without checking which path applies.
+     */
+    public async fireAsync(session: ISession, t: number): Promise<void> {
+        this.fire(session, t);
+    }
+
     public reset(_session: ISession): void {
         // Concrete nodes override.
     }

@@ -9,7 +9,7 @@
 // MPC rollout, and any other DAG of pure compute kernels.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { IChannel, IRuntimeGraph, IRuntimeNode, ISession } from "../execution/execution.interfaces";
+import { IChannel, IRuntimeGraph, IRuntimeNode } from "../execution/execution.interfaces";
 
 // ─── Tensor ──────────────────────────────────────────────────────────────────
 
@@ -109,17 +109,13 @@ export interface IComputeNode extends IRuntimeNode {
 
     /**
      * Optional async execution for nodes that require it (GPU, ONNX
-     * runtime, Web Workers). ComputeGraph.runAsync prefers this over
-     * execute(); CPU-only nodes do not need to implement it.
+     * runtime, Web Workers). When present, ComputeNodeBase.fireAsync
+     * awaits this; CPU-only nodes do not need to implement it.
      */
     executeAsync?(inputs: ITensor[]): Promise<ITensor[]>;
 
-    /**
-     * Optional async fire adapter. ComputeNodeBase provides a default
-     * implementation that mirrors fire() but awaits executeAsync().
-     * Concrete nodes typically do not override.
-     */
-    fireAsync?(session: ISession, t: number): Promise<void>;
+    // fireAsync is inherited from IRuntimeNode (mandatory there) and
+    // overridden by ComputeNodeBase to route through executeAsync.
 }
 
 // ─── Compute graph ───────────────────────────────────────────────────────────
@@ -127,31 +123,11 @@ export interface IComputeNode extends IRuntimeNode {
 /**
  * A directed acyclic graph of compute nodes connected by data links.
  *
- * Extends IRuntimeGraph<IComputeNode, IDataLink>, picking up the
- * scheduler / session machinery from core/execution. ComputeGraph adds
- * the named-input/named-output API (Map<string, ITensor>) on top of the
- * generic ISession.run(t).
+ * Pure typing narrow of IRuntimeGraph<IComputeNode, IDataLink>: no own
+ * members. run() / runAsync() come from IRunnable via IRuntimeGraph; the
+ * named-tensor convenience (infer / inferAsync, returning Map<string,
+ * ITensor>) lives on the concrete ComputeGraph class only.
  */
 export interface IComputeGraph extends IRuntimeGraph<IComputeNode, IDataLink> {
-    /**
-     * Execute the full graph synchronously.
-     *
-     * External inputs (sensor readings, pose, goal) are injected via
-     * the `externalInputs` map, keyed by source node name or ID.
-     *
-     * @param externalInputs  Named tensors to inject into source nodes.
-     * @returns                Named tensors from output (sink) nodes.
-     */
-    run(externalInputs?: Map<string, ITensor>): Map<string, ITensor>;
-
-    /**
-     * Execute the full graph asynchronously.
-     *
-     * Walks the topological order awaiting each node's fireAsync (which
-     * routes to executeAsync when available, falls back to execute).
-     *
-     * @param externalInputs  Named tensors to inject into source nodes.
-     * @returns                Promise resolving to named tensors from output nodes.
-     */
-    runAsync(externalInputs?: Map<string, ITensor>): Promise<Map<string, ITensor>>;
+    // no own members; pure typing narrow.
 }

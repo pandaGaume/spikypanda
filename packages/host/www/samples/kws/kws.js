@@ -136,7 +136,7 @@ function runInference(mfccData, nFrames) {
         var externalInputs = new Map();
         externalInputs.set(onnxInputNames[0], inputTensor);
 
-        var results = onnxGraph.run(externalInputs);
+        var results = onnxGraph.infer(externalInputs);
         var output = results.values().next().value;
         logits = Array.from(output.data);
     } else {

@@ -360,7 +360,7 @@ describe("SpikyPanda graph pipeline vs onnxruntime reference", () => {
             }
 
             // 4. Run the graph
-            const results = graph.run(externalInputs);
+            const results = graph.infer(externalInputs);
             expect(results.size).toBeGreaterThan(0);
 
             // 5. Compare outputs

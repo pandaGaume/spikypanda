@@ -36,7 +36,7 @@ export abstract class ComputeNodeBase extends RuntimeNode implements IComputeNod
      * Async variant of fire(): same gather/publish flow but awaits
      * executeAsync when defined. Falls back to the sync execute path.
      */
-    public async fireAsync(session: ISession, _t: number): Promise<void> {
+    public override async fireAsync(session: ISession, _t: number): Promise<void> {
         const inputs = this._gatherInputs(session);
         const outputs = this.executeAsync ? await this.executeAsync(inputs) : this.execute(inputs);
         this._publishOutputs(session, outputs);
