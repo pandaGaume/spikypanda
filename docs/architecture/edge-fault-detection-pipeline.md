@@ -329,7 +329,7 @@ explicit object. This means:
   level (no need for monolithic tensor checkpoints)
 - A 4,773-parameter LSTM is literally 4,773 synapse objects — trivial
   to transfer over a low-bandwidth link
-- The ONNX parser (`packages/dev/runtime/src/onnx/`) maps standard
+- The ONNX parser (`packages/dev/onnx/src/onnx/`) maps standard
   ONNX models to SpikyPanda graphs, so models trained in any
   framework can be deployed
 

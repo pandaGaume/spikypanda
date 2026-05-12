@@ -2,4 +2,3 @@ export * from "./compute.interfaces";
 export * from "./compute.node.base";
 export * from "./compute.graph";
 export * from "./nodes/index";
-export * from "./mpc";

@@ -1,6 +1,4 @@
-import { ComputeGraph, DataLink } from "../compute/compute.graph";
-import { ComputeNodeBase } from "../compute/compute.node.base";
-import type { IComputeNode, ITensor } from "../compute/compute.interfaces";
+import { ComputeGraph, ComputeNodeBase, DataLink, IComputeNode, ITensor } from "spikypanda-core";
 import type { OnnxParseResult } from "./onnx-parser";
 import type { OnnxValueInfo } from "./onnx-types";
 import type { OnnxTensorInfo } from "./onnx-types";

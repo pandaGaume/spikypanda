@@ -16,7 +16,7 @@
  *   SpDTW             — Dynamic Time Warping distance between two MFCC sequences
  */
 
-import type { ITensor } from "../../compute/compute.interfaces";
+import type { ITensor } from "spikypanda-core";
 import type { OnnxNodeInfo } from "../onnx-types";
 import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "../registry";
 

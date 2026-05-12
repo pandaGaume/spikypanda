@@ -1,17 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// @spiky-panda/runtime
+// @spiky-panda/onnx
 //
-// ONNX-like compute graph runtime for SpikyPanda neural networks.
-//
-// Provides a typed DAG execution engine where:
-//   - Nodes are processing stages (IComputeNode)
-//   - Edges carry typed data tensors (IDataLink)
-//   - The graph executes in topological order (Kahn's algorithm)
-//
-// Modules:
-//   compute/  : ITensor, IComputeNode, ComputeGraph, built-in nodes
-//   onnx/     : Protobuf reader, ONNX parser (zero-dependency)
+// ONNX inference engine. Tensor flow primitives (ITensor, IComputeNode,
+// ComputeGraph, MLP/CNN/RNN/Conv/Concat/ExternalInput nodes) live in
+// @spiky-panda/core under core/compute. MPC lives in
+// @spiky-panda/applications-mpc.
 // ═══════════════════════════════════════════════════════════════════════════
 
-export * from "./compute/index";
 export * from "./onnx/index";

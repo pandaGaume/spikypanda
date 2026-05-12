@@ -1,7 +1,7 @@
 {
-    "name": "@spiky-panda/runtime",
+    "name": "@spiky-panda/applications-mpc",
     "version": "0.1.0",
-    "description": "ONNX-like compute graph runtime for SpikyPanda neural networks",
+    "description": "Model Predictive Control nodes (RolloutNode, ObjectiveNode, ShootingSelectorNode) on top of @spiky-panda/core ComputeGraph",
     "private": true,
     "main": "dist/index",
     "module": "dist/index",
@@ -10,12 +10,10 @@
     "files": ["dist", "src"],
     "scripts": {
         "build": "npm run clean && npm run compile",
-        "clean": "rimraf dist && rimraf tsconfig.build.tsbuildinfo",
+        "clean": "rimraf dist bundle && rimraf tsconfig.build.tsbuildinfo",
         "compile": "npm run compile:source",
         "compile:source": "tsc -b tsconfig.build.json",
-        "watch:source": "tsc -b tsconfig.build.json -w",
-        "bundle": "webpack --mode production --config webpack.config.js",
-        "bundle:dev": "webpack --mode development --config webpack.config.js"
+        "watch:source": "tsc -b tsconfig.build.json -w"
     },
     "sideEffects": false,
     "devDependencies": {

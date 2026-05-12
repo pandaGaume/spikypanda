@@ -270,9 +270,9 @@ function createMpcAdapter() {
 
 // ── Load dynamics model and build MPC pipeline ────────────────────────
 function loadDynamics() {
-    RT = window.SpikypandaRuntime;
+    RT = window.SpikypandaOnnx;
     if (!RT) {
-        co2Log("ERROR: SpikypandaRuntime bundle not loaded");
+        co2Log("ERROR: SpikypandaOnnx bundle not loaded");
         document.getElementById("info-status").textContent = "Runtime missing";
         return;
     }

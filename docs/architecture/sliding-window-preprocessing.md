@@ -148,7 +148,7 @@ and adaptive thresholds already in place would work unchanged.
 
 | File | Change |
 |---|---|
-| `packages/dev/runtime/src/onnx/ops/dotvision.ts` | Add `mode` attribute to `EnvelopeCenterNode`, implement modes 1 and 2 |
+| `packages/dev/onnx/src/onnx/ops/dotvision.ts` | Add `mode` attribute to `EnvelopeCenterNode`, implement modes 1 and 2 |
 | `packages/dev/tools/python/prepare_motor_current.py` | Add `--normalize-mode` flag to `_normalize_window_centered` |
 | `packages/host/www/samples/motor_current/motor_current.js` | Pass `mode` in the ONNX export, add mode dropdown |
 | `packages/host/www/samples/motor_monitor/motor_monitor.js` | Option to use variance-only scoring |

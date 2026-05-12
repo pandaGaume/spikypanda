@@ -9,13 +9,13 @@ import {
     ComputeGraph,
     ComputeNodeBase,
     ITensor,
-} from "../../dev/runtime/src/compute/index";
+} from "spikypanda-core";
 import {
     RolloutNode,
     ObjectiveNode,
     ShootingSelectorNode,
     makeDiscreteOneHotSampler,
-} from "../../dev/runtime/src/compute/mpc";
+} from "spikypanda-applications-mpc";
 
 /**
  * Trivial dynamics node: out = state + sum(action_onehot * [0, 1, 2, 3]).

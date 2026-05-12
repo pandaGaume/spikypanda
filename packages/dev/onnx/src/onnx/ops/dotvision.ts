@@ -35,7 +35,7 @@
  *     Output: centered [T, C] (centered, clamped to [0, 1])
  */
 
-import type { ITensor } from "../../compute/compute.interfaces";
+import type { ITensor } from "spikypanda-core";
 import type { OnnxNodeInfo } from "../onnx-types";
 import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "../registry";
 

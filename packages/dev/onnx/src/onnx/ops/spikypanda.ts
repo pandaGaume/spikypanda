@@ -1,4 +1,4 @@
-import type { ITensor } from "../../compute/compute.interfaces";
+import type { ITensor } from "spikypanda-core";
 import type { OnnxNodeInfo } from "../onnx-types";
 import { OnnxOpNode, makeTensor, OnnxOpRegistry, PRIORITY_NATIVE } from "../registry";
 

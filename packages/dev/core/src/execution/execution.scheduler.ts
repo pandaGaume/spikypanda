@@ -181,4 +181,20 @@ export class Scheduler {
             reasons,
         };
     }
+
+    /**
+     * Returns the Kahn topological order over the non-delayed enabled-
+     * channel subgraph. Throws when the graph contains a cycle without
+     * a delayed channel to break it. Exposed for callers that need to
+     * walk nodes themselves (e.g. an async runner that awaits a
+     * per-node fireAsync between steps) without going through
+     * RunStatic.
+     */
+    public static GetStaticOrder(graph: IRuntimeGraph): IRuntimeNode[] {
+        const { order, reasons } = topoSort(graph);
+        if (reasons.length > 0) {
+            throw new Error(`graph is not statically schedulable: ${reasons.join("; ")}`);
+        }
+        return order;
+    }
 }

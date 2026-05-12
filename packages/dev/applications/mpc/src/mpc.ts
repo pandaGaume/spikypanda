@@ -12,9 +12,7 @@
 // These nodes let you run full MPC loops on a microcontroller using the
 // same inference engine as the perception (past graph).
 // ═══════════════════════════════════════════════════════════════════════════
-import { ComputeGraph } from "./compute.graph";
-import { ComputeNodeBase } from "./compute.node.base";
-import { ITensor } from "./compute.interfaces";
+import { ComputeGraph, ComputeNodeBase, ITensor } from "spikypanda-core";
 
 // ─── RolloutNode ─────────────────────────────────────────────────────────────
 

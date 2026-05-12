@@ -1,5 +1,4 @@
-import { ComputeNodeBase } from "../compute/compute.node.base";
-import type { ITensor } from "../compute/compute.interfaces";
+import { ComputeNodeBase, ITensor } from "spikypanda-core";
 import { OnnxDataType } from "./onnx-types";
 import type { OnnxNodeInfo, OnnxTensorInfo } from "./onnx-types";
 

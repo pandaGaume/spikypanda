@@ -82,7 +82,7 @@ The SpikyPanda ONNX pipeline runs in the browser:
 3. `graph.run()` — executes all operators in topological order
 4. Read output logits, apply softmax, display result
 
-The runtime is bundled as `spikypanda-runtime.js` (webpack UMD) and loaded alongside `spikypanda-core.js`.
+The runtime is bundled as `spikypanda-onnx.js` (webpack UMD) and loaded alongside `spikypanda-core.js`.
 
 ### MCU Deployment Path
 
@@ -103,6 +103,6 @@ The same model (`kws_conv_tiny.onnx`) can be deployed on a microcontroller via C
 | File | Description |
 |---|---|
 | `index.html` | Demo page with hero image, collapsible panels, spectrogram |
-| `kws.js` | Audio capture, MFCC extraction, ONNX inference via SpikypandaRuntime |
+| `kws.js` | Audio capture, MFCC extraction, ONNX inference via SpikypandaOnnx |
 | `kws.css` | Sample-specific styles |
 | `hero.png` | Hero banner image |

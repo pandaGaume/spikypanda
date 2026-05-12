@@ -9,7 +9,7 @@ Classes (13): yes, no, up, down, left, right, on, off, stop, go, hey,
 
 "hey" enables two-stage wake-word detection: KWS detects "hey", then a
 DTW matcher (SpDTW op) identifies the asset name from an enrolled template.
-See packages/dev/runtime/src/onnx/ops/dsp.ts for enroll() and SpDTW.
+See packages/dev/onnx/src/onnx/ops/dsp.ts for enroll() and SpDTW.
 
 Outputs:
   - kws_model.onnx          : ONNX model for SpikyPanda pipeline

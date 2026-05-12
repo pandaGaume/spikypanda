@@ -70,7 +70,7 @@ var mfccNode = null; // lazy-initialized SpMFCC node from runtime
 
 function getOrCreateMfccNode() {
     if (mfccNode) return mfccNode;
-    var RT = window.SpikypandaRuntime;
+    var RT = window.SpikypandaOnnx;
     if (!RT) return null;
 
     // Create a SpMFCC op node via the registry
@@ -150,9 +150,9 @@ function runInference(mfccData, nFrames) {
 
 // ── Load ONNX Model ────────────────────────────────────────────────
 function loadOnnxModel() {
-    var RT = window.SpikypandaRuntime;
+    var RT = window.SpikypandaOnnx;
     if (!RT) {
-        kwsLog("SpikypandaRuntime bundle not found - inference disabled");
+        kwsLog("SpikypandaOnnx bundle not found - inference disabled");
         return;
     }
 
@@ -379,7 +379,7 @@ function stopListening() {
 
 // ── Graph build (lazy) ──────────────────────────────────────────────
 function buildGraph(native) {
-    var RT = window.SpikypandaRuntime;
+    var RT = window.SpikypandaOnnx;
     if (!RT || !onnxModelBytes) return;
 
     var parsed = RT.OnnxParser.parse(onnxModelBytes);

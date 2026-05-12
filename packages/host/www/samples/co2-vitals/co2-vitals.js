@@ -733,7 +733,7 @@ function rebuildMpc(adapterGraph) {
 
 // ── Load dynamics ─────────────────────────────────────────────────────
 function loadDynamics() {
-    RT = window.SpikypandaRuntime;
+    RT = window.SpikypandaOnnx;
     if (!RT) { co2Log("ERROR: runtime not loaded"); return; }
     co2Log("Loading dynamics model...");
     fetch(MODEL_URL)

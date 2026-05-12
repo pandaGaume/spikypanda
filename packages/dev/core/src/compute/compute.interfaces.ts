@@ -1,18 +1,15 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // Compute graph interfaces : ONNX-like configurable data flow pipeline
 //
-// Extends @spiky-panda/core's INode/IOlink/IGraph to build typed
-// compute graphs where:
-//   - Nodes are processing stages (IComputeNode)
-//   - Edges carry typed data tensors (IDataLink)
-//   - The graph executes in topological order
-//
-// Usage:
-//   [LidarSource] ──► [Convolution] ──► [PerceptCortex] ──► [DecisionCortex]
-//   [StereoCapture] ──► [MatchingCNN] ──► [Convolution] ──► [Percept] ──► [Decision]
+// Specialisation of core/execution for tensor-flow graphs. IComputeNode
+// extends IRuntimeNode with the kernel-style execute(inputs[]):outputs[]
+// contract; IDataLink narrows IChannel<ITensor> to a numeric slot
+// (matches ONNX positional input indexing). ComputeGraph defaults to
+// static (Kahn) scheduling, which is the right mode for ONNX inference,
+// MPC rollout, and any other DAG of pure compute kernels.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { IGraph, INode, IOlink } from "spikypanda-core";
+import { IChannel, IRuntimeGraph, IRuntimeNode, ISession } from "../execution/execution.interfaces";
 
 // ─── Tensor ──────────────────────────────────────────────────────────────────
 
@@ -44,38 +41,47 @@ export interface ITensor {
 /**
  * A directed edge carrying a tensor between compute nodes.
  *
- * Extends IOlink (which provides `oini`/`ofin` node references)
- * with a `tensor` payload, analogous to how `ISynapse` extends `IOlink`
- * with a `weight` property.
- *
- * During graph execution:
- * 1. Source node executes -> writes its output to outgoing links' `tensor`
- * 2. Destination node reads from incoming links' `tensor` array
+ * Narrows IChannel<ITensor> by constraining the slot to a number
+ * (ONNX-style positional input index). The runtime ILinkState (in the
+ * session) holds the actual payload at execution time; the link itself
+ * is pure topology + routing metadata.
  */
-export interface IDataLink extends IOlink {
-    /** The tensor flowing through this edge. Null before first execution. */
-    tensor: ITensor | null;
+export interface IDataLink extends IChannel<ITensor> {
     /** Positional index of this link at the consumer node. -1 if unset. */
-    inputIndex: number;
+    readonly slot: number;
 }
 
 // ─── Compute node ────────────────────────────────────────────────────────────
 
 /**
+ * Cached execution context stashed on a compute node's `bag` during
+ * fire(). `lastOutputs` lets sink collectors retrieve the per-node
+ * output set without re-reading channel state.
+ */
+export interface IComputeNodeBag {
+    /** Cached output tensors from the last fire(). */
+    lastOutputs?: ITensor[];
+    /** Pre-injected external input tensor for source nodes (set by ComputeGraph.run before session.run). */
+    pendingInput?: ITensor;
+}
+
+/**
  * A processing stage in the compute graph.
  *
- * Each node implements `execute()` which reads input tensors from
- * incoming `IDataLink`s and produces output tensors written to
- * outgoing `IDataLink`s.
+ * Extends IRuntimeNode with the kernel-style execute(inputs[]):outputs[]
+ * contract. ComputeNodeBase provides the fire(session, t) adapter that
+ * gathers inputs from incoming channels (via session.consume), calls
+ * execute(), and publishes outputs to outgoing channels (via session
+ * .publish), so concrete ops stay agnostic of the session API.
  *
  * Node types:
- * - **Source**: no inputs, produces data (e.g., LidarSourceNode reads a sensor)
- * - **Transform**: inputs -> outputs (e.g., ConvolutionNode, PerceptCortexNode)
- * - **Sink**: consumes data, no outputs (e.g., a logger)
- *
- * The graph engine calls `execute()` in topological order.
+ * - **Source**: no inputs, produces data (e.g., ExternalInputNode).
+ *   Receives its tensor via bag.pendingInput before session.run.
+ * - **Transform**: inputs -> outputs (e.g., ConvNode, MlpNode).
+ *   Inputs are gathered from opsc() in slot-sorted order.
+ * - **Sink**: terminal node whose lastOutputs are collected by run().
  */
-export interface IComputeNode extends INode {
+export interface IComputeNode extends IRuntimeNode {
     /**
      * Human-readable node type for debugging (e.g., "lidar_source", "convolution").
      */
@@ -91,25 +97,29 @@ export interface IComputeNode extends INode {
     /**
      * Execute this compute node synchronously.
      *
-     * For **source nodes** (no incoming links): `inputs` is empty.
-     * For **transform nodes**: `inputs` are the tensors from incoming `IDataLink`s,
-     * in the same order as `opsc()` (predecessors).
+     * For **source nodes** (no incoming links): `inputs` is empty or
+     * contains the pre-injected external tensor.
+     * For **transform nodes**: `inputs` are the tensors from incoming
+     * IDataLinks, ordered by their slot index.
      *
      * @param inputs  Input tensors from upstream nodes.
-     * @returns       Output tensors to be written to outgoing `IDataLink`s.
+     * @returns       Output tensors to be written to outgoing IDataLinks.
      */
     execute(inputs: ITensor[]): ITensor[];
 
     /**
-     * Optional async execution for nodes that require it (GPU, ONNX, Web Workers).
-     *
-     * When present, `runAsync()` will prefer this over `execute()`.
-     * CPU-only nodes do not need to implement this.
-     *
-     * @param inputs  Input tensors from upstream nodes.
-     * @returns       Promise resolving to output tensors.
+     * Optional async execution for nodes that require it (GPU, ONNX
+     * runtime, Web Workers). ComputeGraph.runAsync prefers this over
+     * execute(); CPU-only nodes do not need to implement it.
      */
     executeAsync?(inputs: ITensor[]): Promise<ITensor[]>;
+
+    /**
+     * Optional async fire adapter. ComputeNodeBase provides a default
+     * implementation that mirrors fire() but awaits executeAsync().
+     * Concrete nodes typically do not override.
+     */
+    fireAsync?(session: ISession, t: number): Promise<void>;
 }
 
 // ─── Compute graph ───────────────────────────────────────────────────────────
@@ -117,17 +127,12 @@ export interface IComputeNode extends INode {
 /**
  * A directed acyclic graph of compute nodes connected by data links.
  *
- * Extends `IGraph<IComputeNode, IDataLink>`, inheriting:
- * - `nodes` : all compute nodes
- * - `links` : all data links (edges with tensor payloads)
- * - `inputs` : source nodes (no predecessors)
- * - `outputs` : sink nodes (no successors)
- * - `hiddens` : intermediate nodes
- *
- * The graph provides a `run()` method that executes all nodes in
- * topological order, flowing tensors through the links.
+ * Extends IRuntimeGraph<IComputeNode, IDataLink>, picking up the
+ * scheduler / session machinery from core/execution. ComputeGraph adds
+ * the named-input/named-output API (Map<string, ITensor>) on top of the
+ * generic ISession.run(t).
  */
-export interface IComputeGraph extends IGraph<IComputeNode, IDataLink> {
+export interface IComputeGraph extends IRuntimeGraph<IComputeNode, IDataLink> {
     /**
      * Execute the full graph synchronously.
      *
@@ -142,24 +147,11 @@ export interface IComputeGraph extends IGraph<IComputeNode, IDataLink> {
     /**
      * Execute the full graph asynchronously.
      *
-     * Uses `executeAsync()` on nodes that provide it, falls back to
-     * `execute()` wrapped in Promise.resolve() for synchronous nodes.
-     * Nodes are still executed in topological order (sequential await).
+     * Walks the topological order awaiting each node's fireAsync (which
+     * routes to executeAsync when available, falls back to execute).
      *
      * @param externalInputs  Named tensors to inject into source nodes.
      * @returns                Promise resolving to named tensors from output nodes.
      */
     runAsync(externalInputs?: Map<string, ITensor>): Promise<Map<string, ITensor>>;
-}
-
-// ─── Compute node base bag ───────────────────────────────────────────────────
-
-/**
- * Runtime execution context stored in a compute node's `bag` property.
- * Used to cache intermediate results between frames (zero-allocation
- * after the first execution).
- */
-export interface IComputeNodeBag {
-    /** Cached output tensors from the last execution. */
-    lastOutputs?: ITensor[];
 }

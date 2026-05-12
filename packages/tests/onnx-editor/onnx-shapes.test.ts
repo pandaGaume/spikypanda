@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { OnnxParser } from "../../dev/runtime/src/onnx/onnx-parser";
+import { OnnxParser } from "../../dev/onnx/src/onnx/onnx-parser";
 
 const MODEL_PATH = path.resolve(
     __dirname, "../../../", "../CyanMycelium/models/imu/model_embed.onnx",
