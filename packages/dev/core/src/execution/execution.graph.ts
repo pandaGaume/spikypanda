@@ -100,18 +100,21 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
         }
 
         // 1. Route incoming external channels into internal link states.
+        // Use parent.consume to clear-and-decrement the parent counter,
+        // then inner.publish to write-and-bump the internal counter.
+        const parentLinks = parentSession.graph.links as ReadonlyArray<IChannel>;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) {
                 continue;
             }
-            const parentState = parentSession.linkStateOf(link);
+            const parentIdx = parentLinks.indexOf(link);
             const internalIdx = this.inputBindings.get(link.slot);
-            if (!parentState || !parentState.ready || internalIdx === undefined) {
+            const parentState = parentSession.linkStateOf(link);
+            if (parentIdx < 0 || internalIdx === undefined || !parentState || !parentState.ready) {
                 continue;
             }
-            inner.setInput(internalIdx, parentState.payload);
-            parentState.payload = undefined;
-            parentState.ready = false;
+            const value = parentSession.consume(parentIdx);
+            inner.publish(internalIdx, value);
         }
 
         // 2. Run the internal scheduler.
@@ -122,19 +125,17 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
             if (!link.enabled) {
                 continue;
             }
-            const parentState = parentSession.linkStateOf(link);
+            const parentIdx = parentLinks.indexOf(link);
             const internalIdx = this.outputBindings.get(link.slot);
-            if (!parentState || internalIdx === undefined) {
+            if (parentIdx < 0 || internalIdx === undefined) {
                 continue;
             }
             const internalState = inner.linkStates[internalIdx];
             if (!internalState.ready) {
                 continue;
             }
-            parentState.payload = internalState.payload;
-            parentState.ready = true;
-            internalState.payload = undefined;
-            internalState.ready = false;
+            const value = inner.consume(internalIdx);
+            parentSession.publish(parentIdx, value);
         }
     }
 

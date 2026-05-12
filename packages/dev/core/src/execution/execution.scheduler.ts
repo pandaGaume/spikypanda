@@ -63,51 +63,80 @@ function topoSort(graph: IRuntimeGraph): { order: IRuntimeNode[]; reasons: strin
  * Schedulers for IRuntimeGraph. Static-class container gathering the
  * available scheduling strategies as pure static methods.
  *
- *   RunDynamic           : ready-queue dispatch. Walks the graph,
- *                          fires every ready+enabled node, repeats
- *                          until quiescence. Handles cycles (via
- *                          delayed channels), conditional readiness
- *                          (SNN, phase-aware nodes), external-input
- *                          pacing.
+ *   RunDynamic           : ready-queue dispatch driven by linksReady
+ *                          counters maintained by Session.publish() /
+ *                          Session.consume(). A node is queued the
+ *                          moment its INodeState.linksReady reaches
+ *                          session.requiredInputsOf(node), fired once,
+ *                          and its outputs propagate to downstream
+ *                          counters automatically. O(N+E) per cycle.
  *
  *   RunStatic            : pre-computed Kahn topological order over
  *                          the non-delayed enabled-channel subgraph,
  *                          fires each enabled node once in order. No
- *                          isReady() check; the user opts in to the
- *                          assumption that the graph is statically
- *                          schedulable.
+ *                          isReady() check.
  *
  *   CheckStaticEligible  : verifies the graph satisfies the structural
- *                          precondition for RunStatic (acyclic in the
- *                          non-delayed enabled subgraph). Returns the
- *                          reasons when it does not.
+ *                          precondition for RunStatic.
  */
 export class Scheduler {
     /**
-     * Dynamic (ready-queue) scheduler. One pass per session.run() call:
-     * repeatedly walk the graph looking for nodes whose isReady() is
-     * true and that have not yet fired this cycle, fire them, repeat
-     * until no progress can be made.
+     * Dynamic (ready-queue) scheduler. Seeds the queue from nodes
+     * already eligible at session start (sources, plus nodes whose only
+     * inputs are delayed and pre-seeded by reset), drains the queue
+     * firing each enabled node once, scans the fired node's outgoing
+     * channels to enqueue any newly-eligible downstream nodes.
      */
     public static RunDynamic(session: ISession, t: number): void {
-        const nodes = session.graph.nodes;
+        const nodes = session.graph.nodes as ReadonlyArray<IRuntimeNode>;
+        const queue: IRuntimeNode[] = [];
         const fired = new Set<IRuntimeNode>();
-        let progress = true;
-        while (progress) {
-            progress = false;
-            for (const node of nodes) {
-                if (fired.has(node)) {
+
+        // Seed: nodes whose counter already meets the required count.
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
+            if (!node.enabled) {
+                continue;
+            }
+            if (session.nodeStates[i].linksReady >= session.requiredInputsOf(node)) {
+                queue.push(node);
+            }
+        }
+
+        while (queue.length > 0) {
+            const node = queue.shift()!;
+            if (fired.has(node) || !node.enabled) {
+                continue;
+            }
+            // Defensive isReady: lets nodes refuse to fire even when
+            // their counter looks ready (SNN threshold, phase gating).
+            if (!node.isReady(session)) {
+                continue;
+            }
+            node.fire(session, t);
+            fired.add(node);
+
+            // The node's publish() calls during fire bumped downstream
+            // counters; enqueue any downstream that just reached its
+            // required count.
+            for (const link of node.onsc<IChannel>()) {
+                if (!link.enabled) {
                     continue;
                 }
-                if (!node.enabled) {
+                const dst = link.ofin as IRuntimeNode | null;
+                if (!dst || fired.has(dst) || !dst.enabled) {
                     continue;
                 }
-                if (!node.isReady(session)) {
+                if (nodes.indexOf(dst) < 0) {
                     continue;
                 }
-                node.fire(session, t);
-                fired.add(node);
-                progress = true;
+                const dstState = session.nodeStateOf(dst);
+                if (!dstState) {
+                    continue;
+                }
+                if (dstState.linksReady >= session.requiredInputsOf(dst)) {
+                    queue.push(dst);
+                }
             }
         }
     }
@@ -115,12 +144,9 @@ export class Scheduler {
     /**
      * Static (Kahn-topo) scheduler. Computes the topological order over
      * the non-delayed enabled-channel subgraph and fires each enabled
-     * node once in that order. Throws if a cycle remains in the
-     * eligible subgraph; call CheckStaticEligible() before declaring
-     * mode="static" on a graph built dynamically.
-     *
-     * v1 recomputes the order on every call (O(N+E)). A future commit
-     * caches it on the graph after first call.
+     * node once in that order. Throws if a cycle remains; call
+     * CheckStaticEligible() before declaring mode="static" on a graph
+     * built dynamically.
      */
     public static RunStatic(session: ISession, t: number): void {
         const { order, reasons } = topoSort(session.graph);

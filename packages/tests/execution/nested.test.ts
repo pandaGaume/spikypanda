@@ -1,62 +1,5 @@
-import {
-    Channel,
-    IChannel,
-    ISession,
-    RuntimeGraph,
-    RuntimeNode,
-    SchedulingMode,
-    Session,
-} from "spikypanda-core";
-
-class ProducerNode extends RuntimeNode {
-    public constructor(public readonly value: number) {
-        super();
-    }
-    public override isReady(_s: ISession): boolean {
-        return this.enabled;
-    }
-    public override fire(session: ISession, _t: number): void {
-        const out = this.onsc<IChannel>()[0];
-        const idx = (session.graph.links as ReadonlyArray<IChannel>).indexOf(out);
-        const state = session.linkStates[idx];
-        state.payload = this.value;
-        state.ready = true;
-    }
-}
-
-class ConsumerNode extends RuntimeNode {
-    public received: number[] = [];
-    public override fire(session: ISession, _t: number): void {
-        const inc = this.opsc<IChannel>()[0];
-        const idx = (session.graph.links as ReadonlyArray<IChannel>).indexOf(inc);
-        const state = session.linkStates[idx];
-        this.received.push(state.payload as number);
-        state.payload = undefined;
-        state.ready = false;
-    }
-    public override reset(_s: ISession): void {
-        this.received = [];
-    }
-}
-
-/** Internal Add node: reads its two opsc channels, writes their sum to its single onsc channel. */
-class AddNode extends RuntimeNode {
-    public override fire(session: ISession, _t: number): void {
-        const links = session.graph.links as ReadonlyArray<IChannel>;
-        const ins = this.opsc<IChannel>();
-        const a = session.linkStates[links.indexOf(ins[0])];
-        const b = session.linkStates[links.indexOf(ins[1])];
-        const sum = (a.payload as number) + (b.payload as number);
-        a.ready = false;
-        a.payload = undefined;
-        b.ready = false;
-        b.payload = undefined;
-        const out = this.onsc<IChannel>()[0];
-        const o = session.linkStates[links.indexOf(out)];
-        o.payload = sum;
-        o.ready = true;
-    }
-}
+import { Channel, RuntimeGraph, RuntimeNode, SchedulingMode, Session } from "spikypanda-core";
+import { AddNode, ConsumerNode, ProducerNode } from "./poc-nodes";
 
 /**
  * Build an Add sub-graph (no source for "a" / "b" inputs, no sink for
@@ -142,6 +85,22 @@ describe("Nested sub-graph (fractal composition)", () => {
         s.run(0);
 
         expect(c.received).toEqual([123]);
+    });
+
+    test("mixed mode: static parent, dynamic sub-graph", () => {
+        const pa = new ProducerNode(50);
+        const pb = new ProducerNode(50);
+        const sub = buildAddSubgraph("dynamic");
+        const c = new ConsumerNode();
+        const lAtoSub = new Channel(pa, sub, "a");
+        const lBtoSub = new Channel(pb, sub, "b");
+        const lSubtoC = new Channel(sub, c, "sum");
+        const parent = new RuntimeGraph<RuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "static");
+        const s = new Session(parent);
+
+        s.run(0);
+
+        expect(c.received).toEqual([100]);
     });
 
     test("disabled sub-graph: parent skips it, consumer never reads", () => {

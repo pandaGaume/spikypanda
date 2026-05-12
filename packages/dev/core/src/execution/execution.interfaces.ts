@@ -177,18 +177,54 @@ export interface ISession {
     readonly nodeStates: ReadonlyArray<INodeState>;
 
     /**
-     * Inject a value into a channel from outside the graph. channelIndex
-     * is the channel's position in graph.links. Typical use: feeding a
-     * model-input channel before a run.
+     * Inject a value into a channel from outside the graph. Equivalent
+     * to publish() but named for clarity at the caller boundary
+     * (feeding a model-input channel before a run).
      */
     setInput(channelIndex: number, value: unknown): void;
 
     /**
-     * Read the current payload of a channel. channelIndex is the
-     * channel's position in graph.links. Typical use: reading a model-
-     * output channel after a run.
+     * Read the current payload of a channel without consuming it.
+     * Equivalent to peek() but named for clarity at the caller boundary
+     * (reading a model-output channel after a run).
      */
     getOutput(channelIndex: number): unknown;
+
+    /**
+     * Node-side write API: set payload + ready=true on the channel.
+     * When this transitions the channel from not-ready to ready and
+     * the channel is enabled, the destination node's INodeState
+     * .linksReady is bumped by 1. The ready-queue scheduler uses this
+     * counter to dispatch downstream nodes without rescanning the
+     * graph; nodes that mutate linkStates directly bypass that
+     * accounting and must update counters themselves (not recommended).
+     */
+    publish(channelIndex: number, value: unknown): void;
+
+    /**
+     * Node-side read+clear API: returns the payload and clears the
+     * channel (ready=false, payload=undefined). When the channel was
+     * ready and is enabled, decrements the destination node's
+     * INodeState.linksReady so it can re-arm on the next publish.
+     */
+    consume(channelIndex: number): unknown;
+
+    /**
+     * Node-side read API: returns the payload without clearing the
+     * channel. Use for SNN-style integration where a node reads its
+     * input but does not consume it (so the next tick still sees the
+     * same value).
+     */
+    peek(channelIndex: number): unknown;
+
+    /**
+     * Number of enabled incoming channels (filtered to channels that
+     * belong to this session's graph) for the given node. Cached at
+     * session construction; treat as immutable per session. The
+     * scheduler dispatches a node when its INodeState.linksReady
+     * reaches this count.
+     */
+    requiredInputsOf(node: IRuntimeNode): number;
 
     /**
      * Lookup helper: per-node session state for a given node. Returns
