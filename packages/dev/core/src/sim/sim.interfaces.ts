@@ -1,4 +1,5 @@
 import { IEnableable, IGraph, INode, IOlink, isEnableable, isGraph, isNode, isOlink } from "../graph/graph.interfaces";
+import { IRuntimeNode, ISession } from "../execution/execution.interfaces";
 
 /**
  * Named scheduling phases. The scheduler runs nodes phase-by-phase in
@@ -105,4 +106,40 @@ export function isSimLink<L extends ISimLink>(obj: unknown): obj is L {
  */
 export function isSimGraph<N extends ISimNode, L extends ISimLink>(obj: unknown): obj is ISimGraph<N, L> {
     return isGraph<N, L>(obj) && isSimNode<N>(obj) && "tick" in obj && typeof (obj as ISimGraph<N, L>).tick === "function";
+}
+
+// =====================================================================
+// New execution-model extension: phase as a session-level context.
+// These types live alongside the legacy ISimNode / SimGraph above and
+// will eventually supersede them once the impls land.
+// =====================================================================
+
+/**
+ * Sim-specific session: extends the generic ISession with the phase
+ * currently being dispatched. The scheduler sets this once per phase
+ * iteration before draining the ready-queue; nodes that implement
+ * ISupportsPhasing read it to gate themselves.
+ */
+export interface ISimSession extends ISession {
+    readonly currentPhase: SimPhase;
+}
+
+/**
+ * Opt-in marker for nodes that gate themselves on the current phase.
+ * Nodes not implementing this fire whenever their inputs are ready,
+ * regardless of phase (pure KPN behaviour).
+ *
+ * The scheduler checks: if supportsPhasing(node) and
+ * !node.phases.includes(session.currentPhase), skip the node this
+ * phase even if its inputs are ready.
+ */
+export interface ISupportsPhasing {
+    readonly phases: ReadonlyArray<SimPhase>;
+}
+
+/**
+ * Type guard for ISupportsPhasing on a runtime node.
+ */
+export function supportsPhasing(n: IRuntimeNode): n is IRuntimeNode & ISupportsPhasing {
+    return "phases" in n && Array.isArray((n as unknown as ISupportsPhasing).phases);
 }
