@@ -1,6 +1,9 @@
 // SpikyPanda — Stereo Depth Estimation Demo
 (function () {
-    const S = SpikypandaCore;
+    // Stereo classes/builders live in the @spiky-panda/applications-stereo
+    // bundle (SpikypandaApplicationsStereo); LossFunctions, Optimizers and
+    // other primitives still live in core. Merge both into a single S.
+    const S = Object.assign({}, SpikypandaCore, SpikypandaApplicationsStereo);
 
     const logEl = document.getElementById("log");
     const statusEl = document.getElementById("status");

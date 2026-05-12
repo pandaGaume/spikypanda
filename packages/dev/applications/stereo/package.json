@@ -9,11 +9,13 @@
     "types": "dist/index",
     "files": ["dist", "src"],
     "scripts": {
-        "build": "npm run clean && npm run compile",
+        "build": "npm run clean && npm run compile && npm run bundle",
         "clean": "rimraf dist bundle && rimraf tsconfig.build.tsbuildinfo",
         "compile": "npm run compile:source",
         "compile:source": "tsc -b tsconfig.build.json",
-        "watch:source": "tsc -b tsconfig.build.json -w"
+        "watch:source": "tsc -b tsconfig.build.json -w",
+        "bundle": "webpack --mode production --config webpack.config.js",
+        "bundle:dev": "webpack --mode development --config webpack.config.js"
     },
     "sideEffects": false,
     "devDependencies": {

@@ -8,7 +8,7 @@ import {
     Nullable,
     PoolingType,
 } from "spikypanda-core";
-import { IStereoCnnNeuron, IStereoCnnSynapse, StereoBranch } from "./stereo.interfaces";
+import type { IStereoCnnNeuron, IStereoCnnSynapse, StereoBranch } from "./stereo.interfaces";
 
 /// <summary>
 /// A neuron in a stereo CNN graph. Extends CnnNeuron with branch identifier.

@@ -12,6 +12,7 @@ const sources = [
     join(root, "packages/dev/nodeeditor/bundle"),
     join(root, "packages/dev/onnx-editor/bundle"),
     join(root, "packages/dev/mcp/bundle"),
+    join(root, "packages/dev/applications/stereo/bundle"),
 ];
 
 const dest = join(root, "packages/host/www/bundle");
