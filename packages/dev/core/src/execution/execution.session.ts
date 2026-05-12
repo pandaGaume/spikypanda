@@ -1,11 +1,20 @@
-import { IChannel, ILinkState, INodeState, IRuntimeGraph, ISession } from "./execution.interfaces";
-import { runDynamic } from "./execution.scheduler.dynamic";
+import { IOlink } from "../graph/graph.interfaces";
+import {
+    IChannel,
+    ILinkState,
+    INodeState,
+    IRuntimeGraph,
+    IRuntimeNode,
+    ISession,
+} from "./execution.interfaces";
+import { Scheduler } from "./execution.scheduler";
 
 /**
  * Concrete ISession. Allocates linkStates / nodeStates at construction
- * (one slot per graph.link, one per graph.node), seeds delayed channels
- * with their initialValue on reset, dispatches run(t) through the
- * scheduler matching the graph's declared mode.
+ * (one per graph.link, one per graph.node, with node-provided state
+ * factories where available), seeds delayed channels with their
+ * initialValue on reset, dispatches run(t) through the scheduler that
+ * matches the graph's declared mode.
  *
  * No allocation in the hot path: run(t) reuses the pre-allocated state
  * slots; producers write payloads in place, consumers clear them in
@@ -19,7 +28,12 @@ export class Session implements ISession {
     public constructor(graph: IRuntimeGraph) {
         this.graph = graph;
         this.linkStates = graph.links.map(() => ({ ready: false, payload: undefined as unknown }));
-        this.nodeStates = graph.nodes.map(() => ({ linksReady: 0 }));
+        this.nodeStates = graph.nodes.map((n) => {
+            if (typeof n.createNodeState === "function") {
+                return n.createNodeState();
+            }
+            return { linksReady: 0 };
+        });
         this.reset();
     }
 
@@ -33,9 +47,23 @@ export class Session implements ISession {
         return this.linkStates[channelIndex].payload;
     }
 
+    public nodeStateOf(node: IRuntimeNode): INodeState | undefined {
+        const idx = (this.graph.nodes as ReadonlyArray<IRuntimeNode>).indexOf(node);
+        return idx >= 0 ? this.nodeStates[idx] : undefined;
+    }
+
+    public linkStateOf(channel: IOlink): ILinkState | undefined {
+        const idx = (this.graph.links as ReadonlyArray<IOlink>).indexOf(channel);
+        return idx >= 0 ? this.linkStates[idx] : undefined;
+    }
+
     public run(t: number): void {
         if (this.graph.mode === "dynamic") {
-            runDynamic(this, t);
+            Scheduler.RunDynamic(this, t);
+            return;
+        }
+        if (this.graph.mode === "static") {
+            Scheduler.RunStatic(this, t);
             return;
         }
         throw new Error(`scheduler not implemented for mode "${this.graph.mode}"`);

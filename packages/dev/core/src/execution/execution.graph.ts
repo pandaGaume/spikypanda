@@ -2,16 +2,33 @@ import type { ICartesian } from "../geometry";
 import { cloneable } from "../graph/graph.interfaces";
 import { Graph } from "../graph/graph.graph";
 import { Nullable } from "../types";
-import { IChannel, IRuntimeGraph, IRuntimeNode, ISession, SchedulingMode } from "./execution.interfaces";
+import {
+    IChannel,
+    IGraphNodeState,
+    INodeState,
+    IRuntimeGraph,
+    IRuntimeNode,
+    ISession,
+    SchedulingMode,
+} from "./execution.interfaces";
+import { Session } from "./execution.session";
 
 /**
- * Concrete IRuntimeGraph. Extends Graph<N, L> for the topology (inherits
- * nodes / links / inputs / outputs / hiddens / clone), declares the
- * scheduling mode at construction, and implements the IRuntimeNode
- * surface (so the graph can later embed in a parent graph, fractal
- * composition). For v1, the IRuntimeNode methods are stubs: the entry
- * point is Session.run(t), which invokes the scheduler matching the
- * declared mode.
+ * Concrete IRuntimeGraph. Extends Graph<N, L> for the topology and
+ * implements the IRuntimeNode surface so the graph can be embedded as a
+ * node inside a parent graph (fractal composition).
+ *
+ * Top-level use: the caller creates `new Session(graph)` and drives via
+ * session.run(t). The graph's own IRuntimeNode methods are unused; the
+ * Session it owns is the entry point.
+ *
+ * Embedded use: the caller wires this graph as a node in a parent graph
+ * via channels, providing inputBindings (external slot -> internal
+ * channel index) and outputBindings (external slot -> internal channel
+ * index). Per-parent-session state (including the internal Session
+ * driving this sub-graph) lives in IGraphNodeState within the parent
+ * session, so the same IRuntimeGraph instance can be embedded by N
+ * concurrent parent sessions without sharing state.
  */
 export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChannel = IChannel>
     extends Graph<N, L>
@@ -19,11 +36,15 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
 {
     @cloneable public mode: SchedulingMode;
     @cloneable public enabled: boolean;
+    @cloneable public inputBindings: Map<string | number, number>;
+    @cloneable public outputBindings: Map<string | number, number>;
 
     public constructor(
         nodes: N[] = [],
         links: L[] = [],
         mode: SchedulingMode = "dynamic",
+        inputBindings: Map<string | number, number> = new Map(),
+        outputBindings: Map<string | number, number> = new Map(),
         inputs: Nullable<N[]> = null,
         outputs: Nullable<N[]> = null,
         hiddens: Nullable<N[]> = null,
@@ -32,22 +53,110 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
     ) {
         super(nodes, links, inputs, outputs, hiddens, null, null, position);
         this.mode = mode;
+        this.inputBindings = inputBindings;
+        this.outputBindings = outputBindings;
         this.enabled = enabled;
     }
 
-    public isReady(_session: ISession): boolean {
-        return this.enabled;
+    /**
+     * Per-parent-session state factory: allocates an internal Session
+     * keyed to this sub-graph. Each parent session calling this gets a
+     * distinct internalSession, so concurrent embeddings do not share
+     * runtime state.
+     */
+    public createNodeState(): IGraphNodeState {
+        return {
+            linksReady: 0,
+            internalSession: new Session(this),
+        };
     }
 
-    public fire(_session: ISession, _t: number): void {
-        // Fractal embedding (graph as node inside a parent graph) lands
-        // in a follow-up commit. For v1, drive the graph via
-        // Session.run(t) instead.
-    }
-
-    public reset(session: ISession): void {
-        for (const n of this.nodes) {
-            n.reset(session);
+    public isReady(parentSession: ISession): boolean {
+        if (!this.enabled) {
+            return false;
         }
+        const incoming = this.opsc<IChannel>();
+        for (const link of incoming) {
+            if (!link.enabled) {
+                continue;
+            }
+            const state = parentSession.linkStateOf(link);
+            if (!state) {
+                // Channel belongs to a different parent session (this
+                // sub-graph instance is embedded in N parents); skip.
+                continue;
+            }
+            if (!state.ready) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public fire(parentSession: ISession, t: number): void {
+        const inner = this._internalSessionIn(parentSession);
+        if (!inner) {
+            return;
+        }
+
+        // 1. Route incoming external channels into internal link states.
+        for (const link of this.opsc<IChannel>()) {
+            if (!link.enabled) {
+                continue;
+            }
+            const parentState = parentSession.linkStateOf(link);
+            const internalIdx = this.inputBindings.get(link.slot);
+            if (!parentState || !parentState.ready || internalIdx === undefined) {
+                continue;
+            }
+            inner.setInput(internalIdx, parentState.payload);
+            parentState.payload = undefined;
+            parentState.ready = false;
+        }
+
+        // 2. Run the internal scheduler.
+        inner.run(t);
+
+        // 3. Route internal output link states back to external channels.
+        for (const link of this.onsc<IChannel>()) {
+            if (!link.enabled) {
+                continue;
+            }
+            const parentState = parentSession.linkStateOf(link);
+            const internalIdx = this.outputBindings.get(link.slot);
+            if (!parentState || internalIdx === undefined) {
+                continue;
+            }
+            const internalState = inner.linkStates[internalIdx];
+            if (!internalState.ready) {
+                continue;
+            }
+            parentState.payload = internalState.payload;
+            parentState.ready = true;
+            internalState.payload = undefined;
+            internalState.ready = false;
+        }
+    }
+
+    public reset(parentSession: ISession): void {
+        // The Session.reset() that triggered this call already zeroed
+        // linksReady on every nodeState; we only need to reset our
+        // internal session, which cascades to our internal nodes.
+        const inner = this._internalSessionIn(parentSession);
+        inner?.reset();
+    }
+
+    /**
+     * Retrieves this sub-graph's internal session from its IGraphNodeState
+     * inside the given parent session. Returns undefined when the parent
+     * session was not constructed against a graph containing this
+     * sub-graph (defensive).
+     */
+    private _internalSessionIn(parentSession: ISession): ISession | undefined {
+        const state = parentSession.nodeStateOf(this) as IGraphNodeState | INodeState | undefined;
+        if (state && "internalSession" in state) {
+            return state.internalSession;
+        }
+        return undefined;
     }
 }

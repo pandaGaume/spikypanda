@@ -42,27 +42,35 @@ export interface IChannel<T = unknown> extends IOlink, IEnableable {
  * A graph node with an execution contract. Reuses INode for topology
  * (id, position, onsc(), opsc()) and adds the dataflow lifecycle:
  *
- *   isReady(session)   true when this node may fire in the current
- *                      session cycle. Default semantic: every required
- *                      input slot has its bound channel marked ready
- *                      in the session's linkStates.
+ *   isReady(session)        true when this node may fire in the current
+ *                           session cycle. Default semantic: every
+ *                           required input slot has its bound channel
+ *                           marked ready in the session's linkStates.
  *
- *   fire(session, t)   consume inputs (read from session.linkStates of
- *                      bound channels), produce outputs (write into
- *                      session.linkStates of bound channels). The
- *                      scheduler does not transport data; the node
- *                      decides what to peek vs consume.
+ *   fire(session, t)        consume inputs, produce outputs (read/write
+ *                           session.linkStates of bound channels). The
+ *                           scheduler does not transport data; the node
+ *                           decides what to peek vs consume.
  *
- *   reset(session)     drop any per-node session state. Called when
- *                      the session is reset.
+ *   reset(session)          drop any per-node session state. Called
+ *                           when the session is reset.
+ *
+ *   createNodeState()       optional factory: when present, the Session
+ *                           constructor calls it to allocate the node's
+ *                           entry in session.nodeStates. Used by nodes
+ *                           that need more than the base INodeState
+ *                           (e.g. a sub-graph stores its internal
+ *                           Session in IGraphNodeState).
  *
  * A single IRuntimeNode instance is safely shared by N parallel
- * sessions; all mutable state lives in the session.
+ * sessions; all mutable state lives in the session's nodeStates entry
+ * for this node.
  */
 export interface IRuntimeNode extends INode, IEnableable {
     isReady(session: ISession): boolean;
     fire(session: ISession, t: number): void;
     reset(session: ISession): void;
+    createNodeState?(): INodeState;
 }
 
 // =====================================================================
@@ -89,12 +97,31 @@ export type SchedulingMode = "static" | "dynamic";
 
 /**
  * Runtime graph: an IGraph of IRuntimeNode + IChannel that is itself an
- * IRuntimeNode (composition fractale conservée). One IRuntimeGraph backs
- * many concurrent sessions.
+ * IRuntimeNode (composition fractale).
+ *
+ * Embedding: when this graph is wired as a node inside a parent graph,
+ * the parent treats it like any other IRuntimeNode (channels target it
+ * with a slot, isReady/fire follow the standard contract). The
+ * inputBindings/outputBindings maps connect the external slot vocabulary
+ * (used by parent channels) to internal channel indices, so fire(parent,
+ * t) can route data across the boundary:
+ *
+ *   external slot of channel feeding this graph
+ *     -> inputBindings.get(slot)                 (internal channel idx)
+ *     -> internalSession.linkStates[idx]         (write payload)
+ *
+ *   external slot of channel leaving this graph
+ *     -> outputBindings.get(slot)                (internal channel idx)
+ *     -> internalSession.linkStates[idx]         (read payload)
+ *
+ * Top-level use (no parent embedding): bindings can be empty; the user
+ * drives via `new Session(graph)` as usual.
  */
 export interface IRuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChannel = IChannel>
     extends IGraph<N, L>, IRuntimeNode {
     readonly mode: SchedulingMode;
+    readonly inputBindings: ReadonlyMap<string | number, number>;
+    readonly outputBindings: ReadonlyMap<string | number, number>;
 }
 
 // =====================================================================
@@ -116,9 +143,25 @@ export interface ILinkState<T = unknown> {
  * required input channels are currently marked ready; the node is
  * dispatch-eligible when linksReady equals the count of required inputs.
  * Indexed by the node's position in graph.nodes.
+ *
+ * Extensible: nodes that need richer per-session state declare a
+ * createNodeState() factory and return a subtype. A sub-graph node, for
+ * example, stores its internal Session as IGraphNodeState.internalSession.
  */
 export interface INodeState {
     linksReady: number;
+}
+
+/**
+ * Per-node state for a graph that is embedded as a node in a parent.
+ * The internalSession is the per-parent-session instance that drives
+ * this sub-graph's internal scheduler. One parent session has its own
+ * IGraphNodeState (and therefore its own internalSession) per embedded
+ * graph node, so a single IRuntimeGraph instance can be shared across N
+ * parents without collision.
+ */
+export interface IGraphNodeState extends INodeState {
+    internalSession: ISession;
 }
 
 /**
@@ -146,6 +189,21 @@ export interface ISession {
      * output channel after a run.
      */
     getOutput(channelIndex: number): unknown;
+
+    /**
+     * Lookup helper: per-node session state for a given node. Returns
+     * undefined when the node is not part of this session's graph.
+     * Used by nodes that need to read/write their own state without
+     * tracking their index manually.
+     */
+    nodeStateOf(node: IRuntimeNode): INodeState | undefined;
+
+    /**
+     * Lookup helper: per-link session state for a given channel.
+     * Returns undefined when the channel is not part of this session's
+     * graph.
+     */
+    linkStateOf(channel: IOlink): ILinkState | undefined;
 
     run(t: number): void;
     reset(): void;
