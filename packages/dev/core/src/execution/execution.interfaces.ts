@@ -283,7 +283,7 @@ export interface IPortDescriptor {
     readonly multiplicity?: "single" | "variadic";
 }
 
-export function declaresPorts( n: IRuntimeNode ): n is IRuntimeNode & IDeclaresPorts {
+export function declaresPorts(n: IRuntimeNode): n is IRuntimeNode & IDeclaresPorts {
     const candidate = n as IRuntimeNode & Partial<IDeclaresPorts>;
 
     return (

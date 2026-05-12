@@ -143,8 +143,13 @@ export class Scheduler {
 
     /**
      * Static (Kahn-topo) scheduler. Computes the topological order over
-     * the non-delayed enabled-channel subgraph and fires each enabled
-     * node once in that order. Throws if a cycle remains; call
+     * the non-delayed enabled-channel subgraph, then visits each enabled
+     * node in that order; each visited node is given the same chance to
+     * refuse via isReady() as in the dynamic scheduler (a phase-aware
+     * node skipping a phase, an SNN below threshold, etc.). The static
+     * mode optimisation is only about avoiding the ready-queue
+     * book-keeping; the per-node isReady() contract is honored
+     * identically in both modes. Throws if a cycle remains; call
      * CheckStaticEligible() before declaring mode="static" on a graph
      * built dynamically.
      */
@@ -155,6 +160,9 @@ export class Scheduler {
         }
         for (const node of order) {
             if (!node.enabled) {
+                continue;
+            }
+            if (!node.isReady(session)) {
                 continue;
             }
             node.fire(session, t);
