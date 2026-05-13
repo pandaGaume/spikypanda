@@ -24,15 +24,29 @@ export interface OnnxKernelNaming {
 }
 
 /**
- * Spec for a synthesized ONNX node. Distinct attribute buckets keep
- * the API explicit (scalar vs list, int vs float) without erasing
- * the type at the boundary.
+ * Spec for a synthesized ONNX node.
+ *
+ * Preferred path : pass a unified `attrs` map; the framework looks up
+ * the op's schema (declared via `@onnxOp` decorators in
+ * `onnx/export/schema/`) and classifies each attribute as int / float
+ * / ints / floats automatically. This is the cleanest call site and
+ * keeps the type information in ONE place per op (the schema
+ * declaration) instead of scattered across every emitter.
+ *
+ * Escape hatch : the `intAttrs / floatAttrs / intsAttrs / floatsAttrs`
+ * buckets stay supported for one-off ops that aren't in the schema
+ * registry (or when a serializer wants to override the schema). When
+ * both `attrs` and a bucket carry the same key, the bucket wins
+ * (deliberate override).
  */
 export interface OnnxNodeSpec {
     opType: string;
     inputs: ReadonlyArray<string>;
     outputs: ReadonlyArray<string>;
     name?: string;
+    /** Unified attribute bag. Types resolved via the op's
+     *  `@onnxOp`-decorated schema. */
+    attrs?: Record<string, number | ReadonlyArray<number>>;
     intAttrs?: Record<string, number>;
     floatAttrs?: Record<string, number>;
     intsAttrs?: Record<string, ReadonlyArray<number>>;

@@ -10,6 +10,7 @@
 import { OnnxDataType } from "../onnx-types";
 import type { OnnxNodeInfo, OnnxTensorInfo } from "../onnx-types";
 import type { OnnxExportContext, OnnxNodeSpec } from "./export.types";
+import { getOnnxOpSchema } from "./schema/op-schema";
 
 export class DefaultOnnxExportContext implements OnnxExportContext {
     public readonly nodes: OnnxNodeInfo[] = [];
@@ -78,9 +79,37 @@ export class DefaultOnnxExportContext implements OnnxExportContext {
             attributes: new Map(),
         };
 
+        // 1. Unified `attrs` map: classify each key via the op's
+        //    @onnxOp schema. Missing schema → error (force the caller
+        //    to declare it or fall back to the legacy buckets).
+        if (spec.attrs && Object.keys(spec.attrs).length > 0) {
+            const schema = getOnnxOpSchema(spec.opType);
+            if (!schema) {
+                throw new Error(
+                    `OnnxExportContext.makeNode: op "${spec.opType}" has no registered schema. ` +
+                    `Declare it with @onnxOp("${spec.opType}") in onnx/export/schema/op-schemas.defs.ts ` +
+                    `(plus @attr.<kind> on each property), or use the legacy intAttrs / floatAttrs / ` +
+                    `intsAttrs / floatsAttrs buckets at this call site.`
+                );
+            }
+            for (const [k, v] of Object.entries(spec.attrs)) {
+                const def = schema.attrs.find((a) => a.name === k);
+                if (!def) {
+                    throw new Error(
+                        `Op "${spec.opType}": attribute "${k}" not declared in its schema. ` +
+                        `Known: [${schema.attrs.map((a) => `${a.name}: ${a.kind}`).join(", ")}].`
+                    );
+                }
+                this._applySchemaAttr(node, def.name, def.kind, v);
+            }
+        }
+
+        // 2. Legacy typed buckets (override the schema-classified
+        //    entry when both reference the same key).
         if (spec.intAttrs) {
             for (const [k, v] of Object.entries(spec.intAttrs)) {
                 node.attributes.set(k, v);
+                node.floatAttributeNames?.delete(k);
             }
         }
         if (spec.floatAttrs) {
@@ -90,33 +119,85 @@ export class DefaultOnnxExportContext implements OnnxExportContext {
                 node.floatAttributeNames.add(k);
             }
         }
-
-        const hasLists = (spec.intsAttrs && Object.keys(spec.intsAttrs).length > 0)
-            || (spec.floatsAttrs && Object.keys(spec.floatsAttrs).length > 0);
-        if (hasLists) {
-            node.listAttributes = new Map();
-            if (spec.intsAttrs) {
-                for (const [k, v] of Object.entries(spec.intsAttrs)) {
-                    node.listAttributes.set(k, [...v]);
-                    if (v.length > 0 && !node.attributes.has(k)) {
-                        node.attributes.set(k, v[0]);
-                    }
+        if (spec.intsAttrs) {
+            node.listAttributes = node.listAttributes ?? new Map();
+            for (const [k, v] of Object.entries(spec.intsAttrs)) {
+                node.listAttributes.set(k, [...v]);
+                node.floatListAttributeNames?.delete(k);
+                if (v.length > 0 && !node.attributes.has(k)) {
+                    node.attributes.set(k, v[0]);
                 }
             }
-            if (spec.floatsAttrs) {
-                for (const [k, v] of Object.entries(spec.floatsAttrs)) {
-                    node.listAttributes.set(k, [...v]);
-                    node.floatListAttributeNames = node.floatListAttributeNames ?? new Set();
-                    node.floatListAttributeNames.add(k);
-                    if (v.length > 0 && !node.attributes.has(k)) {
-                        node.attributes.set(k, v[0]);
-                        node.floatAttributeNames = node.floatAttributeNames ?? new Set();
-                        node.floatAttributeNames.add(k);
-                    }
+        }
+        if (spec.floatsAttrs) {
+            node.listAttributes = node.listAttributes ?? new Map();
+            for (const [k, v] of Object.entries(spec.floatsAttrs)) {
+                node.listAttributes.set(k, [...v]);
+                node.floatListAttributeNames = node.floatListAttributeNames ?? new Set();
+                node.floatListAttributeNames.add(k);
+                if (v.length > 0 && !node.attributes.has(k)) {
+                    node.attributes.set(k, v[0]);
+                    node.floatAttributeNames = node.floatAttributeNames ?? new Set();
+                    node.floatAttributeNames.add(k);
                 }
             }
         }
 
         this.nodes.push(node);
+    }
+
+    /**
+     * Apply a single schema-classified attribute to a node. The kind
+     * comes from the @attr.<kind> decorator on the op's schema class.
+     */
+    private _applySchemaAttr(node: OnnxNodeInfo, name: string, kind: string, value: number | ReadonlyArray<number>): void {
+        switch (kind) {
+            case "int": {
+                if (typeof value !== "number") {
+                    throw new Error(`attr "${name}" expects int (number), got ${typeof value}`);
+                }
+                node.attributes.set(name, value);
+                break;
+            }
+            case "float": {
+                if (typeof value !== "number") {
+                    throw new Error(`attr "${name}" expects float (number), got ${typeof value}`);
+                }
+                node.attributes.set(name, value);
+                node.floatAttributeNames = node.floatAttributeNames ?? new Set();
+                node.floatAttributeNames.add(name);
+                break;
+            }
+            case "ints": {
+                if (!Array.isArray(value)) {
+                    throw new Error(`attr "${name}" expects ints (number[]), got ${typeof value}`);
+                }
+                node.listAttributes = node.listAttributes ?? new Map();
+                node.listAttributes.set(name, [...value]);
+                if (value.length > 0 && !node.attributes.has(name)) {
+                    node.attributes.set(name, value[0]);
+                }
+                break;
+            }
+            case "floats": {
+                if (!Array.isArray(value)) {
+                    throw new Error(`attr "${name}" expects floats (number[]), got ${typeof value}`);
+                }
+                node.listAttributes = node.listAttributes ?? new Map();
+                node.listAttributes.set(name, [...value]);
+                node.floatListAttributeNames = node.floatListAttributeNames ?? new Set();
+                node.floatListAttributeNames.add(name);
+                if (value.length > 0 && !node.attributes.has(name)) {
+                    node.attributes.set(name, value[0]);
+                    node.floatAttributeNames = node.floatAttributeNames ?? new Set();
+                    node.floatAttributeNames.add(name);
+                }
+                break;
+            }
+            case "tensor":
+                throw new Error(`attr "${name}": tensor-valued attributes via the unified \`attrs\` API are not implemented yet.`);
+            default:
+                throw new Error(`attr "${name}": unknown kind "${kind}"`);
+        }
     }
 }

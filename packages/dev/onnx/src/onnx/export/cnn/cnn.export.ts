@@ -142,7 +142,7 @@ export class CnnGraphOnnxExporter {
             inputs: [prev, wName, bName],
             outputs: [convOut],
             name: `${scope}_conv`,
-            intsAttrs: {
+            attrs: {
                 kernel_shape: [kH, kW],
                 strides: [sH, sW],
                 pads: [padH, padW, padH, padW],
@@ -193,7 +193,7 @@ export class CnnGraphOnnxExporter {
             opType: isAvg ? "AveragePool" : "MaxPool",
             inputs: [prev],
             outputs: [out],
-            intsAttrs: {
+            attrs: {
                 kernel_shape: [pH, pW],
                 strides: [sH, sW],
             },
@@ -207,7 +207,7 @@ export class CnnGraphOnnxExporter {
             opType: "Flatten",
             inputs: [prev],
             outputs: [out],
-            intAttrs: { axis: 1 },
+            attrs: { axis: 1 },
         });
     }
 
@@ -246,7 +246,7 @@ export class CnnGraphOnnxExporter {
                 opType: "Flatten",
                 inputs: [prev],
                 outputs: [flat],
-                intAttrs: { axis: 1 },
+                attrs: { axis: 1 },
                 name: `${scope}_implicit_flatten`,
             });
             gemmInput = flat;
@@ -294,8 +294,7 @@ export class CnnGraphOnnxExporter {
             inputs: [gemmInput, wName, bName],
             outputs: [gemmOut],
             name: `${scope}_gemm`,
-            floatAttrs: { alpha: 1.0, beta: 1.0 },
-            intAttrs: { transA: 0, transB: 1 },
+            attrs: { alpha: 1.0, beta: 1.0, transA: 0, transB: 1 },
         });
 
         if (needsActivation) {
