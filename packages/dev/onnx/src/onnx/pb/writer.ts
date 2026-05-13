@@ -258,20 +258,27 @@ export class PBWriter {
     }
 
     /**
-     * Write a 64-bit varint from a JS number (safe up to 2^53).
+     * Write a 64-bit varint from a JS number.
+     *
+     * Negative values are encoded as 10-byte sign-extended varints
+     * (the canonical protobuf int64 encoding for negatives, which the
+     * reader recognises via the byteCount === 10 branch). BigInt is
+     * used internally to handle the two's-complement extension to 64
+     * bits without losing the sign through `>>> 0`.
      */
     protected _writeVarint64(value: number): void {
-        // Handle negative or values > 2^32 by splitting into lo/hi
-        let lo = value >>> 0;
-        let hi = (value / 0x100000000) >>> 0;
-
-        // Write lo part (up to 4 full 7-bit groups = 28 bits)
-        while (hi > 0 || lo > 0x7f) {
-            this._writeByte((lo & 0x7f) | 0x80);
-            lo = ((lo >>> 7) | (hi << 25)) >>> 0;
-            hi >>>= 7;
+        // Promote to BigInt and reinterpret negatives as their unsigned
+        // 64-bit two's-complement: -1 → 0xFFFFFFFFFFFFFFFFn, which then
+        // encodes as ten 0x7F | 0x80 groups + a final 0x01.
+        let v = BigInt(value);
+        if (v < 0n) {
+            v = v + (1n << 64n);
         }
-        this._writeByte(lo & 0x7f);
+        while (v > 0x7fn) {
+            this._writeByte(Number((v & 0x7fn) | 0x80n));
+            v >>= 7n;
+        }
+        this._writeByte(Number(v));
     }
 
     protected _writeByte(b: number): void {

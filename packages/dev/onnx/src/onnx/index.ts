@@ -6,3 +6,4 @@ export * from "./registry";
 export { OnnxGraphBuilder } from "./graph-builder";
 export * from "./onnx.graph";
 export * from "./ops/index";
+export * from "./export/index";

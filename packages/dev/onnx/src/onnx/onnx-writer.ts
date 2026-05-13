@@ -17,7 +17,12 @@ import {
     OnnxValueInfo,
     // ModelProto fields
     MODEL_IR_VERSION,
+    MODEL_PRODUCER_NAME,
+    MODEL_OPSET_IMPORT,
     MODEL_GRAPH,
+    // OperatorSetIdProto fields
+    OPSET_DOMAIN,
+    OPSET_VERSION,
     // GraphProto fields
     GRAPH_NODE,
     GRAPH_NAME,
@@ -35,6 +40,10 @@ import {
     ATT_NAME,
     ATT_FLOAT,
     ATT_INT,
+    ATT_FLOATS,
+    ATT_INTS,
+    ATT_TYPE,
+    OnnxAttributeType,
     // ValueInfoProto fields
     VINFO_NAME,
     VINFO_TYPE,
@@ -86,6 +95,22 @@ export class OnnxWriter {
             w.writeTag(MODEL_IR_VERSION, WireType.VARINT);
             w.writeInt32(model.irVersion);
         }
+
+        // producer_name (field 2, length-delimited)
+        w.writeTag(MODEL_PRODUCER_NAME, WireType.LEN);
+        w.writeString("spikypanda");
+
+        // opset_import (field 8, repeated). ONNX checker requires at
+        // least one entry when ir_version >= 3. We declare the default
+        // domain at opset 13, which covers all ops emitted by
+        // CnnGraphOnnxExporter and the cardriver serializers.
+        w.writeTag(MODEL_OPSET_IMPORT, WireType.LEN);
+        w.writeSubMessage((sub) => {
+            sub.writeTag(OPSET_DOMAIN, WireType.LEN);
+            sub.writeString("");
+            sub.writeTag(OPSET_VERSION, WireType.VARINT);
+            sub.writeInt64(13);
+        });
 
         // graph (field 7, length-delimited)
         w.writeTag(MODEL_GRAPH, WireType.LEN);
@@ -161,28 +186,80 @@ export class OnnxWriter {
             w.writeString(node.opType);
         }
 
-        // attributes (field 5, repeated)
+        // attributes (field 5, repeated). List-valued attributes take
+        // priority: when a key appears in both `listAttributes` and
+        // `attributes`, only the list form is emitted (the scalar
+        // entry is the legacy fallback for list[0]).
+        const emittedAsList = new Set<string>();
+        if (node.listAttributes) {
+            for (const [name, values] of node.listAttributes) {
+                if (values.length === 0) continue;
+                const isFloat = node.floatListAttributeNames?.has(name) ?? false;
+                w.writeTag(NODE_ATTRIBUTE, WireType.LEN);
+                w.writeSubMessage((sub) => this._writeListAttribute(sub, name, values, isFloat));
+                emittedAsList.add(name);
+            }
+        }
         for (const [name, value] of node.attributes) {
+            if (emittedAsList.has(name)) continue;
+            const forceFloat = node.floatAttributeNames?.has(name) ?? false;
             w.writeTag(NODE_ATTRIBUTE, WireType.LEN);
-            w.writeSubMessage((sub) => this._writeAttribute(sub, name, value));
+            w.writeSubMessage((sub) => this._writeAttribute(sub, name, value, forceFloat));
         }
     }
 
     // ── Attribute (AttributeProto) ────────────────────────────────────────
 
-    private _writeAttribute(w: PBWriter, name: string, value: number): void {
+    /**
+     * Emit a scalar attribute. `forceFloat` makes the writer emit
+     * AttributeProto.FLOAT even when the value is integer-valued
+     * (e.g. Gemm `alpha = 1.0` must remain FLOAT for ONNX
+     * conformance). Without the hint, integer values default to INT.
+     */
+    private _writeAttribute(w: PBWriter, name: string, value: number, forceFloat: boolean = false): void {
         // name (field 1)
         w.writeTag(ATT_NAME, WireType.LEN);
         w.writeString(name);
 
-        if (Number.isInteger(value)) {
-            // int (field 3, varint — stored as int64 in ONNX)
+        const asInt = !forceFloat && Number.isInteger(value);
+        if (asInt) {
+            w.writeTag(ATT_TYPE, WireType.VARINT);
+            w.writeInt32(OnnxAttributeType.INT);
             w.writeTag(ATT_INT, WireType.VARINT);
             w.writeInt64(value);
         } else {
-            // float (field 2, fixed32)
+            w.writeTag(ATT_TYPE, WireType.VARINT);
+            w.writeInt32(OnnxAttributeType.FLOAT);
             w.writeTag(ATT_FLOAT, WireType.FIXED32);
             w.writeFloat(value);
+        }
+    }
+
+    /**
+     * Emit a list-valued attribute. `forceFloat` overrides the
+     * Number.isInteger heuristic to force FLOATS encoding. One
+     * protobuf record per element (unpacked), matching OnnxParser's
+     * read path.
+     */
+    private _writeListAttribute(w: PBWriter, name: string, values: number[], forceFloat: boolean = false): void {
+        // name (field 1)
+        w.writeTag(ATT_NAME, WireType.LEN);
+        w.writeString(name);
+
+        const allInt = !forceFloat && values.every((v) => Number.isInteger(v));
+        w.writeTag(ATT_TYPE, WireType.VARINT);
+        w.writeInt32(allInt ? OnnxAttributeType.INTS : OnnxAttributeType.FLOATS);
+
+        if (allInt) {
+            for (const v of values) {
+                w.writeTag(ATT_INTS, WireType.VARINT);
+                w.writeInt64(v);
+            }
+        } else {
+            for (const v of values) {
+                w.writeTag(ATT_FLOATS, WireType.FIXED32);
+                w.writeFloat(v);
+            }
         }
     }
 

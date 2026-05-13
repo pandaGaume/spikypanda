@@ -66,7 +66,13 @@ export enum OnnxLinkType {
 
 // ModelProto
 export const MODEL_IR_VERSION = 1;
+export const MODEL_PRODUCER_NAME = 2;
+export const MODEL_OPSET_IMPORT = 8;
 export const MODEL_GRAPH = 7;
+
+// OperatorSetIdProto (inside ModelProto.opset_import)
+export const OPSET_DOMAIN = 1;
+export const OPSET_VERSION = 2;
 
 // GraphProto
 export const GRAPH_NODE = 1;
@@ -91,6 +97,27 @@ export const ATT_INT = 3;
 export const ATT_TENSOR = 5;
 export const ATT_FLOATS = 7;
 export const ATT_INTS = 8;
+export const ATT_TYPE = 20;
+
+/**
+ * AttributeProto.AttributeType (enum values from onnx.proto3).
+ * Required by `onnx.checker.check_model`; without an explicit `type`
+ * field the validator rejects the attribute even when the payload
+ * field (ATT_INT, ATT_FLOATS, ...) is set.
+ */
+export enum OnnxAttributeType {
+    UNDEFINED = 0,
+    FLOAT = 1,
+    INT = 2,
+    STRING = 3,
+    TENSOR = 4,
+    GRAPH = 5,
+    FLOATS = 6,
+    INTS = 7,
+    STRINGS = 8,
+    TENSORS = 9,
+    GRAPHS = 10,
+}
 
 // ValueInfoProto
 export const VINFO_NAME = 1;
@@ -146,8 +173,37 @@ export interface OnnxNodeInfo {
     opType: string;
     inputs: string[];
     outputs: string[];
-    attributes: Map<string, number>; // float or int attributes
-    tensorAttributes?: Map<string, OnnxTensorInfo>; // tensor-valued attributes
+    /**
+     * Scalar int/float attributes. For lists see `listAttributes`;
+     * this map keeps the first value of a list for backward-compat
+     * with legacy consumers that read e.g. `kernel_shape` as a single
+     * int.
+     */
+    attributes: Map<string, number>;
+    /**
+     * Names of attributes that should be serialized as FLOAT (not INT)
+     * on the protobuf wire, even when their numeric value happens to
+     * be integer-valued (e.g. Gemm `alpha = 1.0`). Populated by the
+     * export framework via `OnnxExportContext.makeNode({ floatAttrs })`.
+     * The parser doesn't populate this set; readers that need to
+     * distinguish FLOAT vs INT after a parse must walk the raw bytes.
+     */
+    floatAttributeNames?: Set<string>;
+    /**
+     * Same idea for list attributes whose values are floats (e.g. a
+     * hypothetical `scales: [1.5, 1.5]`). Independent from
+     * `floatAttributeNames` which is only for scalars.
+     */
+    floatListAttributeNames?: Set<string>;
+    /**
+     * Repeated int / float attributes (e.g. Conv `kernel_shape: [3, 3]`,
+     * `pads: [1, 1, 1, 1]`, ReduceMean `axes: [-1]`). Only populated
+     * when the protobuf record carries more than one value; single-
+     * value records are exposed only through `attributes`.
+     */
+    listAttributes?: Map<string, number[]>;
+    /** Tensor-valued attributes. */
+    tensorAttributes?: Map<string, OnnxTensorInfo>;
 }
 
 /**

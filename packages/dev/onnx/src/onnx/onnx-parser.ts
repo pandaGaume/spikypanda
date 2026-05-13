@@ -291,10 +291,8 @@ export class OnnxParser {
                     const end = reader.position + len;
 
                     let attName = "";
-                    let attFloat = 0;
-                    let attInt = 0;
-                    let hasFloat = false;
-                    let hasInt = false;
+                    const attInts: number[] = [];
+                    const attFloats: number[] = [];
                     let attTensor: OnnxTensorInfo | null = null;
 
                     while (reader.position < end) {
@@ -310,15 +308,13 @@ export class OnnxParser {
                             case ATT_FLOAT: {
                                 const f = reader.readFloat();
                                 if (f === null) return null;
-                                attFloat = f;
-                                hasFloat = true;
+                                attFloats.push(f);
                                 break;
                             }
                             case ATT_INT: {
                                 const i = reader.readInt64();
                                 if (i === null) return null;
-                                attInt = i;
-                                hasInt = true;
+                                attInts.push(i);
                                 break;
                             }
                             case ATT_TENSOR: {
@@ -328,17 +324,15 @@ export class OnnxParser {
                                 break;
                             }
                             case ATT_INTS: {
-                                // Repeated int64: store first value as scalar attr
                                 const i = reader.readInt64();
                                 if (i === null) return null;
-                                if (!hasInt) { attInt = i; hasInt = true; }
+                                attInts.push(i);
                                 break;
                             }
                             case ATT_FLOATS: {
-                                // Repeated float: store first value as scalar attr
                                 const f = reader.readFloat();
                                 if (f === null) return null;
-                                if (!hasFloat) { attFloat = f; hasFloat = true; }
+                                attFloats.push(f);
                                 break;
                             }
                             default:
@@ -353,8 +347,22 @@ export class OnnxParser {
                                 node.tensorAttributes = new Map();
                             }
                             node.tensorAttributes.set(attName, attTensor);
-                        } else if (hasFloat || hasInt) {
-                            node.attributes.set(attName, hasFloat ? attFloat : attInt);
+                        } else if (attInts.length > 0) {
+                            node.attributes.set(attName, attInts[0]);
+                            if (attInts.length > 1) {
+                                if (!node.listAttributes) {
+                                    node.listAttributes = new Map();
+                                }
+                                node.listAttributes.set(attName, attInts);
+                            }
+                        } else if (attFloats.length > 0) {
+                            node.attributes.set(attName, attFloats[0]);
+                            if (attFloats.length > 1) {
+                                if (!node.listAttributes) {
+                                    node.listAttributes = new Map();
+                                }
+                                node.listAttributes.set(attName, attFloats);
+                            }
                         }
                     }
                     break;

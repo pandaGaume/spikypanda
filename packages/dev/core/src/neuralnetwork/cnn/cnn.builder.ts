@@ -261,6 +261,10 @@ export class CnnBuilder {
             height: outH,
             channels: config.filters,
             neurons,
+            kernelSize: [kH, kW],
+            stride: [sH, sW],
+            padding: [padH, padW],
+            convKernels: kernels.slice(),
         };
         layerDescriptors.push(desc);
         return desc;
@@ -311,6 +315,9 @@ export class CnnBuilder {
             height: outH,
             channels: prev.channels,
             neurons,
+            kernelSize: [pH, pW],
+            stride: [sH, sW],
+            poolType: config.type,
         };
         layerDescriptors.push(desc);
         return desc;

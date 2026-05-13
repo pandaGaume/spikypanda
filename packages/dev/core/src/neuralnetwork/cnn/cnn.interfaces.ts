@@ -87,6 +87,10 @@ export interface ICnnSynapse extends ISynapse<IBackpropSynapseContext> {
 
 /// <summary>
 /// Metadata describing one layer's shape in the CNN.
+/// The optional fields are populated by the builder for the layer
+/// types that need them (Conv, Pool). They are used by downstream
+/// consumers such as the ONNX exporter that need to know stride /
+/// kernel-size / pool-type without walking individual synapses.
 /// </summary>
 export interface ICnnLayerDescriptor {
     type: CnnLayerType;
@@ -94,6 +98,17 @@ export interface ICnnLayerDescriptor {
     height: number;
     channels: number;
     neurons: ICnnNeuron[];
+
+    /** Conv / Pool: [kH, kW]. */
+    kernelSize?: [number, number];
+    /** Conv / Pool: [sH, sW]. */
+    stride?: [number, number];
+    /** Conv: symmetric padding [padH, padW] applied before and after. */
+    padding?: [number, number];
+    /** Pool: Max or Avg. */
+    poolType?: PoolingType;
+    /** Conv: one IConvKernel per output filter (shared weights). */
+    convKernels?: IConvKernel[];
 }
 
 /// <summary>

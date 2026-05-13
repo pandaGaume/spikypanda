@@ -98,6 +98,14 @@ export class OnnxGraphBuilder {
             }
 
             const node = this.registry.create(nodeInfo, initMap);
+            // Use the first output tensor name as the kernel's id so
+            // ComputeGraph.infer()'s named-output collector can map
+            // back to the original ONNX tensor name. Falls back to the
+            // node's own name when no outputs are declared (rare).
+            const idFromOutput = nodeInfo.outputs[0] || nodeInfo.name;
+            if (idFromOutput) {
+                node.id = idFromOutput;
+            }
             nodes.push(node);
 
             // Register consumer for each input tensor

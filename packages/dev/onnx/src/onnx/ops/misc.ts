@@ -77,6 +77,65 @@ class ReduceMeanNode extends OnnxOpNode {
     }
 }
 
+/**
+ * ReduceL2: sqrt(sum(x^2)) along the given axes.
+ *
+ * Like ReduceMean / ReduceSum, our infrastructure only reads scalar
+ * attributes, so this implementation supports a single axis (the
+ * common case `axes=[-1]`). Extension to multi-axis reduce is left
+ * for when a client demands it.
+ */
+class ReduceL2Node extends OnnxOpNode {
+    private readonly axis: number;
+    private readonly keepdims: boolean;
+    readonly outputShapes: number[][] = [];
+
+    constructor(info: OnnxNodeInfo) {
+        super(info);
+        this.axis = this.attrInt("axes", -1);
+        this.keepdims = this.attrInt("keepdims", 1) !== 0;
+    }
+
+    execute(inputs: ITensor[]): ITensor[] {
+        const X = inputs[0];
+        const shape = X.shape;
+        const rank = shape.length;
+        const axis = this.axis < 0 ? rank + this.axis : this.axis;
+
+        if (rank === 2 && axis === 1) {
+            const rows = shape[0], cols = shape[1];
+            const out = new Float32Array(rows);
+            for (let r = 0; r < rows; r++) {
+                let s = 0;
+                for (let c = 0; c < cols; c++) {
+                    const v = X.data[r * cols + c];
+                    s += v * v;
+                }
+                out[r] = Math.sqrt(s);
+            }
+            return [makeTensor(out, this.keepdims ? [rows, 1] : [rows])];
+        }
+        if (rank === 2 && axis === 0) {
+            const rows = shape[0], cols = shape[1];
+            const out = new Float32Array(cols);
+            for (let c = 0; c < cols; c++) {
+                let s = 0;
+                for (let r = 0; r < rows; r++) {
+                    const v = X.data[r * cols + c];
+                    s += v * v;
+                }
+                out[c] = Math.sqrt(s);
+            }
+            return [makeTensor(out, this.keepdims ? [1, cols] : [cols])];
+        }
+
+        // Fallback: reduce all
+        let s = 0;
+        for (let i = 0; i < X.data.length; i++) s += X.data[i] * X.data[i];
+        return [makeTensor(new Float32Array([Math.sqrt(s)]), [1])];
+    }
+}
+
 class ReduceSumNode extends OnnxOpNode {
     private readonly axis: number;
     private readonly keepdims: boolean;
@@ -289,6 +348,7 @@ export function registerMiscOps(registry: OnnxOpRegistry): void {
     registry.register("Pow", (info) => new PowNode(info));
     registry.register("ReduceMean", (info) => new ReduceMeanNode(info));
     registry.register("ReduceSum", (info) => new ReduceSumNode(info));
+    registry.register("ReduceL2", (info) => new ReduceL2Node(info));
     registry.register("Identity", (info) => new IdentityNode(info));
     registry.register("Cast", (info) => new CastNode(info));
     registry.register("Shape", (info) => new ShapeNode(info));

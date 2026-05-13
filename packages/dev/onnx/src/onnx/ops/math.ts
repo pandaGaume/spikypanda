@@ -175,7 +175,9 @@ class ConcatNode extends OnnxOpNode {
         if (inputs.length === 0) return [makeTensor(new Float32Array(0), [0])];
         if (inputs.length === 1) return [makeTensor(new Float32Array(inputs[0].data), [...inputs[0].shape])];
 
-        const axis = this.axis;
+        // Normalize negative axis (ONNX convention: -1 = last axis).
+        const rank = inputs[0].shape.length;
+        const axis = this.axis < 0 ? rank + this.axis : this.axis;
 
         if (axis === 0) {
             // Stack along rows: all must have same cols
