@@ -136,18 +136,40 @@ export function getInitializerData(init: OnnxTensorInfo): Float32Array {
         return init.floatData;
     }
     if (init.rawData && init.rawData.length > 0) {
-        // Handle int64 raw data: convert 8-byte ints to float32
-        if (init.dataType === OnnxDataType.INT64) {
-            const view = new DataView(init.rawData.buffer, init.rawData.byteOffset, init.rawData.byteLength);
-            const count = init.rawData.byteLength / 8;
-            const out = new Float32Array(count);
-            for (let i = 0; i < count; i++) {
-                // Read as int64 (low 32 bits sufficient for typical values)
-                out[i] = Number(view.getBigInt64(i * 8, true));
+        const raw = init.rawData;
+        const view = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
+        switch (init.dataType) {
+            case OnnxDataType.INT64: {
+                const count = raw.byteLength / 8;
+                const out = new Float32Array(count);
+                for (let i = 0; i < count; i++) {
+                    // Read as int64 (low 32 bits sufficient for typical attribute values).
+                    out[i] = Number(view.getBigInt64(i * 8, true));
+                }
+                return out;
             }
-            return out;
+            case OnnxDataType.INT32: {
+                const count = raw.byteLength / 4;
+                const out = new Float32Array(count);
+                for (let i = 0; i < count; i++) out[i] = view.getInt32(i * 4, true);
+                return out;
+            }
+            case OnnxDataType.INT8: {
+                const out = new Float32Array(raw.byteLength);
+                // Reinterpret unsigned bytes as signed int8.
+                const signed = new Int8Array(raw.buffer, raw.byteOffset, raw.byteLength);
+                for (let i = 0; i < signed.length; i++) out[i] = signed[i];
+                return out;
+            }
+            case OnnxDataType.UINT8: {
+                const out = new Float32Array(raw.byteLength);
+                for (let i = 0; i < raw.byteLength; i++) out[i] = raw[i];
+                return out;
+            }
+            case OnnxDataType.FLOAT:
+            default:
+                return new Float32Array(raw.buffer, raw.byteOffset, raw.byteLength / 4);
         }
-        return new Float32Array(init.rawData.buffer, init.rawData.byteOffset, init.rawData.byteLength / 4);
     }
     return new Float32Array(0);
 }

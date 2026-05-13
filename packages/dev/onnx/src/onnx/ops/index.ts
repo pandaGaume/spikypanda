@@ -9,6 +9,7 @@ export { registerSpikyPandaOps } from "./spikypanda";
 export { registerDotVisionOps } from "./dotvision";
 export { registerDspOps, enroll, serializeTemplate, deserializeTemplate, templateToTensor } from "./dsp";
 export type { MfccParams, DtwTemplate } from "./dsp";
+export { registerQuantOps } from "./quant";
 
 import { OnnxOpRegistry } from "../registry";
 import { registerMathOps } from "./math";
@@ -21,9 +22,11 @@ import { registerMiscOps } from "./misc";
 import { registerSpikyPandaOps } from "./spikypanda";
 import { registerDotVisionOps } from "./dotvision";
 import { registerDspOps } from "./dsp";
+import { registerQuantOps } from "./quant";
 
 /**
- * Create a registry with all generic ONNX ops registered.
+ * Create a registry with all generic ONNX ops registered (including
+ * the fake-quant QLinear* ops for quantized-model round-trip).
  */
 export function createDefaultRegistry(): OnnxOpRegistry {
     const registry = new OnnxOpRegistry();
@@ -35,6 +38,7 @@ export function createDefaultRegistry(): OnnxOpRegistry {
     registerRecurrentOps(registry);
     registerMiscOps(registry);
     registerDspOps(registry);
+    registerQuantOps(registry);
     return registry;
 }
 

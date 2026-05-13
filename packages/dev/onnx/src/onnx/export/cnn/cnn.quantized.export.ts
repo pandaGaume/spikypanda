@@ -84,29 +84,48 @@ export class QuantizedCnnGraphOnnxExporter {
         });
 
         // ── 2. Walk the quantized layers ────────────────────────
+        //
+        // Each layer emitter writes its output into a unique intermediate
+        // tensor (`layerOut`). For all layers except a terminal Dense,
+        // that output is INT8 (lives in the int8 stream). A terminal Dense
+        // emits its own dequantize-then-add-bias sequence and produces
+        // an FP32 tensor directly; we then route that tensor straight to
+        // `outputName` and skip the trailing DequantizeLinear.
+        //
+        // The reason for the Dense special case : standard ONNX `Add`
+        // doesn't accept int8 operands (ORT rejects the model), so we
+        // can't add an int8 bias to the int8 QLinearMatMul output. The
+        // canonical fix is to dequantize first and add in FP32. Since
+        // the dequantize step is exactly what the graph's exit op would
+        // have done anyway, we fuse them by letting Dense write into the
+        // graph output.
         let prev = quantInput;
         let prevParams = qcnn.inputParams;
         let prevDesc: QuantizedCnnLayer = layers[0];
         for (let i = 1; i < layers.length; i++) {
             const layer = layers[i];
             const isLast = i === layers.length - 1;
-            // The final layer's output flows into DequantizeLinear,
-            // so we still allocate an intermediate tensor for it.
-            const out = ctx.allocateTensorName(`${scopeHint}_L${i}_${layerTypeName(layer.type)}`);
             const layerScope = `${scopeHint}_L${i}`;
+            // If this is a terminal Dense, write straight to `outputName`
+            // (the dense path emits its own dequant + bias-add). Otherwise
+            // allocate a fresh intermediate tensor.
+            const denseTerminal = isLast && layer.type === CnnLayerType.Dense;
+            const layerOut = denseTerminal
+                ? outputName
+                : ctx.allocateTensorName(`${scopeHint}_L${i}_${layerTypeName(layer.type)}`);
 
             switch (layer.type) {
                 case CnnLayerType.Conv:
-                    QuantizedCnnGraphOnnxExporter._emitQLinearConv(prev, out, layer, prevParams, prevDesc, ctx, layerScope);
+                    QuantizedCnnGraphOnnxExporter._emitQLinearConv(prev, layerOut, layer, prevParams, prevDesc, ctx, layerScope);
                     break;
                 case CnnLayerType.Pool:
-                    QuantizedCnnGraphOnnxExporter._emitPool(prev, out, layer, prevDesc, ctx);
+                    QuantizedCnnGraphOnnxExporter._emitPool(prev, layerOut, layer, prevDesc, ctx);
                     break;
                 case CnnLayerType.Flatten:
-                    QuantizedCnnGraphOnnxExporter._emitFlatten(prev, out, ctx);
+                    QuantizedCnnGraphOnnxExporter._emitFlatten(prev, layerOut, ctx);
                     break;
                 case CnnLayerType.Dense:
-                    QuantizedCnnGraphOnnxExporter._emitQLinearMatMul(prev, out, layer, prevParams, prevDesc, ctx, layerScope);
+                    QuantizedCnnGraphOnnxExporter._emitQLinearMatMul(prev, layerOut, layer, prevParams, prevDesc, ctx, layerScope);
                     break;
                 default:
                     throw new Error(
@@ -114,20 +133,22 @@ export class QuantizedCnnGraphOnnxExporter {
                     );
             }
 
-            if (isLast) {
+            if (isLast && !denseTerminal) {
                 // ── 3. DequantizeLinear at the exit ────────────
+                // Reached only when the terminal layer's output is int8
+                // (Conv / Pool / Flatten — Dense already produces FP32).
                 const outScaleName = `${layerScope}_y_scale_out`;
                 const outZpName = `${layerScope}_y_zp_out`;
                 QuantizedCnnGraphOnnxExporter._emitScaleAndZp(ctx, layer.outputParams, outScaleName, outZpName);
                 ctx.makeNode({
                     opType: "DequantizeLinear",
-                    inputs: [out, outScaleName, outZpName],
+                    inputs: [layerOut, outScaleName, outZpName],
                     outputs: [outputName],
                     name: `${scopeHint}_dequantize_out`,
                 });
             }
 
-            prev = out;
+            prev = layerOut;
             prevParams = layer.outputParams;
             prevDesc = layer;
         }
@@ -191,10 +212,25 @@ export class QuantizedCnnGraphOnnxExporter {
         const biasName = `${scope}_B`;
         ctx.addInt32Initializer(biasName, [biasInt32.length], biasInt32);
 
-        // QLinearConv with all 9 inputs.
+        // Activation fusion. When the layer's activation is Relu, the
+        // post-Relu calibration of y_scale/y_zp already bakes the Relu
+        // into QLinearConv: negative pre-activation values saturate to
+        // y_zp = -128 (which represents real 0), so the int8 output IS
+        // the Relu output. Emitting a separate Relu node afterward would
+        // re-Relu the *int* representation (treating -128 as a number to
+        // clip), which mangles the values. We therefore skip the explicit
+        // Relu when fused. Sigmoid / Tanh aren't saturation-equivalent
+        // and would need dequant → apply → requant; not supported yet.
         const activation = QuantizedCnnGraphOnnxExporter._activationOnnxName(layer.activation);
-        const needsAct = activation !== null && activation !== "Identity";
-        const convOut = needsAct ? ctx.allocateTensorName(`${scope}_conv_out`) : out;
+        const isReluFused = activation === "Relu";
+        const needsSeparateAct = activation !== null && activation !== "Identity" && !isReluFused;
+        if (activation && activation !== "Identity" && activation !== "Relu") {
+            throw new Error(
+                `QuantizedCnnGraphOnnxExporter: activation "${activation}" on a Conv layer is not yet ` +
+                `supported in quantized export (only linear / Relu are saturation-fusible).`
+            );
+        }
+        const convOut = needsSeparateAct ? ctx.allocateTensorName(`${scope}_conv_out`) : out;
 
         ctx.makeNode({
             opType: "QLinearConv",
@@ -208,9 +244,9 @@ export class QuantizedCnnGraphOnnxExporter {
             },
         });
 
-        if (needsAct) {
-            // ONNX Relu accepts int8 in opset 14+; CyanMycelium has
-            // cm_relu_qs8_ansi to handle it natively.
+        // Reserved for future non-fusible activations (currently
+        // unreachable because we throw above).
+        if (needsSeparateAct) {
             ctx.makeNode({
                 opType: activation!,
                 inputs: [convOut],
@@ -333,10 +369,29 @@ export class QuantizedCnnGraphOnnxExporter {
         const yZpName = `${scope}_y_zp`;
         QuantizedCnnGraphOnnxExporter._emitScaleAndZp(ctx, layer.outputParams, yScaleName, yZpName);
 
-        // QLinearMatMul: 8 inputs, no separate bias.
-        const matmulOut = layer.bias.some((b) => b !== 0)
-            ? ctx.allocateTensorName(`${scope}_matmul_out`)
-            : ctx.allocateTensorName(`${scope}_matmul_no_act`);
+        // Same fusion logic as Conv : Relu is baked into the matmul's
+        // post-Relu y_scale/y_zp calibration via the zero-point saturation
+        // trick. Re-applying Relu on the int8 representation would mangle
+        // the values; sigmoid/tanh need a separate dequant→apply→requant
+        // path that we don't implement yet.
+        const activation = QuantizedCnnGraphOnnxExporter._activationOnnxName(layer.activation);
+        if (activation && activation !== "Identity" && activation !== "Relu") {
+            throw new Error(
+                `QuantizedCnnGraphOnnxExporter: activation "${activation}" on a Dense layer is not yet ` +
+                `supported in quantized export (only linear / Relu are saturation-fusible).`
+            );
+        }
+
+        // Pattern : QLinearMatMul → DequantizeLinear → Add(fp32 bias).
+        //
+        // Standard ONNX `Add` does not accept int8 operands (ORT rejects
+        // such graphs as invalid), so we cannot add an int8 bias directly
+        // to the matmul's int8 output. The canonical fix is to dequantize
+        // the matmul result first, then add the bias in FP32. This also
+        // happens to fuse with the graph-exit dequantize when Dense is
+        // the terminal layer : the caller routes our FP32 output straight
+        // to the graph output, skipping the trailing DequantizeLinear.
+        const matmulOut = ctx.allocateTensorName(`${scope}_matmul_int`);
         ctx.makeNode({
             opType: "QLinearMatMul",
             inputs: [matmulInput, xScaleName, xZpName, wName, wScaleName, wZpName, yScaleName, yZpName],
@@ -344,38 +399,24 @@ export class QuantizedCnnGraphOnnxExporter {
             name: `${scope}_qlinear_matmul`,
         });
 
-        // Add the bias separately as int8 add (when non-zero).
-        // CyanMycelium handles int8 Add. We dequantize bias and
-        // re-quantize against y_scale/y_zp.
-        const yScale = layer.outputParams.scales[0];
-        const yZp = layer.outputParams.zeroPoints[0];
-        const biasInt8 = new Int8Array(layer.bias.length);
-        for (let i = 0; i < layer.bias.length; i++) {
-            const q = Math.round(layer.bias[i] / yScale) + yZp;
-            biasInt8[i] = Math.max(-128, Math.min(127, q));
-        }
-        const biasName = `${scope}_B`;
-        ctx.addInt8Initializer(biasName, [biasInt8.length], biasInt8);
+        const dequantOut = ctx.allocateTensorName(`${scope}_matmul_fp32`);
+        ctx.makeNode({
+            opType: "DequantizeLinear",
+            inputs: [matmulOut, yScaleName, yZpName],
+            outputs: [dequantOut],
+            name: `${scope}_matmul_dequant`,
+        });
 
-        const activation = QuantizedCnnGraphOnnxExporter._activationOnnxName(layer.activation);
-        const needsAct = activation !== null && activation !== "Identity";
-        const addOut = needsAct ? ctx.allocateTensorName(`${scope}_add_out`) : out;
+        const biasFp32 = Float32Array.from(layer.bias);
+        const biasName = `${scope}_B`;
+        ctx.addFloatInitializer(biasName, [biasFp32.length], biasFp32);
 
         ctx.makeNode({
             opType: "Add",
-            inputs: [matmulOut, biasName],
-            outputs: [addOut],
+            inputs: [dequantOut, biasName],
+            outputs: [out],
             name: `${scope}_bias_add`,
         });
-
-        if (needsAct) {
-            ctx.makeNode({
-                opType: activation!,
-                inputs: [addOut],
-                outputs: [out],
-                name: `${scope}_act`,
-            });
-        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────

@@ -78,32 +78,40 @@ function emit(qcnn: ReturnType<typeof buildQuantizedCnn>) {
 // ─── Tests ───────────────────────────────────────────────────────────────
 
 describe("QuantizedCnnGraphOnnxExporter", () => {
-    test("emits the expected op sequence (Quantize → QLinearConv → Relu → Pool → Flatten → QLinearMatMul → Add → Dequantize)", () => {
+    test("emits the expected op sequence (Quantize → QLinearConv → Pool → Flatten → QLinearMatMul → DequantizeLinear → Add)", () => {
         const qcnn = buildQuantizedCnn();
         const ctx = emit(qcnn);
 
         const opTypes = ctx.nodes.map((n) => n.opType);
         // QuantizeLinear at entry.
         expect(opTypes[0]).toBe("QuantizeLinear");
-        // DequantizeLinear at exit.
-        expect(opTypes[opTypes.length - 1]).toBe("DequantizeLinear");
-        // Core quantized ops present in order.
+        // Terminal Dense layer fuses its dequantize into the graph exit,
+        // so the very last op is the bias `Add` (FP32 add), not a
+        // standalone DequantizeLinear. This is also what ORT requires :
+        // standard `Add` does not accept int8 operands.
+        expect(opTypes[opTypes.length - 1]).toBe("Add");
+        // The exit-DequantizeLinear lives just before the bias Add, fed
+        // by the QLinearMatMul output.
         expect(opTypes).toContain("QLinearConv");
-        expect(opTypes).toContain("Relu");
+        // Relu on the Conv layer is fused into the QLinearConv's post-Relu
+        // y_scale/y_zp via the zero-point saturation trick. No separate
+        // Relu node is emitted (a standalone Relu over the int8 buffer
+        // would clip the *integer* representation and mangle the values).
+        expect(opTypes).not.toContain("Relu");
         expect(opTypes).toContain("AveragePool");
         expect(opTypes).toContain("Flatten");
         expect(opTypes).toContain("QLinearMatMul");
-        // Bias add after QLinearMatMul.
+        // DequantizeLinear sits between QLinearMatMul and the bias Add
+        // (the Add is in FP32, so its int8 input must be dequantized first).
+        expect(opTypes).toContain("DequantizeLinear");
         expect(opTypes).toContain("Add");
 
-        // Order: QLinearConv comes before Relu (post-Conv activation).
-        const convIdx = opTypes.indexOf("QLinearConv");
-        const reluIdx = opTypes.indexOf("Relu");
-        expect(convIdx).toBeLessThan(reluIdx);
-        // QLinearMatMul comes before its Add.
+        // Ordering: QLinearMatMul → DequantizeLinear → Add.
         const matmulIdx = opTypes.indexOf("QLinearMatMul");
+        const dqIdx = opTypes.indexOf("DequantizeLinear");
         const addIdx = opTypes.indexOf("Add");
-        expect(matmulIdx).toBeLessThan(addIdx);
+        expect(matmulIdx).toBeLessThan(dqIdx);
+        expect(dqIdx).toBeLessThan(addIdx);
     });
 
     test("Conv emits the full QLinearConv initializer set with correct dtypes", () => {
@@ -129,7 +137,7 @@ describe("QuantizedCnnGraphOnnxExporter", () => {
         expect(inits.get(bias)?.dims).toEqual([2]);        // [F]
     });
 
-    test("QLinearMatMul emits 8 inputs (no separate bias) + Add for the bias", () => {
+    test("QLinearMatMul emits 8 inputs, feeds a DequantizeLinear, then an FP32 bias Add", () => {
         const qcnn = buildQuantizedCnn();
         const ctx = emit(qcnn);
         const matmul = ctx.nodes.find((n) => n.opType === "QLinearMatMul")!;
@@ -140,21 +148,37 @@ describe("QuantizedCnnGraphOnnxExporter", () => {
         const [prevSize, units] = w.dims;
         expect(units).toBe(3);
         expect(prevSize).toBeGreaterThan(0);
-        // Bias added separately as int8 via an Add op consuming the
-        // QLinearMatMul output.
+
+        // QLinearMatMul output flows into a DequantizeLinear (consuming
+        // the int8 matmul output and producing FP32) before the bias Add.
+        // We cannot Add an int8 tensor in standard ONNX, so this hop is
+        // mandatory for ORT validity.
+        const dq = ctx.nodes.find(
+            (n) => n.opType === "DequantizeLinear" && n.inputs[0] === matmul.outputs[0]
+        )!;
+        expect(dq).toBeDefined();
+
+        // The bias Add receives the dequantized FP32 matmul output and an
+        // FP32 bias initializer (no longer int8).
         const add = ctx.nodes.find((n) => n.opType === "Add")!;
-        expect(add.inputs[0]).toBe(matmul.outputs[0]);
+        expect(add.inputs[0]).toBe(dq.outputs[0]);
+        const biasName = add.inputs[1];
+        const biasInit = ctx.initializers.find((i) => i.name === biasName)!;
+        // FLOAT dataType = 1 per the OnnxDataType enum.
+        expect(biasInit.dataType).toBe(1);
     });
 
-    test("entry QuantizeLinear and exit DequantizeLinear bracket the int8 inner graph", () => {
+    test("entry QuantizeLinear and exit Add bracket the quantized inner graph", () => {
         const qcnn = buildQuantizedCnn();
         const ctx = emit(qcnn);
         const q = ctx.nodes[0];
-        const dq = ctx.nodes[ctx.nodes.length - 1];
+        const lastNode = ctx.nodes[ctx.nodes.length - 1];
         expect(q.opType).toBe("QuantizeLinear");
         expect(q.inputs[0]).toBe("x");                          // FP32 graph input
-        expect(dq.opType).toBe("DequantizeLinear");
-        expect(dq.outputs[0]).toBe("y");                        // FP32 graph output
+        // The terminal Dense layer fuses dequantize+bias into the exit,
+        // so the graph's last node is the FP32 bias Add writing into "y".
+        expect(lastNode.opType).toBe("Add");
+        expect(lastNode.outputs[0]).toBe("y");                  // FP32 graph output
     });
 
     test("end-to-end: serialize → re-parse via OnnxParser", () => {
