@@ -7,3 +7,4 @@ export * from "./training";
 export * from "./mlp.synapse";
 export * from "./mlp.neuron";
 export * from "./mlp.graph";
+export * from "./mlp.runner.builder";
