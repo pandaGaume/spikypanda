@@ -70,6 +70,32 @@ export class DefaultOnnxExportContext implements OnnxExportContext {
         });
     }
 
+    public addInt8Initializer(name: string, dims: ReadonlyArray<number>, data: Int8Array): void {
+        // Reinterpret the int8 bytes as unsigned via a copy: the
+        // underlying byte values are identical (two's-complement),
+        // we just want a Uint8Array view we own.
+        const bytes = new Uint8Array(data.byteLength);
+        bytes.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+        this.initializers.push({
+            name,
+            dataType: OnnxDataType.INT8,
+            dims: [...dims],
+            rawData: bytes,
+        });
+    }
+
+    public addInt32Initializer(name: string, dims: ReadonlyArray<number>, data: Int32Array | ReadonlyArray<number>): void {
+        const intData = data instanceof Int32Array ? data : Int32Array.from(data);
+        const buf = new ArrayBuffer(intData.byteLength);
+        new Int32Array(buf).set(intData);
+        this.initializers.push({
+            name,
+            dataType: OnnxDataType.INT32,
+            dims: [...dims],
+            rawData: new Uint8Array(buf),
+        });
+    }
+
     public makeNode(spec: OnnxNodeSpec): void {
         const node: OnnxNodeInfo = {
             name: spec.name ?? "",

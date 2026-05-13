@@ -10,6 +10,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { IChannel, IRuntimeGraph, IRuntimeNode } from "../execution/execution.interfaces";
+import type { IQuantizationParams } from "../quantization/quantization.interfaces";
 
 // ─── Tensor ──────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,21 @@ export interface ITensor {
 
     /** Optional name for debugging and graph wiring (e.g., "lidar_sectors", "pose"). */
     name?: string;
+
+    /**
+     * Optional quantization metadata. When set, the float values in
+     * `data` are a fake-quant representation of an int8 / uint8
+     * tensor (i.e. integer-valued, in the domain implied by `params`).
+     * Used by import-side QLinear ops in TS to validate quantization
+     * numerics without paying the cost of a real int8 runtime; the
+     * payload remains Float32Array so the regular FP32 pipeline can
+     * still consume / inspect the tensor without changes. Pure-FP32
+     * code paths can ignore this field entirely.
+     *
+     * The "real" int8 representation lives outside the runtime — see
+     * `core/quantization/IQuantizedTensor` for that.
+     */
+    quantization?: IQuantizationParams;
 }
 
 // ─── Data link ───────────────────────────────────────────────────────────────

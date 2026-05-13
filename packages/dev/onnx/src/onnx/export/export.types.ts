@@ -86,6 +86,21 @@ export interface OnnxExportContext {
     addInt64Initializer(name: string, dims: ReadonlyArray<number>, data: ReadonlyArray<number>): void;
 
     /**
+     * Convenience: create an int8 initializer from raw values.
+     * Stores into TensorProto.raw_data; the int8 bytes are
+     * reinterpreted as a Uint8Array (same memory, signed → unsigned
+     * view) before packaging.
+     */
+    addInt8Initializer(name: string, dims: ReadonlyArray<number>, data: Int8Array): void;
+
+    /**
+     * Convenience: create an int32 initializer from raw values.
+     * Used for QLinearConv's pre-scaled `B` (bias) input. Stores
+     * into TensorProto.raw_data as little-endian int32.
+     */
+    addInt32Initializer(name: string, dims: ReadonlyArray<number>, data: Int32Array | ReadonlyArray<number>): void;
+
+    /**
      * Convenience: build an OnnxNodeInfo from a typed spec and add
      * it. List attributes also seed the legacy scalar map with their
      * first value so consumers that only read scalars still work.

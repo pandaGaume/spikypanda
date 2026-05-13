@@ -7,6 +7,7 @@ export * from "./graph";
 export * from "./execution";
 export * from "./sim";
 export * from "./compute";
+export * from "./quantization";
 export * from "./neuralnetwork";
 export * from "./utils";
 export * from "./metrics";

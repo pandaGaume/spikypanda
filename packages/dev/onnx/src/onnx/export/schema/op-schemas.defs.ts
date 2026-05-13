@@ -146,6 +146,33 @@ class _Pad {
 @onnxOp("Constant") class _Constant { @attr.tensor value!: unknown; }
 @onnxOp("ConstantOfShape") class _ConstantOfShape { @attr.tensor value!: unknown; }
 
+// ─── Quantized ops (CyanMycelium-compatible) ────────────────────────────
+
+@onnxOp("QuantizeLinear")
+class _QuantizeLinear {
+    /** Axis used when y_scale / y_zero_point are per-axis (1-D
+     *  tensors). 0 when per-tensor (scalars). */
+    @attr.int axis!: number;
+}
+
+@onnxOp("DequantizeLinear")
+class _DequantizeLinear {
+    /** Same convention as QuantizeLinear. */
+    @attr.int axis!: number;
+}
+
+@onnxOp("QLinearConv")
+class _QLinearConv {
+    @attr.ints kernel_shape!: number[];
+    @attr.ints strides!: number[];
+    @attr.ints pads!: number[];
+    @attr.ints dilations!: number[];
+    @attr.int group!: number;
+}
+
+@onnxOp("QLinearMatMul")
+class _QLinearMatMul {}
+
 // ─── Anti-unused-locals shim ────────────────────────────────────────────
 //
 // The schema classes above are never instantiated; their declarations
@@ -162,4 +189,5 @@ export const _registeredOpSchemas: ReadonlyArray<unknown> = [
     _ReduceMean, _ReduceSum, _ReduceL2, _ReduceMax,
     _Conv, _MaxPool, _AveragePool, _Gemm, _Slice, _Pad,
     _Constant, _ConstantOfShape,
+    _QuantizeLinear, _DequantizeLinear, _QLinearConv, _QLinearMatMul,
 ];
