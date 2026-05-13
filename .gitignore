@@ -58,3 +58,7 @@ coverage/
 #Ignore internal doc and data
 internals/
 .claude/
+
+
+#private applications
+/packages/dev/applications/privates/**

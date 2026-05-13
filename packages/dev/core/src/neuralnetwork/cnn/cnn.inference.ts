@@ -1,5 +1,6 @@
+import { readyQueueDispatch } from "../../graph";
 import { ActivationFunctions } from "../ann/mlp/mlp.activation";
-import { CnnLayerType, IActivationFunction, ICnnGraph, ICnnInferenceContext, ICnnNeuron, ICnnSynapse, PoolingType } from "./cnn.interfaces";
+import { CnnLayerType, IActivationFunction, ICnnGraph, ICnnNeuron, ICnnSynapse, PoolingType } from "./cnn.interfaces";
 import { CnnRuntimeUtils } from "./cnn.runtime.utils";
 
 /// <summary>
@@ -20,102 +21,90 @@ export class CnnInferenceRuntime {
             throw new Error(`Input count mismatch: expected ${this.graph.inputs.length}, got ${inputValues.length}`);
         }
 
-        const ready: ICnnNeuron[] = [];
-
-        // Initialize context for all neurons
+        // Initialize context for all neurons (sum=0, remainingInputs=fan-in).
         for (const neuron of this.graph.nodes) {
             CnnRuntimeUtils.resetInferenceContext(neuron);
         }
 
-        // Load input values and mark as ready
+        // Inject input values; force remainingInputs=0 so the dispatcher
+        // treats them as already-fired sources.
+        const seed: ICnnNeuron[] = [];
         for (let i = 0; i < inputValues.length; i++) {
             const neuron = this.graph.inputs[i];
-            const ctx = neuron.bag as ICnnInferenceContext;
+            const ctx = neuron.bag!;
             ctx.sum = inputValues[i];
             ctx.activation = inputValues[i];
             ctx.remainingInputs = 0;
-            ready.push(neuron);
+            seed.push(neuron);
         }
 
-        // Process forward pass using ready-queue
-        while (ready.length > 0) {
-            const source = ready.shift()!;
-            const sourceCtx = source.bag as ICnnInferenceContext;
-
-            const outputs = source.onsc<ICnnSynapse>() ?? [];
-            for (const syn of outputs) {
-                const target = syn.ofin as ICnnNeuron;
-                const targetCtx = target.bag as ICnnInferenceContext;
-
-                // Accumulate input based on target layer type
+        readyQueueDispatch<ICnnNeuron, ICnnSynapse>(this.graph, {
+            seed,
+            getCount: (n) => n.bag!.remainingInputs,
+            setCount: (n, c) => {
+                n.bag!.remainingInputs = c;
+            },
+            propagate: (source, target, syn) => {
+                const sourceCtx = source.bag!;
+                const targetCtx = target.bag!;
+                // Per-layer accumulation policy.
                 switch (target.layerType) {
                     case CnnLayerType.Conv:
                     case CnnLayerType.Dense:
-                        // Weighted sum (same as MLP)
                         targetCtx.sum += sourceCtx.activation * syn.weight;
                         break;
-
                     case CnnLayerType.Pool:
-                        // For pooling, accumulate raw activations in sum
-                        // We handle max/avg when the neuron fires
                         if (target.poolType === PoolingType.Max) {
                             if (targetCtx.remainingInputs === targetCtx.totalInputs) {
-                                // First input — initialize to -Infinity
+                                // First input -- initialise from this activation.
                                 targetCtx.sum = sourceCtx.activation;
                             } else {
                                 targetCtx.sum = Math.max(targetCtx.sum, sourceCtx.activation);
                             }
                         } else {
-                            // Average pooling: accumulate sum, divide when firing
+                            // Average: accumulate, divide at fire().
                             targetCtx.sum += sourceCtx.activation;
                         }
                         break;
-
                     case CnnLayerType.Flatten:
                     case CnnLayerType.Input:
                     case CnnLayerType.Upsample:
                     case CnnLayerType.Reshape:
-                        // Pass-through
                         targetCtx.sum = sourceCtx.activation;
                         break;
                 }
-
-                // initialized with the number of input.
-                targetCtx.remainingInputs--;
-
-                if (targetCtx.remainingInputs === 0) {
-                    // Compute activation based on layer type
-                    switch (target.layerType) {
-                        case CnnLayerType.Conv:
-                        case CnnLayerType.Dense: {
-                            targetCtx.sum += target.bias;
-                            const afn = target.activationFn ?? this.mainActivation;
-                            targetCtx.activation = afn.fn(targetCtx.sum);
-                            break;
-                        }
-                        case CnnLayerType.Pool: {
-                            if (target.poolType === PoolingType.Avg) {
-                                targetCtx.activation = targetCtx.sum / targetCtx.totalInputs;
-                            } else {
-                                // Max pooling — sum already holds the max
-                                targetCtx.activation = targetCtx.sum;
-                            }
-                            break;
-                        }
-                        case CnnLayerType.Flatten:
-                        case CnnLayerType.Input:
-                        case CnnLayerType.Upsample:
-                        case CnnLayerType.Reshape: {
-                            targetCtx.activation = targetCtx.sum;
-                            break;
-                        }
+            },
+            fire: (n) => {
+                const ctx = n.bag!;
+                switch (n.layerType) {
+                    case CnnLayerType.Conv:
+                    case CnnLayerType.Dense: {
+                        ctx.sum += n.bias;
+                        const afn = n.activationFn ?? this.mainActivation;
+                        ctx.activation = afn.fn(ctx.sum);
+                        break;
                     }
-                    ready.push(target);
+                    case CnnLayerType.Pool: {
+                        if (n.poolType === PoolingType.Avg) {
+                            ctx.activation = ctx.sum / ctx.totalInputs;
+                        } else {
+                            // Max pool: sum already holds the max.
+                            ctx.activation = ctx.sum;
+                        }
+                        break;
+                    }
+                    case CnnLayerType.Flatten:
+                    case CnnLayerType.Input:
+                    case CnnLayerType.Upsample:
+                    case CnnLayerType.Reshape: {
+                        ctx.activation = ctx.sum;
+                        break;
+                    }
                 }
-            }
-        }
+            },
+        });
 
-        return this.graph.outputs.map((n) => (n.bag as ICnnInferenceContext).activation);
+        return this.graph.outputs.map((n) => n.bag!.activation);
     }
 
     public clearContext(): void {

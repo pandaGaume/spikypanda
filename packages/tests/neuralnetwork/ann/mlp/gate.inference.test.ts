@@ -1,4 +1,4 @@
-import { ActivationFunctions, IMlpGraph, IMlpNeuron, MLPInferenceRuntime, Synapse, MlpGraph, MlpNeuron, ISynapse } from "spikypanda-core";
+import { ActivationFunctions, IMlpGraph, IMlpNeuron, IMlpSynapse, MLPInferenceRuntime, MlpGraph, MlpNeuron, MlpSynapse } from "spikypanda-core";
 import { createTrainedXorGraph } from "./xor.graph";
 
 function buildPerceptron(weights: number[], bias: number, activation = ActivationFunctions.sigmoid): IMlpGraph {
@@ -7,8 +7,10 @@ function buildPerceptron(weights: number[], bias: number, activation = Activatio
     const i2: IMlpNeuron = new MlpNeuron(0, activation).withTag("input2") as IMlpNeuron;
     const o: IMlpNeuron = new MlpNeuron(bias, activation).withTag("output") as IMlpNeuron;
 
-    const s1 = new Synapse(i1, o, w1).withTag("synapse1") as ISynapse;
-    const s2 = new Synapse(i2, o, w2).withTag("synapse2") as ISynapse;
+    const s1 = new MlpSynapse(i1, o).withTag("synapse1") as IMlpSynapse;
+    s1.weight = w1;
+    const s2 = new MlpSynapse(i2, o).withTag("synapse2") as IMlpSynapse;
+    s2.weight = w2;
 
     return new MlpGraph([i1, i2, o], [s1, s2]);
 }

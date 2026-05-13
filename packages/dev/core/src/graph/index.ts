@@ -7,3 +7,4 @@ export * from "./graph.graph";
 export * from "./graph.builder.node";
 export * from "./graph.builder.olink";
 export * from "./graph.builder.graph";
+export * from "./graph.dataflow";
