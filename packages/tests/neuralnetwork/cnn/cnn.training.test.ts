@@ -7,7 +7,7 @@ function log(message: string) {
 describe("CnnTrainingRuntime", () => {
     test("kernel weights change after a training step", () => {
         // 2×2×1 → Conv(1, 2×2, linear) → 1×1×1
-        const graph = new CnnBuilder().addInputLayer(2, 2, 1).addConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.sigmoid }).build();
+        const graph = new CnnBuilder().withInputLayer(2, 2, 1).withConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.sigmoid }).build();
 
         const runtime = new CnnInferenceRuntime(graph);
         const trainer = new CnnTrainingRuntime(graph, runtime, LossFunctions.MSE, 0.1, Optimizers.SGD());
@@ -30,7 +30,7 @@ describe("CnnTrainingRuntime", () => {
 
     test("loss decreases over training steps", () => {
         // 2×2×1 → Conv(1, 2×2, sigmoid) → 1×1×1
-        const graph = new CnnBuilder().addInputLayer(2, 2, 1).addConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.sigmoid, biasInit: 0 }).build();
+        const graph = new CnnBuilder().withInputLayer(2, 2, 1).withConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.sigmoid, biasInit: 0 }).build();
 
         const runtime = new CnnInferenceRuntime(graph);
         const trainer = new CnnTrainingRuntime(graph, runtime, LossFunctions.MSE, 0.5, Optimizers.Adam());
@@ -51,10 +51,10 @@ describe("CnnTrainingRuntime", () => {
     test("max pool routes gradient to max input only", () => {
         // 2×2×1 → MaxPool(2×2) → 1×1×1 → Dense(1, sigmoid)
         const graph = new CnnBuilder()
-            .addInputLayer(2, 2, 1)
-            .addPoolLayer({ type: PoolingType.Max, size: 2 })
-            .addFlattenLayer()
-            .addDenseLayer({ units: 1, activation: ActivationFunctions.sigmoid, biasInit: 0 })
+            .withInputLayer(2, 2, 1)
+            .withPoolLayer({ type: PoolingType.Max, size: 2 })
+            .withFlattenLayer()
+            .withDenseLayer({ units: 1, activation: ActivationFunctions.sigmoid, biasInit: 0 })
             .build();
 
         // Set dense weight to 1
@@ -82,10 +82,10 @@ describe("CnnTrainingRuntime", () => {
     test("avg pool distributes gradient equally", () => {
         // 2×2×1 → AvgPool(2×2) → 1×1×1 → Dense(1, linear)
         const graph = new CnnBuilder()
-            .addInputLayer(2, 2, 1)
-            .addPoolLayer({ type: PoolingType.Avg, size: 2 })
-            .addFlattenLayer()
-            .addDenseLayer({ units: 1, activation: ActivationFunctions.linear, biasInit: 0 })
+            .withInputLayer(2, 2, 1)
+            .withPoolLayer({ type: PoolingType.Avg, size: 2 })
+            .withFlattenLayer()
+            .withDenseLayer({ units: 1, activation: ActivationFunctions.linear, biasInit: 0 })
             .build();
 
         const denseSynapses = graph.links.filter((s) => s.kernel === null && (s.ofin as ICnnNeuron).layerType === CnnLayerType.Dense);
@@ -109,11 +109,11 @@ describe("CnnTrainingRuntime", () => {
         // Train to detect "bright top-left corner" pattern
         // 4×4×1 → Conv(2, 2×2, relu) → Pool(max, 2×2) → Flatten → Dense(1, sigmoid)
         const graph = new CnnBuilder()
-            .addInputLayer(4, 4, 1)
-            .addConvLayer({ filters: 2, kernelSize: 2, activation: ActivationFunctions.relu, biasInit: 0 })
-            .addPoolLayer({ type: PoolingType.Max, size: 3 })
-            .addFlattenLayer()
-            .addDenseLayer({ units: 1, activation: ActivationFunctions.sigmoid, biasInit: 0 })
+            .withInputLayer(4, 4, 1)
+            .withConvLayer({ filters: 2, kernelSize: 2, activation: ActivationFunctions.relu, biasInit: 0 })
+            .withPoolLayer({ type: PoolingType.Max, size: 3 })
+            .withFlattenLayer()
+            .withDenseLayer({ units: 1, activation: ActivationFunctions.sigmoid, biasInit: 0 })
             .build();
 
         const runtime = new CnnInferenceRuntime(graph);
@@ -152,7 +152,7 @@ describe("CnnTrainingRuntime", () => {
 
     test("dense-only CNN behaves like MLP", () => {
         // 1×2×1 → Flatten → Dense(1, sigmoid) — should learn simple weighted sum
-        const graph = new CnnBuilder().addInputLayer(2, 1, 1).addFlattenLayer().addDenseLayer({ units: 1, activation: ActivationFunctions.sigmoid, biasInit: 0 }).build();
+        const graph = new CnnBuilder().withInputLayer(2, 1, 1).withFlattenLayer().withDenseLayer({ units: 1, activation: ActivationFunctions.sigmoid, biasInit: 0 }).build();
 
         const runtime = new CnnInferenceRuntime(graph);
         const trainer = new CnnTrainingRuntime(graph, runtime, LossFunctions.CrossEntropy, 0.01, Optimizers.Adam());

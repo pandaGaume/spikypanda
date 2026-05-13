@@ -48,7 +48,9 @@
             "spikypanda-applications-stereo": ["dev/applications/stereo/src/index.ts"],
             "spikypanda-applications-stereo/*": ["dev/applications/stereo/src/*"],
             "spikypanda-applications-mpc": ["dev/applications/mpc/src/index.ts"],
-            "spikypanda-applications-mpc/*": ["dev/applications/mpc/src/*"]
+            "spikypanda-applications-mpc/*": ["dev/applications/mpc/src/*"],
+            "spikypanda-applications-cardriver": ["dev/applications/privates/cardriver/src/index.ts"],
+            "spikypanda-applications-cardriver/*": ["dev/applications/privates/cardriver/src/*"]
         },
 
         "types": ["reflect-metadata", "jest", "node"]

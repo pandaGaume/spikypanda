@@ -16,7 +16,9 @@
             "spikypanda-nodeeditor":   ["dev/nodeeditor/src/index.ts"],
             "spikypanda-nodeeditor/*": ["dev/nodeeditor/src/*"],
             "spikypanda-applications-mpc":      ["dev/applications/mpc/src/index.ts"],
-            "spikypanda-applications-mpc/*":    ["dev/applications/mpc/src/*"]
+            "spikypanda-applications-mpc/*":    ["dev/applications/mpc/src/*"],
+            "spikypanda-applications-cardriver":   ["dev/applications/privates/cardriver/src/index.ts"],
+            "spikypanda-applications-cardriver/*": ["dev/applications/privates/cardriver/src/*"]
         }
     },
     "include": ["**/*.ts"]

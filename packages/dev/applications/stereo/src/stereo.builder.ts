@@ -4,12 +4,15 @@ import {
     CnnGraph,
     CnnLayerType,
     He,
+    IActivationFunction,
     ICnnLayerDescriptor,
     ICnnNeuron,
     ICnnSynapse,
     IConvKernel,
     ConvKernel,
+    IWeightInitializer,
     PaddingType,
+    PoolingType,
 } from "spikypanda-core";
 import { IStereoConfig, IStereoCnnGraph, IStereoCnnNeuron, IStereoCnnSynapse, MergeStrategy } from "./stereo.interfaces";
 import { StereoCnnNeuron } from "./stereo.neuron";
@@ -75,7 +78,7 @@ export class StereoCnnBuilder {
             for (let f = 0; f < filters; f++) {
                 const fanIn = kH * kW * prevLeft.channels;
                 const initializer = new He(fanIn);
-                const kernel = new ConvKernel(kH, kW, prevLeft.channels, initializer, 0);
+                const kernel = this._createKernel(kH, kW, prevLeft.channels, initializer, 0);
                 layerKernels.push(kernel);
                 sharedKernels.push(kernel);
             }
@@ -101,7 +104,7 @@ export class StereoCnnBuilder {
                 const crossChannels = leftConvDesc.channels;
                 const crossFanIn = crossChannels * (config.maxDisparity + 1);
                 const crossInitializer = new He(crossFanIn);
-                const crossKernel = new ConvKernel(1, 1, crossChannels, crossInitializer, 0);
+                const crossKernel = this._createKernel(1, 1, crossChannels, crossInitializer, 0);
                 crossKernels.push(crossKernel);
 
                 this._buildCrossSynapses(
@@ -167,7 +170,7 @@ export class StereoCnnBuilder {
 
         const allKernels = [...sharedKernels, ...crossKernels];
 
-        const graph = new CnnGraph(
+        const graph = this._createGraph(
             allNeurons as ICnnNeuron[],
             allSynapses as ICnnSynapse[],
             inputNeurons as ICnnNeuron[],
@@ -208,11 +211,7 @@ export class StereoCnnBuilder {
         for (let c = 0; c < channels; c++) {
             for (let r = 0; r < height; r++) {
                 for (let col = 0; col < width; col++) {
-                    const neuron = new StereoCnnNeuron(
-                        branch, CnnLayerType.Input, r, col, c,
-                        0, undefined, undefined, null, null,
-                        new Cartesian3(col, r, layerDepth)
-                    );
+                    const neuron = this._createNeuron(branch, CnnLayerType.Input, r, col, c, 0, undefined, undefined, new Cartesian3(col, r, layerDepth));
                     neurons.push(neuron);
                     allNeurons.push(neuron);
                 }
@@ -254,11 +253,7 @@ export class StereoCnnBuilder {
             const kernel = kernels[f];
             for (let r = 0; r < outH; r++) {
                 for (let col = 0; col < outW; col++) {
-                    const neuron = new StereoCnnNeuron(
-                        branch, CnnLayerType.Conv, r, col, f,
-                        kernel.bias, activation, undefined, null, null,
-                        new Cartesian3(col, r, layerDepth)
-                    );
+                    const neuron = this._createNeuron(branch, CnnLayerType.Conv, r, col, f, kernel.bias, activation, undefined, new Cartesian3(col, r, layerDepth));
                     neurons.push(neuron);
                     allNeurons.push(neuron);
 
@@ -275,9 +270,7 @@ export class StereoCnnBuilder {
 
                                 const srcNeuron = this._getNeuronAt(prev, srcRow, srcCol, ic);
                                 const kernelIndex = ic * kH * kW + kr * kW + kc;
-                                const synapse = new StereoCnnSynapse(
-                                    srcNeuron, neuron, kernel, kernelIndex, 0, false, 0
-                                );
+                                const synapse = this._createSynapse(srcNeuron, neuron, kernel, kernelIndex, 0, false, 0);
                                 allSynapses.push(synapse);
                             }
                         }
@@ -321,15 +314,11 @@ export class StereoCnnBuilder {
                         const kernelIndex = ch;
 
                         // L -> R
-                        const synLR = new StereoCnnSynapse(
-                            leftNeuron, rightNeuron, crossKernel, kernelIndex, 0, true, d
-                        );
+                        const synLR = this._createSynapse(leftNeuron, rightNeuron, crossKernel, kernelIndex, 0, true, d);
                         allSynapses.push(synLR);
 
                         // R -> L (bidirectional)
-                        const synRL = new StereoCnnSynapse(
-                            rightNeuron, leftNeuron, crossKernel, kernelIndex, 0, true, d
-                        );
+                        const synRL = this._createSynapse(rightNeuron, leftNeuron, crossKernel, kernelIndex, 0, true, d);
                         allSynapses.push(synRL);
                     }
                 }
@@ -356,16 +345,12 @@ export class StereoCnnBuilder {
             for (let c = 0; c < channels; c++) {
                 for (let r = 0; r < height; r++) {
                     for (let col = 0; col < width; col++) {
-                        const neuron = new StereoCnnNeuron(
-                            "merge", CnnLayerType.Flatten, r, col, c,
-                            0, undefined, undefined, null, null,
-                            new Cartesian3(col, r, layerDepth)
-                        );
+                        const neuron = this._createNeuron("merge", CnnLayerType.Flatten, r, col, c, 0, undefined, undefined, new Cartesian3(col, r, layerDepth));
                         neurons.push(neuron);
                         allNeurons.push(neuron);
 
                         const srcNeuron = this._getNeuronAt(leftDesc, r, col, c);
-                        const synapse = new StereoCnnSynapse(srcNeuron, neuron, null, -1, 1, false, 0);
+                        const synapse = this._createSynapse(srcNeuron, neuron, null, -1, 1, false, 0);
                         allSynapses.push(synapse);
                     }
                 }
@@ -375,16 +360,12 @@ export class StereoCnnBuilder {
             for (let c = 0; c < channels; c++) {
                 for (let r = 0; r < height; r++) {
                     for (let col = 0; col < width; col++) {
-                        const neuron = new StereoCnnNeuron(
-                            "merge", CnnLayerType.Flatten, r, col, channels + c,
-                            0, undefined, undefined, null, null,
-                            new Cartesian3(col, r, layerDepth)
-                        );
+                        const neuron = this._createNeuron("merge", CnnLayerType.Flatten, r, col, channels + c, 0, undefined, undefined, new Cartesian3(col, r, layerDepth));
                         neurons.push(neuron);
                         allNeurons.push(neuron);
 
                         const srcNeuron = this._getNeuronAt(rightDesc, r, col, c);
-                        const synapse = new StereoCnnSynapse(srcNeuron, neuron, null, -1, 1, false, 0);
+                        const synapse = this._createSynapse(srcNeuron, neuron, null, -1, 1, false, 0);
                         allSynapses.push(synapse);
                     }
                 }
@@ -401,11 +382,7 @@ export class StereoCnnBuilder {
             for (let c = 0; c < channels; c++) {
                 for (let r = 0; r < height; r++) {
                     for (let col = 0; col < width; col++) {
-                        const neuron = new StereoCnnNeuron(
-                            "merge", CnnLayerType.Flatten, r, col, c,
-                            0, ActivationFunctions.relu, undefined, null, null,
-                            new Cartesian3(col, r, layerDepth)
-                        );
+                        const neuron = this._createNeuron("merge", CnnLayerType.Flatten, r, col, c, 0, ActivationFunctions.relu, undefined, new Cartesian3(col, r, layerDepth));
                         neurons.push(neuron);
                         allNeurons.push(neuron);
 
@@ -413,11 +390,11 @@ export class StereoCnnBuilder {
                         const rightNeuron = this._getNeuronAt(rightDesc, r, col, c);
 
                         // L with weight +1
-                        const synL = new StereoCnnSynapse(leftNeuron, neuron, null, -1, 1, false, 0);
+                        const synL = this._createSynapse(leftNeuron, neuron, null, -1, 1, false, 0);
                         allSynapses.push(synL);
 
                         // R with weight -1
-                        const synR = new StereoCnnSynapse(rightNeuron, neuron, null, -1, -1, false, 0);
+                        const synR = this._createSynapse(rightNeuron, neuron, null, -1, -1, false, 0);
                         allSynapses.push(synR);
                     }
                 }
@@ -445,16 +422,12 @@ export class StereoCnnBuilder {
         for (let c = 0; c < prev.channels; c++) {
             for (let r = 0; r < prev.height; r++) {
                 for (let col = 0; col < prev.width; col++) {
-                    const neuron = new StereoCnnNeuron(
-                        "merge", CnnLayerType.Flatten, 0, idx, 0,
-                        0, undefined, undefined, null, null,
-                        new Cartesian3(idx, 0, layerDepth)
-                    );
+                    const neuron = this._createNeuron("merge", CnnLayerType.Flatten, 0, idx, 0, 0, undefined, undefined, new Cartesian3(idx, 0, layerDepth));
                     neurons.push(neuron);
                     allNeurons.push(neuron);
 
                     const srcNeuron = this._getNeuronAt(prev, r, col, c);
-                    const synapse = new StereoCnnSynapse(srcNeuron, neuron, null, -1, 1, false, 0);
+                    const synapse = this._createSynapse(srcNeuron, neuron, null, -1, 1, false, 0);
                     allSynapses.push(synapse);
                     idx++;
                 }
@@ -484,18 +457,12 @@ export class StereoCnnBuilder {
         const neurons: IStereoCnnNeuron[] = [];
 
         for (let i = 0; i < units; i++) {
-            const neuron = new StereoCnnNeuron(
-                "merge", CnnLayerType.Dense, 0, i, 0,
-                0, activation, undefined, null, null,
-                new Cartesian3(i, 0, layerDepth)
-            );
+            const neuron = this._createNeuron("merge", CnnLayerType.Dense, 0, i, 0, 0, activation, undefined, new Cartesian3(i, 0, layerDepth));
             neurons.push(neuron);
             allNeurons.push(neuron);
 
             for (const srcNeuron of prev.neurons) {
-                const synapse = new StereoCnnSynapse(
-                    srcNeuron, neuron, null, -1, initializer.next(), false, 0
-                );
+                const synapse = this._createSynapse(srcNeuron, neuron, null, -1, initializer.next(), false, 0);
                 allSynapses.push(synapse);
             }
         }
@@ -512,5 +479,59 @@ export class StereoCnnBuilder {
     private _getNeuronAt(desc: ICnnLayerDescriptor, row: number, col: number, channel: number): ICnnNeuron {
         const index = channel * desc.height * desc.width + row * desc.width + col;
         return desc.neurons[index];
+    }
+
+    // ── Concrete-class factories (override in subclasses) ─────────────────
+
+    /** Factory for stereo CNN neurons. */
+    protected _createNeuron(
+        branch: "left" | "right" | "merge",
+        layerType: CnnLayerType,
+        row: number,
+        col: number,
+        channel: number,
+        bias: number,
+        activation: IActivationFunction | undefined,
+        poolType: PoolingType | undefined,
+        position: Cartesian3
+    ): IStereoCnnNeuron {
+        return new StereoCnnNeuron(branch, layerType, row, col, channel, bias, activation, poolType, null, null, position);
+    }
+
+    /** Factory for stereo CNN synapses (cross flag + disparity for inter-branch edges). */
+    protected _createSynapse(
+        source: ICnnNeuron,
+        target: IStereoCnnNeuron,
+        kernel: IConvKernel | null,
+        kernelIndex: number,
+        directWeight: number,
+        cross: boolean,
+        disparity: number
+    ): IStereoCnnSynapse {
+        return new StereoCnnSynapse(source, target, kernel, kernelIndex, directWeight, cross, disparity);
+    }
+
+    /** Factory for shared (and cross) convolutional kernels. */
+    protected _createKernel(
+        kernelHeight: number,
+        kernelWidth: number,
+        inputChannels: number,
+        initializer: IWeightInitializer,
+        bias: number
+    ): ConvKernel {
+        return new ConvKernel(kernelHeight, kernelWidth, inputChannels, initializer, bias);
+    }
+
+    /** Factory for the final stereo CNN graph. */
+    protected _createGraph(
+        neurons: ICnnNeuron[],
+        synapses: ICnnSynapse[],
+        inputs: ICnnNeuron[],
+        outputs: ICnnNeuron[],
+        hiddens: ICnnNeuron[],
+        kernels: IConvKernel[],
+        layerDescriptors: ICnnLayerDescriptor[]
+    ): CnnGraph {
+        return new CnnGraph(neurons, synapses, inputs, outputs, hiddens, null, null, undefined, kernels, layerDescriptors);
     }
 }

@@ -105,13 +105,13 @@ export class SatBuilder {
         // =====================================================================
         const inputNeurons: VitNeuron[] = [];
         for (let i = 0; i < c.width * c.height * c.channels; i++) {
-            inputNeurons.push(new VitNeuron(VitNeuronType.Input));
+            inputNeurons.push(this._createInputNeuron());
         }
 
         const outputNeurons: VitNeuron[] = [];
         const numOutputs = c.patchDecode ? 0 : (c.numClasses || 10);
         for (let i = 0; i < numOutputs; i++) {
-            outputNeurons.push(new VitNeuron(VitNeuronType.Output, 0, i));
+            outputNeurons.push(this._createOutputNeuron(i));
         }
 
         const allNeurons: IVitNeuron[] = [...inputNeurons, ...outputNeurons];
@@ -177,9 +177,9 @@ export class SatBuilder {
         // 4. Assemble graph
         // =====================================================================
         const builder = new GraphBuilder<IVitNeuron, IVitSynapse>();
-        builder.withNodes(allNeurons);
+        builder.withNodes(...allNeurons);
 
-        const graph = builder.build() as ISatGraph;
+        const graph = builder.build() as unknown as ISatGraph;
         (graph as any).inputs = inputNeurons;
         (graph as any).outputs = outputNeurons;
         (graph as any).hiddens = [];
@@ -214,5 +214,17 @@ export class SatBuilder {
     public reset(): SatBuilder {
         this._config = null;
         return this;
+    }
+
+    // ── Concrete-class factories (override in subclasses) ─────────────────
+
+    /** Factory for SAT input-tile neurons. */
+    protected _createInputNeuron(): VitNeuron {
+        return new VitNeuron(VitNeuronType.Input);
+    }
+
+    /** Factory for SAT output (classification head) neurons. */
+    protected _createOutputNeuron(index: number): VitNeuron {
+        return new VitNeuron(VitNeuronType.Output, 0, index);
     }
 }

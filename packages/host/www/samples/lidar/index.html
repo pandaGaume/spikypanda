@@ -273,10 +273,10 @@ const custom = new AutoencoderBuilder({
   inputChannels: 6,
   latentDim: 128,
 })
-  .addConvLayer({ filters: 16, kernelSize: 3, padding: "same" })
-  .addPoolLayer({ type: "max", size: 2 })
-  .addConvLayer({ filters: 32, kernelSize: 3, padding: "same" })
-  .addPoolLayer({ type: "max", size: 2 })
+  .withConvLayer({ filters: 16, kernelSize: 3, padding: "same" })
+  .withPoolLayer({ type: "max", size: 2 })
+  .withConvLayer({ filters: 32, kernelSize: 3, padding: "same" })
+  .withPoolLayer({ type: "max", size: 2 })
   .build();
 
 // 3. Train with standard MSE loss

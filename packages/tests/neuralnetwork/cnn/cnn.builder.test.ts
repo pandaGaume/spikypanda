@@ -4,10 +4,10 @@ describe("CnnBuilder", () => {
     test("builds a simple CNN with correct neuron counts", () => {
         // Input: 4×4×1 → Conv(2 filters, 3×3) → 2×2×2 → Flatten → 8 → Dense(2)
         const graph = new CnnBuilder()
-            .addInputLayer(4, 4, 1)
-            .addConvLayer({ filters: 2, kernelSize: 3, activation: ActivationFunctions.relu })
-            .addFlattenLayer()
-            .addDenseLayer({ units: 2, activation: ActivationFunctions.linear })
+            .withInputLayer(4, 4, 1)
+            .withConvLayer({ filters: 2, kernelSize: 3, activation: ActivationFunctions.relu })
+            .withFlattenLayer()
+            .withDenseLayer({ units: 2, activation: ActivationFunctions.linear })
             .build();
 
         // Input: 4×4×1 = 16 neurons
@@ -35,7 +35,7 @@ describe("CnnBuilder", () => {
 
     test("computes conv output dimensions correctly", () => {
         // Input: 6×6×1 → Conv(1 filter, 3×3, stride 2) → floor((6-3)/2)+1 = 2 → 2×2×1
-        const graph = new CnnBuilder().addInputLayer(6, 6, 1).addConvLayer({ filters: 1, kernelSize: 3, stride: 2, activation: ActivationFunctions.relu }).build();
+        const graph = new CnnBuilder().withInputLayer(6, 6, 1).withConvLayer({ filters: 1, kernelSize: 3, stride: 2, activation: ActivationFunctions.relu }).build();
 
         const convDesc = graph.layerDescriptors[1];
         expect(convDesc.width).toBe(2);
@@ -46,7 +46,7 @@ describe("CnnBuilder", () => {
 
     test("computes pool output dimensions correctly", () => {
         // Input: 4×4×1 → Pool(max, 2×2, stride 2) → 2×2×1
-        const graph = new CnnBuilder().addInputLayer(4, 4, 1).addPoolLayer({ type: PoolingType.Max, size: 2, stride: 2 }).build();
+        const graph = new CnnBuilder().withInputLayer(4, 4, 1).withPoolLayer({ type: PoolingType.Max, size: 2, stride: 2 }).build();
 
         const poolDesc = graph.layerDescriptors[1];
         expect(poolDesc.width).toBe(2);
@@ -57,7 +57,7 @@ describe("CnnBuilder", () => {
 
     test("pool preserves channel count", () => {
         // Input: 4×4×3 → Pool(max, 2×2) → 2×2×3
-        const graph = new CnnBuilder().addInputLayer(4, 4, 3).addPoolLayer({ type: PoolingType.Max, size: 2, stride: 2 }).build();
+        const graph = new CnnBuilder().withInputLayer(4, 4, 3).withPoolLayer({ type: PoolingType.Max, size: 2, stride: 2 }).build();
 
         const poolDesc = graph.layerDescriptors[1];
         expect(poolDesc.channels).toBe(3);
@@ -67,7 +67,7 @@ describe("CnnBuilder", () => {
     test("conv synapse count is correct", () => {
         // Input: 3×3×1, Conv(1 filter, 2×2) → 2×2×1
         // Each of 4 output neurons connects to a 2×2 receptive field → 4 synapses each → 16 total
-        const graph = new CnnBuilder().addInputLayer(3, 3, 1).addConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.relu }).build();
+        const graph = new CnnBuilder().withInputLayer(3, 3, 1).withConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.relu }).build();
 
         // Conv synapses: 4 output neurons × 4 (2×2×1) = 16
         expect(graph.links.length).toBe(16);
@@ -75,7 +75,7 @@ describe("CnnBuilder", () => {
 
     test("kernels share weights across spatial positions", () => {
         // Input: 3×3×1, Conv(1 filter, 2×2) → 2×2×1
-        const graph = new CnnBuilder().addInputLayer(3, 3, 1).addConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.relu }).build();
+        const graph = new CnnBuilder().withInputLayer(3, 3, 1).withConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.relu }).build();
 
         // All 16 synapses should reference the same kernel
         const kernel = graph.kernels[0];
@@ -89,7 +89,7 @@ describe("CnnBuilder", () => {
 
     test("same-padding keeps spatial dimensions", () => {
         // Input: 5×5×1 → Conv(1 filter, 3×3, padding=same) → 5×5×1
-        const graph = new CnnBuilder().addInputLayer(5, 5, 1).addConvLayer({ filters: 1, kernelSize: 3, padding: PaddingType.Same, activation: ActivationFunctions.relu }).build();
+        const graph = new CnnBuilder().withInputLayer(5, 5, 1).withConvLayer({ filters: 1, kernelSize: 3, padding: PaddingType.Same, activation: ActivationFunctions.relu }).build();
 
         const convDesc = graph.layerDescriptors[1];
         expect(convDesc.width).toBe(5);
@@ -98,7 +98,7 @@ describe("CnnBuilder", () => {
 
     test("flatten produces correct total units", () => {
         // Input: 4×4×2 → Flatten → 32 neurons
-        const graph = new CnnBuilder().addInputLayer(4, 4, 2).addFlattenLayer().build();
+        const graph = new CnnBuilder().withInputLayer(4, 4, 2).withFlattenLayer().build();
 
         const flattenDesc = graph.layerDescriptors[1];
         expect(flattenDesc.width).toBe(32);
@@ -107,7 +107,7 @@ describe("CnnBuilder", () => {
 
     test("multi-channel conv uses correct kernel size", () => {
         // Input: 4×4×3, Conv(2 filters, 3×3) → kernels are 3×3×3 = 27 weights each
-        const graph = new CnnBuilder().addInputLayer(4, 4, 3).addConvLayer({ filters: 2, kernelSize: 3, activation: ActivationFunctions.relu }).build();
+        const graph = new CnnBuilder().withInputLayer(4, 4, 3).withConvLayer({ filters: 2, kernelSize: 3, activation: ActivationFunctions.relu }).build();
 
         expect(graph.kernels.length).toBe(2);
         expect(graph.kernels[0].weights.length).toBe(27); // 3×3×3

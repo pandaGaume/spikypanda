@@ -5,9 +5,8 @@ import {
     LayerConnectionBuilder,
     LayerConnectionType,
     MLPInferenceRuntime,
-    MlpSynapse,
+    MlpSynapseBuilder,
     PerceptronBuilder,
-    SynapseBuilder,
 } from "spikypanda-core";
 import { SimConfig } from "./bestioles.config";
 import { ICreatureBrain } from "./bestioles.interfaces";
@@ -69,7 +68,7 @@ export class CreatureBrain implements ICreatureBrain {
             // every neuron in layer N connects to every neuron in layer N+1.
             // Glorot initialization scales weights by sqrt(2/(fanin+fanout))
             // to maintain variance across layers.
-            const synapseBuilder = new SynapseBuilder().withType(MlpSynapse) as SynapseBuilder;
+            const synapseBuilder = new MlpSynapseBuilder();
             return new LayerConnectionBuilder().withSynapseBuilder(synapseBuilder).withType(LayerConnectionType.FullyConnected).withWeightInitializer(new Glorot(fanin, fanout));
         };
 

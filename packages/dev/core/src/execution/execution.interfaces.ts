@@ -127,27 +127,30 @@ export interface IRunnable {
  *
  * Embedding: when this graph is wired as a node inside a parent graph,
  * the parent treats it like any other IRuntimeNode (channels target it
- * with a slot, isReady/fire follow the standard contract). The
- * inputBindings/outputBindings maps connect the external slot vocabulary
- * (used by parent channels) to internal channel indices, so fire(parent,
- * t) can route data across the boundary:
+ * with a slot, isReady/fire follow the standard contract). Routing
+ * across the boundary uses the slot vocabulary directly:
  *
- *   external slot of channel feeding this graph
- *     -> inputBindings.get(slot)                 (internal channel idx)
+ *   external slot of a channel feeding this graph
+ *     -> internal channel whose oini is null and whose slot matches
+ *        (the sub-graph's input "port" for that slot name)
  *     -> internalSession.linkStates[idx]         (write payload)
  *
- *   external slot of channel leaving this graph
- *     -> outputBindings.get(slot)                (internal channel idx)
+ *   external slot of a channel leaving this graph
+ *     -> internal channel whose ofin is null and whose slot matches
+ *        (the sub-graph's output "port" for that slot name)
  *     -> internalSession.linkStates[idx]         (read payload)
  *
- * Top-level use (no parent embedding): bindings can be empty; the user
- * drives via `new Session(graph)` as usual.
+ * Port channels are simply channels created with a dangling endpoint
+ * (oini undefined for inputs, ofin undefined for outputs); their slot
+ * names define the public interface of the sub-graph. No separate
+ * binding map is required.
+ *
+ * Top-level use (no parent embedding): port channels are never
+ * matched; the user drives via `new Session(graph)` as usual.
  */
 export interface IRuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChannel = IChannel>
     extends IGraph<N, L>, IRuntimeNode, IRunnable {
     readonly mode: SchedulingMode;
-    readonly inputBindings: ReadonlyMap<string | number, number>;
-    readonly outputBindings: ReadonlyMap<string | number, number>;
 }
 
 // =====================================================================

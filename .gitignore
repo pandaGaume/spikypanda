@@ -62,3 +62,6 @@ internals/
 
 #private applications
 /packages/dev/applications/privates/**
+
+#private tests (confidential work)
+/packages/tests/privates/**

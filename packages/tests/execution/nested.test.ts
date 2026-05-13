@@ -2,23 +2,17 @@ import { Channel, RuntimeGraph, RuntimeNode, SchedulingMode, Session } from "spi
 import { AddNode, ConsumerNode, ProducerNode } from "./poc-nodes";
 
 /**
- * Build an Add sub-graph (no source for "a" / "b" inputs, no sink for
- * "sum" output: those are routed by the embedding mechanism via
- * inputBindings / outputBindings).
+ * Build an Add sub-graph: the "a" / "b" input ports and "sum" output
+ * port are simply dangling channels (oini = undefined for inputs,
+ * ofin = undefined for outputs). The embedding mechanism matches them
+ * to parent channels by slot name automatically.
  */
 function buildAddSubgraph(mode: SchedulingMode): RuntimeGraph<RuntimeNode, Channel> {
     const add = new AddNode();
     const inA = new Channel<number>(undefined, add, "a");
     const inB = new Channel<number>(undefined, add, "b");
     const out = new Channel<number>(add, undefined, "sum");
-    const inputBindings = new Map<string | number, number>([
-        ["a", 0], // inA at links[0]
-        ["b", 1], // inB at links[1]
-    ]);
-    const outputBindings = new Map<string | number, number>([
-        ["sum", 2], // out at links[2]
-    ]);
-    return new RuntimeGraph<RuntimeNode, Channel>([add], [inA, inB, out], mode, inputBindings, outputBindings);
+    return new RuntimeGraph<RuntimeNode, Channel>([add], [inA, inB, out], mode);
 }
 
 describe("Nested sub-graph (fractal composition)", () => {

@@ -44,26 +44,26 @@ export function buildAutoencoderFromPreset(preset: AutoencoderPreset, config: Au
     switch (preset) {
         case AutoencoderPreset.Tiny:
             return new AutoencoderBuilder(aeConfig)
-                .addConvLayer({ filters: 8, kernelSize: 3, padding: PaddingType.Same, activation: ActivationFunctions.relu })
-                .addPoolLayer({ type: PoolingType.Max, size: 2 })
+                .withConvLayer({ filters: 8, kernelSize: 3, padding: PaddingType.Same, activation: ActivationFunctions.relu })
+                .withPoolLayer({ type: PoolingType.Max, size: 2 })
                 .build();
 
         case AutoencoderPreset.Small:
             return new AutoencoderBuilder(aeConfig)
-                .addConvLayer({ filters: 8, kernelSize: 3, padding: PaddingType.Same, activation: ActivationFunctions.relu })
-                .addPoolLayer({ type: PoolingType.Max, size: 2 })
-                .addConvLayer({ filters: 16, kernelSize: 3, padding: PaddingType.Same, activation: ActivationFunctions.relu })
-                .addPoolLayer({ type: PoolingType.Max, size: 2 })
+                .withConvLayer({ filters: 8, kernelSize: 3, padding: PaddingType.Same, activation: ActivationFunctions.relu })
+                .withPoolLayer({ type: PoolingType.Max, size: 2 })
+                .withConvLayer({ filters: 16, kernelSize: 3, padding: PaddingType.Same, activation: ActivationFunctions.relu })
+                .withPoolLayer({ type: PoolingType.Max, size: 2 })
                 .build();
 
         case AutoencoderPreset.Standard:
             return new AutoencoderBuilder(aeConfig)
-                .addConvLayer({ filters: 8, kernelSize: 5, padding: PaddingType.Same, activation: ActivationFunctions.relu })
-                .addPoolLayer({ type: PoolingType.Max, size: 2 })
-                .addConvLayer({ filters: 16, kernelSize: 3, padding: PaddingType.Same, activation: ActivationFunctions.relu })
-                .addPoolLayer({ type: PoolingType.Max, size: 2 })
-                .addConvLayer({ filters: 32, kernelSize: 3, padding: PaddingType.Same, activation: ActivationFunctions.relu })
-                .addPoolLayer({ type: PoolingType.Max, size: 2 })
+                .withConvLayer({ filters: 8, kernelSize: 5, padding: PaddingType.Same, activation: ActivationFunctions.relu })
+                .withPoolLayer({ type: PoolingType.Max, size: 2 })
+                .withConvLayer({ filters: 16, kernelSize: 3, padding: PaddingType.Same, activation: ActivationFunctions.relu })
+                .withPoolLayer({ type: PoolingType.Max, size: 2 })
+                .withConvLayer({ filters: 32, kernelSize: 3, padding: PaddingType.Same, activation: ActivationFunctions.relu })
+                .withPoolLayer({ type: PoolingType.Max, size: 2 })
                 .build();
     }
 }

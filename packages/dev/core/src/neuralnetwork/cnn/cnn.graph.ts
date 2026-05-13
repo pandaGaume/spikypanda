@@ -13,11 +13,11 @@ export class CnnGraph extends Graph<ICnnNeuron, ICnnSynapse> implements ICnnGrap
         inputs: Nullable<ICnnNeuron[]> = null,
         outputs: Nullable<ICnnNeuron[]> = null,
         hiddens: Nullable<ICnnNeuron[]> = null,
-        kernels: IConvKernel[] = [],
-        layerDescriptors: ICnnLayerDescriptor[] = [],
         onsc: Nullable<ICnnSynapse[]> = null,
         opsc: Nullable<ICnnSynapse[]> = null,
-        position?: ICartesian
+        position?: ICartesian,
+        kernels: IConvKernel[] = [],
+        layerDescriptors: ICnnLayerDescriptor[] = []
     ) {
         super(nodes, links, inputs, outputs, hiddens, onsc, opsc, position);
         this.kernels = kernels;

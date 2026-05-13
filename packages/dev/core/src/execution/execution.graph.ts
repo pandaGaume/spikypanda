@@ -24,12 +24,15 @@ import { Session } from "./execution.session";
  * Session it owns is the entry point.
  *
  * Embedded use: the caller wires this graph as a node in a parent graph
- * via channels, providing inputBindings (external slot -> internal
- * channel index) and outputBindings (external slot -> internal channel
- * index). Per-parent-session state (including the internal Session
- * driving this sub-graph) lives in IGraphNodeState within the parent
- * session, so the same IRuntimeGraph instance can be embedded by N
- * concurrent parent sessions without sharing state.
+ * via channels. Routing across the embedding boundary uses the channel
+ * slot directly: an internal channel with `oini === null` (a dangling
+ * input port) matches an incoming parent channel by slot name; an
+ * internal channel with `ofin === null` (a dangling output port)
+ * matches an outgoing parent channel by slot name. Per-parent-session
+ * state (including the internal Session driving this sub-graph) lives
+ * in IGraphNodeState within the parent session, so the same
+ * IRuntimeGraph instance can be embedded by N concurrent parent
+ * sessions without sharing state.
  */
 export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChannel = IChannel>
     extends Graph<N, L>
@@ -37,8 +40,6 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
 {
     @cloneable public mode: SchedulingMode;
     @cloneable public enabled: boolean;
-    @cloneable public inputBindings: Map<string | number, number>;
-    @cloneable public outputBindings: Map<string | number, number>;
 
     /**
      * Lazy default Session for autonomous run() / runAsync() calls.
@@ -52,8 +53,6 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
         nodes: N[] = [],
         links: L[] = [],
         mode: SchedulingMode = "dynamic",
-        inputBindings: Map<string | number, number> = new Map(),
-        outputBindings: Map<string | number, number> = new Map(),
         inputs: Nullable<N[]> = null,
         outputs: Nullable<N[]> = null,
         hiddens: Nullable<N[]> = null,
@@ -62,8 +61,6 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
     ) {
         super(nodes, links, inputs, outputs, hiddens, null, null, position);
         this.mode = mode;
-        this.inputBindings = inputBindings;
-        this.outputBindings = outputBindings;
         this.enabled = enabled;
     }
 
@@ -130,6 +127,10 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
      * Route incoming external channels into the internal session.
      * Returns the internal session (or undefined if this graph is not
      * embedded in the given parent session's graph).
+     *
+     * Boundary matching: each external incoming link's slot is matched
+     * against an internal input port (a channel whose oini is null).
+     * Lazily memoized in _portIndex for O(1) subsequent lookups.
      */
     private _routeInputsFromParent(parentSession: ISession): ISession | undefined {
         const inner = this._internalSessionIn(parentSession);
@@ -142,9 +143,9 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
                 continue;
             }
             const parentIdx = parentLinks.indexOf(link);
-            const internalIdx = this.inputBindings.get(link.slot);
+            const internalIdx = this._inputPortIndex(link.slot);
             const parentState = parentSession.linkStateOf(link);
-            if (parentIdx < 0 || internalIdx === undefined || !parentState || !parentState.ready) {
+            if (parentIdx < 0 || internalIdx < 0 || !parentState || !parentState.ready) {
                 continue;
             }
             const value = parentSession.consume(parentIdx);
@@ -156,6 +157,9 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
     /**
      * Route internal output link states back to external channels in
      * the parent session.
+     *
+     * Boundary matching: each external outgoing link's slot is matched
+     * against an internal output port (a channel whose ofin is null).
      */
     private _routeOutputsToParent(parentSession: ISession, inner: ISession): void {
         const parentLinks = parentSession.graph.links as ReadonlyArray<IChannel>;
@@ -164,8 +168,8 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
                 continue;
             }
             const parentIdx = parentLinks.indexOf(link);
-            const internalIdx = this.outputBindings.get(link.slot);
-            if (parentIdx < 0 || internalIdx === undefined) {
+            const internalIdx = this._outputPortIndex(link.slot);
+            if (parentIdx < 0 || internalIdx < 0) {
                 continue;
             }
             const internalState = inner.linkStates[internalIdx];
@@ -175,6 +179,44 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
             const value = inner.consume(internalIdx);
             parentSession.publish(parentIdx, value);
         }
+    }
+
+    // ── Port-channel lookup (memoized) ────────────────────────────────
+    //
+    // Input ports : internal channels whose oini === null.
+    // Output ports: internal channels whose ofin === null.
+    // The slot of a port channel is its public name; embedding code
+    // matches external link.slot against these.
+
+    private _inputPortMap?: Map<string | number, number>;
+    private _outputPortMap?: Map<string | number, number>;
+
+    private _inputPortIndex(slot: string | number): number {
+        if (!this._inputPortMap) {
+            this._inputPortMap = new Map();
+            for (let i = 0; i < this.links.length; i++) {
+                const link = this.links[i] as unknown as IChannel;
+                if (link.oini == null) {
+                    this._inputPortMap.set(link.slot, i);
+                }
+            }
+        }
+        const idx = this._inputPortMap.get(slot);
+        return idx === undefined ? -1 : idx;
+    }
+
+    private _outputPortIndex(slot: string | number): number {
+        if (!this._outputPortMap) {
+            this._outputPortMap = new Map();
+            for (let i = 0; i < this.links.length; i++) {
+                const link = this.links[i] as unknown as IChannel;
+                if (link.ofin == null) {
+                    this._outputPortMap.set(link.slot, i);
+                }
+            }
+        }
+        const idx = this._outputPortMap.get(slot);
+        return idx === undefined ? -1 : idx;
     }
 
     public reset(parentSession: ISession): void {

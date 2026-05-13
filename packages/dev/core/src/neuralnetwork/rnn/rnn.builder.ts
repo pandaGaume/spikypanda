@@ -26,11 +26,11 @@ import { ISynapse } from "../nn.interfaces";
 ///       .build();
 /// </summary>
 export class RnnBuilder {
-    private _inputSize: number = 0;
-    private _hiddenSize: number = 0;
-    private _outputSize: number = 0;
-    private _cellType: RnnCellType = RnnCellType.LSTM;
-    private _outputActivation: IActivationFunction = ActivationFunctions.sigmoid;
+    protected _inputSize: number = 0;
+    protected _hiddenSize: number = 0;
+    protected _outputSize: number = 0;
+    protected _cellType: RnnCellType = RnnCellType.LSTM;
+    protected _outputActivation: IActivationFunction = ActivationFunctions.sigmoid;
 
     public withInputSize(size: number): RnnBuilder {
         this._inputSize = size;
@@ -89,21 +89,17 @@ export class RnnBuilder {
         // 1. Create neurons
         const inputNeurons: Neuron[] = [];
         for (let i = 0; i < this._inputSize; i++) {
-            inputNeurons.push(new Neuron());
+            inputNeurons.push(this._createInputNeuron());
         }
 
         const hiddenNeurons: IRnnNeuron[] = [];
         for (let i = 0; i < this._hiddenSize; i++) {
-            if (this._cellType === RnnCellType.LSTM) {
-                hiddenNeurons.push(new LstmNeuron());
-            } else {
-                hiddenNeurons.push(new GruNeuron());
-            }
+            hiddenNeurons.push(this._createHiddenNeuron(this._cellType));
         }
 
         const outputNeurons: MlpNeuron[] = [];
         for (let i = 0; i < this._outputSize; i++) {
-            outputNeurons.push(new MlpNeuron(0, this._outputActivation));
+            outputNeurons.push(this._createOutputNeuron(this._outputActivation));
         }
 
         // 2. Create synapses
@@ -116,7 +112,7 @@ export class RnnBuilder {
         // Input -> Hidden (RnnSynapse with numGates weights)
         for (const inp of inputNeurons) {
             for (const hid of hiddenNeurons) {
-                const syn = new RnnSynapse(inp, hid, numGates);
+                const syn = this._createRnnSynapse(inp, hid, numGates);
                 for (let g = 0; g < numGates; g++) {
                     syn.weights[g] = WeightInit.Glorot(fanIn, fanOut);
                 }
@@ -127,7 +123,7 @@ export class RnnBuilder {
         // Hidden -> Hidden recurrent (RnnSynapse with numGates weights)
         for (const hSrc of hiddenNeurons) {
             for (const hTgt of hiddenNeurons) {
-                const syn = new RnnSynapse(hSrc, hTgt, numGates);
+                const syn = this._createRnnSynapse(hSrc, hTgt, numGates);
                 for (let g = 0; g < numGates; g++) {
                     syn.weights[g] = WeightInit.Glorot(fanIn, fanOut);
                 }
@@ -138,7 +134,7 @@ export class RnnBuilder {
         // Hidden -> Output (regular Synapse, single weight)
         for (const hid of hiddenNeurons) {
             for (const out of outputNeurons) {
-                const syn = new Synapse(hid, out, WeightInit.Glorot(this._hiddenSize, this._outputSize));
+                const syn = this._createOutputSynapse(hid, out, WeightInit.Glorot(this._hiddenSize, this._outputSize));
                 allSynapses.push(syn);
             }
         }
@@ -147,8 +143,8 @@ export class RnnBuilder {
         const allNodes = [...inputNeurons, ...hiddenNeurons, ...outputNeurons] as IRnnNeuron[];
 
         const builder = new GraphBuilder<IRnnNeuron, ISynapse>();
-        builder.withNodes(allNodes);
-        builder.withLinks(allSynapses);
+        builder.withNodes(...allNodes);
+        builder.withLinks(...allSynapses);
 
         const graph = builder.build() as IRnnGraph;
 
@@ -167,5 +163,32 @@ export class RnnBuilder {
         this._cellType = RnnCellType.LSTM;
         this._outputActivation = ActivationFunctions.sigmoid;
         return this;
+    }
+
+    // ── Concrete-class factories (override in subclasses) ─────────────────
+
+    /** Factory for input-layer neurons. Plain pass-through neurons by default. */
+    protected _createInputNeuron(): Neuron {
+        return new Neuron();
+    }
+
+    /** Factory for hidden-layer neurons; dispatches on cell type. */
+    protected _createHiddenNeuron(cellType: RnnCellType): IRnnNeuron {
+        return cellType === RnnCellType.LSTM ? new LstmNeuron() : new GruNeuron();
+    }
+
+    /** Factory for output-layer neurons (MLP-style with configurable activation). */
+    protected _createOutputNeuron(activation: IActivationFunction): MlpNeuron {
+        return new MlpNeuron(0, activation);
+    }
+
+    /** Factory for RnnSynapse instances (multi-gate weighted edges in/around the hidden layer). */
+    protected _createRnnSynapse(source: Neuron | IRnnNeuron, target: IRnnNeuron, numGates: number): RnnSynapse {
+        return new RnnSynapse(source, target, numGates);
+    }
+
+    /** Factory for hidden-to-output Synapse (single-weight edge). */
+    protected _createOutputSynapse(source: IRnnNeuron, target: MlpNeuron, weight: number): Synapse {
+        return new Synapse(source, target, weight);
     }
 }

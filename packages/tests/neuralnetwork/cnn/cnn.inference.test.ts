@@ -4,7 +4,7 @@ describe("CnnInferenceRuntime", () => {
     test("conv layer computes correct weighted sum with known weights", () => {
         // Build a minimal CNN: 2×2×1 input → Conv(1 filter, 2×2, linear activation) → 1×1×1 output
         // This way we can verify the exact convolution computation.
-        const graph = new CnnBuilder().addInputLayer(2, 2, 1).addConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.linear }).build();
+        const graph = new CnnBuilder().withInputLayer(2, 2, 1).withConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.linear }).build();
 
         // Set kernel weights manually: [1, 2, 3, 4] (row-major)
         // ConvKernel index layout: ic*kH*kW + kr*kW + kc
@@ -32,7 +32,7 @@ describe("CnnInferenceRuntime", () => {
     });
 
     test("conv layer applies bias correctly", () => {
-        const graph = new CnnBuilder().addInputLayer(2, 2, 1).addConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.linear, biasInit: 10 }).build();
+        const graph = new CnnBuilder().withInputLayer(2, 2, 1).withConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.linear, biasInit: 10 }).build();
 
         const kernel = graph.kernels[0];
         kernel.weights[0] = 1;
@@ -48,7 +48,7 @@ describe("CnnInferenceRuntime", () => {
 
     test("max pooling selects maximum value", () => {
         // 2×2×1 input → MaxPool(2×2) → 1×1×1
-        const graph = new CnnBuilder().addInputLayer(2, 2, 1).addPoolLayer({ type: PoolingType.Max, size: 2 }).build();
+        const graph = new CnnBuilder().withInputLayer(2, 2, 1).withPoolLayer({ type: PoolingType.Max, size: 2 }).build();
 
         const runtime = new CnnInferenceRuntime(graph);
         const result = runtime.run([3, 7, 1, 5]);
@@ -57,7 +57,7 @@ describe("CnnInferenceRuntime", () => {
 
     test("avg pooling computes average", () => {
         // 2×2×1 input → AvgPool(2×2) → 1×1×1
-        const graph = new CnnBuilder().addInputLayer(2, 2, 1).addPoolLayer({ type: PoolingType.Avg, size: 2 }).build();
+        const graph = new CnnBuilder().withInputLayer(2, 2, 1).withPoolLayer({ type: PoolingType.Avg, size: 2 }).build();
 
         const runtime = new CnnInferenceRuntime(graph);
         const result = runtime.run([2, 4, 6, 8]);
@@ -66,7 +66,7 @@ describe("CnnInferenceRuntime", () => {
 
     test("flatten preserves values", () => {
         // 2×2×1 input → Flatten → 4 outputs
-        const graph = new CnnBuilder().addInputLayer(2, 2, 1).addFlattenLayer().build();
+        const graph = new CnnBuilder().withInputLayer(2, 2, 1).withFlattenLayer().build();
 
         const runtime = new CnnInferenceRuntime(graph);
         const result = runtime.run([1, 2, 3, 4]);
@@ -75,7 +75,7 @@ describe("CnnInferenceRuntime", () => {
 
     test("dense layer computes weighted sum", () => {
         // 1×2×1 input → Dense(1, linear) → weighted sum
-        const graph = new CnnBuilder().addInputLayer(2, 1, 1).addFlattenLayer().addDenseLayer({ units: 1, activation: ActivationFunctions.linear, biasInit: 0 }).build();
+        const graph = new CnnBuilder().withInputLayer(2, 1, 1).withFlattenLayer().withDenseLayer({ units: 1, activation: ActivationFunctions.linear, biasInit: 0 }).build();
 
         // Manually set dense synapse weights
         const denseSynapses = graph.links.filter((s) => s.kernel === null && (s.ofin as ICnnNeuron).layerType === CnnLayerType.Dense);
@@ -92,11 +92,11 @@ describe("CnnInferenceRuntime", () => {
     test("end-to-end: conv → pool → flatten → dense", () => {
         // 4×4×1 → Conv(1 filter, 2×2, linear) → 3×3×1 → MaxPool(3×3) → 1×1×1 → Flatten → Dense(1, linear)
         const graph = new CnnBuilder()
-            .addInputLayer(4, 4, 1)
-            .addConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.linear, biasInit: 0 })
-            .addPoolLayer({ type: PoolingType.Max, size: 3 })
-            .addFlattenLayer()
-            .addDenseLayer({ units: 1, activation: ActivationFunctions.linear, biasInit: 0 })
+            .withInputLayer(4, 4, 1)
+            .withConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.linear, biasInit: 0 })
+            .withPoolLayer({ type: PoolingType.Max, size: 3 })
+            .withFlattenLayer()
+            .withDenseLayer({ units: 1, activation: ActivationFunctions.linear, biasInit: 0 })
             .build();
 
         // Set all kernel weights to 1 (sum of 2×2 patch)
@@ -128,7 +128,7 @@ describe("CnnInferenceRuntime", () => {
     });
 
     test("relu activation is applied in conv layer", () => {
-        const graph = new CnnBuilder().addInputLayer(2, 2, 1).addConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.relu, biasInit: 0 }).build();
+        const graph = new CnnBuilder().withInputLayer(2, 2, 1).withConvLayer({ filters: 1, kernelSize: 2, activation: ActivationFunctions.relu, biasInit: 0 }).build();
 
         const kernel = graph.kernels[0];
         kernel.weights[0] = 1;
@@ -150,7 +150,7 @@ describe("CnnInferenceRuntime", () => {
     });
 
     test("multiple runs produce consistent results", () => {
-        const graph = new CnnBuilder().addInputLayer(2, 2, 1).addPoolLayer({ type: PoolingType.Max, size: 2 }).build();
+        const graph = new CnnBuilder().withInputLayer(2, 2, 1).withPoolLayer({ type: PoolingType.Max, size: 2 }).build();
 
         const runtime = new CnnInferenceRuntime(graph);
         const r1 = runtime.run([1, 5, 3, 2]);
