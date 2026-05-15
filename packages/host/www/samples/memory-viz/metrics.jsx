@@ -63,13 +63,19 @@ function Metrics({
   policy, order, step,
   tensors, peak, peakInfo, liveCountInfo,
   memoryOverTime, currentMem, frag,
-  policyPeaks, onSetPolicy, theme,
+  policyPeaks, flashBytes, target,
+  onSetPolicy, theme,
 }) {
   const dark = theme === "dark";
   const stepIdx = Math.round(step);
   const baseline = policyPeaks["no-recycling"];
   const savedPct = baseline > 0 ? (baseline - peak) / baseline : 0;
   const isBaseline = policy === "no-recycling";
+
+  const sramBudget  = target?.sramBytes  ?? 520 * 1024;
+  const flashBudget = target?.flashBytes ?? 4 * 1024 * 1024;
+  const sramPctUsed   = peak        > 0 ? peak        / sramBudget  : 0;
+  const flashPctUsed  = flashBytes  > 0 ? flashBytes  / flashBudget : 0;
 
   return (
     <aside
@@ -78,11 +84,11 @@ function Metrics({
       }`}
       style={{ width: 320, flex: "0 0 320px" }}
     >
-      {/* Peak */}
+      {/* SRAM Peak (the metric that decides on-chip viability) */}
       <MetricCard
         theme={theme}
         icon={<IconZap size={11} />}
-        label="Pic mémoire"
+        label="Pic SRAM"
         accent={
           <span className={`ml-auto text-[10px] font-mono ${dark ? "text-neutral-600" : "text-neutral-500"}`}>
             @ step {peakInfo.step}
@@ -94,6 +100,9 @@ function Metrics({
             {(peak / 1024).toFixed(1)}
           </span>
           <span className={`text-xs font-mono ${dark ? "text-neutral-500" : "text-neutral-500"}`}>KB</span>
+          <span className={`ml-auto text-[10px] font-mono ${dark ? "text-neutral-500" : "text-neutral-500"}`}>
+            {fmtPct(sramPctUsed)} of {(sramBudget/1024).toFixed(0)}KB
+          </span>
         </div>
         <div className="mt-1.5">
           {isBaseline ? (
@@ -110,6 +119,37 @@ function Metrics({
               </span>
             </span>
           )}
+        </div>
+      </MetricCard>
+
+      {/* Flash budget (constant across policies; weights live there read-only) */}
+      <MetricCard
+        theme={theme}
+        icon={<IconHash size={11} />}
+        label="Flash (weights)"
+        accent={
+          <span className={`ml-auto text-[10px] font-mono ${dark ? "text-neutral-600" : "text-neutral-500"}`}>
+            read-only
+          </span>
+        }
+      >
+        <div className="flex items-baseline gap-1.5">
+          <span className={`font-mono font-semibold tabular-nums ${dark ? "text-neutral-50" : "text-neutral-900"}`} style={{ fontSize: 22, lineHeight: 1 }}>
+            {(flashBytes / 1024).toFixed(1)}
+          </span>
+          <span className={`text-[11px] font-mono ${dark ? "text-neutral-500" : "text-neutral-500"}`}>KB</span>
+          <span className={`ml-auto text-[10px] font-mono ${dark ? "text-neutral-500" : "text-neutral-500"}`}>
+            {fmtPct(flashPctUsed)} of {(flashBudget/1024/1024).toFixed(0)}MB
+          </span>
+        </div>
+        <div className={`mt-2 h-1.5 rounded overflow-hidden ${dark ? "bg-[#161616]" : "bg-neutral-100"}`}>
+          <div
+            className="h-full rounded transition-all duration-300"
+            style={{
+              width: `${Math.min(100, flashPctUsed * 100)}%`,
+              background: "#7c9eb2",
+            }}
+          />
         </div>
       </MetricCard>
 
