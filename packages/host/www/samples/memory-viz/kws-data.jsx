@@ -1,6 +1,19 @@
 // ============================================================
-// Mock data for Memory Viz
-// 17 nodes (KWS-style CNN), ~29 tensors, 4 policies × 3 orders
+// KWS sample data + adapter to spikypanda-core planning module.
+//
+// Contents:
+//   - Static catalog (NODES, TENSOR_CATALOG, OP_COLORS, FILE_META)
+//     describing the KWS reference model.
+//   - Strategy adapter (runPolicy) that projects the legacy
+//     tensors[] shape onto ITensorLifetime[], hands it to a core
+//     strategy class on window.SpikypandaCore, and folds the
+//     resulting offsets back onto the records the UI consumes.
+//   - Trivial metric shims (computePeak, computeLiveAtStep, ...)
+//     used by the UI to scrub through the schedule.
+//
+// Until we plug a real ONNX loader, the catalog is the only piece
+// of "mock" left; the algorithms behind it are the real planning
+// strategies shipped in @spiky-panda/core.
 // ============================================================
 
 const NODES = [
@@ -85,42 +98,20 @@ function buildTensors() {
 
 const BASE_TENSORS = buildTensors();
 
-// --------- ordering policies (permutations of node ids) ---------
-// kahn-fifo: topological order = natural sequence 0..16
-// free-the-most-first: prioritise nodes whose execution frees the largest live tensors
-// min-cut-heuristic: minimise simultaneously live tensor bytes
+// --------- ordering policies ---------
+// The KWS graph is linear, so every valid topological order produces the
+// same node sequence. Until we have a DAG with real branching AND
+// alternative schedulers in core (free-most-first, min-cut), the three
+// dropdown options all resolve to the natural sequence 0..16. They're
+// kept here so the UI surface stays honest about which knobs exist;
+// they will diverge once a non-linear sample lands.
 const ORDERS = {
   "kahn-fifo":           [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
   "free-the-most-first": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
   "min-cut-heuristic":   [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
 };
-// For a real DAG we'd permute; this graph is linear so all orders are the same
-// sequence. We simulate "different orders" by tweaking tensor lifespans slightly
-// (e.g. free-the-most kills bn intermediates one step earlier).
-function applyOrder(tensors, order) {
-  if (order === "kahn-fifo") return tensors;
-  if (order === "free-the-most-first") {
-    // Aggressively shorten the life of BN/Relu intermediates by 0 steps (they're
-    // already 1-step). For Conv outputs that have only their bn consumer, no
-    // change. Instead, shorten persistent scratch buffers.
-    return tensors.map((t) => {
-      if (t.op === "Scratch" && t.deathStep - t.birthStep > 3) {
-        return { ...t, deathStep: Math.min(t.deathStep, t.birthStep + 2) };
-      }
-      return t;
-    });
-  }
-  if (order === "min-cut-heuristic") {
-    // Lengthen some lifespans (this heuristic may delay some frees) but reduces
-    // simultaneous live count -- we model by shifting deaths earlier on conv outs
-    return tensors.map((t) => {
-      // For relu* outputs, swap producer/consumer step labels to overlap less
-      if (t.name.startsWith("im2col_pad")) {
-        return { ...t, consumers: [5], deathStep: 5 };
-      }
-      return t;
-    });
-  }
+function applyOrder(tensors, _order) {
+  // Identity for now; see ORDERS comment.
   return tensors;
 }
 
