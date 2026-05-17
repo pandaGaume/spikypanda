@@ -6,19 +6,19 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import type { ITensor } from "../../dev/runtime/src/compute/compute.interfaces";
-import { OnnxOpRegistry } from "../../dev/runtime/src/onnx/registry";
-import { makeTensor } from "../../dev/runtime/src/onnx/registry";
-import { registerMathOps } from "../../dev/runtime/src/onnx/ops/math";
-import { registerActivationOps } from "../../dev/runtime/src/onnx/ops/activations";
-import { registerMatrixOps } from "../../dev/runtime/src/onnx/ops/matrix";
-import { registerConvOps } from "../../dev/runtime/src/onnx/ops/conv";
-import { registerNormOps } from "../../dev/runtime/src/onnx/ops/normalization";
-import { registerRecurrentOps } from "../../dev/runtime/src/onnx/ops/recurrent";
-import { registerMiscOps } from "../../dev/runtime/src/onnx/ops/misc";
-import { registerSpikyPandaOps } from "../../dev/runtime/src/onnx/ops/spikypanda";
-import { OnnxParser } from "../../dev/runtime/src/onnx/onnx-parser";
-import { OnnxGraphBuilder } from "../../dev/runtime/src/onnx/graph-builder";
+import type { ITensor } from "spikypanda-core";
+import { OnnxOpRegistry } from "../../dev/onnx/src/onnx/registry";
+import { makeTensor } from "../../dev/onnx/src/onnx/registry";
+import { registerMathOps } from "../../dev/onnx/src/onnx/ops/math";
+import { registerActivationOps } from "../../dev/onnx/src/onnx/ops/activations";
+import { registerMatrixOps } from "../../dev/onnx/src/onnx/ops/matrix";
+import { registerConvOps } from "../../dev/onnx/src/onnx/ops/conv";
+import { registerNormOps } from "../../dev/onnx/src/onnx/ops/normalization";
+import { registerRecurrentOps } from "../../dev/onnx/src/onnx/ops/recurrent";
+import { registerMiscOps } from "../../dev/onnx/src/onnx/ops/misc";
+import { registerSpikyPandaOps } from "../../dev/onnx/src/onnx/ops/spikypanda";
+import { OnnxParser } from "../../dev/onnx/src/onnx/onnx-parser";
+import { OnnxGraphBuilder } from "../../dev/onnx/src/onnx/graph-builder";
 
 // ---------------------------------------------------------------------------
 // Types for test vectors
@@ -360,7 +360,7 @@ describe("SpikyPanda graph pipeline vs onnxruntime reference", () => {
             }
 
             // 4. Run the graph
-            const results = graph.run(externalInputs);
+            const results = graph.infer(externalInputs);
             expect(results.size).toBeGreaterThan(0);
 
             // 5. Compare outputs

@@ -634,8 +634,8 @@
                 log("ERROR: Train a model first before exporting.");
                 return;
             }
-            if (typeof SpikypandaRuntime === "undefined") {
-                log("ERROR: spikypanda-runtime.js not loaded (OnnxWriter unavailable).");
+            if (typeof SpikypandaOnnx === "undefined") {
+                log("ERROR: spikypanda-onnx.js not loaded (OnnxWriter unavailable).");
                 return;
             }
 
@@ -664,7 +664,7 @@
     }
 
     function exportToOnnx(graph, numClasses, mode) {
-        var R = SpikypandaRuntime;
+        var R = SpikypandaOnnx;
         var FLOAT = 1; // OnnxDataType.FLOAT
 
         // Extract graph dimensions

@@ -55,12 +55,12 @@ export class AutoencoderBuilder {
         this._config = config;
     }
 
-    public addConvLayer(config: ConvLayerConfig): AutoencoderBuilder {
+    public withConvLayer(config: ConvLayerConfig): AutoencoderBuilder {
         this._encoderSpecs.push({ type: "conv", config });
         return this;
     }
 
-    public addPoolLayer(config: PoolLayerConfig): AutoencoderBuilder {
+    public withPoolLayer(config: PoolLayerConfig): AutoencoderBuilder {
         this._encoderSpecs.push({ type: "pool", config });
         return this;
     }
@@ -125,18 +125,18 @@ export class AutoencoderBuilder {
 
     private _buildEncoder(inputWidth: number, inputHeight: number, inputChannels: number, latentDim: number): ICnnGraph {
         const builder = new CnnBuilder();
-        builder.addInputLayer(inputWidth, inputHeight, inputChannels);
+        builder.withInputLayer(inputWidth, inputHeight, inputChannels);
 
         for (const spec of this._encoderSpecs) {
             if (spec.type === "conv") {
-                builder.addConvLayer(spec.config as ConvLayerConfig);
+                builder.withConvLayer(spec.config as ConvLayerConfig);
             } else {
-                builder.addPoolLayer(spec.config as PoolLayerConfig);
+                builder.withPoolLayer(spec.config as PoolLayerConfig);
             }
         }
 
-        builder.addFlattenLayer();
-        builder.addDenseLayer({ units: latentDim, activation: ActivationFunctions.linear });
+        builder.withFlattenLayer();
+        builder.withDenseLayer({ units: latentDim, activation: ActivationFunctions.linear });
 
         return builder.build();
     }
@@ -150,25 +150,25 @@ export class AutoencoderBuilder {
         const builder = new CnnBuilder();
 
         // --- Encoder portion ---
-        builder.addInputLayer(inputWidth, inputHeight, inputChannels);
+        builder.withInputLayer(inputWidth, inputHeight, inputChannels);
 
         for (const spec of this._encoderSpecs) {
             if (spec.type === "conv") {
-                builder.addConvLayer(spec.config as ConvLayerConfig);
+                builder.withConvLayer(spec.config as ConvLayerConfig);
             } else {
-                builder.addPoolLayer(spec.config as PoolLayerConfig);
+                builder.withPoolLayer(spec.config as PoolLayerConfig);
             }
         }
 
-        builder.addFlattenLayer();
-        builder.addDenseLayer({ units: latentDim, activation: ActivationFunctions.linear });
+        builder.withFlattenLayer();
+        builder.withDenseLayer({ units: latentDim, activation: ActivationFunctions.linear });
 
         // --- Decoder portion (mirror of encoder) ---
         // Dense back to flat spatial size
-        builder.addDenseLayer({ units: flatSize, activation: ActivationFunctions.relu });
+        builder.withDenseLayer({ units: flatSize, activation: ActivationFunctions.relu });
 
         // Reshape from flat back to spatial
-        builder.addReshapeLayer({ width: lastW, height: lastH, channels: lastC });
+        builder.withReshapeLayer({ width: lastW, height: lastH, channels: lastC });
 
         // Mirror encoder layers in reverse
         for (let i = this._encoderSpecs.length - 1; i >= 0; i--) {
@@ -179,7 +179,7 @@ export class AutoencoderBuilder {
                 // Pool -> Upsample
                 const cfg = spec.config as PoolLayerConfig;
                 const [pH, pW] = toTuple(cfg.size);
-                builder.addUpsampleLayer({ factor: [pH, pW] });
+                builder.withUpsampleLayer({ factor: [pH, pW] });
             } else {
                 // Conv -> Conv with reversed channels, Same padding
                 const cfg = spec.config as ConvLayerConfig;
@@ -188,7 +188,7 @@ export class AutoencoderBuilder {
                 // Last decoder conv (i === 0) outputs inputChannels with sigmoid
                 const isLast = i === 0;
                 const outChannels = prevDims.c;
-                builder.addConvLayer({
+                builder.withConvLayer({
                     filters: outChannels,
                     kernelSize: [kH, kW],
                     stride: 1,
@@ -203,7 +203,7 @@ export class AutoencoderBuilder {
 
     /// <summary>
     /// Initial weight sync between encoder and autoencoder dense layers.
-    /// Kernel weights are shared by reference. Dense weights need explicit sync after training.
+    /// ConvKernel weights are shared by reference. Dense weights need explicit sync after training.
     /// </summary>
     private _shareDenseWeights(_encoder: ICnnGraph, _autoencoder: ICnnGraph): void {
         // Kernels are already shared by reference (assigned above).

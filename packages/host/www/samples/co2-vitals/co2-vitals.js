@@ -641,7 +641,7 @@ function controllerMPC(co2, crewSize, scrubberRate) {
 // ── MPC adapter (identical to sample 1) ───────────────────────────────
 function createMpcAdapter() {
     if (!RT) return null;
-    class AdapterNode extends RT.ComputeNodeBase {
+    class AdapterNode extends RT.Kernel {
         constructor() {
             super();
             this.id = "mpc_adapter_input";
@@ -733,7 +733,7 @@ function rebuildMpc(adapterGraph) {
 
 // ── Load dynamics ─────────────────────────────────────────────────────
 function loadDynamics() {
-    RT = window.SpikypandaRuntime;
+    RT = window.SpikypandaOnnx;
     if (!RT) { co2Log("ERROR: runtime not loaded"); return; }
     co2Log("Loading dynamics model...");
     fetch(MODEL_URL)

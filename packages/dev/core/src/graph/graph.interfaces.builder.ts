@@ -1,47 +1,66 @@
 import { ICartesian } from "../geometry/geometry.interfaces";
-import { Nullable, SingleOrArray } from "../types";
 import { IGraph, INode, IOlink } from "./graph.interfaces";
 
-export type LinkConstructor<T extends IOlink> = new (from: INode, to: INode, ...args: any[]) => T;
+/**
+ * Fluent builders for the graph layer.
+ *
+ * The base builders (LinkBuilder, GraphNodeBuilder, GraphBuilder) each
+ * produce their own concrete class (GraphOLink, GraphNode, Graph). When
+ * a caller needs to construct a subclass (Synapse, MlpNeuron, CnnGraph,
+ * ...), the right way is to extend the relevant base builder and
+ * override `build()` (or the dedicated `_createXxx` factory) with a
+ * typed signature. The base builders never accept a constructor at
+ * runtime.
+ *
+ * All collection-style methods (withNodes, withLinks, withInputs, ...)
+ * use rest parameters so callers can write `.withNodes(a, b, c)` without
+ * brackets; pass an existing array with the spread operator
+ * (`.withNodes(...arr)`).
+ */
 
 export interface ILinkBuilder {
-    withType<T extends IOlink>(c: LinkConstructor<T>): ILinkBuilder;
     withFrom(node: INode): ILinkBuilder;
     withTo(node: INode): ILinkBuilder;
-    build(...args: any[]): IOlink;
+    build(): IOlink;
 }
-
-export type NodeConstructor<T extends INode> = new (onsc: Nullable<IOlink[]>, opsc: Nullable<IOlink[]>, position?: ICartesian, ...args: any[]) => T;
 
 export interface INodeBuilder {
-    withType<T extends INode>(c: NodeConstructor<T>): INodeBuilder;
     withPosition(p: ICartesian): INodeBuilder;
-    withInputs(link: SingleOrArray<IOlink> | SingleOrArray<ILinkBuilder>): INodeBuilder;
-    withOutputs(link: SingleOrArray<IOlink> | SingleOrArray<ILinkBuilder>): INodeBuilder;
-    build(...args: any[]): INode;
+    withInputs(...links: Array<IOlink | ILinkBuilder>): INodeBuilder;
+    withOutputs(...links: Array<IOlink | ILinkBuilder>): INodeBuilder;
+    build(): INode;
 }
 
-export type GraphConstructor<N extends INode, L extends IOlink, T extends IGraph<N, L>> = new (
-    nodes: N[],
-    links: L[],
-    inputs: Nullable<N[]>,
-    outputs: Nullable<N[]>,
-    hiddens: Nullable<N[]>,
-    onsc: Nullable<L[]>,
-    opsc: Nullable<L[]>,
-    position?: ICartesian,
-    ...args: any[]
-) => T;
-
 export interface IGraphBuilder<N extends INode, L extends IOlink> {
-    // the Node part of the graph
+    // the Node part of the graph (graph is also a node through inheritance)
     withNodePosition(p: ICartesian): IGraphBuilder<N, L>;
-    withNodeInputs(link: SingleOrArray<IOlink> | SingleOrArray<ILinkBuilder>): IGraphBuilder<N, L>;
-    withNodeOutputs(link: SingleOrArray<IOlink> | SingleOrArray<ILinkBuilder>): IGraphBuilder<N, L>;
+    withNodeInputs(...links: Array<IOlink | ILinkBuilder>): IGraphBuilder<N, L>;
+    withNodeOutputs(...links: Array<IOlink | ILinkBuilder>): IGraphBuilder<N, L>;
 
     // the graph part of the graph
-    withType<T extends IGraph<N, L>>(c: GraphConstructor<N, L, T>): IGraphBuilder<N, L>;
-    withNodes(node: SingleOrArray<N> | SingleOrArray<INodeBuilder>): IGraphBuilder<N, L>;
-    withLinks(link: SingleOrArray<L> | SingleOrArray<ILinkBuilder>): IGraphBuilder<N, L>;
-    build<T extends IGraph<N, L>>(...args: any[]): Nullable<T>;
+    withNodes(...nodes: Array<N | INodeBuilder>): IGraphBuilder<N, L>;
+
+    /**
+     * Register graph links. Accepts three shapes (mutually exclusive
+     * per call):
+     *   - pre-built link instances `(linkA, linkB, ...)`
+     *   - link builders `(builderA, builderB, ...)`
+     *   - a chain of nodes `(nodeA, nodeB, nodeC, ...)` — the builder
+     *     creates one link per consecutive pair via the internal
+     *     `_createLink(from, to)` factory; throws if the subclass does
+     *     not override that factory.
+     */
+    withLinks(...items: Array<L | ILinkBuilder | N>): IGraphBuilder<N, L>;
+
+    /** Declare the graph input nodes explicitly. When omitted, the Graph
+     * constructor auto-detects them from opsc()-empty nodes. */
+    withInputs(...nodes: Array<N | INodeBuilder>): IGraphBuilder<N, L>;
+    /** Declare the graph output nodes explicitly. When omitted, auto-
+     * detected from onsc()-empty nodes. */
+    withOutputs(...nodes: Array<N | INodeBuilder>): IGraphBuilder<N, L>;
+    /** Declare the graph hidden nodes explicitly. When omitted, auto-
+     * detected as nodes not in inputs or outputs. */
+    withHiddens(...nodes: Array<N | INodeBuilder>): IGraphBuilder<N, L>;
+
+    build(): IGraph<N, L>;
 }

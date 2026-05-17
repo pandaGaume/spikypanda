@@ -68,18 +68,18 @@ cp kws_model.onnx kws_conv_tiny.onnx
 ## 3. Build the SpikyPanda runtime bundle
 
 ```bash
-cd packages/dev/runtime
+cd packages/dev/onnx
 npx webpack --mode development --config webpack.config.js
 ```
 
-This produces `bundle/spikypanda-runtime.js` (~700 KB). Deploy it:
+This produces `bundle/spikypanda-onnx.js` (~700 KB). Deploy it:
 ```bash
-cp bundle/spikypanda-runtime.js ../../host/www/bundle/
+cp bundle/spikypanda-onnx.js ../../host/www/bundle/
 ```
 
 Or from the repo root:
 ```bash
-npm run bundle --workspace=@spiky-panda/runtime
+npm run bundle --workspace=@spiky-panda/onnx
 node scripts/deploy-bundles.mjs  # if this script handles runtime
 ```
 

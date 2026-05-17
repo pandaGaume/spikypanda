@@ -1,11 +1,11 @@
 import { Cartesian3 } from "../../geometry";
 import { ActivationFunctions } from "../ann/mlp/mlp.activation";
 import { IWeightInitializer, He, Uniform } from "../nn.weights";
-import { CnnLayerType, IActivationFunction, ICnnGraph, ICnnLayerDescriptor, ICnnNeuron, ICnnSynapse, IKernel, PaddingType, PoolingType } from "./cnn.interfaces";
+import { CnnLayerType, IActivationFunction, ICnnGraph, ICnnLayerDescriptor, ICnnNeuron, ICnnSynapse, IConvKernel, PaddingType, PoolingType } from "./cnn.interfaces";
 import { CnnGraph } from "./cnn.graph";
 import { CnnNeuron } from "./cnn.neuron";
 import { CnnSynapse } from "./cnn.synapse";
-import { Kernel } from "./cnn.kernel";
+import { ConvKernel } from "./cnn.kernel";
 
 export interface ConvLayerConfig {
     filters: number;
@@ -68,14 +68,20 @@ function computePadding(inputSize: number, kernelSize: number, stride: number, p
 /// <summary>
 /// Declarative builder for CNN graphs.
 /// Constructs the full graph of neurons and synapses, including kernels with shared weights.
+///
+/// All concrete object instantiation goes through the protected factory
+/// methods at the bottom of the class (_createNeuron, _createSynapse,
+/// _createKernel, _createGraph). Subclass builders override those
+/// factories to swap in custom neuron / synapse / kernel / graph types
+/// without rewriting the layer-assembly logic.
 /// </summary>
 export class CnnBuilder {
-    private _inputWidth: number = 0;
-    private _inputHeight: number = 0;
-    private _inputChannels: number = 0;
-    private _layers: LayerSpec[] = [];
+    protected _inputWidth: number = 0;
+    protected _inputHeight: number = 0;
+    protected _inputChannels: number = 0;
+    protected _layers: LayerSpec[] = [];
 
-    public addInputLayer(width: number, height: number, channels: number): CnnBuilder {
+    public withInputLayer(width: number, height: number, channels: number): CnnBuilder {
         this._inputWidth = width;
         this._inputHeight = height;
         this._inputChannels = channels;
@@ -83,32 +89,32 @@ export class CnnBuilder {
         return this;
     }
 
-    public addConvLayer(config: ConvLayerConfig): CnnBuilder {
+    public withConvLayer(config: ConvLayerConfig): CnnBuilder {
         this._layers.push({ type: CnnLayerType.Conv, config });
         return this;
     }
 
-    public addPoolLayer(config: PoolLayerConfig): CnnBuilder {
+    public withPoolLayer(config: PoolLayerConfig): CnnBuilder {
         this._layers.push({ type: CnnLayerType.Pool, config });
         return this;
     }
 
-    public addFlattenLayer(): CnnBuilder {
+    public withFlattenLayer(): CnnBuilder {
         this._layers.push({ type: CnnLayerType.Flatten, config: null });
         return this;
     }
 
-    public addDenseLayer(config: DenseLayerConfig): CnnBuilder {
+    public withDenseLayer(config: DenseLayerConfig): CnnBuilder {
         this._layers.push({ type: CnnLayerType.Dense, config });
         return this;
     }
 
-    public addUpsampleLayer(config: UpsampleLayerConfig): CnnBuilder {
+    public withUpsampleLayer(config: UpsampleLayerConfig): CnnBuilder {
         this._layers.push({ type: CnnLayerType.Upsample, config });
         return this;
     }
 
-    public addReshapeLayer(config: ReshapeLayerConfig): CnnBuilder {
+    public withReshapeLayer(config: ReshapeLayerConfig): CnnBuilder {
         this._layers.push({ type: CnnLayerType.Reshape, config });
         return this;
     }
@@ -120,7 +126,7 @@ export class CnnBuilder {
 
         const allNeurons: ICnnNeuron[] = [];
         const allSynapses: ICnnSynapse[] = [];
-        const allKernels: IKernel[] = [];
+        const allKernels: IConvKernel[] = [];
         const layerDescriptors: ICnnLayerDescriptor[] = [];
 
         let prevDescriptor: ICnnLayerDescriptor | null = null;
@@ -159,7 +165,7 @@ export class CnnBuilder {
         const outputNeurons = outputDesc.neurons;
         const hiddenNeurons = allNeurons.filter((n) => !inputNeurons.includes(n) && !outputNeurons.includes(n));
 
-        return new CnnGraph(allNeurons, allSynapses, inputNeurons, outputNeurons, hiddenNeurons, allKernels, layerDescriptors);
+        return this._createGraph(allNeurons, allSynapses, inputNeurons, outputNeurons, hiddenNeurons, allKernels, layerDescriptors);
     }
 
     private _buildInputLayer(allNeurons: ICnnNeuron[], layerDescriptors: ICnnLayerDescriptor[], layerDepth: number): ICnnLayerDescriptor {
@@ -167,7 +173,7 @@ export class CnnBuilder {
         for (let c = 0; c < this._inputChannels; c++) {
             for (let r = 0; r < this._inputHeight; r++) {
                 for (let col = 0; col < this._inputWidth; col++) {
-                    const neuron = new CnnNeuron(CnnLayerType.Input, r, col, c, 0, undefined, undefined, null, null, new Cartesian3(col, r, layerDepth));
+                    const neuron = this._createNeuron(CnnLayerType.Input, r, col, c, 0, undefined, undefined, new Cartesian3(col, r, layerDepth));
                     neurons.push(neuron);
                     allNeurons.push(neuron);
                 }
@@ -190,7 +196,7 @@ export class CnnBuilder {
         prev: ICnnLayerDescriptor,
         allNeurons: ICnnNeuron[],
         allSynapses: ICnnSynapse[],
-        allKernels: IKernel[],
+        allKernels: IConvKernel[],
         layerDescriptors: ICnnLayerDescriptor[],
         layerDepth: number
     ): ICnnLayerDescriptor {
@@ -208,11 +214,11 @@ export class CnnBuilder {
         const neurons: ICnnNeuron[] = [];
 
         // Create one kernel per output filter — each kernel has shape (kH × kW × inputChannels)
-        const kernels: Kernel[] = [];
+        const kernels: IConvKernel[] = [];
         for (let f = 0; f < config.filters; f++) {
             const fanIn = kH * kW * prev.channels;
             const initializer = config.weightInitializer ?? new He(fanIn);
-            const kernel = new Kernel(kH, kW, prev.channels, initializer, biasInit);
+            const kernel = this._createKernel(kH, kW, prev.channels, initializer, biasInit);
             kernels.push(kernel);
             allKernels.push(kernel);
         }
@@ -222,7 +228,7 @@ export class CnnBuilder {
             const kernel = kernels[f];
             for (let r = 0; r < outH; r++) {
                 for (let col = 0; col < outW; col++) {
-                    const neuron = new CnnNeuron(CnnLayerType.Conv, r, col, f, kernel.bias, activation, undefined, null, null, new Cartesian3(col, r, layerDepth));
+                    const neuron = this._createNeuron(CnnLayerType.Conv, r, col, f, kernel.bias, activation, undefined, new Cartesian3(col, r, layerDepth));
                     neurons.push(neuron);
                     allNeurons.push(neuron);
 
@@ -240,7 +246,7 @@ export class CnnBuilder {
 
                                 const srcNeuron = this._getNeuronAt(prev, srcRow, srcCol, ic);
                                 const kernelIndex = ic * kH * kW + kr * kW + kc;
-                                const synapse = new CnnSynapse(srcNeuron, neuron, kernel, kernelIndex);
+                                const synapse = this._createSynapse(srcNeuron, neuron, kernel, kernelIndex);
                                 allSynapses.push(synapse);
                             }
                         }
@@ -255,6 +261,10 @@ export class CnnBuilder {
             height: outH,
             channels: config.filters,
             neurons,
+            kernelSize: [kH, kW],
+            stride: [sH, sW],
+            padding: [padH, padW],
+            convKernels: kernels.slice(),
         };
         layerDescriptors.push(desc);
         return desc;
@@ -279,7 +289,7 @@ export class CnnBuilder {
         for (let c = 0; c < prev.channels; c++) {
             for (let r = 0; r < outH; r++) {
                 for (let col = 0; col < outW; col++) {
-                    const neuron = new CnnNeuron(CnnLayerType.Pool, r, col, c, 0, undefined, config.type, null, null, new Cartesian3(col, r, layerDepth));
+                    const neuron = this._createNeuron(CnnLayerType.Pool, r, col, c, 0, undefined, config.type, new Cartesian3(col, r, layerDepth));
                     neurons.push(neuron);
                     allNeurons.push(neuron);
 
@@ -290,7 +300,7 @@ export class CnnBuilder {
                             const srcCol = col * sW + pc;
                             if (srcRow < prev.height && srcCol < prev.width) {
                                 const srcNeuron = this._getNeuronAt(prev, srcRow, srcCol, c);
-                                const synapse = new CnnSynapse(srcNeuron, neuron, null, -1, 1);
+                                const synapse = this._createSynapse(srcNeuron, neuron, null, -1, 1);
                                 allSynapses.push(synapse);
                             }
                         }
@@ -305,6 +315,9 @@ export class CnnBuilder {
             height: outH,
             channels: prev.channels,
             neurons,
+            kernelSize: [pH, pW],
+            stride: [sH, sW],
+            poolType: config.type,
         };
         layerDescriptors.push(desc);
         return desc;
@@ -324,12 +337,12 @@ export class CnnBuilder {
         for (let c = 0; c < prev.channels; c++) {
             for (let r = 0; r < prev.height; r++) {
                 for (let col = 0; col < prev.width; col++) {
-                    const neuron = new CnnNeuron(CnnLayerType.Flatten, 0, idx, 0, 0, undefined, undefined, null, null, new Cartesian3(idx, 0, layerDepth));
+                    const neuron = this._createNeuron(CnnLayerType.Flatten, 0, idx, 0, 0, undefined, undefined, new Cartesian3(idx, 0, layerDepth));
                     neurons.push(neuron);
                     allNeurons.push(neuron);
 
                     const srcNeuron = this._getNeuronAt(prev, r, col, c);
-                    const synapse = new CnnSynapse(srcNeuron, neuron, null, -1, 1);
+                    const synapse = this._createSynapse(srcNeuron, neuron, null, -1, 1);
                     allSynapses.push(synapse);
                     idx++;
                 }
@@ -362,13 +375,13 @@ export class CnnBuilder {
         const neurons: ICnnNeuron[] = [];
 
         for (let i = 0; i < config.units; i++) {
-            const neuron = new CnnNeuron(CnnLayerType.Dense, 0, i, 0, biasInit, activation, undefined, null, null, new Cartesian3(i, 0, layerDepth));
+            const neuron = this._createNeuron(CnnLayerType.Dense, 0, i, 0, biasInit, activation, undefined, new Cartesian3(i, 0, layerDepth));
             neurons.push(neuron);
             allNeurons.push(neuron);
 
             // Fully connected to all neurons in previous layer
             for (const srcNeuron of prev.neurons) {
-                const synapse = new CnnSynapse(srcNeuron, neuron, null, -1, initializer.next());
+                const synapse = this._createSynapse(srcNeuron, neuron, null, -1, initializer.next());
                 allSynapses.push(synapse);
             }
         }
@@ -401,7 +414,7 @@ export class CnnBuilder {
         for (let c = 0; c < prev.channels; c++) {
             for (let r = 0; r < outH; r++) {
                 for (let col = 0; col < outW; col++) {
-                    const neuron = new CnnNeuron(CnnLayerType.Upsample, r, col, c, 0, undefined, undefined, null, null, new Cartesian3(col, r, layerDepth));
+                    const neuron = this._createNeuron(CnnLayerType.Upsample, r, col, c, 0, undefined, undefined, new Cartesian3(col, r, layerDepth));
                     neurons.push(neuron);
                     allNeurons.push(neuron);
 
@@ -409,7 +422,7 @@ export class CnnBuilder {
                     const srcRow = Math.floor(r / fH);
                     const srcCol = Math.floor(col / fW);
                     const srcNeuron = this._getNeuronAt(prev, srcRow, srcCol, c);
-                    const synapse = new CnnSynapse(srcNeuron, neuron, null, -1, 1);
+                    const synapse = this._createSynapse(srcNeuron, neuron, null, -1, 1);
                     allSynapses.push(synapse);
                 }
             }
@@ -446,13 +459,13 @@ export class CnnBuilder {
         for (let c = 0; c < config.channels; c++) {
             for (let r = 0; r < config.height; r++) {
                 for (let col = 0; col < config.width; col++) {
-                    const neuron = new CnnNeuron(CnnLayerType.Reshape, r, col, c, 0, undefined, undefined, null, null, new Cartesian3(col, r, layerDepth));
+                    const neuron = this._createNeuron(CnnLayerType.Reshape, r, col, c, 0, undefined, undefined, new Cartesian3(col, r, layerDepth));
                     neurons.push(neuron);
                     allNeurons.push(neuron);
 
                     // 1-to-1 connection from flat layout
                     const srcNeuron = prev.neurons[idx];
-                    const synapse = new CnnSynapse(srcNeuron, neuron, null, -1, 1);
+                    const synapse = this._createSynapse(srcNeuron, neuron, null, -1, 1);
                     allSynapses.push(synapse);
                     idx++;
                 }
@@ -474,5 +487,71 @@ export class CnnBuilder {
         // Neurons are stored in channel-major, then row, then col order
         const index = channel * desc.height * desc.width + row * desc.width + col;
         return desc.neurons[index];
+    }
+
+    // ── Concrete-class factories (override in subclasses) ─────────────────
+
+    /**
+     * Factory for CNN neurons. The base class returns a plain CnnNeuron.
+     * Subclasses override to instantiate domain-specific neuron types
+     * (e.g. StereoCnnNeuron) while keeping the layer-building logic
+     * untouched.
+     */
+    protected _createNeuron(
+        layerType: CnnLayerType,
+        row: number,
+        col: number,
+        channel: number,
+        bias: number,
+        activation: IActivationFunction | undefined,
+        poolType: PoolingType | undefined,
+        position: Cartesian3
+    ): ICnnNeuron {
+        return new CnnNeuron(layerType, row, col, channel, bias, activation, poolType, null, null, position);
+    }
+
+    /**
+     * Factory for CNN synapses. The base class returns a plain
+     * CnnSynapse. Subclasses override for custom synapse types.
+     */
+    protected _createSynapse(
+        source: ICnnNeuron,
+        target: ICnnNeuron,
+        kernel: IConvKernel | null,
+        kernelIndex: number,
+        directWeight: number = 0
+    ): ICnnSynapse {
+        return new CnnSynapse(source, target, kernel, kernelIndex, directWeight);
+    }
+
+    /**
+     * Factory for convolutional kernels. The base class returns a plain
+     * ConvKernel. Subclasses override to instantiate custom kernels.
+     */
+    protected _createKernel(
+        kernelHeight: number,
+        kernelWidth: number,
+        inputChannels: number,
+        initializer: IWeightInitializer,
+        bias: number
+    ): IConvKernel {
+        return new ConvKernel(kernelHeight, kernelWidth, inputChannels, initializer, bias);
+    }
+
+    /**
+     * Factory for the final CNN graph object. The base class returns a
+     * plain CnnGraph. Subclasses override to instantiate custom graph
+     * types (e.g. IStereoCnnGraph with extra metadata).
+     */
+    protected _createGraph(
+        neurons: ICnnNeuron[],
+        synapses: ICnnSynapse[],
+        inputs: ICnnNeuron[],
+        outputs: ICnnNeuron[],
+        hiddens: ICnnNeuron[],
+        kernels: IConvKernel[],
+        layerDescriptors: ICnnLayerDescriptor[]
+    ): ICnnGraph {
+        return new CnnGraph(neurons, synapses, inputs, outputs, hiddens, null, null, undefined, kernels, layerDescriptors);
     }
 }

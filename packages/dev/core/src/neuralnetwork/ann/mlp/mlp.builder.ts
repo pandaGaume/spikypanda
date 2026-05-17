@@ -1,13 +1,16 @@
-import { GraphBuilder, GraphNodeBuilder } from "../../../graph";
+import { ICartesian } from "../../../geometry";
+import { GraphBuilder, GraphNodeBuilder, INode, IOlink } from "../../../graph";
+import { Nullable } from "../../../types";
 import { LayerConnectionBuilder } from "../../nn.builders";
 import { ILayer } from "../../nn.interfaces";
 import { ILayerConnectionBuilder } from "../../nn.interfaces.builder";
 
 import { IActivationFunction, IMlpGraph, IMlpNeuron } from "./mlp.interfaces";
+import { MlpNeuron } from "./mlp.neuron";
 
 export class MlpNeuronBuilder extends GraphNodeBuilder {
-    _bias?: number;
-    _activationFn?: IActivationFunction;
+    protected _bias?: number;
+    protected _activationFn?: IActivationFunction;
 
     public withBias(bias: number): MlpNeuronBuilder {
         this._bias = bias;
@@ -17,17 +20,18 @@ export class MlpNeuronBuilder extends GraphNodeBuilder {
         this._activationFn = fn;
         return this;
     }
-    public build(...args: any[]): IMlpNeuron {
+    public override build(): IMlpNeuron {
         if (this._bias == undefined) {
             throw new Error("Bias must be provided.");
         }
         if (this._activationFn == undefined) {
             throw new Error("Activation function must be provided.");
         }
-        const neuron = super.build(...args) as IMlpNeuron;
-        neuron.bias = this._bias;
-        neuron.activationFn = this._activationFn;
-        return neuron;
+        return super.build() as IMlpNeuron;
+    }
+
+    protected override _createNode(onsc: Nullable<IOlink[]>, opsc: Nullable<IOlink[]>, position?: ICartesian): INode {
+        return new MlpNeuron(this._bias!, this._activationFn!, onsc, opsc, position);
     }
 }
 
@@ -53,7 +57,7 @@ export class MlpLayerBuilder {
         return this;
     }
 
-    public build(...args: any[]): ILayer<IMlpNeuron> {
+    public build(): ILayer<IMlpNeuron> {
         if (!this._neuronBuilder) {
             throw new Error("Neuron builder is not defined. Please set it using withNeuron() method.");
         }
@@ -62,7 +66,7 @@ export class MlpLayerBuilder {
         }
         const neurons: ILayer<IMlpNeuron> = [];
         for (let i = 0; i < this._count; i++) {
-            neurons.push(this._neuronBuilder.build(...args));
+            neurons.push(this._neuronBuilder.build());
         }
         return neurons;
     }
@@ -150,13 +154,13 @@ export class PerceptronBuilder {
         return this;
     }
 
-    public build(...args: any[]): IMlpGraph {
+    public build(): IMlpGraph {
         const builder = new GraphBuilder();
 
         const layers = [];
-        layers.push(this._inputLayerBuilder.build(...args));
-        layers.push(...this._hiddenLayerBuilders.map((b) => b.build(...args)));
-        layers.push(this._outputLayerBuilder.build(...args));
+        layers.push(this._inputLayerBuilder.build());
+        layers.push(...this._hiddenLayerBuilders.map((b) => b.build()));
+        layers.push(this._outputLayerBuilder.build());
 
         for (let i = 0; i != this._connectionBuilders.length; i++) {
             let layerIndex = this._connectionBuilders[i].from;
@@ -170,12 +174,12 @@ export class PerceptronBuilder {
             }
             const b = layers[layerIndex];
             const links = this._connectionBuilders[i].conn.build(a, b);
-            if (links) builder.withLinks(links);
+            if (links) builder.withLinks(...links);
         }
 
-        builder.withNodes(layers.flat());
+        builder.withNodes(...layers.flat());
 
-        const g = builder.build() as IMlpGraph;
+        const g = builder.build() as unknown as IMlpGraph;
         return g;
     }
 

@@ -23,6 +23,8 @@
         "bundle:mcp:dev": "npm run bundle:dev --workspace=@spiky-panda/mcp",
         "bundle:sensors": "npm run bundle --workspace=@spiky-panda/sensors",
         "bundle:sensors:dev": "npm run bundle:dev --workspace=@spiky-panda/sensors",
+        "bundle:stereo": "npm run bundle --workspace=@spiky-panda/applications-stereo",
+        "bundle:stereo:dev": "npm run bundle:dev --workspace=@spiky-panda/applications-stereo",
         "build:mcp:research": "npm run compile:research --workspace=@spiky-panda/mcp",
         "deploy:bundles": "node scripts/deploy-bundles.mjs",
         "deploy:mcp-bundles": "node scripts/deploy-mcp-bundles.mjs",

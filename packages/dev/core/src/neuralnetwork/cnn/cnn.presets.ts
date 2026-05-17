@@ -44,31 +44,31 @@ export function buildCnnFromPreset(preset: CnnPreset, config: CnnPresetConfig): 
     switch (preset) {
         case CnnPreset.Fast:
             return new CnnBuilder()
-                .addInputLayer(width, height, channels)
-                .addConvLayer({ filters: 4, kernelSize: 3, activation: ActivationFunctions.relu })
-                .addPoolLayer({ type: PoolingType.Max, size: 2 })
-                .addFlattenLayer()
-                .addDenseLayer({ units: numClasses, activation: ActivationFunctions.sigmoid })
+                .withInputLayer(width, height, channels)
+                .withConvLayer({ filters: 4, kernelSize: 3, activation: ActivationFunctions.relu })
+                .withPoolLayer({ type: PoolingType.Max, size: 2 })
+                .withFlattenLayer()
+                .withDenseLayer({ units: numClasses, activation: ActivationFunctions.sigmoid })
                 .build();
 
         case CnnPreset.Balanced:
             return new CnnBuilder()
-                .addInputLayer(width, height, channels)
-                .addConvLayer({ filters: 8, kernelSize: 5, activation: ActivationFunctions.relu })
-                .addPoolLayer({ type: PoolingType.Max, size: 2 })
-                .addFlattenLayer()
-                .addDenseLayer({ units: numClasses, activation: ActivationFunctions.sigmoid })
+                .withInputLayer(width, height, channels)
+                .withConvLayer({ filters: 8, kernelSize: 5, activation: ActivationFunctions.relu })
+                .withPoolLayer({ type: PoolingType.Max, size: 2 })
+                .withFlattenLayer()
+                .withDenseLayer({ units: numClasses, activation: ActivationFunctions.sigmoid })
                 .build();
 
         case CnnPreset.Accuracy:
             return new CnnBuilder()
-                .addInputLayer(width, height, channels)
-                .addConvLayer({ filters: 16, kernelSize: 5, activation: ActivationFunctions.relu })
-                .addPoolLayer({ type: PoolingType.Max, size: 2 })
-                .addConvLayer({ filters: 32, kernelSize: 5, activation: ActivationFunctions.relu })
-                .addPoolLayer({ type: PoolingType.Max, size: 2 })
-                .addFlattenLayer()
-                .addDenseLayer({ units: numClasses, activation: ActivationFunctions.sigmoid })
+                .withInputLayer(width, height, channels)
+                .withConvLayer({ filters: 16, kernelSize: 5, activation: ActivationFunctions.relu })
+                .withPoolLayer({ type: PoolingType.Max, size: 2 })
+                .withConvLayer({ filters: 32, kernelSize: 5, activation: ActivationFunctions.relu })
+                .withPoolLayer({ type: PoolingType.Max, size: 2 })
+                .withFlattenLayer()
+                .withDenseLayer({ units: numClasses, activation: ActivationFunctions.sigmoid })
                 .build();
     }
 }

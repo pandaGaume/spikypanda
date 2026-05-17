@@ -1,26 +1,39 @@
-import { LinkBuilder } from "../graph";
+import { INode, IOlink, LinkBuilder } from "../graph";
 import { ILayer, ILayerConnection, INeuron, ISynapse, LayerConnectionType } from "./nn.interfaces";
 import { ILayerConnectionBuilder, ISynapseBuilder } from "./nn.interfaces.builder";
 import { Synapse } from "./nn.synapse";
 import { IWeightInitializer, Uniform } from "./nn.weights";
 
+/**
+ * Base builder for the concrete Synapse class. Subclasses (e.g.
+ * MlpSynapseBuilder) extend this and override _createLink() to
+ * instantiate their own synapse type; build() takes care of validating
+ * endpoints and applying the configured weight.
+ */
 export class SynapseBuilder extends LinkBuilder implements ISynapseBuilder {
-    private _weight: number = 0.0; // Default weight
+    protected _weight: number = 0.0; // Default weight
 
-    public constructor() {
-        super();
-        this.withType(Synapse);
-    }
-
-    public withWeight(weight: number): ISynapseBuilder {
+    public withWeight(weight: number): this {
         this._weight = weight;
         return this;
     }
 
-    public build(...args: any[]): ISynapse {
-        const synapse = super.build(...args) as ISynapse;
-        synapse.weight = this._weight;
-        return synapse;
+    public override build(): ISynapse {
+        return super.build() as ISynapse;
+    }
+
+    protected override _createLink(from: INode, to: INode): IOlink {
+        return this._createSynapse(from, to);
+    }
+
+    /**
+     * Factory for the concrete synapse class. Subclass builders
+     * override this to instantiate their own synapse type. The weight
+     * value passed comes from `withWeight()`; the base implementation
+     * builds a plain `Synapse(from, to, weight)`.
+     */
+    protected _createSynapse(from: INode, to: INode): ISynapse {
+        return new Synapse(from, to, this._weight);
     }
 }
 

@@ -1,6 +1,8 @@
 import { IGraph } from "../../graph";
 import { INeuron, ISynapse } from "../nn.interfaces";
 import { IActivationFunction } from "../ann/mlp/mlp.interfaces";
+import type { ICnnBackpropNeuronContext } from "./training/cnn.training.interfaces";
+import type { IBackpropSynapseContext } from "../nn.training";
 export type { IActivationFunction } from "../ann/mlp/mlp.interfaces";
 
 /// <summary>
@@ -39,7 +41,7 @@ export enum PaddingType {
 /// A convolutional kernel (filter) that holds shared weights.
 /// Multiple synapses across spatial positions reference the same kernel.
 /// </summary>
-export interface IKernel {
+export interface IConvKernel {
     readonly height: number;
     readonly width: number;
     readonly inputChannels: number;
@@ -60,7 +62,7 @@ export interface ICnnInferenceContext {
 /// <summary>
 /// A neuron in a CNN graph. Carries spatial metadata and layer type.
 /// </summary>
-export interface ICnnNeuron extends INeuron {
+export interface ICnnNeuron extends INeuron<ICnnBackpropNeuronContext> {
     layerType: CnnLayerType;
     bias: number;
     activationFn?: IActivationFunction;
@@ -78,13 +80,17 @@ export function isCnnNeuron(obj: unknown): obj is ICnnNeuron {
 /// A synapse in a CNN graph. For conv layers, delegates weight to a shared kernel.
 /// For pool/flatten/dense layers, kernel may be null and weight is stored directly.
 /// </summary>
-export interface ICnnSynapse extends ISynapse {
-    kernel: IKernel | null;
+export interface ICnnSynapse extends ISynapse<IBackpropSynapseContext> {
+    kernel: IConvKernel | null;
     kernelIndex: number;
 }
 
 /// <summary>
 /// Metadata describing one layer's shape in the CNN.
+/// The optional fields are populated by the builder for the layer
+/// types that need them (Conv, Pool). They are used by downstream
+/// consumers such as the ONNX exporter that need to know stride /
+/// kernel-size / pool-type without walking individual synapses.
 /// </summary>
 export interface ICnnLayerDescriptor {
     type: CnnLayerType;
@@ -92,12 +98,23 @@ export interface ICnnLayerDescriptor {
     height: number;
     channels: number;
     neurons: ICnnNeuron[];
+
+    /** Conv / Pool: [kH, kW]. */
+    kernelSize?: [number, number];
+    /** Conv / Pool: [sH, sW]. */
+    stride?: [number, number];
+    /** Conv: symmetric padding [padH, padW] applied before and after. */
+    padding?: [number, number];
+    /** Pool: Max or Avg. */
+    poolType?: PoolingType;
+    /** Conv: one IConvKernel per output filter (shared weights). */
+    convKernels?: IConvKernel[];
 }
 
 /// <summary>
 /// A complete CNN graph composed of neurons, synapses, and kernels.
 /// </summary>
 export interface ICnnGraph extends IGraph<ICnnNeuron, ICnnSynapse> {
-    kernels: IKernel[];
+    kernels: IConvKernel[];
     layerDescriptors: ICnnLayerDescriptor[];
 }

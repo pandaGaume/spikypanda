@@ -6,9 +6,9 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import type { ITensor } from "../../dev/runtime/src/compute/compute.interfaces";
-import { OnnxOpRegistry } from "../../dev/runtime/src/onnx/registry";
-import { registerDspOps, enroll, serializeTemplate, deserializeTemplate, templateToTensor } from "../../dev/runtime/src/onnx/ops/dsp";
+import type { ITensor } from "spikypanda-core";
+import { OnnxOpRegistry } from "../../dev/onnx/src/onnx/registry";
+import { registerDspOps, enroll, serializeTemplate, deserializeTemplate, templateToTensor } from "../../dev/onnx/src/onnx/ops/dsp";
 
 // ---------------------------------------------------------------------------
 // Types

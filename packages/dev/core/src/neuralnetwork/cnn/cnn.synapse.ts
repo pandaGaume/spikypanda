@@ -1,16 +1,17 @@
 import { GraphOLink, INode } from "../../graph";
-import { ICnnSynapse, IKernel } from "./cnn.interfaces";
+import { ICnnSynapse, IConvKernel } from "./cnn.interfaces";
+import type { IBackpropSynapseContext } from "../nn.training";
 
 /// <summary>
 /// A CNN synapse. For conv layers, weight is delegated to a shared kernel.
 /// For pool/flatten/dense layers, kernel is null and weight is stored directly.
 /// </summary>
-export class CnnSynapse extends GraphOLink implements ICnnSynapse {
-    public kernel: IKernel | null;
+export class CnnSynapse extends GraphOLink<IBackpropSynapseContext> implements ICnnSynapse {
+    public kernel: IConvKernel | null;
     public kernelIndex: number;
     private _directWeight: number;
 
-    public constructor(oini: INode, ofin: INode, kernel: IKernel | null = null, kernelIndex: number = -1, directWeight: number = 0) {
+    public constructor(oini: INode, ofin: INode, kernel: IConvKernel | null = null, kernelIndex: number = -1, directWeight: number = 0) {
         super(oini, ofin);
         this.kernel = kernel;
         this.kernelIndex = kernelIndex;

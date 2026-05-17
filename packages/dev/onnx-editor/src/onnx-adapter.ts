@@ -1,4 +1,4 @@
-import type { OnnxParseResult } from "spikypanda-runtime/onnx/onnx-parser.js";
+import type { OnnxParseResult } from "spikypanda-onnx/onnx/onnx-parser.js";
 
 export interface OnnxNodeDef {
     onnxId: string;

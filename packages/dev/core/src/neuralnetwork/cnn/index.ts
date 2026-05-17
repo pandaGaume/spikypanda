@@ -10,3 +10,5 @@ export * from "./cnn.presets";
 export * from "./cnn.autoencoder.builder";
 export * from "./cnn.autoencoder.presets";
 export * from "./training";
+export * from "./cnn.runner.builder";
+export * from "./quantization/index";

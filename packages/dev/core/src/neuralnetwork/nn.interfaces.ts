@@ -6,7 +6,7 @@ import { ILinkSet, INode, INodeSet, IOlink } from "../graph";
 /// Represents a generic neuron (node) in a neural network.
 /// This interface is extended by specific neuron types (e.g., spiking, activation-based).
 /// </summary>
-export interface INeuron extends INode {
+export interface INeuron<B = unknown> extends INode<B> {
     /// <summary>Resets the neuron to its initial state</summary>
     reset(): void;
 }
@@ -41,7 +41,7 @@ export enum LayerConnectionType {
 /// Represents a synapse (link) between two neurons in a network.
 /// This interface is extended by specific synapse types (e.g., with weights, delays, STDP).
 /// </summary>
-export interface ISynapse extends IOlink {
+export interface ISynapse<B = unknown> extends IOlink<B> {
     /// <summary>Synaptic weight</summary>
     weight: number;
 }

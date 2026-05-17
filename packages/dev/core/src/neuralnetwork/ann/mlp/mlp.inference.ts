@@ -1,5 +1,6 @@
+import { readyQueueDispatch } from "../../../graph";
 import { ActivationFunctions } from "./mlp.activation";
-import { IMlpGraph, IMlpNeuron, IMlpSynapse, IInferenceNeuronContext, IActivationFunction } from "./mlp.interfaces";
+import { IMlpGraph, IMlpNeuron, IMlpSynapse, IActivationFunction } from "./mlp.interfaces";
 import { MLPRuntimeUtils } from "./mlp.runtime.utils";
 
 export class MLPInferenceRuntime {
@@ -17,49 +18,44 @@ export class MLPInferenceRuntime {
             throw new Error(`Input count mismatch: expected ${this.graph.inputs.length}, got ${inputValues.length}`);
         }
 
-        const ready: IMlpNeuron[] = [];
-
-        // Initialize context for all neurons
+        // Initialize context for all neurons (sum=0, remainingInputs=fan-in).
         for (const neuron of this.graph.nodes) {
             MLPRuntimeUtils.resetInferenceContext(neuron);
         }
 
-        // Load input values and mark as ready
+        // Inject input values into the input neurons' bag. Their
+        // remainingInputs is forced to 0 so the dispatcher seeds them.
+        const seed: IMlpNeuron[] = [];
         for (let i = 0; i < inputValues.length; i++) {
             const neuron = this.graph.inputs[i];
-            const ctx = neuron.bag as IInferenceNeuronContext;
-
+            const ctx = neuron.bag!;
             ctx.sum = inputValues[i];
             ctx.activation = inputValues[i];
             ctx.remainingInputs = 0;
-            ready.push(neuron);
+            seed.push(neuron);
         }
 
-        // Process forward pass
-        while (ready.length > 0) {
-            const source = ready.shift()!;
-            const sourceCtx = source.bag as IInferenceNeuronContext;
+        // Generic ready-queue dispatch: the helper manages the FIFO and
+        // counter decrement; we provide the MLP-specific accumulate and
+        // fire bodies.
+        readyQueueDispatch<IMlpNeuron, IMlpSynapse>(this.graph, {
+            seed,
+            getCount: (n) => n.bag!.remainingInputs,
+            setCount: (n, c) => {
+                n.bag!.remainingInputs = c;
+            },
+            propagate: (source, target, syn) => {
+                target.bag!.sum += source.bag!.activation * syn.weight;
+            },
+            fire: (n) => {
+                const ctx = n.bag!;
+                ctx.sum += n.bias;
+                const afn = n.activationFn ?? this.mainActivation;
+                ctx.activation = afn.fn(ctx.sum);
+            },
+        });
 
-            const outputs = source.onsc<IMlpSynapse>() ?? [];
-            for (const syn of outputs) {
-                const target = syn.ofin as IMlpNeuron;
-                const targetCtx = target.bag as IInferenceNeuronContext;
-
-                targetCtx.sum += sourceCtx.activation * syn.weight;
-                targetCtx.remainingInputs--;
-
-                if (targetCtx.remainingInputs === 0) {
-                    targetCtx.sum += target.bias;
-                    const afn = target.activationFn ?? this.mainActivation;
-                    targetCtx.activation = afn.fn(targetCtx.sum);
-                    ready.push(target);
-                }
-            }
-        }
-
-        // Return output activations
-        const results = this.graph.outputs.map((n) => (n.bag as IInferenceNeuronContext).activation);
-        return results;
+        return this.graph.outputs.map((n) => n.bag!.activation);
     }
 
     public clearContext() {

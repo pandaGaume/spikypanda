@@ -1,6 +1,6 @@
-import { OnnxParser, OnnxParseResult } from "../../dev/runtime/src/onnx/onnx-parser";
-import { OnnxWriter } from "../../dev/runtime/src/onnx/onnx-writer";
-import { OnnxDataType, OnnxLinkType } from "../../dev/runtime/src/onnx/onnx-types";
+import { OnnxParser, OnnxParseResult } from "../../dev/onnx/src/onnx/onnx-parser";
+import { OnnxWriter } from "../../dev/onnx/src/onnx/onnx-writer";
+import { OnnxDataType, OnnxLinkType } from "../../dev/onnx/src/onnx/onnx-types";
 
 /**
  * Build a synthetic OnnxParseResult that exercises every field path

@@ -1,10 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
-import { OnnxParser } from "../../dev/runtime/src/onnx/onnx-parser";
-import { OnnxOpRegistry } from "../../dev/runtime/src/onnx/registry";
-import { registerMathOps } from "../../dev/runtime/src/onnx/ops/math";
-import { OnnxGraphBuilder } from "../../dev/runtime/src/onnx/graph-builder";
-import type { ITensor } from "../../dev/runtime/src/compute/compute.interfaces";
+import { OnnxParser } from "../../dev/onnx/src/onnx/onnx-parser";
+import { OnnxOpRegistry } from "../../dev/onnx/src/onnx/registry";
+import { registerMathOps } from "../../dev/onnx/src/onnx/ops/math";
+import { OnnxGraphBuilder } from "../../dev/onnx/src/onnx/graph-builder";
+import type { ITensor } from "spikypanda-core";
 
 const MODEL_PATH = path.resolve(
     __dirname,
@@ -90,7 +90,7 @@ describeIf("ONNX Runtime POC", () => {
         externalInputs.set(inputNames[0], dummyInput);
 
         // Execute
-        const results = graph.run(externalInputs);
+        const results = graph.infer(externalInputs);
         expect(results).toBeDefined();
         expect(results.size).toBeGreaterThan(0);
 

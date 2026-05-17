@@ -22,8 +22,12 @@ export interface ICloneable<T = any> {
 /// <summary>
 /// Type guard to check if an object implements ICloneable
 /// </summary>
-export function IsCloneable<T>(obj: any): obj is ICloneable<T> {
-    return typeof obj === "object" && obj !== null && typeof obj.clone === "function";
+export function IsCloneable<T>(obj: unknown): obj is ICloneable<T> {
+    if (typeof obj !== "object" || obj === null) {
+        return false;
+    }
+    const candidate = obj as Partial<ICloneable<T>>;
+    return typeof candidate.clone === "function";
 }
 
 export interface IDisposable {
@@ -39,17 +43,38 @@ export interface IIDentifiable {
     id?: any;
 }
 
-export interface IHasBag {
+export interface IHasBag<T=unknown> {
     /**
      * Runtime-only container for execution context.
      * Can be safely overwritten between runs.
      */
-    bag?: unknown;
+    bag?: T;
 }
 
-export interface IGraphItem extends IDisposable, ICloneable, ITaggable, IIDentifiable, IHasBag {}
+/**
+ * Toggleable runtime state. When enabled is false, the consumer (e.g.
+ * the sim scheduler) treats the bearer as inert: skipped during
+ * execution, ignored for dependency calculations. The bearer remains in
+ * place so topology and identity are preserved.
+ */
+export interface IEnableable {
+    enabled: boolean;
+}
 
-export interface INode extends IGraphItem {
+/**
+ * Type guard for IEnableable.
+ */
+export function isEnableable(obj: unknown): obj is IEnableable {
+    if (typeof obj !== "object" || obj === null) {
+        return false;
+    }
+    const candidate = obj as Partial<IEnableable>;
+    return typeof candidate.enabled === "boolean";
+}
+
+export interface IGraphItem<B=unknown> extends IDisposable, ICloneable, ITaggable, IIDentifiable, IHasBag<B> {}
+
+export interface INode<B=unknown> extends IGraphItem<B> {
     position?: ICartesian;
     onsc<L extends IOlink>(): Array<L>;
     opsc<L extends IOlink>(): Array<L>;
@@ -60,7 +85,7 @@ export interface INode extends IGraphItem {
 // or attach specific properties to a group of nodes or links.
 export interface INodeSet<N extends INode> extends Array<N> {}
 
-export interface IOlink extends IGraphItem {
+export interface IOlink<B=unknown> extends IGraphItem<B> {
     oini: Nullable<INode>;
     ofin: Nullable<INode>;
 }
@@ -79,38 +104,44 @@ export interface IGraph<N extends INode, L extends IOlink> extends INode {
  * Type guard for INode
  */
 export function isNode<N extends INode>(obj: unknown): obj is N {
+    if (typeof obj !== "object" || obj === null) {
+        return false;
+    }
+    const candidate = obj as Partial<INode>;
     return (
-        typeof obj === "object" &&
-        obj !== null &&
-        ("position" in obj ? obj.position === undefined || isCartesian(obj.position) : true) && // Ensure position is undefined or ICartesian3
-        "onsc" in obj &&
-        "opsc" in obj
+        (candidate.position === undefined || isCartesian(candidate.position)) &&
+        typeof candidate.onsc === "function" &&
+        typeof candidate.opsc === "function"
     );
 }
+
 /**
  * Type guard for IOlink
  */
 export function isOlink<L extends IOlink>(obj: unknown): obj is L {
-    return typeof obj === "object" && obj !== null && "oini" in obj && "ofin" in obj && isNode((obj as IOlink).oini) && isNode((obj as IOlink).ofin);
+    if (typeof obj !== "object" || obj === null) {
+        return false;
+    }
+    const candidate = obj as Partial<IOlink>;
+    return isNode(candidate.oini) && isNode(candidate.ofin);
 }
 
 /**
  * Type guard for IGraph
  */
 export function isGraph<N extends INode, L extends IOlink>(obj: unknown): obj is IGraph<N, L> {
+    if (!isNode<N>(obj)) {
+        return false;
+    }
+    const candidate = obj as N & Partial<IGraph<N, L>>;
     return (
-        isNode(obj) &&
-        "nodes" in obj &&
-        "links" in obj &&
-        "inputs" in obj &&
-        "outputs" in obj &&
-        Array.isArray((obj as IGraph<N, L>).nodes) &&
-        Array.isArray((obj as IGraph<N, L>).links) &&
-        Array.isArray((obj as IGraph<N, L>).inputs) &&
-        Array.isArray((obj as IGraph<N, L>).outputs) &&
-        (obj as IGraph<N, L>).nodes.every(isNode) &&
-        (obj as IGraph<N, L>).links.every(isOlink) &&
-        (obj as IGraph<N, L>).inputs.every(isNode) &&
-        (obj as IGraph<N, L>).outputs.every(isNode)
+        Array.isArray(candidate.nodes) &&
+        Array.isArray(candidate.links) &&
+        Array.isArray(candidate.inputs) &&
+        Array.isArray(candidate.outputs) &&
+        candidate.nodes.every(isNode) &&
+        candidate.links.every(isOlink) &&
+        candidate.inputs.every(isNode) &&
+        candidate.outputs.every(isNode)
     );
 }

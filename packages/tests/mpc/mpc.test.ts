@@ -7,22 +7,22 @@
  */
 import {
     ComputeGraph,
-    ComputeNodeBase,
+    Kernel,
     ITensor,
-} from "../../dev/runtime/src/compute/index";
+} from "spikypanda-core";
 import {
     RolloutNode,
     ObjectiveNode,
     ShootingSelectorNode,
     makeDiscreteOneHotSampler,
-} from "../../dev/runtime/src/compute/mpc";
+} from "spikypanda-applications-mpc";
 
 /**
  * Trivial dynamics node: out = state + sum(action_onehot * [0, 1, 2, 3]).
  * Treats the concatenated [state, action] input and produces the delta.
  * Used to make unit tests deterministic without requiring a trained model.
  */
-class AdderDynamicsNode extends ComputeNodeBase {
+class AdderDynamicsNode extends Kernel {
     public readonly nodeType = "adder_dynamics";
     public readonly outputShapes: number[][] = [[1]];
 

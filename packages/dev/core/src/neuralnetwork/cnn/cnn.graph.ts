@@ -1,10 +1,10 @@
 import { ICartesian } from "../../geometry";
 import { Graph } from "../../graph";
 import { Nullable } from "../../types";
-import { ICnnGraph, ICnnLayerDescriptor, ICnnNeuron, ICnnSynapse, IKernel } from "./cnn.interfaces";
+import { ICnnGraph, ICnnLayerDescriptor, ICnnNeuron, ICnnSynapse, IConvKernel } from "./cnn.interfaces";
 
 export class CnnGraph extends Graph<ICnnNeuron, ICnnSynapse> implements ICnnGraph {
-    public kernels: IKernel[];
+    public kernels: IConvKernel[];
     public layerDescriptors: ICnnLayerDescriptor[];
 
     public constructor(
@@ -13,11 +13,11 @@ export class CnnGraph extends Graph<ICnnNeuron, ICnnSynapse> implements ICnnGrap
         inputs: Nullable<ICnnNeuron[]> = null,
         outputs: Nullable<ICnnNeuron[]> = null,
         hiddens: Nullable<ICnnNeuron[]> = null,
-        kernels: IKernel[] = [],
-        layerDescriptors: ICnnLayerDescriptor[] = [],
         onsc: Nullable<ICnnSynapse[]> = null,
         opsc: Nullable<ICnnSynapse[]> = null,
-        position?: ICartesian
+        position?: ICartesian,
+        kernels: IConvKernel[] = [],
+        layerDescriptors: ICnnLayerDescriptor[] = []
     ) {
         super(nodes, links, inputs, outputs, hiddens, onsc, opsc, position);
         this.kernels = kernels;

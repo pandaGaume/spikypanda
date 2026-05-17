@@ -28,7 +28,7 @@ no code generation).
 ## File structure
 
 ```
-packages/dev/runtime/src/onnx/
+packages/dev/onnx/src/onnx/
   pb/
     stream.ts        IInputStream, MemoryStream, StreamView
     reader.ts        PBReader, PBSubReader, WireType

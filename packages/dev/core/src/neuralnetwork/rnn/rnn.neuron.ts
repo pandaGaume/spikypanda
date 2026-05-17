@@ -2,7 +2,7 @@ import { ICartesian } from "../../geometry";
 import { cloneable, IOlink } from "../../graph";
 import { Nullable } from "../../types";
 import { Neuron } from "../nn.neuron";
-import { ILstmNeuron, IGruNeuron, RnnCellType } from "./rnn.interfaces";
+import { ILstmNeuron, IGruNeuron, ILstmInferenceContext, IGruInferenceContext, RnnCellType } from "./rnn.interfaces";
 
 /// <summary>
 /// LSTM neuron with 4 gates and a persistent cell state.
@@ -15,7 +15,7 @@ import { ILstmNeuron, IGruNeuron, RnnCellType } from "./rnn.interfaces";
 ///   o = sigmoid(Wo * [h, x] + bo)
 ///   h = o * tanh(cellState)
 /// </summary>
-export class LstmNeuron extends Neuron implements ILstmNeuron {
+export class LstmNeuron extends Neuron<ILstmInferenceContext> implements ILstmNeuron {
     @cloneable public cellType: RnnCellType = RnnCellType.LSTM;
     @cloneable public hiddenState: number = 0;
     @cloneable public cellState: number = 0;
@@ -51,7 +51,7 @@ export class LstmNeuron extends Neuron implements ILstmNeuron {
 ///   h~ = tanh(Wh * [r*h, x] + bh)   -- candidate
 ///   h = (1 - z) * h + z * h~
 /// </summary>
-export class GruNeuron extends Neuron implements IGruNeuron {
+export class GruNeuron extends Neuron<IGruInferenceContext> implements IGruNeuron {
     @cloneable public cellType: RnnCellType = RnnCellType.GRU;
     @cloneable public hiddenState: number = 0;
     @cloneable public biasReset: number = 0;

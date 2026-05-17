@@ -3,7 +3,7 @@ import { Nullable } from "../types";
 import { GraphItem } from "./graph.graphItem";
 import { cloneable, INode, IOlink } from "./graph.interfaces";
 
-export class GraphNode extends GraphItem implements INode {
+export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
     protected _onsc: IOlink[];
     protected _opsc: IOlink[];
 

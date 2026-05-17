@@ -4,10 +4,10 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import type { ITensor } from "../../dev/runtime/src/compute/compute.interfaces";
-import { OnnxParser } from "../../dev/runtime/src/onnx/onnx-parser";
-import { OnnxGraphBuilder } from "../../dev/runtime/src/onnx/graph-builder";
-import { createDefaultRegistry, createSpikyPandaRegistry } from "../../dev/runtime/src/onnx/ops/index";
+import type { ITensor } from "spikypanda-core";
+import { OnnxParser } from "../../dev/onnx/src/onnx/onnx-parser";
+import { OnnxGraphBuilder } from "../../dev/onnx/src/onnx/graph-builder";
+import { createDefaultRegistry, createSpikyPandaRegistry } from "../../dev/onnx/src/onnx/ops/index";
 
 const KWS_DIR = path.resolve(__dirname, "../../dev/tools/kws");
 
@@ -69,7 +69,7 @@ describe("KWS model pipeline", () => {
                     name: inputNames[0],
                 });
 
-                const results = graph.run(externalInputs);
+                const results = graph.infer(externalInputs);
                 expect(results.size).toBeGreaterThan(0);
 
                 const output = [...results.values()][0];
@@ -100,7 +100,7 @@ describe("KWS model pipeline", () => {
                     name: inputNames[0],
                 });
 
-                const results = graph.run(externalInputs);
+                const results = graph.infer(externalInputs);
                 expect(results.size).toBeGreaterThan(0);
 
                 const output = [...results.values()][0];

@@ -1,7 +1,7 @@
-import { OnnxParser } from "spikypanda-runtime/onnx/onnx-parser.js";
-import { OnnxWriter } from "spikypanda-runtime/onnx/onnx-writer.js";
-import type { OnnxParseResult, OnnxNodeInfo, OnnxTensorInfo, OnnxValueInfo } from "spikypanda-runtime/onnx/onnx-types.js";
-import { OnnxDataType, OnnxLinkType } from "spikypanda-runtime/onnx/onnx-types.js";
+import { OnnxParser } from "spikypanda-onnx/onnx/onnx-parser.js";
+import { OnnxWriter } from "spikypanda-onnx/onnx/onnx-writer.js";
+import type { OnnxParseResult, OnnxNodeInfo, OnnxTensorInfo, OnnxValueInfo } from "spikypanda-onnx/onnx/onnx-types.js";
+import { OnnxDataType, OnnxLinkType } from "spikypanda-onnx/onnx/onnx-types.js";
 import type { NodeEditor, FileHandler } from "spikypanda-nodeeditor";
 import { onnxToGraph, OnnxGraphDef } from "./onnx-adapter.js";
 

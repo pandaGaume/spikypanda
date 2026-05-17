@@ -16,9 +16,10 @@ export enum RnnCellType {
 
 /// <summary>
 /// Base interface for all RNN neurons. Extends INeuron with persistent hidden state
-/// that carries information between timesteps.
+/// that carries information between timesteps. The B generic typed-bag carries the
+/// per-cell inference context (LSTM, GRU, or simple) stored in neuron.bag.
 /// </summary>
-export interface IRnnNeuron extends INeuron {
+export interface IRnnNeuron<B = unknown> extends INeuron<B> {
     cellType: RnnCellType;
     /// <summary>Hidden state h(t-1), persists between timesteps</summary>
     hiddenState: number;
@@ -30,7 +31,7 @@ export interface IRnnNeuron extends INeuron {
 /// LSTM neuron with 4 gates (forget, input, candidate, output) and a cell state.
 /// The cell state acts as long-term memory, regulated by the gates.
 /// </summary>
-export interface ILstmNeuron extends IRnnNeuron {
+export interface ILstmNeuron extends IRnnNeuron<ILstmInferenceContext> {
     /// <summary>Cell state c(t-1), LSTM-specific long-term memory</summary>
     cellState: number;
     biasForget: number;
@@ -43,7 +44,7 @@ export interface ILstmNeuron extends IRnnNeuron {
 /// GRU neuron with 2 gates (reset, update) and a candidate mechanism.
 /// Simpler than LSTM with comparable performance on many tasks.
 /// </summary>
-export interface IGruNeuron extends IRnnNeuron {
+export interface IGruNeuron extends IRnnNeuron<IGruInferenceContext> {
     biasReset: number;
     biasUpdate: number;
     biasCandidate: number;

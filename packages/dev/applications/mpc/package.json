@@ -1,0 +1,22 @@
+{
+    "name": "@spiky-panda/applications-mpc",
+    "version": "0.1.0",
+    "description": "Model Predictive Control nodes (RolloutNode, ObjectiveNode, ShootingSelectorNode) on top of @spiky-panda/core ComputeGraph",
+    "private": true,
+    "main": "dist/index",
+    "module": "dist/index",
+    "esnext": "dist/index",
+    "types": "dist/index",
+    "files": ["dist", "src"],
+    "scripts": {
+        "build": "npm run clean && npm run compile",
+        "clean": "rimraf dist bundle && rimraf tsconfig.build.tsbuildinfo",
+        "compile": "npm run compile:source",
+        "compile:source": "tsc -b tsconfig.build.json",
+        "watch:source": "tsc -b tsconfig.build.json -w"
+    },
+    "sideEffects": false,
+    "devDependencies": {
+        "rimraf": "~6.0.1"
+    }
+}
