@@ -2,7 +2,7 @@ import type { ICartesian } from "../geometry";
 import { cloneable } from "../graph/graph.interfaces";
 import { Graph } from "../graph/graph.graph";
 import { Nullable } from "../types";
-import {
+import type {
     IChannel,
     IGraphNodeState,
     INodeState,

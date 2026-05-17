@@ -25,6 +25,8 @@
         "bundle:sensors:dev": "npm run bundle:dev --workspace=@spiky-panda/sensors",
         "bundle:stereo": "npm run bundle --workspace=@spiky-panda/applications-stereo",
         "bundle:stereo:dev": "npm run bundle:dev --workspace=@spiky-panda/applications-stereo",
+        "bundle:cardriver": "npm run bundle --workspace=@spiky-panda/applications-cardriver",
+        "bundle:cardriver:dev": "npm run bundle:dev --workspace=@spiky-panda/applications-cardriver",
         "build:mcp:research": "npm run compile:research --workspace=@spiky-panda/mcp",
         "deploy:bundles": "node scripts/deploy-bundles.mjs",
         "deploy:mcp-bundles": "node scripts/deploy-mcp-bundles.mjs",
