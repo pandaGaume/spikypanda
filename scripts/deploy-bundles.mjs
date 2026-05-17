@@ -25,7 +25,8 @@ for (const src of sources) {
         continue;
     }
     for (const file of readdirSync(src)) {
-        if (file.endsWith(".js") || file.endsWith(".js.map")) {
+        if (file.endsWith(".js") || file.endsWith(".js.map") ||
+            file.endsWith(".css") || file.endsWith(".css.map")) {
             copyFileSync(join(src, file), join(dest, file));
             console.log(`  ${file} -> ${dest}`);
         }

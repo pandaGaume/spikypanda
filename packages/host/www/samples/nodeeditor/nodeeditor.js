@@ -17,6 +17,19 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
     const editor = new NODEEDITOR.NodeEditor(container);
     window.__spkEditor = editor;
 
+    // Register the built-in primitive editors (vector3, vector4,
+    // quaternion) that ship with the nodeeditor package. Apps wanting
+    // only a subset call editor.editors.register(...) granularly.
+    NODEEDITOR.installBuiltinEditors(editor);
+
+    // Sample-side domain editor for "transform-3d" (SVG isometric).
+    // Loaded from samples/nodeeditor/editors/transform-3d.js into
+    // window.__spkEditorFactories. Apps wanting a Babylon/Three.js
+    // viewer ship their own under the same kind name (last wins).
+    if (window.__spkEditorFactories && window.__spkEditorFactories.transform3D) {
+        editor.editors.register("transform-3d", window.__spkEditorFactories.transform3D);
+    }
+
     // Expose the full op registry so the MCP simulation adapter can build
     // tool schemas dynamically from OPS_V1. Adding a new op in
     // spikypanda-ops.js automatically extends every MCP tool that iterates
@@ -294,30 +307,108 @@ import { DatasetWidget }   from "../../js/dataset-widget.js";
         toolbar.appendChild(menu);
     });
 
+    // ── Geometry menu (core/nodes/geometry/) ──
+    // Sourced directly from spikypanda-core classes, not from the legacy
+    // OPS_V1 registry. As we migrate more nodes to core/nodes/<domain>/,
+    // they get added here following the same pattern.
+    (function addGeometryMenu() {
+        var menu = document.createElement("div");
+        menu.className = "ne-menu";
+        var btn = document.createElement("button");
+        btn.className = "ne-menu-btn";
+        btn.type = "button";
+        btn.innerHTML = 'Geometry <span class="ne-menu-caret">&#9662;</span>';
+        btn.addEventListener("click", function (e) {
+            e.stopPropagation();
+            var wasOpen = (openMenu === menu);
+            closeAllMenus();
+            if (!wasOpen) { menu.classList.add("ne-menu-open"); openMenu = menu; }
+        });
+        menu.appendChild(btn);
+
+        var dropdown = document.createElement("div");
+        dropdown.className = "ne-menu-dropdown";
+
+        function addGeometryItem(label, title, onClick) {
+            var item = document.createElement("button");
+            item.type = "button";
+            item.className = "ne-menu-item";
+            item.title = title;
+            item.innerHTML = '<span class="ne-menu-swatch" style="background:var(--ne-color-category-geometry, #888)"></span>' +
+                             '<span class="ne-menu-label">' + label + '</span>';
+            item.addEventListener("click", function (e) {
+                e.stopPropagation();
+                onClick();
+                closeAllMenus();
+            });
+            dropdown.appendChild(item);
+        }
+        addGeometryItem("Transform", "core/nodes/geometry/Transform",
+            function () { spawnFromClass(SpikypandaCore.Transform, { label: "Transform", category: "geometry" }); });
+        addGeometryItem("Attitude",  "core/nodes/geometry/Attitude",
+            function () { spawnFromClass(SpikypandaCore.Attitude,  { label: "Attitude",  category: "geometry" }); });
+        menu.appendChild(dropdown);
+        toolbar.appendChild(menu);
+    }());
+
+    // Generic spawn helper for any node whose model implements
+    // IDeclaresPorts (declares inputPorts / outputPorts on the
+    // instance). The helper maps them onto the editor's
+    // { name, type } NodeDef shape, so the sample never repeats the
+    // port declarations that already live on the class.
+    function spawnFromClass(Ctor, meta) {
+        var worldPos = editor.camera.screenToWorld(
+            container.clientWidth / 2,
+            container.clientHeight / 2,
+        );
+        var data = new Ctor();
+        var toPort = function (p) { return { name: String(p.slot), type: p.type || "any" }; };
+        editor.addNode(
+            {
+                label:    meta.label,
+                category: meta.category,
+                inputs:   Array.isArray(data.inputPorts)  ? data.inputPorts.map(toPort)  : [],
+                outputs: Array.isArray(data.outputPorts) ? data.outputPorts.map(toPort) : [],
+                data:     data,
+            },
+            worldPos.x + (nextX % 200),
+            worldPos.y + (nextY % 200),
+        );
+        nextX += 40;
+        nextY += 30;
+    }
+
     // ── Overlay action buttons (on canvas) ──
     var overlay = document.createElement("div");
     overlay.className = "ne-overlay-actions";
     editor.canvas.appendChild(overlay);
 
-    var profileSelect = document.createElement("select");
-    profileSelect.className = "ne-overlay-select";
-    profileSelect.title = "Color profile";
-    var profiles = [
-        { value: "dark", label: "Dark" },
-        { value: "light", label: "Light" },
-        { value: "transparent_dark", label: "Dark (no bg)" },
-        { value: "transparent_light", label: "Light (no bg)" },
-    ];
-    for (var i = 0; i < profiles.length; i++) {
-        var opt = document.createElement("option");
-        opt.value = profiles[i].value;
-        opt.textContent = profiles[i].label;
-        profileSelect.appendChild(opt);
+    // ── Skin switcher ──
+    // Single source of truth for the editor's visual identity. Built-in
+    // skins are pre-registered by the NodeEditor constructor; apps add
+    // more via editor.skins.register(name, vars). The dropdown options
+    // are populated dynamically so any app-registered skin shows up
+    // without code changes here.
+    var skinSelect = document.createElement("select");
+    skinSelect.className = "ne-overlay-select";
+    skinSelect.title = "Skin";
+    var labelize = function (name) {
+        return name.split(/[_-]/).map(function (p) {
+            return p.charAt(0).toUpperCase() + p.slice(1);
+        }).join(" ");
+    };
+    var skins = editor.skins.names();
+    for (var s = 0; s < skins.length; s++) {
+        var skinOpt = document.createElement("option");
+        skinOpt.value = skins[s];
+        skinOpt.textContent = labelize(skins[s]);
+        skinSelect.appendChild(skinOpt);
     }
-    profileSelect.addEventListener("change", function () {
-        editor.setProfile(profileSelect.value);
+    skinSelect.value = editor.getSkinName();
+    skinSelect.addEventListener("change", function () {
+        editor.setSkin(skinSelect.value);
     });
-    overlay.appendChild(profileSelect);
+    overlay.appendChild(skinSelect);
 
     var copyBtn = document.createElement("button");
     copyBtn.className = "ne-overlay-btn";

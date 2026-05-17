@@ -24,7 +24,20 @@ export interface NodeDef {
     label: string;
     inputs: Omit<PortDef, "direction">[];
     outputs: Omit<PortDef, "direction">[];
+    /**
+     * Per-instance literal color override for the node header background.
+     * Lowest precedence: a skin's --ne-color-category-<category> token
+     * wins when category is set and the token resolves to a value.
+     */
     color?: string;
+    /**
+     * Free-form category string used by the active skin to pick a
+     * header palette via the --ne-color-category-<category> token
+     * (lowercased, non-alphanumeric chars replaced with "-"). Lets a
+     * skin enforce a coherent palette across all nodes of the same
+     * kind without per-op overrides.
+     */
+    category?: string;
     data?: unknown;
 }
 

@@ -11,6 +11,10 @@ const config: Config = {
     },
     testRegex: ".*\\.test\\.ts$",
     moduleNameMapper: {
+        // CSS imports are webpack-only; jest stubs them with an empty
+        // module so workspace entry points that `import "./foo.css"`
+        // (e.g. spikypanda-nodeeditor) load without error.
+        "\\.css$":                      "<rootDir>/jest-css-mock.js",
         "^spikypanda-core$":            "<rootDir>/packages/dev/core/src/index.ts",
         "^spikypanda-core/(.*)$":       "<rootDir>/packages/dev/core/src/$1",
         "^spikypanda-onnx$":         "<rootDir>/packages/dev/onnx/src/index.ts",

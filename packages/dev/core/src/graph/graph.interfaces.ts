@@ -3,7 +3,7 @@ import { IDisposable, Nullable } from "../types";
 
 export type { IDisposable };
 
-export const CloneMetadataKey = Symbol("cloneable");
+export const CloneMetadataKey = Symbol.for("spikypanda.cloneable");
 
 /// <summary>
 /// Marks a property as cloneable for automatic deep copying
@@ -91,7 +91,7 @@ export type RunStatus =
  */
 export type RunnableAffordance = "play" | "record";
 
-export const RunnableAffordanceMetadataKey = Symbol("runnableAffordance");
+export const RunnableAffordanceMetadataKey = Symbol.for("spikypanda.runnableAffordance");
 
 /**
  * Class decorator that tags an IRunnable implementation with a UI

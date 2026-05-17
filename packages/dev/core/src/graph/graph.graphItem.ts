@@ -74,4 +74,35 @@ export class GraphItem<B = unknown> implements IGraphItem<B> {
         }
         obs.notifyObservers(new PropertyChangedEventArgs<unknown, unknown>(this, oldValue, newValue, propertyName));
     }
+
+    /**
+     * Reactive field setter. Short-circuits when newValue strictly equals
+     * currentValue (no write, no notification), otherwise invokes the
+     * writer callback to commit the value to the private backing field
+     * and fires notifyPropertyChanged.
+     *
+     * The writer callback exists because TypeScript has no portable
+     * way to write through a private field name passed as a string.
+     *
+     * Usage:
+     *     public set roll(v: number) {
+     *         this.setField("roll", this._roll, v, (x) => { this._roll = x; });
+     *     }
+     *
+     * Returns true if the value changed (write + notify happened),
+     * false if the call was a no-op.
+     */
+    protected setField<T>(
+        propertyName: string,
+        currentValue: T,
+        newValue: T,
+        writer: (value: T) => void,
+    ): boolean {
+        if (currentValue === newValue) {
+            return false;
+        }
+        writer(newValue);
+        this.notifyPropertyChanged(propertyName, currentValue, newValue);
+        return true;
+    }
 }

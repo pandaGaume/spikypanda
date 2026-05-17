@@ -1145,6 +1145,43 @@ export function buildNodeDef(op, nodeId) {
             if (typeof data._onStartChange === "function") data._onStartChange(_started);
         };
     }
+
+    // ── Bridge to the package's new IRunnable / IEnabled contract ──
+    // The editor's NodeUI no longer reads the legacy isRunning/isEnabled
+    // method-based shapes; it expects `status: string + start() + stop()`
+    // (IRunnable) or a plain `enabled: boolean` field (IEnabled). The
+    // adapter below adds the new shape on top of the existing private
+    // state and legacy setters, so the on-node toolbar buttons render.
+    // Existing call sites (nodeeditor.js Play wiring) keep using the
+    // legacy setters/getters unchanged.
+    if (isRunnable) {
+        Object.defineProperty(data, "status", {
+            get: function () { return _running ? "started" : "stopped"; },
+            enumerable: true,
+            configurable: true,
+        });
+        data.start = function () { data.setRunning(true); };
+        data.stop  = function () { data.setRunning(false); };
+        data.affordance = "play";
+    }
+    if (isStartable) {
+        Object.defineProperty(data, "status", {
+            get: function () { return _started ? "started" : "stopped"; },
+            enumerable: true,
+            configurable: true,
+        });
+        data.start = function () { data.setStarted(true); };
+        data.stop  = function () { data.setStarted(false); };
+        data.affordance = "record";
+    }
+    if (isToggable) {
+        Object.defineProperty(data, "enabled", {
+            get: function () { return _enabled; },
+            set: function (v) { data.setEnabled(!!v); },
+            enumerable: true,
+            configurable: true,
+        });
+    }
     // ── Auto-injected exec pins ──────────────────────────────────────────
     // Sources (IStartable) get "start" / "stop" prepended to their inputs.
     // Wire StartRuntime.started → source.start to activate on BeginPlay, or
@@ -1171,6 +1208,7 @@ export function buildNodeDef(op, nodeId) {
     return {
         label: op.label,
         color: op.color,
+        category: op.category,
         inputs: [
             ...execInputsPrefix,
             ...op.inputs.map((p) => ({ name: p.name, type: p.type })),

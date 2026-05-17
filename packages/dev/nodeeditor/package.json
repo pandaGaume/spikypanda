@@ -16,7 +16,7 @@
         "bundle": "webpack --mode production --config webpack.config.js",
         "bundle:dev": "webpack --mode development --config webpack.config.js"
     },
-    "sideEffects": false,
+    "sideEffects": ["*.css"],
     "devDependencies": {
         "rimraf": "~6.0.1",
         "ts-loader": "^9.5.0"

@@ -13,6 +13,23 @@ const GRID = 20;
 
 let nodeIdCounter = 0;
 
+/**
+ * Build the CSS background for a node header. Resolution chain:
+ *   skin token (--ne-color-category-<sanitized-category>)
+ *   → def.color literal
+ *   → --ne-color-node-header (skin default).
+ * The chain is expressed with var() fallbacks so a runtime skin switch
+ * propagates without rebuilding the node DOM.
+ */
+function computeNodeHeaderBackground(def: NodeDef): string | null {
+    const fallback = def.color ? def.color : "var(--ne-color-node-header)";
+    if (def.category) {
+        const sanitized = def.category.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        return `var(--ne-color-category-${sanitized}, ${fallback})`;
+    }
+    return def.color ?? null;
+}
+
 export class NodeUI {
     readonly id: string;
     readonly el: HTMLDivElement;
@@ -53,8 +70,15 @@ export class NodeUI {
 
         this.headerEl = document.createElement("div");
         this.headerEl.className = "ne-node-header";
-        if (def.color) {
-            this.headerEl.style.background = def.color;
+        // Resolution order for the header background:
+        //   1. skin token --ne-color-category-<def.category> if set
+        //   2. def.color literal if provided
+        //   3. --ne-color-node-header default (active skin's fallback)
+        // The chain is encoded as a CSS var() fallback so it stays live
+        // when the user switches skin at runtime.
+        const headerBg = computeNodeHeaderBackground(def);
+        if (headerBg) {
+            this.headerEl.style.background = headerBg;
         }
         // Title + runtime-button slot. Title gets its own span so external
         // code can locate and update it (e.g. an auto-rename routine that
