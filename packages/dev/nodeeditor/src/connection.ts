@@ -1,5 +1,5 @@
-import { UIItemBase } from "./inspectable.js";
-import { Port } from "./port.js";
+import { UIItemBase } from "./inspectable";
+import { Port } from "./port";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 

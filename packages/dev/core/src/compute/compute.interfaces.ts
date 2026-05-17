@@ -140,7 +140,7 @@ export interface IKernel extends IRuntimeNode<IKernelBag> {
  * A directed acyclic graph of compute nodes connected by data links.
  *
  * Pure typing narrow of IRuntimeGraph<IKernel, IDataLink>: no own
- * members. run() / runAsync() come from IRunnable via IRuntimeGraph; the
+ * members. run() / runAsync() come from ITickable via IRuntimeGraph; the
  * named-tensor convenience (infer / inferAsync, returning Map<string,
  * ITensor>) lives on the concrete ComputeGraph class only.
  */

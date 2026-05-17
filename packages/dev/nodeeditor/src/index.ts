@@ -1,16 +1,24 @@
-export { NodeEditor } from "./editor.js";
-export { defaultLayout } from "./auto-layout.js";
-export type { LayoutStrategy } from "./auto-layout.js";
-export { FileHandlerRegistry } from "./file-handler.js";
-export type { FileHandler } from "./file-handler.js";
-export { NodeUI } from "./node-ui.js";
-export { Port } from "./port.js";
-export { Connection, ConnectionPreview } from "./connection.js";
-export { Camera } from "./camera.js";
-export { PropertyPanel } from "./property-panel.js";
-export { UIItemBase, isInspectable, isSerializable, isRunnableNode, isToggableNode } from "./inspectable.js";
-export type { Inspectable, Serializable, PropertyEntry, IRunnableNode, IToggableNode } from "./inspectable.js";
-export { PORT_COLORS, EXPORT_PROFILES } from "./types.js";
+// reflect-metadata polyfills Reflect.{define,get}Metadata, used by
+// core's class-level decorators (e.g. @runnableAffordance). Core has
+// the same import at its barrel, but its sideEffects:false manifest
+// lets webpack tree-shake the side-effect import when only specific
+// named exports are pulled in. Importing here guarantees the polyfill
+// lands in the nodeeditor bundle.
+import "reflect-metadata";
+
+export { NodeEditor } from "./editor";
+export { defaultLayout } from "./auto-layout";
+export type { LayoutStrategy } from "./auto-layout";
+export { FileHandlerRegistry } from "./file-handler";
+export type { FileHandler } from "./file-handler";
+export { NodeUI } from "./node-ui";
+export { Port } from "./port";
+export { Connection, ConnectionPreview } from "./connection";
+export { Camera } from "./camera";
+export { PropertyPanel } from "./property-panel";
+export { UIItemBase, isInspectable, isSerializable } from "./inspectable";
+export type { Inspectable, Serializable, PropertyEntry } from "./inspectable";
+export { PORT_COLORS, EXPORT_PROFILES } from "./types";
 export type {
     PortDirection,
     PortType,
@@ -21,4 +29,4 @@ export type {
     SerializedNode,
     SerializedConnection,
     ExportProfile,
-} from "./types.js";
+} from "./types";

@@ -1,4 +1,4 @@
-import { PortDirection, PortType, PORT_COLORS, Vec2 } from "./types.js";
+import { PortDirection, PortType, PORT_COLORS, Vec2 } from "./types";
 
 export class Port {
     readonly el: HTMLDivElement;

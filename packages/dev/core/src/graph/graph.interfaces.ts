@@ -55,19 +55,117 @@ export interface IHasBag<T=unknown> {
  * execution, ignored for dependency calculations. The bearer remains in
  * place so topology and identity are preserved.
  */
-export interface IEnableable {
+export interface IEnabled {
     enabled: boolean;
 }
 
 /**
- * Type guard for IEnableable.
+ * Type guard for IEnabled.
  */
-export function isEnableable(obj: unknown): obj is IEnableable {
+export function isEnabled(obj: unknown): obj is IEnabled {
     if (typeof obj !== "object" || obj === null) {
         return false;
     }
-    const candidate = obj as Partial<IEnableable>;
+    const candidate = obj as Partial<IEnabled>;
     return typeof candidate.enabled === "boolean";
+}
+
+/**
+ * Lifecycle states for an IRunnable model object. Transitions move
+ * idle/stopped → starting → started → stopping → stopped, with failed
+ * reachable from any starting/stopping transition on error.
+ */
+export type RunStatus =
+    | "idle"
+    | "starting"
+    | "started"
+    | "stopping"
+    | "stopped"
+    | "failed";
+
+/**
+ * UI hint for IRunnable presentation. Editors map "play" to a green
+ * start triangle and "record" to a pulsing red circle, with matching
+ * tooltip vocabulary ("Start"/"Stop" vs "Record"/"Stop recording").
+ * Absent or unrecognised values default to "play".
+ */
+export type RunnableAffordance = "play" | "record";
+
+export const RunnableAffordanceMetadataKey = Symbol("runnableAffordance");
+
+/**
+ * Class decorator that tags an IRunnable implementation with a UI
+ * affordance hint. The value is constant per class (every instance of
+ * a recorder is a recorder), so the declaration lives at class scope:
+ *
+ *     @runnableAffordance("record")
+ *     class DatasetCapture implements IRunnable { ... }
+ *
+ * Editors read the tag via getRunnableAffordance(); models without a
+ * decorator (and without an inline affordance field) default to "play".
+ */
+export function runnableAffordance(value: RunnableAffordance): ClassDecorator {
+    return (target) => {
+        Reflect.defineMetadata(RunnableAffordanceMetadataKey, value, target);
+    };
+}
+
+/**
+ * Resolve the UI affordance of a runnable target. Instance fields take
+ * precedence over class-level decorator metadata so ad-hoc data objects
+ * can still override without subclassing. Unknown values fall back to
+ * "play".
+ */
+export function getRunnableAffordance(target: object): RunnableAffordance {
+    const inline = (target as Partial<IRunnable>).affordance;
+    if (inline === "play" || inline === "record") {
+        return inline;
+    }
+    const ctor = (target as { constructor?: Function }).constructor;
+    if (ctor) {
+        const meta = Reflect.getMetadata(RunnableAffordanceMetadataKey, ctor);
+        if (meta === "play" || meta === "record") {
+            return meta;
+        }
+    }
+    return "play";
+}
+
+/**
+ * Lifecycle contract for a model object whose activity can be started
+ * and stopped. start/stop may be sync or async; observers watch status
+ * transitions through the bearer's onPropertyChanged (property name
+ * "status").
+ *
+ * Distinct from the per-tick driver previously called IRunnable, which
+ * was renamed to ITickable.
+ */
+export interface IRunnable {
+    readonly status: RunStatus;
+    /**
+     * Optional inline override for the editor presentation hint.
+     * Preferred declaration site is the @runnableAffordance class
+     * decorator; this field is kept on the interface only for ad-hoc
+     * data objects that have no class to decorate.
+     */
+    readonly affordance?: RunnableAffordance;
+    start(): void | Promise<void>;
+    stop(): void | Promise<void>;
+}
+
+/**
+ * Type guard for IRunnable.
+ */
+export function isRunnable(obj: unknown): obj is IRunnable {
+    if (typeof obj !== "object" || obj === null) {
+        return false;
+    }
+    const candidate = obj as Partial<IRunnable>;
+    return (
+        typeof candidate.status === "string" &&
+        typeof candidate.start === "function" &&
+        typeof candidate.stop === "function"
+    );
 }
 
 export interface IGraphItem<B=unknown> extends IDisposable, ICloneable, ITaggable, IIDentifiable, IHasBag<B> {}

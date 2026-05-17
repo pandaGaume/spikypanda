@@ -1,11 +1,11 @@
-import { defaultLayout, LayoutStrategy } from "./auto-layout.js";
-import { Camera } from "./camera.js";
-import { Connection, ConnectionPreview } from "./connection.js";
-import { FileHandler, FileHandlerRegistry } from "./file-handler.js";
-import { NodeUI } from "./node-ui.js";
-import { Port } from "./port.js";
-import { PropertyPanel } from "./property-panel.js";
-import { ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedGraph } from "./types.js";
+import { defaultLayout, LayoutStrategy } from "./auto-layout";
+import { Camera } from "./camera";
+import { Connection, ConnectionPreview } from "./connection";
+import { FileHandler, FileHandlerRegistry } from "./file-handler";
+import { NodeUI } from "./node-ui";
+import { Port } from "./port";
+import { PropertyPanel } from "./property-panel";
+import { ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedGraph } from "./types";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -86,7 +86,7 @@ export class NodeEditor {
         this.setProfile("dark");
     }
 
-    private onPropertyApply(item: import("./inspectable.js").UIItemBase<unknown>, changes: Map<string, unknown>): void {
+    private onPropertyApply(item: import("./inspectable").UIItemBase<unknown>, changes: Map<string, unknown>): void {
         const node = this.nodes.find((n) => n.item === item);
         if (node) {
             if (changes.has("label")) {
@@ -192,7 +192,7 @@ export class NodeEditor {
 
         const idx = this.nodes.indexOf(node);
         if (idx >= 0) this.nodes.splice(idx, 1);
-        node.el.remove();
+        node.dispose();
 
         this.selectedNodes.delete(node);
     }

@@ -227,7 +227,7 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
         inner?.reset();
     }
 
-    // ── IRunnable: autonomous drive on the default (or caller-provided) session ──
+    // ── ITickable: autonomous drive on the default (or caller-provided) session ──
 
     public run(t: number, session?: ISession): void {
         const target = session ?? this._ensureDefaultSession();

@@ -1,13 +1,13 @@
-import { UIItemBase, IRunnableNode, IToggableNode, IStartableNode, isRunnableNode, isToggableNode, isStartableNode } from "./inspectable.js";
-import { Port } from "./port.js";
-import { NodeDef, PortType } from "./types.js";
+import { IDisposable, IEnabled, IRunnable, Observable, PropertyChangedEventArgs, getRunnableAffordance, isEnabled, isRunnable } from "spikypanda-core";
+import { UIItemBase } from "./inspectable";
+import { Port } from "./port";
+import { NodeDef, PortType } from "./types";
 
 const RUN_PLAY_SVG  = '<svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><path d="M4 3l9 5-9 5V3z"/></svg>';
 const RUN_STOP_SVG  = '<svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg>';
+const REC_SVG       = '<svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="5"/></svg>';
 const ENABLED_SVG   = '<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8 7 12 13 4"/></svg>';
 const DISABLED_SVG  = '<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>';
-// Filled circle: record indicator for IStartableNode (capture/recorder nodes).
-const REC_SVG       = '<svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="5"/></svg>';
 
 const GRID = 20;
 
@@ -30,11 +30,16 @@ export class NodeUI {
     private readonly outputsContainer: HTMLDivElement;
     private readonly headerEl: HTMLDivElement;
     private readonly titleEl: HTMLSpanElement;
-    private runBtn: HTMLButtonElement | null = null;    // play (start) button
-    private stopBtn: HTMLButtonElement | null = null;   // stop button
-    private toggleBtn: HTMLButtonElement | null = null;
-    private recBtn: HTMLButtonElement | null = null;    // record toggle (IStartableNode)
+    private readonly toolbarEl: HTMLDivElement;
+    private readonly footerEl: HTMLDivElement;
+    private readonly statusEl: HTMLSpanElement;
+    private readonly statusDotEl: HTMLSpanElement;
+    private readonly statusTextEl: HTMLSpanElement;
+    private runBtn: HTMLButtonElement | null = null;    // start button (lifecycle)
+    private stopBtn: HTMLButtonElement | null = null;   // stop button (lifecycle)
+    private toggleBtn: HTMLButtonElement | null = null; // enable / disable
     private _inPlayMode = false;
+    private _modelSubscription: IDisposable | null = null;
 
     constructor(def: NodeDef, parent: HTMLElement) {
         this.id = `node_${nodeIdCounter++}`;
@@ -53,12 +58,17 @@ export class NodeUI {
         }
         // Title + runtime-button slot. Title gets its own span so external
         // code can locate and update it (e.g. an auto-rename routine that
-        // tracks a node's inbound wiring).
+        // tracks a node's inbound wiring). Toolbar is a separate container
+        // so runtime buttons stay visually grouped to the right of the
+        // title and out of the title's text-overflow path.
         this.titleEl = document.createElement("span");
         this.titleEl.className = "ne-node-title";
         this.titleEl.textContent = def.label;
         this.headerEl.appendChild(this.titleEl);
-        this._installRuntimeButtons();
+
+        this.toolbarEl = document.createElement("div");
+        this.toolbarEl.className = "ne-node-toolbar";
+        this.headerEl.appendChild(this.toolbarEl);
         this.el.appendChild(this.headerEl);
 
         const body = document.createElement("div");
@@ -73,6 +83,29 @@ export class NodeUI {
         body.appendChild(this.outputsContainer);
 
         this.el.appendChild(body);
+
+        // Footer + status bar. Always present in the DOM so the layout
+        // stays predictable; refreshStatusBar() hides the footer entirely
+        // (display:none) for nodes that expose neither IRunnable nor
+        // IEnabled, preserving the compact look of pure data nodes.
+        this.footerEl = document.createElement("div");
+        this.footerEl.className = "ne-node-footer";
+        this.statusEl = document.createElement("span");
+        this.statusEl.className = "ne-node-status";
+        this.statusDotEl = document.createElement("span");
+        this.statusDotEl.className = "ne-node-status-dot";
+        this.statusTextEl = document.createElement("span");
+        this.statusTextEl.className = "ne-node-status-text";
+        this.statusEl.appendChild(this.statusDotEl);
+        this.statusEl.appendChild(this.statusTextEl);
+        this.footerEl.appendChild(this.statusEl);
+        this.el.appendChild(this.footerEl);
+
+        // Buttons + subscription + initial refresh. Footer must already
+        // exist because refreshRuntimeButtons cascades into the status
+        // bar refresh.
+        this._installRuntimeButtons();
+
         parent.appendChild(this.el);
 
         for (const inp of def.inputs) {
@@ -211,58 +244,106 @@ export class NodeUI {
     }
 
     /**
-     * Refresh the visual state of the runtime header buttons. Read the data
-     * object's IRunnableNode / IToggableNode methods and the current play
-     * mode to decide which buttons are enabled and their accent colour.
+     * Refresh the visual state of the runtime header buttons from the
+     * model's IRunnable.status and IEnabled.enabled, gated by play mode.
      *
-     * Rules for IRunnableNode (sources):
-     *   Design mode : both play and stop buttons disabled (grey)
-     *   Play + stopped : play button green/enabled, stop button grey/disabled
-     *   Play + running : play button grey/disabled, stop button red/enabled
+     * Lifecycle (IRunnable):
+     *   Design mode    : both buttons disabled (grey)
+     *   started        : start disabled, stop enabled (red)
+     *   starting/stopping : both disabled (transition in progress)
+     *   idle/stopped/failed : start enabled (green), stop disabled
      *
-     * Rules for IToggableNode (faults, environment):
-     *   Design mode : toggle button disabled (grey)
-     *   Play mode   : toggle button reflects enabled state (green = on)
+     * Enable toggle (IEnabled):
+     *   Design mode : disabled (grey)
+     *   Play mode   : reflects enabled state (green when on)
      */
     refreshRuntimeButtons(): void {
         const data = this.item.data;
         const inPlay = this._inPlayMode;
 
-        if (this.runBtn && this.stopBtn && isRunnableNode(data)) {
-            const r = (data as IRunnableNode).isRunning();
-            // Play button: active only in play mode when the source is stopped.
-            this.runBtn.disabled  = !inPlay || r;
-            this.runBtn.classList.toggle("ne-rtbtn-play-active", inPlay && !r);
-            // Stop button: active (red) only in play mode when the source runs.
-            this.stopBtn.disabled = !inPlay || !r;
-            this.stopBtn.classList.toggle("ne-rtbtn-stop-active", inPlay && r);
+        if (this.runBtn && this.stopBtn && isRunnable(data)) {
+            const s = data.status;
+            const transitioning = s === "starting" || s === "stopping";
+            const started = s === "started";
+            const canStart = !started && !transitioning;
+            const canStop  =  started && !transitioning;
+            const affordance = getRunnableAffordance(data);
+            const isRecord = affordance === "record";
+
+            this.runBtn.disabled = !inPlay || !canStart;
+            this.runBtn.classList.toggle("ne-rtbtn-play-active",   inPlay && canStart && !isRecord);
+            this.runBtn.classList.toggle("ne-rtbtn-record-active", inPlay && canStart &&  isRecord);
+            this.stopBtn.disabled = !inPlay || !canStop;
+            this.stopBtn.classList.toggle("ne-rtbtn-stop-active", inPlay && canStop);
         }
-        if (this.toggleBtn && isToggableNode(data)) {
-            const e = (data as IToggableNode).isEnabled();
+        if (this.toggleBtn && isEnabled(data)) {
+            const e = data.enabled;
             this.toggleBtn.disabled = !inPlay;
             this.toggleBtn.classList.toggle("ne-rtbtn-play-active", inPlay && e);
             this.toggleBtn.innerHTML = e ? ENABLED_SVG : DISABLED_SVG;
             this.toggleBtn.title = e ? "Disable" : "Enable";
         }
-        if (this.recBtn && isStartableNode(data)) {
-            const s = (data as IStartableNode).isStarted();
-            this.recBtn.disabled = !inPlay;
-            this.recBtn.classList.toggle("ne-rtbtn-record-active", inPlay && s);
-            this.recBtn.title = s ? "Stop recording" : "Record";
-        }
+
+        this.refreshStatusBar();
     }
 
     /**
-     * Build header buttons for whichever runtime interfaces the data
-     * object implements. Idempotent on first call.
+     * Update the footer status bar from the data's lifecycle and enabled
+     * state. For nodes that expose neither IRunnable nor IEnabled the
+     * status element is emptied; a `:empty` CSS rule hides the footer
+     * so non-runnable nodes keep their original compact look.
+     */
+    refreshStatusBar(): void {
+        const data = this.item.data;
+        const runnable = isRunnable(data) ? data : null;
+        const enableable = isEnabled(data) ? data : null;
+
+        if (!runnable && !enableable) {
+            this.footerEl.style.display = "none";
+            return;
+        }
+        this.footerEl.style.display = "";
+
+        const parts: string[] = [];
+        let dotState = "idle";
+        if (runnable) {
+            parts.push(runnable.status);
+            dotState = runnable.status;
+        }
+        if (enableable) {
+            if (!enableable.enabled) {
+                // Disabled wins visually: an enabled=false node is
+                // inert regardless of its lifecycle status, so the dot
+                // turns grey and "disabled" appears in the text.
+                parts.push("disabled");
+                dotState = "disabled";
+            } else if (!runnable) {
+                // Pure IEnabled nodes (no lifecycle) get an explicit
+                // "enabled" marker so the footer is never just a dot.
+                parts.push("enabled");
+            }
+        }
+
+        this.statusTextEl.textContent = parts.join(" · ");
+        this.statusDotEl.className = `ne-node-status-dot ne-status-${dotState}`;
+        this.statusEl.title = parts.join(" · ");
+    }
+
+    /**
+     * Build header buttons for whichever model contracts the data
+     * implements (IRunnable for lifecycle, IEnabled for on/off toggle).
      *
-     * IRunnableNode gets two separate buttons: a play button (▶) and a
-     * stop button (⬛). Each targets one direction only so their disabled
-     * state can independently reflect the current running state.
+     * IRunnable gets a start button (▶) and a stop button (⬛). Each
+     * targets one direction only so their disabled state can
+     * independently reflect the current lifecycle status.
      *
-     * IToggableNode gets a single enable/disable toggle (checkmark / cross).
+     * IEnabled gets a single enable/disable toggle (checkmark / cross).
      *
-     * Both sets are disabled in Design mode; setPlayMode(true) unlocks them.
+     * All buttons are disabled in Design mode; setPlayMode(true) unlocks
+     * them. If the data exposes an onPropertyChanged Observable, the UI
+     * subscribes to it so that asynchronous transitions (starting →
+     * started, stopping → stopped) refresh the buttons without an
+     * explicit caller-side refresh.
      */
     private _installRuntimeButtons(): void {
         const data = this.item.data;
@@ -276,43 +357,49 @@ export class NodeUI {
             ev.stopImmediatePropagation();
         };
 
-        if (isRunnableNode(data)) {
-            // --- Play (start) button ---
+        if (isRunnable(data)) {
+            const isRecord = getRunnableAffordance(data) === "record";
+
             const playBtn = document.createElement("button");
             playBtn.type = "button";
             playBtn.className = "ne-node-runtime-btn";
-            playBtn.title = "Start";
-            playBtn.innerHTML = RUN_PLAY_SVG;
+            playBtn.title = isRecord ? "Record" : "Start";
+            playBtn.innerHTML = isRecord ? REC_SVG : RUN_PLAY_SVG;
             playBtn.addEventListener("pointerdown", blockDrag, { capture: true });
             playBtn.addEventListener("mousedown",   blockDrag, { capture: true });
             playBtn.addEventListener("click", (ev: MouseEvent) => {
                 ev.stopPropagation();
                 ev.stopImmediatePropagation();
-                (data as IRunnableNode).setRunning(true);
+                const result = (data as IRunnable).start();
+                if (result instanceof Promise) {
+                    result.finally(() => this.refreshRuntimeButtons());
+                }
                 this.refreshRuntimeButtons();
             });
-            this.headerEl.appendChild(playBtn);
+            this.toolbarEl.appendChild(playBtn);
             this.runBtn = playBtn;
 
-            // --- Stop button ---
             const stopBtn = document.createElement("button");
             stopBtn.type = "button";
             stopBtn.className = "ne-node-runtime-btn";
-            stopBtn.title = "Stop";
+            stopBtn.title = isRecord ? "Stop recording" : "Stop";
             stopBtn.innerHTML = RUN_STOP_SVG;
             stopBtn.addEventListener("pointerdown", blockDrag, { capture: true });
             stopBtn.addEventListener("mousedown",   blockDrag, { capture: true });
             stopBtn.addEventListener("click", (ev: MouseEvent) => {
                 ev.stopPropagation();
                 ev.stopImmediatePropagation();
-                (data as IRunnableNode).setRunning(false);
+                const result = (data as IRunnable).stop();
+                if (result instanceof Promise) {
+                    result.finally(() => this.refreshRuntimeButtons());
+                }
                 this.refreshRuntimeButtons();
             });
-            this.headerEl.appendChild(stopBtn);
+            this.toolbarEl.appendChild(stopBtn);
             this.stopBtn = stopBtn;
         }
 
-        if (isToggableNode(data)) {
+        if (isEnabled(data)) {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "ne-node-runtime-btn";
@@ -321,36 +408,45 @@ export class NodeUI {
             btn.addEventListener("click", (ev: MouseEvent) => {
                 ev.stopPropagation();
                 ev.stopImmediatePropagation();
-                const e = (data as IToggableNode).isEnabled();
-                (data as IToggableNode).setEnabled(!e);
+                (data as IEnabled).enabled = !(data as IEnabled).enabled;
                 this.refreshRuntimeButtons();
             });
-            this.headerEl.appendChild(btn);
+            this.toolbarEl.appendChild(btn);
             this.toggleBtn = btn;
         }
 
-        // IStartableNode: capture/recorder nodes (e.g. DatasetCapture).
-        // A single record button toggles between capturing and stopped.
-        if (isStartableNode(data)) {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "ne-node-runtime-btn";
-            btn.title = "Record";
-            btn.innerHTML = REC_SVG;
-            btn.addEventListener("pointerdown", blockDrag, { capture: true });
-            btn.addEventListener("mousedown",   blockDrag, { capture: true });
-            btn.addEventListener("click", (ev: MouseEvent) => {
-                ev.stopPropagation();
-                ev.stopImmediatePropagation();
-                const s = (data as IStartableNode).isStarted();
-                (data as IStartableNode).setStarted(!s);
-                this.refreshRuntimeButtons();
-            });
-            this.headerEl.appendChild(btn);
-            this.recBtn = btn;
-        }
+        this._subscribeToModel();
 
         // Initial visual state: Design mode, all buttons disabled.
         this.refreshRuntimeButtons();
+    }
+
+    /**
+     * Duck-checks the data object for an onPropertyChanged Observable
+     * (exposed by GraphItem-derived models). When present, refresh the
+     * runtime buttons on every "status" or "enabled" property change so
+     * the UI stays in sync with asynchronous lifecycle transitions
+     * without callers having to invoke refreshRuntimeButtons themselves.
+     */
+    private _subscribeToModel(): void {
+        const candidate = this.item.data as { onPropertyChanged?: Observable<PropertyChangedEventArgs<unknown, unknown>> };
+        const obs = candidate?.onPropertyChanged;
+        if (!obs || typeof obs.add !== "function") return;
+
+        this._modelSubscription = obs.add((args) => {
+            if (args.propertyName === "status" || args.propertyName === "enabled") {
+                this.refreshRuntimeButtons();
+            }
+        });
+    }
+
+    /**
+     * Release model subscriptions and detach DOM. Called by the editor
+     * when this node is removed from the graph.
+     */
+    dispose(): void {
+        this._modelSubscription?.dispose();
+        this._modelSubscription = null;
+        this.el.remove();
     }
 }

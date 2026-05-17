@@ -1,6 +1,6 @@
-import type { NodeEditor } from "./editor.js";
-import type { NodeUI } from "./node-ui.js";
-import type { NodeDef } from "./types.js";
+import type { NodeEditor } from "./editor";
+import type { NodeUI } from "./node-ui";
+import type { NodeDef } from "./types";
 
 const COL_GAP = 60;
 const NODE_GAP = 30;

@@ -1,4 +1,4 @@
-import { PropertyEntry, UIItemBase } from "./inspectable.js";
+import { PropertyEntry, UIItemBase } from "./inspectable";
 
 export class PropertyPanel {
     readonly el: HTMLDivElement;

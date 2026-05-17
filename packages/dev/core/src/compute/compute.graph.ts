@@ -40,7 +40,7 @@ export class DataLink extends Channel<ITensor> implements IDataLink {
  * Executable compute graph.
  *
  * Extends RuntimeGraph<IKernel, IDataLink>, inheriting the
- * autonomous run() / runAsync() pair (IRunnable) from there. Adds the
+ * autonomous run() / runAsync() pair (ITickable) from there. Adds the
  * named-tensor convenience: infer(inputs) / inferAsync(inputs) inject
  * named external tensors onto source nodes' bag, drive one tick, and
  * collect named outputs from sink nodes' bag.

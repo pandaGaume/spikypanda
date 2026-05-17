@@ -509,6 +509,22 @@
     background: #335;
     letter-spacing: 0.02em;
     white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ne-node-title {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ne-node-toolbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .ne-node-body {
@@ -516,6 +532,57 @@
     display: flex;
     justify-content: space-between;
     gap: 4px;
+}
+
+.ne-node-footer {
+    padding: 3px 8px;
+    background: rgba(0, 0, 0, 0.25);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.7em;
+    color: var(--text-muted, rgba(255, 255, 255, 0.6));
+    letter-spacing: 0.04em;
+}
+
+.ne-node-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ne-node-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+    flex: 0 0 auto;
+}
+
+.ne-node-status-dot.ne-status-idle,
+.ne-node-status-dot.ne-status-stopped {
+    background: rgba(255, 255, 255, 0.35);
+}
+
+.ne-node-status-dot.ne-status-starting,
+.ne-node-status-dot.ne-status-stopping {
+    background: #fbbf24;
+    animation: ne-status-pulse 1.0s ease-in-out infinite;
+}
+
+.ne-node-status-dot.ne-status-started {
+    background: #4ade80;
+}
+
+.ne-node-status-dot.ne-status-failed {
+    background: #f87171;
+}
+
+.ne-node-status-dot.ne-status-disabled {
+    background: #6b7280;
+}
+
+@keyframes ne-status-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
 }
 
 .ne-node-inputs,

@@ -7,7 +7,7 @@ import { IChannel } from "./execution.interfaces";
  * stay managed by the existing graph layer; adds slot (input-port name
  * on the destination), delayed (the channel is pre-seeded with
  * initialValue at session reset, breaking feedback cycles), and the
- * inherited IEnableable.enabled toggle.
+ * inherited IEnabled.enabled toggle.
  */
 export class Channel<T = unknown> extends GraphOLink implements IChannel<T> {
     @cloneable public slot: string | number;

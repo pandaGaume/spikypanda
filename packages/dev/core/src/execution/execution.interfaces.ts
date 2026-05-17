@@ -1,4 +1,4 @@
-import { IEnableable, IGraph, INode, IOlink } from "../graph/graph.interfaces";
+import { IEnabled, IGraph, INode, IOlink } from "../graph/graph.interfaces";
 
 /**
  * Execution layer. Reuses the topology of core/graph (INode, IOlink,
@@ -28,7 +28,7 @@ import { IEnableable, IGraph, INode, IOlink } from "../graph/graph.interfaces";
  * break feedback cycles in DAG-topology graphs (FOC reading machine
  * state from t-1).
  */
-export interface IChannel<T = unknown> extends IOlink, IEnableable {
+export interface IChannel<T = unknown> extends IOlink, IEnabled {
     readonly slot: string | number;
     readonly delayed: boolean;
     readonly initialValue?: T;
@@ -66,7 +66,7 @@ export interface IChannel<T = unknown> extends IOlink, IEnableable {
  * sessions; all mutable state lives in the session's nodeStates entry
  * for this node.
  */
-export interface IRuntimeNode<B=unknown> extends INode<B>, IEnableable {
+export interface IRuntimeNode<B=unknown> extends INode<B>, IEnabled {
     isReady(session: ISession): boolean;
     fire(session: ISession, t: number): void;
     /**
@@ -105,18 +105,23 @@ export interface IRuntimeNode<B=unknown> extends INode<B>, IEnableable {
 export type SchedulingMode = "static" | "dynamic";
 
 /**
- * Autonomous-run contract. A graph that is IRunnable can drive itself
- * without the caller having to construct a Session explicitly: it lazily
- * allocates a default Session whose state persists across run() calls
- * (so delayed channels and counters survive between ticks). Callers that
- * need explicit Session control (concurrent inferences, custom state
- * lifecycle) pass their own Session via the optional second parameter,
- * in which case the default session is bypassed entirely.
+ * Per-tick autonomous-drive contract. A graph that is ITickable can
+ * drive itself without the caller having to construct a Session
+ * explicitly: it lazily allocates a default Session whose state persists
+ * across run() calls (so delayed channels and counters survive between
+ * ticks). Callers that need explicit Session control (concurrent
+ * inferences, custom state lifecycle) pass their own Session via the
+ * optional second parameter, in which case the default session is
+ * bypassed entirely.
  *
  * The default Session is an implementation detail and is intentionally
  * not part of this contract.
+ *
+ * Distinct from IRunnable (the start/stop lifecycle contract in
+ * graph.interfaces): ITickable is one cycle of work; IRunnable is the
+ * higher-level "is the engine on or off" state.
  */
-export interface IRunnable {
+export interface ITickable {
     run(t: number, session?: ISession): void;
     runAsync(t: number, session?: ISession): Promise<void>;
 }
@@ -149,7 +154,7 @@ export interface IRunnable {
  * matched; the user drives via `new Session(graph)` as usual.
  */
 export interface IRuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChannel = IChannel>
-    extends IGraph<N, L>, IRuntimeNode, IRunnable {
+    extends IGraph<N, L>, IRuntimeNode, ITickable {
     readonly mode: SchedulingMode;
 }
 
