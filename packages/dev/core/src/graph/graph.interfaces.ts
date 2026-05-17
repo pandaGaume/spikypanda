@@ -1,5 +1,7 @@
 import { ICartesian, isCartesian } from "../geometry/geometry.interfaces";
-import { Nullable } from "../types";
+import { IDisposable, Nullable } from "../types";
+
+export type { IDisposable };
 
 export const CloneMetadataKey = Symbol("cloneable");
 
@@ -28,10 +30,6 @@ export function IsCloneable<T>(obj: unknown): obj is ICloneable<T> {
     }
     const candidate = obj as Partial<ICloneable<T>>;
     return typeof candidate.clone === "function";
-}
-
-export interface IDisposable {
-    dispose(): void;
 }
 
 export interface ITaggable {
