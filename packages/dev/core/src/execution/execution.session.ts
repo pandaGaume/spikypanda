@@ -1,4 +1,5 @@
 import { IOlink } from "../graph/graph.interfaces";
+import { isControlSlot } from "./control-ports";
 import {
     IChannel,
     ILinkState,
@@ -8,6 +9,8 @@ import {
     ISession,
 } from "./execution.interfaces";
 import { Scheduler } from "./execution.scheduler";
+import { StartNode } from "./start.node";
+import { StopNode } from "./stop.node";
 
 /**
  * Concrete ISession. Allocates linkStates / nodeStates at construction
@@ -115,6 +118,26 @@ export class Session implements ISession {
         return idx >= 0 ? this.linkStates[idx] : undefined;
     }
 
+    /**
+     * Begin-Play entry point. Arms every StartNode in this session's
+     * graph; on the next run(t) those nodes fire and publish their
+     * _started trigger. Safe to call before run(); no immediate
+     * execution happens (the trigger flows through the normal scheduler
+     * dispatch).
+     */
+    public start(): void {
+        for (const node of this.graph.nodes) {
+            if (node instanceof StartNode) node.arm();
+        }
+    }
+
+    /** End-Play entry point: arms every StopNode of the graph. */
+    public stop(): void {
+        for (const node of this.graph.nodes) {
+            if (node instanceof StopNode) node.arm();
+        }
+    }
+
     public run(t: number): void {
         if (this.graph.mode === "dynamic") {
             Scheduler.RunDynamic(this, t);
@@ -184,6 +207,13 @@ export class Session implements ISession {
                     continue;
                 }
                 if (links.indexOf(link) < 0) {
+                    continue;
+                }
+                // Control-plane channels (_enable, _start, _stop, ...) are
+                // optional by contract and must not gate the data-flow
+                // readiness counter; otherwise a node with an unwired
+                // _enable port would never reach `linksReady >= required`.
+                if (isControlSlot(link.slot)) {
                     continue;
                 }
                 count++;

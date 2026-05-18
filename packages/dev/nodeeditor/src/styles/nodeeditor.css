@@ -678,6 +678,47 @@
     align-items: flex-end;
 }
 
+/* ── Control plane (Unreal-style exec ports row) ─────────────────────── */
+.ne-node-control-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0 4px;
+    border-bottom: 1px dashed var(--ne-color-border-soft, var(--ne-color-border));
+    min-height: 0;
+}
+/* Collapse the row entirely when both halves are empty (pure-data node). */
+.ne-node-control-row:has(> .ne-node-control-inputs:empty):has(> .ne-node-control-outputs:empty) {
+    display: none;
+}
+
+.ne-node-control-inputs,
+.ne-node-control-outputs {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.ne-node-control-outputs { align-items: flex-end; }
+
+.ne-port.ne-port-control {
+    padding: 1px 8px;
+    font-size: 0.78em;
+    opacity: 0.85;
+    letter-spacing: 0.04em;
+}
+.ne-port.ne-port-control .ne-port-dot {
+    width: 8px;
+    height: 8px;
+}
+.ne-port.ne-port-control:hover {
+    opacity: 1;
+}
+.ne-port.ne-port-control .ne-port-label {
+    text-transform: lowercase;
+    color: var(--ne-color-text-muted);
+}
+
 /* ── Port ── */
 .ne-port {
     display: flex;
@@ -1370,4 +1411,176 @@
 .ne-muted-led.ne-muted-led-red {
     background: var(--ne-color-danger);
     box-shadow: 0 0 5px var(--ne-color-danger);
+}
+
+/* ============================================================
+   Palette component (ne-palette)
+   Renders Type entries from an INodeRegistry, grouped by
+   category. Hosts must provide a positioned container; the
+   palette fills it. All visual tokens defer to --ne-color-*.
+   ============================================================ */
+
+.ne-palette {
+    display:        flex;
+    flex-direction: column;
+    height:         100%;
+    color:          var(--ne-color-text);
+    font-family:    var(--ne-font-mono, var(--ne-font-sans, "IBM Plex Mono", ui-monospace, monospace));
+    overflow:       hidden;
+}
+
+.ne-palette-title {
+    font-family:    var(--ne-font-mono, var(--ne-font-sans, "IBM Plex Mono", ui-monospace, monospace));
+    font-size:      10px;
+    font-weight:    500;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color:          var(--ne-color-text-muted);
+    padding:        20px 18px 8px;
+    margin:         0 0 12px;
+    border-bottom:  1px solid var(--ne-color-border-strong, var(--ne-color-border));
+    flex-shrink:    0;
+}
+
+.ne-palette-list {
+    flex:           1;
+    overflow-y:     auto;
+    padding:        0 0 8px;
+}
+
+.ne-palette-empty {
+    font-size:      11px;
+    color:          var(--ne-color-text-muted);
+    padding:        12px 14px;
+    font-style:     italic;
+}
+
+/* Folder + leaf entries. Categories are tree paths ("a/b/c") and each
+   segment becomes a collapsible folder. */
+.ne-palette-folder {
+    display: block;
+}
+.ne-palette-folder-header {
+    display:        flex;
+    align-items:    center;
+    gap:            6px;
+    width:          100%;
+    text-align:     left;
+    font:           inherit;
+    font-size:      11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color:          var(--ne-color-text);
+    background:     transparent;
+    border:         0;
+    padding:        6px 10px;
+    cursor:         pointer;
+    transition:     color .12s, background-color .12s;
+}
+.ne-palette-folder-header:hover { color: var(--ne-color-accent, var(--ne-color-text)); background: var(--ne-color-surface-hover, transparent); }
+
+.ne-palette-folder-arrow {
+    display:        inline-block;
+    width:          12px;
+    color:          var(--ne-color-text-muted);
+    transition:     transform .15s ease-out;
+    transform-origin: center;
+    font-size:      10px;
+    transform:      rotate(90deg);  /* expanded */
+}
+.ne-palette-folder.is-collapsed > .ne-palette-folder-header .ne-palette-folder-arrow {
+    transform: rotate(0deg);  /* collapsed */
+}
+
+.ne-palette-folder-name {
+    flex: 1;
+}
+
+.ne-palette-folder-count {
+    font-size:      10px;
+    color:          var(--ne-color-text-muted);
+    padding:        1px 6px;
+    border:         1px solid var(--ne-color-border);
+    border-radius:  2px;
+    letter-spacing: 0;
+    font-weight:    400;
+}
+
+.ne-palette-folder-body {
+    display: block;
+}
+.ne-palette-folder.is-collapsed > .ne-palette-folder-body {
+    display: none;
+}
+
+.ne-palette-entry {
+    display:        flex;
+    align-items:    center;
+    gap:            8px;
+    width:          100%;
+    text-align:     left;
+    font:           inherit;
+    font-size:      12px;
+    color:          var(--ne-color-text);
+    background:     transparent;
+    border:         0;
+    padding:        5px 10px;
+    cursor:         pointer;
+    transition:     background-color .12s, color .12s;
+}
+.ne-palette-entry-dot {
+    display:        inline-block;
+    width:          5px;
+    height:         5px;
+    border-radius:  50%;
+    background:     var(--ne-color-accent, var(--ne-color-text-muted));
+    opacity:        .6;
+    flex-shrink:    0;
+}
+.ne-palette-entry:hover  { background: var(--ne-color-surface-hover, var(--ne-color-border)); color: var(--ne-color-text); }
+.ne-palette-entry:active { background: var(--ne-color-accent); color: var(--ne-color-bg); }
+.ne-palette-entry:hover .ne-palette-entry-dot { opacity: 1; }
+
+/* ============================================================
+   Standards badges (interop compliance: onnx, tflite, etc.)
+   ============================================================ */
+
+.ne-standard-badge {
+    display:          inline-flex;
+    align-items:      center;
+    justify-content:  center;
+    min-width:        16px;
+    height:           16px;
+    padding:          0 4px;
+    background:       var(--ne-color-accent, #555);
+    color:            #fff;
+    font-family:      var(--ne-font-mono, monospace);
+    font-size:        9px;
+    font-weight:      600;
+    line-height:      1;
+    letter-spacing:   0.02em;
+    border-radius:    3px;
+    text-transform:   uppercase;
+    flex-shrink:      0;
+}
+
+/* Standards strip sits in the node header between title and toolbar. */
+.ne-node-standards {
+    display:      inline-flex;
+    align-items:  center;
+    gap:          3px;
+    margin-right: 6px;
+    flex-shrink:  0;
+}
+
+/* Standards strip on a palette entry sits at the right edge. */
+.ne-palette-entry-label {
+    flex: 1;
+}
+.ne-palette-entry-standards {
+    display:      inline-flex;
+    align-items:  center;
+    gap:          3px;
+    margin-left:  8px;
+    flex-shrink:  0;
 }

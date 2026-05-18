@@ -6,3 +6,7 @@ export * from "./execution.session";
 export * from "./execution.scheduler";
 export * from "./execution.builder";
 export * from "./execution.io";
+export * from "./control-ports";
+export * from "./runnable.node";
+export * from "./start.node";
+export * from "./stop.node";

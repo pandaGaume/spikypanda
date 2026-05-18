@@ -105,7 +105,14 @@ export class Scheduler {
 
         while (queue.length > 0) {
             const node = queue.shift()!;
-            if (fired.has(node) || !node.enabled) {
+            if (fired.has(node)) {
+                continue;
+            }
+            // Drain control-plane inputs (_enable / _start / _stop) so
+            // the latest lifecycle commands take effect before the
+            // enabled/isReady gates are re-evaluated below.
+            node.processControlInputs?.(session);
+            if (!node.enabled) {
                 continue;
             }
             // Defensive isReady: lets nodes refuse to fire even when
@@ -159,6 +166,7 @@ export class Scheduler {
             throw new Error(`graph is not statically schedulable: ${reasons.join("; ")}`);
         }
         for (const node of order) {
+            node.processControlInputs?.(session);
             if (!node.enabled) {
                 continue;
             }

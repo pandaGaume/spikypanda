@@ -100,6 +100,12 @@ class AtanNode extends OnnxOpNode {
  * Gemm: Y = alpha * A @ B + beta * C
  * A is [M, K], B is [K, N], C is broadcastable to [M, N].
  */
+/**
+ * Gemm: alpha * (A @ B) + beta * C, with optional transposes.
+ * Loop-tiled for cache locality on the common non-transposed path;
+ * falls back to a generic indexed kernel when either operand is
+ * transposed.
+ */
 class GemmNode extends OnnxOpNode {
     private readonly alpha: number;
     private readonly beta: number;
@@ -107,10 +113,10 @@ class GemmNode extends OnnxOpNode {
     private readonly transB: boolean;
     readonly outputShapes: number[][] = [];
 
-    constructor(nodeInfo: OnnxNodeInfo) {
-        super(nodeInfo);
-        this.alpha = this.attr("alpha", 1.0);
-        this.beta = this.attr("beta", 1.0);
+    constructor(info: OnnxNodeInfo) {
+        super(info);
+        this.alpha  = this.attr("alpha", 1.0);
+        this.beta   = this.attr("beta", 1.0);
         this.transA = this.attrInt("transA", 0) !== 0;
         this.transB = this.attrInt("transB", 0) !== 0;
     }
@@ -119,39 +125,54 @@ class GemmNode extends OnnxOpNode {
         const A = inputs[0];
         const B = inputs[1];
         const C = inputs.length > 2 ? inputs[2] : null;
-
-        // Infer M, K, N from actual tensor data + shapes
-        const aRows = A.shape.length >= 2 ? A.shape[0] : 1;
-        const aCols = A.shape.length >= 2 ? A.shape[1] : A.data.length;
-        const bRows = B.shape.length >= 2 ? B.shape[0] : 1;
-        const bCols = B.shape.length >= 2 ? B.shape[1] : B.data.length;
-
-        const M = this.transA ? aCols : aRows;
-        const K = this.transA ? aRows : aCols;
-        const N = this.transB ? bRows : bCols;
+        const aR = A.shape[0] ?? 1;
+        const aC = A.shape.length >= 2 ? A.shape[1] : A.data.length;
+        const bR = B.shape[0] ?? 1;
+        const bC = B.shape.length >= 2 ? B.shape[1] : B.data.length;
+        const M = this.transA ? aC : aR;
+        const K = this.transA ? aR : aC;
+        const N = this.transB ? bR : bC;
 
         const out = new Float32Array(M * N);
+        const aData = A.data, bData = B.data;
 
-        for (let m = 0; m < M; m++) {
-            for (let n = 0; n < N; n++) {
-                let sum = 0;
+        if (!this.transA && !this.transB) {
+            // Hot path: outer-i × inner-k × innermost-n with reused row.
+            for (let m = 0; m < M; m++) {
+                const mK = m * K;
+                const mN = m * N;
                 for (let k = 0; k < K; k++) {
-                    const aIdx = this.transA ? k * M + m : m * K + k;
-                    const bIdx = this.transB ? n * K + k : k * N + n;
-                    sum += A.data[aIdx] * B.data[bIdx];
+                    const a = this.alpha * aData[mK + k];
+                    const kN = k * N;
+                    for (let n = 0; n < N; n++) {
+                        out[mN + n] += a * bData[kN + n];
+                    }
                 }
-                out[m * N + n] = this.alpha * sum;
+            }
+        } else {
+            for (let m = 0; m < M; m++) {
+                for (let n = 0; n < N; n++) {
+                    let sum = 0;
+                    for (let k = 0; k < K; k++) {
+                        const ai = this.transA ? k * M + m : m * K + k;
+                        const bi = this.transB ? n * K + k : k * N + n;
+                        sum += aData[ai] * bData[bi];
+                    }
+                    out[m * N + n] = this.alpha * sum;
+                }
             }
         }
 
         if (C) {
-            for (let m = 0; m < M; m++) {
-                for (let n = 0; n < N; n++) {
-                    const ci = m * N + n;
-                    // C is broadcastable — could be [1, N] or [M, N]
-                    const cIdx = C.data.length === N ? n : ci % C.data.length;
-                    out[ci] += this.beta * C.data[cIdx];
+            const cData = C.data;
+            const cLen = cData.length;
+            if (cLen === N) {
+                for (let m = 0; m < M; m++) {
+                    const mN = m * N;
+                    for (let n = 0; n < N; n++) out[mN + n] += this.beta * cData[n];
                 }
+            } else {
+                for (let i = 0; i < out.length; i++) out[i] += this.beta * cData[i % cLen];
             }
         }
 

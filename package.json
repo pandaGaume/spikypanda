@@ -42,7 +42,7 @@
         "test:watch": "jest --watch"
     },
     "dependencies": {
-        "@dev/core": "file:../Gaume/mcp-for-babylon/packages/dev/core",
+        "@cyanmycelium/mcp-core": "file:../Gaume/mcp-core",
         "@dev/tunnel": "file:../Gaume/mcp-for-babylon/packages/dev/tunnel",
         "@spikypanda/root": "file:.claude/worktrees/funny-chaum-69251c",
         "reflect-metadata": "^0.2.2",

@@ -1,6 +1,7 @@
-import { IDisposable, IEnabled, IRunnable, Observable, PropertyChangedEventArgs, getRunnableAffordance, isEnabled, isRunnable } from "spikypanda-core";
+import { IDisposable, IEnabled, IRunnable, Observable, PropertyChangedEventArgs, getRunnableAffordance, isEnabled, isRunnable, supportsEnabling } from "spikypanda-core";
 import { UIItemBase } from "./inspectable";
 import { Port } from "./port";
+import { StandardsRegistry } from "./standards";
 import { NodeDef, PortType } from "./types";
 
 const RUN_PLAY_SVG  = '<svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><path d="M4 3l9 5-9 5V3z"/></svg>';
@@ -37,6 +38,10 @@ export class NodeUI {
     readonly color?: string;
     readonly inputs: Port[] = [];
     readonly outputs: Port[] = [];
+    /** Control-plane inputs (_enable, _start, _stop, ...) — rendered in
+     *  a separate row above the data inputs, distinct visual treatment. */
+    readonly controlInputs: Port[] = [];
+    readonly controlOutputs: Port[] = [];
     readonly item: UIItemBase<unknown>;
 
     x = 0;
@@ -45,6 +50,8 @@ export class NodeUI {
 
     private readonly inputsContainer: HTMLDivElement;
     private readonly outputsContainer: HTMLDivElement;
+    private readonly controlInputsContainer: HTMLDivElement;
+    private readonly controlOutputsContainer: HTMLDivElement;
     private readonly headerEl: HTMLDivElement;
     private readonly titleEl: HTMLSpanElement;
     private readonly toolbarEl: HTMLDivElement;
@@ -58,7 +65,7 @@ export class NodeUI {
     private _inPlayMode = false;
     private _modelSubscription: IDisposable | null = null;
 
-    constructor(def: NodeDef, parent: HTMLElement) {
+    constructor(def: NodeDef, parent: HTMLElement, standards?: StandardsRegistry) {
         this.id = `node_${nodeIdCounter++}`;
         this.label = def.label;
         this.color = def.color;
@@ -93,7 +100,41 @@ export class NodeUI {
         this.toolbarEl = document.createElement("div");
         this.toolbarEl.className = "ne-node-toolbar";
         this.headerEl.appendChild(this.toolbarEl);
+
+        // Standards badges (e.g. ONNX). Rendered between the title and
+        // the toolbar so they sit near the identity of the node, not
+        // mixed with the lifecycle buttons. Empty unless def.standards
+        // declares anything.
+        if (def.standards && def.standards.length > 0) {
+            const badgeWrap = document.createElement("div");
+            badgeWrap.className = "ne-node-standards";
+            for (const id of def.standards) {
+                const info = standards?.get(id);
+                const b = document.createElement("span");
+                b.className = `ne-standard-badge ne-standard-${id}`;
+                b.textContent = info?.glyph ?? id.slice(0, 1).toUpperCase();
+                b.title = info ? info.label : id;
+                if (info?.color) b.style.backgroundColor = info.color;
+                badgeWrap.appendChild(b);
+            }
+            this.headerEl.insertBefore(badgeWrap, this.toolbarEl);
+        }
+
         this.el.appendChild(this.headerEl);
+
+        // Control-plane row sits ABOVE the data body: control inputs on
+        // the left, control outputs on the right. Hidden via CSS
+        // (:empty) when neither row has content, so plain data nodes
+        // look identical to before.
+        const controlRow = document.createElement("div");
+        controlRow.className = "ne-node-control-row";
+        this.controlInputsContainer = document.createElement("div");
+        this.controlInputsContainer.className = "ne-node-control-inputs";
+        controlRow.appendChild(this.controlInputsContainer);
+        this.controlOutputsContainer = document.createElement("div");
+        this.controlOutputsContainer.className = "ne-node-control-outputs";
+        controlRow.appendChild(this.controlOutputsContainer);
+        this.el.appendChild(controlRow);
 
         const body = document.createElement("div");
         body.className = "ne-node-body";
@@ -132,12 +173,34 @@ export class NodeUI {
 
         parent.appendChild(this.el);
 
+        for (const inp of def.controlInputs ?? []) {
+            this.addControlInput(inp.name, inp.type);
+        }
+        for (const out of def.controlOutputs ?? []) {
+            this.addControlOutput(out.name, out.type);
+        }
         for (const inp of def.inputs) {
             this.addInput(inp.name, inp.type);
         }
         for (const out of def.outputs) {
             this.addOutput(out.name, out.type);
         }
+    }
+
+    addControlInput(name: string, type: PortType): Port {
+        const port = new Port(name, type, "input");
+        port.attachTo(this.el, this.controlInputsContainer);
+        port.el.classList.add("ne-port-control");
+        this.controlInputs.push(port);
+        return port;
+    }
+
+    addControlOutput(name: string, type: PortType): Port {
+        const port = new Port(name, type, "output");
+        port.attachTo(this.el, this.controlOutputsContainer);
+        port.el.classList.add("ne-port-control");
+        this.controlOutputs.push(port);
+        return port;
     }
 
     addInput(name: string, type: PortType): Port {
@@ -212,8 +275,16 @@ export class NodeUI {
         this.movePort(this.outputs, this.outputsContainer, from, to);
     }
 
+    moveControlInputPort(from: number, to: number): void {
+        this.movePort(this.controlInputs, this.controlInputsContainer, from, to);
+    }
+
+    moveControlOutputPort(from: number, to: number): void {
+        this.movePort(this.controlOutputs, this.controlOutputsContainer, from, to);
+    }
+
     getAllPorts(): Port[] {
-        return [...this.inputs, ...this.outputs];
+        return [...this.controlInputs, ...this.inputs, ...this.outputs, ...this.controlOutputs];
     }
 
     findPortByDot(dot: HTMLElement): Port | undefined {
@@ -302,8 +373,12 @@ export class NodeUI {
         }
         if (this.toggleBtn && isEnabled(data)) {
             const e = data.enabled;
-            this.toggleBtn.disabled = !inPlay;
-            this.toggleBtn.classList.toggle("ne-rtbtn-play-active", inPlay && e);
+            // Enable is a design-time + runtime concept (the user may
+            // pre-disable a node before pressing Play). Keep the toggle
+            // interactive even outside play mode; only the visual
+            // "active" state is gated on play.
+            this.toggleBtn.disabled = false;
+            this.toggleBtn.classList.toggle("ne-rtbtn-play-active", e);
             this.toggleBtn.innerHTML = e ? ENABLED_SVG : DISABLED_SVG;
             this.toggleBtn.title = e ? "Disable" : "Enable";
         }
@@ -320,7 +395,9 @@ export class NodeUI {
     refreshStatusBar(): void {
         const data = this.item.data;
         const runnable = isRunnable(data) ? data : null;
-        const enableable = isEnabled(data) ? data : null;
+        // Skip IEnabled status entirely when the node opts out of
+        // enable semantics (StartNode / StopNode etc.).
+        const enableable = (isEnabled(data) && supportsEnabling(data)) ? data : null;
 
         if (!runnable && !enableable) {
             this.footerEl.style.display = "none";
@@ -423,7 +500,7 @@ export class NodeUI {
             this.stopBtn = stopBtn;
         }
 
-        if (isEnabled(data)) {
+        if (isEnabled(data) && supportsEnabling(data)) {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "ne-node-runtime-btn";

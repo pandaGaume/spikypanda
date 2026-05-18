@@ -1,0 +1,318 @@
+/* ───────────────────────────────────────────────────────────────────────────
+   Node Editor v2 — self-contained theme + shell
+
+   Inspired by the HELIOS design system (mono-uppercase chrome, accent
+   orange, thin rules, IBM Plex typography) but with no dependency on it.
+   All design tokens, the minimal reset, and the layout live here so the
+   sample can be lifted into another host (vscode plugin, standalone page)
+   without dragging an external framework along.
+
+   Sections:
+     1. Tokens
+     2. Minimal reset
+     3. Token bridge to GraphViewer
+     4. App frame
+     5. Topbar + brand + toolbar buttons / selects / labels
+     6. Player segment
+     7. Body: palette + viewer + property
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* ── 1. Tokens ───────────────────────────────────────────────────────── */
+
+:root {
+    --bg:           #0A0A0F;
+    --surface:      #14141C;
+    --surface-2:    #1B1B25;
+    --text:         #F0F0F5;
+    --text-dim:     #8A8A9A;
+    --text-faint:   #5A5A6A;
+    --rule:         #2A2A35;
+    --rule-strong:  #3A3A48;
+    --accent:       #E8762D;
+    --accent-dim:   #B05E25;
+    --warn:         #B84A3C;
+
+    --gutter:       24px;
+
+    --font-sans:    "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono:    "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* ── 2. Minimal reset ────────────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+    height:   100%;
+    margin:   0;
+    overflow: hidden;
+}
+
+body {
+    font-family: var(--font-sans);
+    font-size:   13px;
+    line-height: 1.55;
+    color:       var(--text);
+    background:  var(--bg);
+    font-feature-settings: "ss01", "ss02", "kern";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+button {
+    font:        inherit;
+    color:       inherit;
+    background:  none;
+    border:      0;
+    cursor:      pointer;
+}
+
+a {
+    color:           inherit;
+    text-decoration: none;
+}
+
+::selection { background: var(--accent); color: var(--bg); }
+
+/* ── 3. NodeEditor token bridge ──────────────────────────────────────── */
+/* Apply on the app root so every editor component (GraphViewer, Palette,
+   property editor, ...) inherits the helios palette via --ne-color-*. */
+
+.nev2-app {
+    --ne-color-bg:            var(--bg);
+    --ne-color-surface:       var(--surface);
+    --ne-color-surface-hover: var(--surface-2);
+    --ne-color-border:        var(--rule);
+    --ne-color-border-strong: var(--rule-strong);
+    --ne-color-text:          var(--text);
+    --ne-color-text-strong:   var(--text);
+    --ne-color-text-muted:    var(--text-dim);
+    --ne-color-text-faint:    var(--text-faint);
+    --ne-color-accent:        var(--accent);
+    --ne-color-connection:    var(--accent);
+    --ne-color-recessed-3:    rgba(0, 0, 0, 0.45);
+    --ne-font-mono:           var(--font-mono);
+    --ne-font-sans:           var(--font-sans);
+}
+
+/* ── 4. App frame ────────────────────────────────────────────────────── */
+
+.nev2-app {
+    display:        flex;
+    flex-direction: column;
+    height:         100vh;
+    width:          100vw;
+}
+
+/* ── 5. Topbar ───────────────────────────────────────────────────────── */
+
+.nev2-topbar {
+    display:        flex;
+    align-items:    center;
+    gap:            18px;
+    padding:        10px var(--gutter);
+    height:         52px;
+    flex-shrink:    0;
+    background:     color-mix(in oklab, var(--bg) 92%, transparent);
+    backdrop-filter: saturate(140%) blur(8px);
+    -webkit-backdrop-filter: saturate(140%) blur(8px);
+    border-bottom:  1px solid var(--rule);
+    z-index:        10;
+}
+
+.nev2-brand {
+    display:        inline-flex;
+    align-items:    baseline;
+    gap:            10px;
+    font-family:    var(--font-mono);
+    font-size:      13px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color:          var(--text);
+}
+.nev2-brand:hover     { color: var(--accent); }
+.nev2-brand-dot       { display: inline-block; width: 8px; height: 8px; background: var(--accent); border-radius: 50%; align-self: center; }
+.nev2-brand-sub       { font-size: 10px; letter-spacing: .18em; color: var(--text-dim); }
+
+/* Permissions badge sits next to the brand. */
+.nev2-perms-badge {
+    font-family:    var(--font-mono);
+    font-size:      10px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color:          var(--accent);
+    border:         1px solid var(--accent-dim);
+    padding:        2px 6px;
+    border-radius:  2px;
+}
+
+.nev2-spacer          { flex: 1; }
+
+.nev2-tb-btn {
+    font-family:    var(--font-mono);
+    font-size:      11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color:          var(--text-dim);
+    padding:        8px 12px;
+    height:         32px;
+    border:         1px solid var(--rule);
+    background:     transparent;
+    cursor:         pointer;
+    transition:     color .14s, border-color .14s, background .14s;
+}
+.nev2-tb-btn:hover           { color: var(--text); border-color: var(--rule-strong); }
+.nev2-tb-btn:active          { color: var(--bg);   background: var(--accent); border-color: var(--accent); }
+.nev2-tb-btn:disabled        { color: var(--text-faint); border-color: var(--rule); cursor: not-allowed; opacity: .6; }
+.nev2-tb-btn:disabled:hover  { color: var(--text-faint); border-color: var(--rule); background: transparent; }
+
+.nev2-tb-select {
+    font-family:    var(--font-mono);
+    font-size:      11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color:          var(--text-dim);
+    padding:        6px 8px;
+    height:         32px;
+    border:         1px solid var(--rule);
+    background:     var(--surface);
+    color-scheme:   dark;  /* hints the browser to use a dark native popup */
+}
+.nev2-tb-select:hover { color: var(--text); border-color: var(--rule-strong); }
+.nev2-tb-select option,
+.nev2-player-speed option {
+    background:   var(--surface);
+    color:        var(--text);
+    font-family:  var(--font-mono);
+}
+
+.nev2-tb-sep {
+    width:      1px;
+    height:     20px;
+    background: var(--rule);
+    margin:     0 4px;
+}
+
+.nev2-tb-label {
+    font-family:    var(--font-mono);
+    font-size:      10px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color:          var(--text-faint);
+    margin-right:   4px;
+}
+
+/* ── 6. Player segment ──────────────────────────────────────────────── */
+
+.nev2-player {
+    display:     inline-flex;
+    align-items: center;
+    height:      32px;
+    border:      1px solid var(--rule);
+    background:  var(--surface);
+}
+
+/* When execute is denied: greyed out + standard not-allowed cursor.
+   pointer-events:none on children blocks the native <select> popup. */
+.nev2-player.is-disabled               { cursor: not-allowed; opacity: 0.5; }
+.nev2-player.is-disabled > *           { pointer-events: none; }
+
+.nev2-player-btn {
+    display:         inline-flex;
+    align-items:     center;
+    justify-content: center;
+    width:           32px;
+    height:          100%;
+    background:      transparent;
+    border:          0;
+    border-right:    1px solid var(--rule);
+    color:           var(--text-dim);
+    font-family:     var(--font-mono);
+    font-size:       13px;
+    line-height:     1;
+    cursor:          pointer;
+    transition:      color .14s, background .14s;
+}
+.nev2-player-btn:last-of-type { border-right: 0; }
+.nev2-player-btn:hover        { color: var(--text); background: var(--surface-2); }
+.nev2-player-btn.is-active    { color: var(--accent); }
+.nev2-player-btn:disabled     { color: var(--text-faint); cursor: not-allowed; }
+
+.nev2-player-readout {
+    font-family:    var(--font-mono);
+    font-size:      11px;
+    letter-spacing: .08em;
+    color:          var(--text);
+    padding:        0 12px;
+    height:         100%;
+    display:        inline-flex;
+    align-items:    center;
+    border-left:    1px solid var(--rule);
+    border-right:   1px solid var(--rule);
+    min-width:      78px;
+    justify-content: flex-end;
+}
+.nev2-player-readout .dim { color: var(--text-dim); margin-right: 4px; }
+
+.nev2-player-speed {
+    font-family:    var(--font-mono);
+    font-size:      11px;
+    letter-spacing: .08em;
+    color:          var(--text-dim);
+    background:     transparent;
+    border:         0;
+    padding:        0 10px;
+    height:         100%;
+    cursor:         pointer;
+    color-scheme:   dark;  /* hints the browser to use a dark native popup */
+}
+.nev2-player-speed:hover { color: var(--text); }
+
+/* ── 7. Body: 3 columns ──────────────────────────────────────────────── */
+
+.nev2-body {
+    display:    flex;
+    flex:       1;
+    min-height: 0;
+}
+
+.nev2-palette,
+.nev2-property {
+    width:        240px;
+    flex-shrink:  0;
+    background:   var(--surface);
+    box-sizing:   border-box;
+}
+.nev2-palette  { border-right: 1px solid var(--rule); }
+.nev2-property { border-left:  1px solid var(--rule); overflow-y: auto; padding: 16px 18px; }
+
+.nev2-section-title {
+    font-family:    var(--font-mono);
+    font-size:      10px;
+    font-weight:    500;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color:          var(--text-dim);
+    margin:         4px 0 12px;
+    padding-bottom: 8px;
+    border-bottom:  1px solid var(--rule-strong);
+}
+
+.nev2-empty {
+    font-family:    var(--font-mono);
+    font-size:      11px;
+    letter-spacing: .08em;
+    color:          var(--text-faint);
+    padding:        6px 0;
+}
+
+.nev2-viewer {
+    flex:       1;
+    min-width:  0;
+    position:   relative;
+    overflow:   hidden;
+    background: var(--bg);
+}
+
+/* GraphViewer creates .ne-viewport + .ne-svg + .ne-nodes-layer inside
+   .nev2-viewer; nodeeditor.css already styles them with full sizing. */

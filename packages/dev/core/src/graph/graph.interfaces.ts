@@ -57,6 +57,15 @@ export interface IHasBag<T=unknown> {
  */
 export interface IEnabled {
     enabled: boolean;
+    /**
+     * Opt-out flag for nodes whose `enabled` field is structurally
+     * present (inherited from a base class) but semantically meaningless
+     * to expose as a user-facing toggle. When `false`, editors omit the
+     * enable checkbox / control row entry for this node. Absent or true
+     * = the enable toggle is shown as usual. Lifecycle source nodes
+     * (StartNode, StopNode) set this to false.
+     */
+    readonly supportsEnabling?: boolean;
 }
 
 /**
@@ -68,6 +77,15 @@ export function isEnabled(obj: unknown): obj is IEnabled {
     }
     const candidate = obj as Partial<IEnabled>;
     return typeof candidate.enabled === "boolean";
+}
+
+/**
+ * Returns true when the target wants the enable toggle exposed. The
+ * default is true (absent or undefined `supportsEnabling` means yes);
+ * explicit `false` is the opt-out for always-on nodes.
+ */
+export function supportsEnabling(target: object): boolean {
+    return (target as Partial<IEnabled>).supportsEnabling !== false;
 }
 
 /**

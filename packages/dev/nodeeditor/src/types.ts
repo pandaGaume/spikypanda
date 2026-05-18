@@ -1,6 +1,6 @@
 export type PortDirection = "input" | "output";
 
-export type PortType = "float" | "vec2" | "vec3" | "vec4" | "tensor" | "any" | "exec" | "matrix44";
+export type PortType = "float" | "vec2" | "vec3" | "vec4" | "tensor" | "any" | "exec" | "matrix44" | "boolean" | "trigger";
 
 export const PORT_COLORS: Record<PortType, string> = {
     float:    "#8cf",
@@ -12,6 +12,9 @@ export const PORT_COLORS: Record<PortType, string> = {
     matrix44: "#c8f",
     // Execution / event ports (white diamond, like UE Blueprint exec pins).
     exec:     "#e8e8e8",
+    // Control plane: boolean (state) and trigger (one-shot edge).
+    boolean:  "#cf6",
+    trigger:  "#fc6",
 };
 
 export interface PortDef {
@@ -24,6 +27,15 @@ export interface NodeDef {
     label: string;
     inputs: Omit<PortDef, "direction">[];
     outputs: Omit<PortDef, "direction">[];
+    /** Control-plane input ports (e.g. _enable, _start, _stop). Rendered
+     *  distinctly from data inputs (top row, control colour). */
+    controlInputs?: Omit<PortDef, "direction">[];
+    /** Control-plane output ports (_enabled, _started, _stopped). */
+    controlOutputs?: Omit<PortDef, "direction">[];
+    /** Interop standards the node complies with (e.g. ["onnx"]). The
+     *  editor renders one badge per id in the node header. The values
+     *  are resolved via the host's StandardsRegistry for display. */
+    standards?: ReadonlyArray<string>;
     /**
      * Per-instance literal color override for the node header background.
      * Lowest precedence: a skin's --ne-color-category-<category> token

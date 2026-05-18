@@ -12,6 +12,22 @@ import "reflect-metadata";
 import "./styles/nodeeditor.css";
 
 export { NodeEditor } from "./editor";
+export { GraphViewer } from "./components/graph-viewer";
+export { Palette } from "./components/palette";
+export type { PaletteOptions } from "./components/palette";
+export { Permissions } from "./permissions";
+export { StandardsRegistry } from "./standards";
+export type { IStandardInfo } from "./standards";
+export { NodeRegistry, StartNode, StopNode, RunnableNode } from "spikypanda-core";
+export type { INodeRegistry, INodeMeta, NodeFactory } from "spikypanda-core";
+export {
+    CONTROL_PORT_ENABLE,
+    CONTROL_PORT_ENABLED,
+    CONTROL_PORT_START,
+    CONTROL_PORT_STOP,
+    CONTROL_PORT_STARTED,
+    CONTROL_PORT_STOPPED,
+} from "spikypanda-core";
 export { defaultLayout } from "./auto-layout";
 export type { LayoutStrategy } from "./auto-layout";
 export { FileHandlerRegistry } from "./file-handler";
@@ -44,6 +60,7 @@ export { transparentDarkSkin, transparentLightSkin } from "./styles/skins/transp
 export { editor, editable, viewable, getEditorSchema } from "spikypanda-core";
 export type { IEditableField, IEditorSchema } from "spikypanda-core";
 export { PORT_COLORS } from "./types";
+export type { IPlugin, IPluginContext, IPluginManifest, IPluginNodeEntry, IPluginEditorEntry } from "./plugin.interfaces";
 export type {
     PortDirection,
     PortType,

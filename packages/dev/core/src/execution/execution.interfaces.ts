@@ -80,6 +80,17 @@ export interface IRuntimeNode<B=unknown> extends INode<B>, IEnabled {
     fireAsync(session: ISession, t: number): Promise<void>;
     reset(session: ISession): void;
     createNodeState?(): INodeState;
+
+    /**
+     * Optional pre-fire control-plane processing. The scheduler calls
+     * this immediately before `fire(session, t)`. Implementations read
+     * incoming control channels (slots prefixed with "_": _enable,
+     * _start, _stop), update the node's lifecycle state accordingly,
+     * and may publish on outgoing control channels (_enabled, _started,
+     * _stopped) to broadcast the change. Returns nothing; mutation
+     * happens on the node and on session linkStates.
+     */
+    processControlInputs?(session: ISession): void;
 }
 
 // =====================================================================
@@ -277,6 +288,15 @@ export interface ISession {
 
     run(t: number): void;
     reset(): void;
+
+    /**
+     * Begin-Play entry point: arms every StartNode in the graph so it
+     * fires on the next run(t) and broadcasts a trigger on its _started
+     * output. Symmetric stop() arms every StopNode (when introduced).
+     * Implementations no-op on graphs that have neither.
+     */
+    start(): void;
+    stop(): void;
 }
 
 // =====================================================================
@@ -323,5 +343,30 @@ export function declaresPorts(n: IRuntimeNode): n is IRuntimeNode & IDeclaresPor
     return (
         Array.isArray(candidate.inputPorts) &&
         Array.isArray(candidate.outputPorts)
+    );
+}
+
+/**
+ * Sister of IDeclaresPorts for the runtime control plane. Kept distinct
+ * from inputPorts/outputPorts so the editor can render the two groups
+ * differently (e.g., compact row at the top/bottom of the node body) and
+ * so validators know which slots correspond to lifecycle wiring vs.
+ * domain data. Slot names by convention start with "_" (see
+ * control-ports.ts).
+ *
+ * Every RuntimeNode satisfies this with at least { _enable, _enabled }.
+ * RunnableNode adds { _start, _stop, _started, _stopped }. Subclasses
+ * compose further if they need more (e.g. _pause, _reset).
+ */
+export interface IDeclaresControlPorts {
+    readonly controlInputPorts:  ReadonlyArray<IPortDescriptor>;
+    readonly controlOutputPorts: ReadonlyArray<IPortDescriptor>;
+}
+
+export function declaresControlPorts(n: IRuntimeNode): n is IRuntimeNode & IDeclaresControlPorts {
+    const candidate = n as IRuntimeNode & Partial<IDeclaresControlPorts>;
+    return (
+        Array.isArray(candidate.controlInputPorts) &&
+        Array.isArray(candidate.controlOutputPorts)
     );
 }

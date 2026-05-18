@@ -28,7 +28,7 @@ import { homedir } from "os";
 import { createServer } from "http";
 import { createServer as createNetServer } from "net";
 import { WsTunnelBuilder } from "@dev/tunnel";
-import { McpServerBuilder, McpGrammarBehavior, McpGrammarStore } from "@dev/core";
+import { McpServerBuilder, McpGrammarBehavior, McpGrammarStore } from "@cyanmycelium/mcp-core";
 import { SpkResearchAdapter } from "../dev/mcp/dist/research/spk.research.adapter.js";
 import { SpkResearchBehavior } from "../dev/mcp/dist/research/spk.research.behavior.js";
 import { SpkProjectAdapter } from "../dev/mcp/dist/projects/spk.project.adapter.js";

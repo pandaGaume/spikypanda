@@ -1,0 +1,25 @@
+{
+    "extends": "../../../../tsconfig.build.json",
+    "compilerOptions": {
+        "composite": true,
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "skipLibCheck": true,
+        "noUnusedLocals": false,
+        "paths": {
+            "spikypanda-core":          ["dev/core/dist"],
+            "spikypanda-core/*":        ["dev/core/dist/*"],
+            "spikypanda-nodeeditor":    ["dev/nodeeditor/dist"],
+            "spikypanda-nodeeditor/*":  ["dev/nodeeditor/dist/*"],
+            "spikypanda-onnx":          ["dev/onnx/dist"],
+            "spikypanda-onnx/*":        ["dev/onnx/dist/*"]
+        }
+    },
+    "references": [
+        { "path": "../../core/tsconfig.build.json" },
+        { "path": "../../nodeeditor/tsconfig.build.json" },
+        { "path": "../../onnx/tsconfig.build.json" }
+    ],
+    "include": ["./src/**/*.ts"],
+    "exclude": ["**/node_modules", "**/dist"]
+}

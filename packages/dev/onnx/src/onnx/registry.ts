@@ -1,4 +1,5 @@
 import { Kernel, ITensor } from "spikypanda-core";
+import type { IDeclaresPorts, IPortDescriptor } from "spikypanda-core";
 import { OnnxDataType } from "./onnx-types";
 import type { OnnxNodeInfo, OnnxTensorInfo } from "./onnx-types";
 
@@ -97,22 +98,49 @@ export class OnnxOpRegistry {
 }
 
 /**
- * Base class for ONNX op nodes. Provides attribute access helpers.
+ * Base class for ONNX op nodes. Provides attribute access helpers and a
+ * default IDeclaresPorts implementation derived from the parsed nodeInfo
+ * (one port per declared input/output tensor name, positional slot
+ * indices). Subclasses that need per-op port refinement (optional B in
+ * Conv, etc.) override _buildInputPorts/_buildOutputPorts.
  */
-export abstract class OnnxOpNode extends Kernel {
+export abstract class OnnxOpNode extends Kernel implements IDeclaresPorts {
     readonly opType: string;
     protected readonly attributes: Map<string, number>;
     protected readonly tensorAttributes: Map<string, OnnxTensorInfo>;
+
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor>;
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor>;
 
     constructor(nodeInfo: OnnxNodeInfo) {
         super();
         this.opType = nodeInfo.opType;
         this.attributes = nodeInfo.attributes;
         this.tensorAttributes = nodeInfo.tensorAttributes ?? new Map();
+        this.inputPorts = this._buildInputPorts(nodeInfo);
+        this.outputPorts = this._buildOutputPorts(nodeInfo);
     }
 
     get nodeType(): string {
         return `onnx_${this.opType.toLowerCase()}`;
+    }
+
+    /**
+     * Build the input port descriptors. Default: one mandatory tensor
+     * port per declared input tensor, positional slot. Subclasses
+     * override to mark specific inputs optional (e.g. Conv.B) or to
+     * refine the type label.
+     */
+    protected _buildInputPorts(nodeInfo: OnnxNodeInfo): ReadonlyArray<IPortDescriptor> {
+        return nodeInfo.inputs.map((_, i) => ({
+            slot: i, optional: false, type: "tensor",
+        }));
+    }
+
+    protected _buildOutputPorts(nodeInfo: OnnxNodeInfo): ReadonlyArray<IPortDescriptor> {
+        return nodeInfo.outputs.map((_, i) => ({
+            slot: i, optional: false, type: "tensor",
+        }));
     }
 
     protected attr(name: string, defaultVal: number): number {

@@ -13,10 +13,10 @@
  * - {@link McpGrammarBehavior}  : runtime grammar mutations so the agent can
  *                                 patch its own tool descriptions in-session.
  */
-import { McpServerBuilder, McpGrammarBehavior, McpGrammarStore } from "@dev/core";
+import { McpServerBuilder, McpGrammarBehavior, McpGrammarStore } from "@cyanmycelium/mcp-core";
+import { StdioTransport } from "@cyanmycelium/mcp-core/node";
 import { SpkResearchAdapter } from "./spk.research.adapter.js";
 import { SpkResearchBehavior } from "./spk.research.behavior.js";
-import { StdioTransport } from "./stdio.transport.js";
 
 async function main(): Promise<void> {
     const adapter = new SpkResearchAdapter(process.env["SPK_RESEARCH_DIR"]);

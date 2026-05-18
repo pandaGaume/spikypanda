@@ -1,4 +1,5 @@
-import type { ITensor } from "spikypanda-core";
+import { cloneable, editable } from "spikypanda-core";
+import type { ITensor, IPortDescriptor } from "spikypanda-core";
 import type { OnnxNodeInfo } from "../onnx-types";
 import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "../registry";
 
@@ -10,17 +11,42 @@ import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "../registry";
  * For our 2D-limited scope: input is [1, C_in * H * W], kernel is [C_out, C_in, kH, kW].
  * Simplified: treats as matrix multiply if shapes are 2D.
  */
-class ConvNode extends OnnxOpNode {
-    private readonly kernelShape: number[];
-    private readonly strides: number[];
-    private readonly pads: number[];
+export class ConvNode extends OnnxOpNode {
+    @cloneable private _kernelShape: number;
+    @cloneable private _strides: number;
+    @cloneable private _pads: number;
     readonly outputShapes: number[][] = [];
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.kernelShape = [this.attrInt("kernel_shape", 3)];
-        this.strides = [this.attrInt("strides", 1)];
-        this.pads = [this.attrInt("pads", 0)];
+        this._kernelShape = this.attrInt("kernel_shape", 3);
+        this._strides     = this.attrInt("strides", 1);
+        this._pads        = this.attrInt("pads", 0);
+    }
+
+    @editable("number", { min: 1, max: 11, step: 1 })
+    public get kernelShape(): number { return this._kernelShape; }
+    public set kernelShape(v: number) {
+        this.setField("kernelShape", this._kernelShape, v, (x) => { this._kernelShape = x; });
+    }
+
+    @editable("number", { min: 1, max: 8, step: 1 })
+    public get strides(): number { return this._strides; }
+    public set strides(v: number) {
+        this.setField("strides", this._strides, v, (x) => { this._strides = x; });
+    }
+
+    @editable("number", { min: 0, max: 8, step: 1 })
+    public get pads(): number { return this._pads; }
+    public set pads(v: number) {
+        this.setField("pads", this._pads, v, (x) => { this._pads = x; });
+    }
+
+    protected override _buildInputPorts(info: OnnxNodeInfo): ReadonlyArray<IPortDescriptor> {
+        // Conv inputs: X (required), W (required), B (optional bias).
+        return info.inputs.map((_, i) => ({
+            slot: i, optional: i === 2, type: "tensor",
+        }));
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -56,9 +82,9 @@ class ConvNode extends OnnxOpNode {
         const C_in = X.shape[1];
         const L = X.shape[2];
         const C_out = W.shape[0];
-        const kL = W.shape.length >= 3 ? W.shape[2] : this.kernelShape[0];
-        const stride = this.strides[0];
-        const pad = this.pads[0];
+        const kL = W.shape.length >= 3 ? W.shape[2] : this._kernelShape;
+        const stride = this._strides;
+        const pad = this._pads;
         const outL = Math.floor((L + 2 * pad - kL) / stride) + 1;
 
         const out = new Float32Array(N * C_out * outL);

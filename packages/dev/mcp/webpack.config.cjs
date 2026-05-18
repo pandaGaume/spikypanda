@@ -9,10 +9,10 @@ const path = require("path");
 // mcp-core.js and mcp-server.js (provided by mcp-for-babylon) inside
 // nodeeditor-mcp.html.
 //
-// @dev/core classes (McpBehavior, McpAdapterBase, McpServerBuilder) live in
+// @cyanmycelium/mcp-core classes (McpBehavior, McpAdapterBase, McpServerBuilder) live in
 // the mcp-server.js bundle as window.McpServer. The webpack externals below
-// rewrite every `import { ... } from "@dev/core"` into a reference to that
-// global, mirroring the pattern used by mcp-babylon.js in mcp-for-babylon.
+// rewrite every `import { ... } from "@cyanmycelium/mcp-core"` into a reference to that
+// global.
 // ---------------------------------------------------------------------------
 module.exports = (env, argv) => {
     const isProd = argv.mode === "production";
@@ -50,7 +50,7 @@ module.exports = (env, argv) => {
         },
         externals: [
             ({ request }, callback) => {
-                if (request && request.match(/^@dev\/core/)) {
+                if (request && request.match(/^@cyanmycelium\/mcp-core/)) {
                     return callback(null, "McpServer");
                 }
                 callback();
