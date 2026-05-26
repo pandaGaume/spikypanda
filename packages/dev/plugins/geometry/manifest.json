@@ -32,8 +32,25 @@
             "outputPorts": [
                 { "slot": "rotation", "type": "vec4", "optional": false }
             ],
+            "editors": ["attitude-3d"],
             "defaults": { "yaw": 0, "pitch": 0, "roll": 0 }
+        },
+        {
+            "type": "spk.geometry:cartesian3",
+            "label": "Cartesian3",
+            "category": "geometry",
+            "inputPorts": [
+                { "slot": "x", "type": "float", "optional": true },
+                { "slot": "y", "type": "float", "optional": true },
+                { "slot": "z", "type": "float", "optional": true }
+            ],
+            "outputPorts": [
+                { "slot": "vec3", "type": "vec3", "optional": false }
+            ],
+            "defaults": { "x": 0, "y": 0, "z": 0 }
         }
     ],
-    "editors": []
+    "editors": [
+        { "kind": "attitude-3d", "factory": "attitude3DEditor" }
+    ]
 }

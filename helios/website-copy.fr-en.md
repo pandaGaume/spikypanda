@@ -66,7 +66,7 @@ pilotée par LLM pour la formation crise d'équipages.
 [Lien discret : Explore le système →]
 ```
 
-**[VISUEL HERO]** : le PFD HELIOS (`figures/helios-pfd.png`), grande taille, sobre, en surimpression légère le titre et le sous-titre. Pas d'animation.
+**[VISUEL HERO]** : le PFD HELIOS (`figures/pfd.png`), grande taille, sobre, en surimpression légère le titre et le sous-titre. Pas d'animation.
 
 **[SECTION : Pourquoi HELIOS]**
 
@@ -293,7 +293,7 @@ All open source, no ITAR-controlled content, designed to be used by academic lab
 
 **[SECTION : Le procédé physique]**
 
-[Visuel : `figures/helios-pfd.png` en très grand]
+[Visuel : `figures/pfd.png` en très grand]
 
 HELIOS modélise une boucle CO2 vers CH4 complète à travers dix unités opératoires reliées par treize tags d'équipement. Les flux entre unités portent une composition multi-espèces (H2O, H2, O2, CO2, CH4, N2) avec température et pression, pas un simple scalaire de débit.
 
@@ -385,7 +385,7 @@ Le LLM est explicitement exclu de trois boucles : l'intégration physique du Sim
 
 **[SECTION : The physical process]**
 
-[Visual : `figures/helios-pfd.png` very large]
+[Visual : `figures/pfd.png` very large]
 
 HELIOS models a complete CO2 to CH4 loop across ten unit operations linked by thirteen equipment tags. Streams between units carry multi-species composition (H2O, H2, O2, CO2, CH4, N2) with temperature and pressure, not a simple scalar flow rate.
 
@@ -607,10 +607,10 @@ Direct contact : [contact@iofmars.com](mailto:contact@iofmars.com)
 
 Documents principaux de la plateforme, maintenus dans le repo et synchronisés avec le code.
 
-- [**HELIOS Project Overview**](https://github.com/iofmars/helios/blob/main/docs/architecture/helios-project-overview.fr.md) : fiche projet complète, contexte, architecture, roadmap.
-- [**ISimGraph v2 Design**](https://github.com/iofmars/helios/blob/main/docs/architecture/isimgraph-v2-notes.fr.md) : design détaillé du framework de simulation, stratégie solveur, outils spectraux.
-- [**Agent Manifest**](https://github.com/iofmars/helios/blob/main/docs/architecture/helios-agent-manifest-v1.fr.md) : spec des 28 agents (inputs, outputs, roles, criticité).
-- [**Glossaire technique**](https://github.com/iofmars/helios/blob/main/docs/architecture/isimgraph-v2-notes.fr.md#glossaire) : tous les acronymes et termes (PFD, ISRU, ECLSS, MCP, BDF, DMD, Koopman, etc.).
+- [**HELIOS Project Overview**](https://github.com/iofmars/helios/blob/main/project-overview.fr.md) : fiche projet complète, contexte, architecture, roadmap.
+- [**ISimGraph v2 Design**](https://github.com/iofmars/helios/blob/main/isimgraph-v2-notes.fr.md) : design détaillé du framework de simulation, stratégie solveur, outils spectraux.
+- [**Agent Manifest**](https://github.com/iofmars/helios/blob/main/agent-manifest-v1.fr.md) : spec des 28 agents (inputs, outputs, roles, criticité).
+- [**Glossaire technique**](https://github.com/iofmars/helios/blob/main/isimgraph-v2-notes.fr.md#glossaire) : tous les acronymes et termes (PFD, ISRU, ECLSS, MCP, BDF, DMD, Koopman, etc.).
 
 **[SECTION : Code]**
 
@@ -646,10 +646,10 @@ Configurations de référence du PFD HELIOS et bibliothèque initiale de scénar
 
 Primary platform documents, maintained in the repo and synced with the code.
 
-- [**HELIOS Project Overview**](https://github.com/iofmars/helios/blob/main/docs/architecture/helios-project-overview.fr.md) : complete project sheet, context, architecture, roadmap.
-- [**ISimGraph v2 Design**](https://github.com/iofmars/helios/blob/main/docs/architecture/isimgraph-v2-notes.fr.md) : detailed simulation framework design, solver strategy, spectral tools.
-- [**Agent Manifest**](https://github.com/iofmars/helios/blob/main/docs/architecture/helios-agent-manifest-v1.fr.md) : 28-agent spec (inputs, outputs, roles, criticality).
-- [**Technical glossary**](https://github.com/iofmars/helios/blob/main/docs/architecture/isimgraph-v2-notes.fr.md#glossaire) : all acronyms and terms (PFD, ISRU, ECLSS, MCP, BDF, DMD, Koopman, etc.).
+- [**HELIOS Project Overview**](https://github.com/iofmars/helios/blob/main/project-overview.fr.md) : complete project sheet, context, architecture, roadmap.
+- [**ISimGraph v2 Design**](https://github.com/iofmars/helios/blob/main/isimgraph-v2-notes.fr.md) : detailed simulation framework design, solver strategy, spectral tools.
+- [**Agent Manifest**](https://github.com/iofmars/helios/blob/main/agent-manifest-v1.fr.md) : 28-agent spec (inputs, outputs, roles, criticality).
+- [**Technical glossary**](https://github.com/iofmars/helios/blob/main/isimgraph-v2-notes.fr.md#glossaire) : all acronyms and terms (PFD, ISRU, ECLSS, MCP, BDF, DMD, Koopman, etc.).
 
 **[SECTION : Code]**
 
@@ -764,7 +764,7 @@ Le pattern « [Lien : Détails techniques →] » indique un lien interne vers u
 
 ### Visuels mentionnés
 
-- Le PFD : `figures/helios-pfd.png` (fourni)
+- Le PFD : `figures/pfd.png` (fourni)
 - Schéma topologie 3 runtimes : à produire, ASCII actuellement dans le project overview, à transformer en schéma vectoriel sobre.
 - Schéma réactions Sabatier + électrolyse : à produire, simple, deux boîtes et des flèches.
 - Schéma 28 agents en overlay sur le PFD : optionnel pour V1, fort impact visuel si fait.

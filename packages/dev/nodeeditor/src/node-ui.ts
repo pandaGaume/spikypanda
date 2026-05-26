@@ -43,6 +43,12 @@ export class NodeUI {
     readonly controlInputs: Port[] = [];
     readonly controlOutputs: Port[] = [];
     readonly item: UIItemBase<unknown>;
+    /** Variadic port descriptors copied from the NodeDef. The editor's
+     *  VariadicReconciler reads these to keep exactly one trailing
+     *  unconnected port for each set. Undefined when the node is not
+     *  variadic on that side. */
+    readonly variadicInput?:  { prefix: string; type: string };
+    readonly variadicOutput?: { prefix: string; type: string };
 
     x = 0;
     y = 0;
@@ -184,6 +190,15 @@ export class NodeUI {
         }
         for (const out of def.outputs) {
             this.addOutput(out.name, out.type);
+        }
+        // Stash the variadic descriptors from the NodeDef. We freeze a
+        // shallow copy so the reconciler can read them without holding
+        // a reference into caller-owned state.
+        if (def.variadicInput) {
+            this.variadicInput = { prefix: def.variadicInput.prefix, type: def.variadicInput.type };
+        }
+        if (def.variadicOutput) {
+            this.variadicOutput = { prefix: def.variadicOutput.prefix, type: def.variadicOutput.type };
         }
     }
 

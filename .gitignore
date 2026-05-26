@@ -65,3 +65,6 @@ internals/
 
 #private tests (confidential work)
 /packages/tests/privates/**
+
+#private working docs (drafts, internal, not for public repo)
+/helios/private/**

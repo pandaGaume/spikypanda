@@ -1,4 +1,4 @@
-import { IChannel, IRuntimeNode, ISession } from "./execution.interfaces";
+import { IChannel, IRuntimeNode, ISession, inSlotOf } from "./execution.interfaces";
 
 /**
  * Walk the runtime node's incoming channels (opsc) and override the
@@ -43,7 +43,7 @@ export function resolveSlotInputs<T extends Record<string, unknown>>(
     const incoming = node.opsc<IChannel>();
     for (const ch of incoming) {
         if (!ch.enabled) continue;
-        const slot = String(ch.slot);
+        const slot = String(inSlotOf(ch));
         if (!(slot in eff)) continue;
         const idx = session.graph.links.indexOf(ch);
         if (idx < 0 || !session.linkStates[idx].ready) continue;

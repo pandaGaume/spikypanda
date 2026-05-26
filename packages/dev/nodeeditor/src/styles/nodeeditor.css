@@ -495,7 +495,17 @@
     height: 100%;
     display: flex;
     overflow: hidden;
+}
+
+/* Disable native text selection inside any editor / viewer host.
+   Without this, dragging from an output port to an input port also
+   selects the port-label text and the surrounding node DOM. Layout
+   is intentionally left alone on .ne-viewer — its v2 host manages
+   sizing via its own classes. */
+.ne-editor,
+.ne-viewer {
     user-select: none;
+    -webkit-user-select: none;
 }
 
 .ne-panel {
@@ -576,6 +586,14 @@
 
 .ne-node:hover {
     box-shadow: 0 4px 16px var(--ne-color-recessed-3);
+}
+
+/* Helios runs on a near-pure-black canvas (#0A0A0F) where a 1px border
+   vanishes on lower-contrast displays. Thicken to 2px so each card has a
+   crisp outline. Color is set inline !important from the skin profile
+   (--ne-color-border), so the contrast comes from the skin's token. */
+.ne-skin-helios .ne-node {
+    border-width: 2px;
 }
 
 .ne-node-selected {
@@ -1584,3 +1602,101 @@
     margin-left:  8px;
     flex-shrink:  0;
 }
+
+/* ============================================================
+   DebugConsole component (ne-console)
+   Footer panel rendering rows from DebugBus. Skin-aware: every
+   visible token resolves from --ne-color-*, so the helios /
+   dark / light skin theming carries through automatically.
+   ============================================================ */
+
+.ne-console {
+    display:        flex;
+    flex-direction: column;
+    height:         100%;
+    background:     var(--ne-color-bg);
+    color:          var(--ne-color-text);
+    font-family:    var(--ne-font-mono, ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace);
+    border-top:     1px solid var(--ne-color-border);
+    overflow:       hidden;
+    transition:     height 0.15s ease;
+}
+
+/* Header strip: same surface as the body — only a thin bottom border
+   separates them. Reserves --ne-color-node-header strictly for actual
+   node-card headers on the canvas. */
+.ne-console-header {
+    display:        flex;
+    align-items:    center;
+    gap:            8px;
+    height:         28px;
+    padding:        0 16px;
+    background:     transparent;
+    border-bottom:  1px solid var(--ne-color-border);
+    font-size:      10px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color:          var(--ne-color-text-muted);
+    flex-shrink:    0;
+}
+
+.ne-console-title  { font-weight: 500; }
+.ne-console-spacer { flex: 1; }
+
+.ne-console-btn {
+    font-family:    var(--ne-font-mono, ui-monospace, monospace);
+    font-size:      10px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color:          var(--ne-color-text-muted);
+    padding:        2px 8px;
+    border:         1px solid var(--ne-color-border);
+    background:     transparent;
+    cursor:         pointer;
+    transition:     color .12s, border-color .12s, background .12s;
+}
+.ne-console-btn:hover {
+    color:        var(--ne-color-text-strong);
+    border-color: var(--ne-color-border-strong);
+    background:   var(--ne-color-primary-bg, transparent);
+}
+
+.ne-console-body {
+    flex:        1;
+    overflow-y:  auto;
+    padding:     4px 0;
+    font-size:   11px;
+    line-height: 1.45;
+    background:  var(--ne-color-bg);
+}
+
+.ne-console-row {
+    display:     flex;
+    gap:         12px;
+    padding:     1px 16px;
+    white-space: pre-wrap;
+    word-break:  break-word;
+}
+.ne-console-row:hover {
+    background: var(--ne-color-recessed-1, transparent);
+}
+
+.ne-console-ts     { flex: 0 0 80px;  color: var(--ne-color-text-faint); }
+.ne-console-level  { flex: 0 0 50px;  text-transform: uppercase; letter-spacing: .14em; }
+.ne-console-source { flex: 0 0 120px; color: var(--ne-color-text-muted); }
+.ne-console-msg    { flex: 1 1 auto;  color: var(--ne-color-text); }
+
+.ne-console-level-info  { color: var(--ne-color-text-muted); }
+.ne-console-level-warn  { color: var(--ne-color-warning, #E8B62D); }
+.ne-console-level-error { color: var(--ne-color-danger,  #B84A3C); }
+.ne-console-level-watch { color: var(--ne-color-primary, var(--ne-color-info, #4DA8C7)); }
+
+.ne-console-empty {
+    padding:        12px 16px;
+    color:          var(--ne-color-text-faint);
+    font-size:      11px;
+    letter-spacing: .04em;
+}
+
+.ne-console.is-collapsed { height: 28px; }
+.ne-console.is-collapsed .ne-console-body { display: none; }

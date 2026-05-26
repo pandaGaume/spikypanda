@@ -1,6 +1,6 @@
 # HELIOS Website - Specs visuels complémentaires
 
-*Spécifications détaillées des visuels à produire pour le site HELIOS, complémentaires au PFD principal déjà disponible (`figures/helios-pfd.png`). Chaque visuel est documenté avec son objectif, son style, son contenu, ses dimensions, un prompt pour Claude design ou outil IA équivalent, et un brief pour illustrateur humain. Cohérent avec le brief site web (`helios-website-brief.fr.md`).*
+*Spécifications détaillées des visuels à produire pour le site HELIOS, complémentaires au PFD principal déjà disponible (`figures/pfd.png`). Chaque visuel est documenté avec son objectif, son style, son contenu, ses dimensions, un prompt pour Claude design ou outil IA équivalent, et un brief pour illustrateur humain. Cohérent avec le brief site web (`website-brief.fr.md`).*
 
 ---
 
@@ -277,7 +277,7 @@ Visuel principal pour la section « Agents distribués » de la page System. Rep
 
 ### Contenu à représenter
 
-Base : le PFD existant `figures/helios-pfd.png`, en fond, en niveau de gris ou avec opacité réduite (par exemple 40%) pour servir de toile de fond sans capturer l'attention.
+Base : le PFD existant `figures/pfd.png`, en fond, en niveau de gris ou avec opacité réduite (par exemple 40%) pour servir de toile de fond sans capturer l'attention.
 
 Surimpression : pour chaque équipement, un ou plusieurs badges circulaires (ou hexagonaux) positionnés sur ou à côté de l'équipement, identifiant les agents qui le supervisent.
 
@@ -304,7 +304,7 @@ Surimpression : pour chaque équipement, un ou plusieurs badges circulaires (ou 
 ### Prompt Claude design (en mode hybride)
 
 ```
-Take the existing PFD diagram (helios-pfd.png) and create an overlay layer
+Take the existing PFD diagram (figures/pfd.png) and create an overlay layer
 showing 28 distributed agents positioned on their respective equipment tags.
 
 Base layer: the existing PFD, displayed at 40% opacity or converted to

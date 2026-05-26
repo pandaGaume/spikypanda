@@ -42,6 +42,15 @@ export class GraphViewer {
 
     private currentSkinName = "dark";
     private appliedSkinKeys: string[] = [];
+    /**
+     * Element the skin's `--ne-color-*` tokens get applied to.
+     * Defaults to the viewer host (legacy behaviour: skin scoped to the
+     * canvas). Apps with sibling editor components (Palette, Property
+     * panel, DebugConsole) call `setSkinTarget(appShell)` so the skin
+     * tokens become an ancestor of every component, keeping them
+     * visually coherent.
+     */
+    private skinTarget: HTMLElement;
     private currentProfile: ExportProfile = EXPORT_PROFILES["dark"];
     private layoutStrategy: LayoutStrategy = defaultLayout;
 
@@ -90,6 +99,11 @@ export class GraphViewer {
         this.viewport.appendChild(this.nodesLayer);
 
         this.host.appendChild(this.viewport);
+
+        // Default skin target = host. Apps with sibling editor
+        // components retarget it via setSkinTarget() so the skin
+        // tokens are applied to a shared ancestor.
+        this.skinTarget = this.host;
 
         this.skins = new SkinRegistry();
         this.skins.register("dark",              darkSkin);
@@ -197,15 +211,15 @@ export class GraphViewer {
         const skin = this.skins.getSkin(name);
         if (!skin) return;
 
-        for (const key of this.appliedSkinKeys) this.host.style.removeProperty(key);
+        for (const key of this.appliedSkinKeys) this.skinTarget.style.removeProperty(key);
         this.appliedSkinKeys = [];
 
-        this.host.classList.remove(`ne-skin-${this.currentSkinName}`);
-        this.host.classList.add(`ne-skin-${name}`);
+        this.skinTarget.classList.remove(`ne-skin-${this.currentSkinName}`);
+        this.skinTarget.classList.add(`ne-skin-${name}`);
         this.currentSkinName = name;
 
         for (const [key, value] of Object.entries(skin)) {
-            this.host.style.setProperty(key, value);
+            this.skinTarget.style.setProperty(key, value);
             this.appliedSkinKeys.push(key);
         }
 
@@ -213,6 +227,36 @@ export class GraphViewer {
     }
 
     getSkinName(): string { return this.currentSkinName; }
+
+    /**
+     * Retarget where the skin's CSS tokens are applied. Defaults to the
+     * viewer's own host (legacy: skin scoped to the canvas). Apps with
+     * sibling editor components (Palette, Property panel, DebugConsole)
+     * pass a shared ancestor so the skin tokens cascade to all of them
+     * and the editor looks coherent across panels.
+     *
+     * Any currently-applied skin is moved to the new target immediately,
+     * so callers don't need to re-call setSkin().
+     */
+    setSkinTarget(el: HTMLElement): void {
+        if (el === this.skinTarget) return;
+        // Pull current tokens off the old target.
+        for (const key of this.appliedSkinKeys) this.skinTarget.style.removeProperty(key);
+        this.skinTarget.classList.remove(`ne-skin-${this.currentSkinName}`);
+        const appliedKeys = this.appliedSkinKeys.slice();
+        this.appliedSkinKeys = [];
+        this.skinTarget = el;
+        // Re-apply on the new target.
+        const skin = this.skins.getSkin(this.currentSkinName);
+        if (!skin) return;
+        this.skinTarget.classList.add(`ne-skin-${this.currentSkinName}`);
+        for (const key of appliedKeys) {
+            const v = skin[key];
+            if (v === undefined) continue;
+            this.skinTarget.style.setProperty(key, v);
+            this.appliedSkinKeys.push(key);
+        }
+    }
 
     private _deriveProfileFromSkin(skin: Skin): ExportProfile {
         const pick = (key: string, fallback: string): string =>

@@ -11,6 +11,7 @@ import { IChannel } from "./execution.interfaces";
  */
 export class Channel<T = unknown> extends GraphOLink implements IChannel<T> {
     @cloneable public slot: string | number;
+    @cloneable public toSlot?: string | number;
     @cloneable public delayed: boolean;
     @cloneable public initialValue?: T;
     @cloneable public enabled: boolean;
@@ -21,10 +22,12 @@ export class Channel<T = unknown> extends GraphOLink implements IChannel<T> {
         slot: string | number = 0,
         delayed: boolean = false,
         initialValue?: T,
-        enabled: boolean = true
+        enabled: boolean = true,
+        toSlot?: string | number,
     ) {
         super(oini, ofin);
         this.slot = slot;
+        this.toSlot = toSlot;
         this.delayed = delayed;
         this.initialValue = initialValue;
         this.enabled = enabled;

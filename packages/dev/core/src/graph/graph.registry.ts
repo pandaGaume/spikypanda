@@ -18,6 +18,14 @@ export interface INodeMeta {
      *  can be exported to a given format (it can if every node carries
      *  the target's badge). Empty/absent = no interop guarantee. */
     readonly standards?: ReadonlyArray<string>;
+    /** Variadic input descriptor: when set, the editor maintains a
+     *  growing/shrinking set of input ports `${prefix}0`, `${prefix}1`,
+     *  ... so exactly one trailing unconnected port stays available
+     *  (the "+" slot). */
+    readonly variadicInput?:  { readonly prefix: string; readonly type: string };
+    /** Same as `variadicInput` but for the output side (e.g. Sequence's
+     *  `then_0`, `then_1`, ...). */
+    readonly variadicOutput?: { readonly prefix: string; readonly type: string };
 }
 
 export type NodeFactory = (config?: Record<string, unknown>) => IRuntimeNode;

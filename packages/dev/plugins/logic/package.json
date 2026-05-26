@@ -1,7 +1,7 @@
 {
-    "name": "@spikypanda/plugin-geometry",
+    "name": "@spikypanda/plugin-logic",
     "version": "0.1.0",
-    "description": "Geometry plugin for SpikyPanda: 3D transforms, attitude (Euler angles to quaternion).",
+    "description": "Logic plugin for SpikyPanda: UE5-blueprint-inspired flow-control and comparison nodes.",
     "private": true,
     "type": "module",
     "main": "dist/index.js",
@@ -18,9 +18,8 @@
     },
     "sideEffects": false,
     "dependencies": {
-        "@spiky-panda/core": "*",
-        "@spikypanda/nodeeditor": "*",
-        "@babylonjs/core": "^8.34.0"
+        "@spiky-panda/core":     "*",
+        "@spikypanda/nodeeditor": "*"
     },
     "devDependencies": {
         "rimraf":    "~6.0.1",

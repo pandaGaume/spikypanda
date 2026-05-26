@@ -2,7 +2,7 @@
 ## CO₂ → CH₄ Closed Loop Life Support System
 *Document de référence pour génération de modèles et distribution sur digital twin*
 
-![PFD HELIOS : équipements ciblés par les agents listés ci-dessous](figures/helios-pfd.png)
+![PFD HELIOS : équipements ciblés par les agents listés ci-dessous](figures/pfd.png)
 
 ---
 
@@ -397,7 +397,7 @@ role     : surveille la chaîne de récupération thermique
 
 ## Lecture par la direction de scénario
 
-Les agents observers de cette liste (W101-FLOW-MONITOR, R601-CATALYST-HEALTH, K401-BEARING-HEALTH, etc.) ont un second usage au-delà du monitoring opérationnel : leurs sorties sont lisibles par le scenario director LLM décrit dans `helios-project-overview.fr.md` section 8. Le LLM s'en sert pour évaluer ce que l'équipage en formation a remarqué dans la situation simulée. Un agent qui signale une dégradation ignorée par l'équipage informe le LLM que l'objectif pédagogique a été manqué ; il peut alors décider d'introduire une alerte plus visible, ou au contraire laisser la situation se dégrader pour observer la suite des décisions.
+Les agents observers de cette liste (W101-FLOW-MONITOR, R601-CATALYST-HEALTH, K401-BEARING-HEALTH, etc.) ont un second usage au-delà du monitoring opérationnel : leurs sorties sont lisibles par le scenario director LLM décrit dans `project-overview.fr.md` section 8. Le LLM s'en sert pour évaluer ce que l'équipage en formation a remarqué dans la situation simulée. Un agent qui signale une dégradation ignorée par l'équipage informe le LLM que l'objectif pédagogique a été manqué ; il peut alors décider d'introduire une alerte plus visible, ou au contraire laisser la situation se dégrader pour observer la suite des décisions.
 
 Les agents controllers et safety ne sont pas dans ce périmètre. Le LLM peut lire leurs états (utile pour le debrief), mais il n'a aucune autorité pour les modifier, les inhiber, ou court-circuiter leur arbitrage. Cette séparation est ce qui rend le scenario director compatible avec un système où la sécurité réelle doit rester gouvernée par les agents safety, pas par le narrateur.
 

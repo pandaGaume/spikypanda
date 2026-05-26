@@ -45,12 +45,21 @@ export class RuntimeGraphBuilder<
     }
 
     /**
-     * Register a directed channel between two nodes with the given
-     * slot. Equivalent to `withLinks(from, to)` but lets you specify
-     * a non-default slot name.
+     * Register a directed channel between two nodes.
+     *
+     * `slot` names the OUTPUT port on the source; `toSlot` names the
+     * INPUT port on the destination. When the source and destination
+     * use the same port name (the common production case) `toSlot`
+     * can be omitted and defaults to `slot`. UE5-style editors that
+     * connect `node.outPortA` to `otherNode.inPortB` pass both.
      */
-    public withChannel(from: N, to: N, slot: string | number = 0): this {
-        const channel = this._createChannel(from, to, slot, false, undefined);
+    public withChannel(
+        from: N,
+        to: N,
+        slot: string | number = 0,
+        toSlot?: string | number,
+    ): this {
+        const channel = this._createChannel(from, to, slot, false, undefined, toSlot);
         return this.withLinks(channel as unknown as L);
     }
 
@@ -102,9 +111,10 @@ export class RuntimeGraphBuilder<
         ofin: INode | null,
         slot: string | number,
         delayed: boolean,
-        initialValue: T | undefined
+        initialValue: T | undefined,
+        toSlot?: string | number,
     ): IChannel<T> {
-        return new Channel<T>(oini ?? undefined, ofin ?? undefined, slot, delayed, initialValue);
+        return new Channel<T>(oini ?? undefined, ofin ?? undefined, slot, delayed, initialValue, true, toSlot);
     }
 
     /**

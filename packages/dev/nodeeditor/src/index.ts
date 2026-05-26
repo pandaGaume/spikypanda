@@ -46,7 +46,18 @@ export {
     vector3Editor,
     vector4Editor,
     quaternionEditor,
+    numberEditor,
 } from "./editors";
+export { LiveBinder } from "./live-binder";
+export { GraphRunner } from "./graph-runner";
+export type { RunnerState } from "./graph-runner";
+export { GraphInferrer } from "./graph-inferrer";
+export { buildSessionFromViewer, disposeChannels } from "./graph-session-builder";
+export { VariadicReconciler } from "./variadic-reconciler";
+export { DebugBus } from "./debug-bus";
+export type { DebugLevel, IDebugEntry, DebugHandler } from "./debug-bus";
+export { DebugConsole } from "./components/debug-console";
+export type { DebugConsoleOptions } from "./components/debug-console";
 export { SkinRegistry } from "./skin-registry";
 export type { Skin } from "./skin-registry";
 export { darkSkin }   from "./styles/skins/dark";

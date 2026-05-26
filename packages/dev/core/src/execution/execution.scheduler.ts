@@ -1,4 +1,14 @@
-import { IChannel, IRuntimeGraph, IRuntimeNode, ISession, IStaticEligibility } from "./execution.interfaces";
+import {
+    IChannel,
+    IRuntimeGraph,
+    IRuntimeNode,
+    ISession,
+    IStaticEligibility,
+    isLinkRef,
+    inSlotOf,
+} from "./execution.interfaces";
+import { isControlSlot } from "./control-ports";
+import type { Session } from "./execution.session";
 
 /**
  * Kahn topological order over the subgraph induced by enabled and
@@ -60,128 +70,130 @@ function topoSort(graph: IRuntimeGraph): { order: IRuntimeNode[]; reasons: strin
 }
 
 /**
- * Schedulers for IRuntimeGraph. Static-class container gathering the
- * available scheduling strategies as pure static methods.
+ * Scheduler strategies.
  *
- *   RunDynamic           : ready-queue dispatch driven by linksReady
- *                          counters maintained by Session.publish() /
- *                          Session.consume(). A node is queued the
- *                          moment its INodeState.linksReady reaches
- *                          session.requiredInputsOf(node), fired once,
- *                          and its outputs propagate to downstream
- *                          counters automatically. O(N+E) per cycle.
+ *   RunDynamic   FIFO drain over the session's queue, which holds
+ *                LinkRefs (publish events) and IRuntimeNode entries
+ *                (ready-check requests). The drain alternates between
+ *                them naturally: a LinkRef delivers its value into the
+ *                destination's per-slot buffer and re-queues the
+ *                destination; a node entry consumes one token per
+ *                gating slot when ready and may re-queue itself if
+ *                multiple tokens were buffered (the loop case).
  *
- *   RunStatic            : pre-computed Kahn topological order over
- *                          the non-delayed enabled-channel subgraph,
- *                          fires each enabled node once in order. No
- *                          isReady() check.
+ *   RunStatic    Kahn topological order over the non-delayed enabled-
+ *                channel subgraph. Visits each enabled node once in
+ *                that order with the same isReady() / processControl
+ *                contract. Cheap when applicable but does NOT support
+ *                multi-token (loop) bursts; raise a static-ineligible
+ *                error if any link has a capacity > 1.
  *
- *   CheckStaticEligible  : verifies the graph satisfies the structural
- *                          precondition for RunStatic.
+ *   CheckStaticEligible  Validates RunStatic preconditions.
  */
 export class Scheduler {
-    /**
-     * Dynamic (ready-queue) scheduler. Seeds the queue from nodes
-     * already eligible at session start (sources, plus nodes whose only
-     * inputs are delayed and pre-seeded by reset), drains the queue
-     * firing each enabled node once, scans the fired node's outgoing
-     * channels to enqueue any newly-eligible downstream nodes.
-     */
     public static RunDynamic(session: ISession, t: number): void {
+        const sess = session as Session;
+        const queue = sess.queue;
         const nodes = session.graph.nodes as ReadonlyArray<IRuntimeNode>;
-        const queue: IRuntimeNode[] = [];
-        const fired = new Set<IRuntimeNode>();
 
-        // Seed: nodes whose counter already meets the required count.
+        // Seed: enqueue every node that is already ready (sources with
+        // requiredInputs = 0, or nodes whose delayed inputs were pre-
+        // seeded into their buffers by Session.reset()).
         for (let i = 0; i < nodes.length; i++) {
             const node = nodes[i];
-            if (!node.enabled) {
-                continue;
-            }
+            if (!node.enabled) continue;
             if (session.nodeStates[i].linksReady >= session.requiredInputsOf(node)) {
                 queue.push(node);
             }
         }
 
         while (queue.length > 0) {
-            const node = queue.shift()!;
-            if (fired.has(node)) {
-                continue;
-            }
-            // Drain control-plane inputs (_enable / _start / _stop) so
-            // the latest lifecycle commands take effect before the
-            // enabled/isReady gates are re-evaluated below.
-            node.processControlInputs?.(session);
-            if (!node.enabled) {
-                continue;
-            }
-            // Defensive isReady: lets nodes refuse to fire even when
-            // their counter looks ready (SNN threshold, phase gating).
-            if (!node.isReady(session)) {
-                continue;
-            }
-            node.fire(session, t);
-            fired.add(node);
+            const item = queue.shift()!;
 
-            // The node's publish() calls during fire bumped downstream
-            // counters; enqueue any downstream that just reached its
-            // required count.
-            for (const link of node.onsc<IChannel>()) {
-                if (!link.enabled) {
-                    continue;
-                }
+            if (isLinkRef(item)) {
+                // Deliver the value into the destination's per-slot
+                // buffer and re-queue the destination for a ready-check.
+                sess.deliverLinkRef(item);
+                const link = session.graph.links[item.linkIndex] as IChannel | undefined;
+                if (!link || !link.enabled) continue;
                 const dst = link.ofin as IRuntimeNode | null;
-                if (!dst || fired.has(dst) || !dst.enabled) {
-                    continue;
-                }
-                if (nodes.indexOf(dst) < 0) {
-                    continue;
-                }
-                const dstState = session.nodeStateOf(dst);
-                if (!dstState) {
-                    continue;
-                }
-                if (dstState.linksReady >= session.requiredInputsOf(dst)) {
-                    queue.push(dst);
-                }
+                if (!dst || !dst.enabled) continue;
+                if (nodes.indexOf(dst) < 0) continue;
+                queue.push(dst);
+                continue;
+            }
+
+            // Node ready-check entry. Drain its control-plane inputs
+            // first (e.g. _enable, _start, _stop / _reset) so the
+            // enabled/isReady gates see the latest state.
+            const node = item;
+            node.processControlInputs?.(session);
+            if (!node.enabled) continue;
+
+            const required = session.requiredInputsOf(node);
+            const state = session.nodeStateOf(node);
+            if (!state) continue;
+            if (state.linksReady < required) continue;
+            if (!node.isReady(session)) continue;
+
+            node.fire(session, t);
+
+            // If the node still has tokens on every gating slot, it's
+            // ready to fire again on the next pop. This is what makes
+            // loops work: an upstream that published N times left N
+            // tokens queued; each fire consumes one and the node
+            // refires until the queue is empty.
+            //
+            // The `linksReady > 0` guard is what stops required=0
+            // sources (StartNode, MakeArray, etc.) from re-enqueuing
+            // forever: they have no gating inputs (readyCount stays
+            // at 0 across fires), so the criterion `0 >= 0` would
+            // otherwise create an infinite loop. Loop-mode dispatch
+            // (multi-token gating inputs) goes through the > 0 branch
+            // because at least one buffer remains non-empty.
+            if (state.linksReady > 0 && state.linksReady >= required) {
+                queue.push(node);
             }
         }
     }
 
-    /**
-     * Static (Kahn-topo) scheduler. Computes the topological order over
-     * the non-delayed enabled-channel subgraph, then visits each enabled
-     * node in that order; each visited node is given the same chance to
-     * refuse via isReady() as in the dynamic scheduler (a phase-aware
-     * node skipping a phase, an SNN below threshold, etc.). The static
-     * mode optimisation is only about avoiding the ready-queue
-     * book-keeping; the per-node isReady() contract is honored
-     * identically in both modes. Throws if a cycle remains; call
-     * CheckStaticEligible() before declaring mode="static" on a graph
-     * built dynamically.
-     */
     public static RunStatic(session: ISession, t: number): void {
         const { order, reasons } = topoSort(session.graph);
         if (reasons.length > 0) {
             throw new Error(`graph is not statically schedulable: ${reasons.join("; ")}`);
         }
+        // Static mode: pull-style. Each node is visited exactly once.
+        // For each node, drain its publish events from the session
+        // queue first (so any seeded delayed channels deliver their
+        // tokens into the input buffers) and then attempt fire.
+        const sess = session as Session;
+        // Flush any LinkRefs that were sitting on the queue (e.g. from
+        // Session.reset's delayed-channel seeding).
+        const pending = sess.queue.splice(0, sess.queue.length);
+        for (const item of pending) {
+            if (isLinkRef(item)) sess.deliverLinkRef(item);
+        }
         for (const node of order) {
             node.processControlInputs?.(session);
-            if (!node.enabled) {
-                continue;
+            if (!node.enabled) continue;
+            // Drain any LinkRefs published by an earlier node fire.
+            const newRefs = sess.queue.splice(0, sess.queue.length);
+            for (const item of newRefs) {
+                if (isLinkRef(item)) sess.deliverLinkRef(item);
             }
-            if (!node.isReady(session)) {
-                continue;
-            }
+            if (!node.isReady(session)) continue;
             node.fire(session, t);
         }
+        // Final drain so the post-last-node publishes land on the
+        // input buffers of any consumer (useful for sub-graph ports).
+        const tail = sess.queue.splice(0, sess.queue.length);
+        for (const item of tail) {
+            if (isLinkRef(item)) sess.deliverLinkRef(item);
+        }
+        // t is read by node.fire; declare it used.
+        void t;
     }
 
-    /**
-     * Reports whether the graph satisfies the structural preconditions
-     * for RunStatic. eligible=true when the non-delayed enabled-channel
-     * subgraph is acyclic; reasons lists every blocker otherwise.
-     */
     public static CheckStaticEligible(graph: IRuntimeGraph): IStaticEligibility {
         const { reasons } = topoSort(graph);
         return {
@@ -190,14 +202,6 @@ export class Scheduler {
         };
     }
 
-    /**
-     * Returns the Kahn topological order over the non-delayed enabled-
-     * channel subgraph. Throws when the graph contains a cycle without
-     * a delayed channel to break it. Exposed for callers that need to
-     * walk nodes themselves (e.g. an async runner that awaits a
-     * per-node fireAsync between steps) without going through
-     * RunStatic.
-     */
     public static GetStaticOrder(graph: IRuntimeGraph): IRuntimeNode[] {
         const { order, reasons } = topoSort(graph);
         if (reasons.length > 0) {
@@ -206,3 +210,6 @@ export class Scheduler {
         return order;
     }
 }
+
+// Helpers re-exported for documentation cross-references; not used here directly.
+export { isControlSlot, inSlotOf };

@@ -95,7 +95,7 @@ instrument d'expérience scientifique.
 
 ## Cas d'usage de référence : PFD CO2 vers CH4 en habitat lunaire
 
-![PFD HELIOS : boucle fermée CO2 vers CH4](figures/helios-pfd.png)
+![PFD HELIOS : boucle fermée CO2 vers CH4](figures/pfd.png)
 
 Le cas test choisi pour valider ISimGraph v2 est une boucle fermée de support
 vie + production de carburant. Plus exigeant qu'une simulation PMSM parce qu'il
@@ -276,8 +276,8 @@ Environnement complet, sans contrainte de footprint :
 
 Cible matérielle physique :
 
-- Inférence ONNX quantisée int8 (pipeline existant, voir
-  `graph-runtime-architecture.md`).
+- Inférence ONNX quantisée int8 (pipeline CyanMycelium existant, documenté
+  dans le repo SpikyPanda sous `docs/architecture/graph-runtime-architecture`).
 - Footprint typique par MCU : 50-300 KB pour l'ensemble des agents d'un nœud.
 - Cibles défauts : STM32H7, ESP32-S3.
 - **Contrainte portabilité HPSC** : code C++14 portable, aucun intrinsic
@@ -305,7 +305,7 @@ Cible démonstrative et étude utilisateur :
 
 ### Format portable : le manifest JSON
 
-Le manifest JSON (voir `helios-agent-manifest-v1.fr.md` pour HELIOS) est
+Le manifest JSON (voir `agent-manifest-v1.fr.md` pour HELIOS) est
 consommé identiquement par les trois runtimes :
 
 - SpikyPanda l'utilise pour instancier les agents en simulation et les
@@ -329,6 +329,58 @@ décisions vers SpikyPanda en mode monitoring/replay :
   alertes, actions), métriques de performance.
 - Usage : dashboards, replay pour debugging, déclenchement de retraining
   quand drift détecté.
+
+## Architecture d'IA incarnée multi-niveau
+
+La topologie de déploiement décrit où le code tourne. Cette section décrit
+comment l'intelligence du système est structurée, indépendamment du substrat.
+
+ISimGraph v2 et le manifest d'agents instancient un patron d'IA incarnée
+(embodied AI) où l'agentivité est distribuée en cinq tiers. Chaque tier se
+définit par son incarnation (à quel corps l'agent est lié), son horizon
+temporel, et son substrat d'exécution. Ces trois propriétés co-varient.
+
+| Tier | Incarnation | Horizon | Substrat |
+|---|---|---|---|
+| 0. Substrat physique | SimGraph ou équipement réel | environnement | Physique |
+| 1. Agents réactifs incarnés | Un équipement (un nœud) | ms à seconde | MCU embarqué |
+| 2. Agents coordinatifs | La topologie du graphe | minute à heure | Nœud de calcul |
+| 3. Direction délibérative | Aucun équipement | session à mission | LLM via MCP |
+| 4. Supervision humaine | Un corps humain | continu | Équipage |
+
+Conséquences directes pour le design d'ISimGraph v2 :
+
+- Les **ports typés observation/action** sur `ISimNode` sont ce qui rend le
+  Tier 1 possible. Un agent réactif incarné lit le port observation de son
+  nœud et écrit sur son port action, sans jamais toucher l'état physique
+  directement. La séparation port/état n'est pas cosmétique, elle matérialise
+  la frontière entre le Tier 0 et le Tier 1.
+- La **composition fractale** `ISimGraph extends ISimNode` est ce qui rend le
+  Tier 2 propre. Un agent coordinatif observe un sous-graphe entier traité
+  comme un nœud unique, donc le même mécanisme de port s'applique à un
+  équipement isolé ou à une boucle complète.
+- La **surface MCP** (sprint 8) est l'interface du Tier 3. Le LLM n'a pas
+  d'accès au `rhs` ni au solveur, uniquement aux outils MCP validés.
+- L'**arbitrator** par nœud gère les conflits intra-Tier 1 (plusieurs agents
+  sur un même actuateur) et la préemption par les agents safety.
+
+La propriété structurante est une inversion. L'autorité pour les actions de
+survie est distribuée à l'inverse de la capacité de délibération : le Tier 1,
+qui ne délibère pas, détient l'autorité absolue sur les coupures d'urgence ;
+le Tier 3, qui délibère le mieux, n'a aucune autorité directe sur la sécurité.
+C'est l'architecture de subsomption de Brooks (1986) appliquée à un système
+thermo-fluide.
+
+Cette structure en tiers suit la hiérarchie des échelles de temps du plant.
+Le système physique s'étale sur quatre ordres de grandeur (compression en ms,
+vieillissement catalyseur en semaines), et chaque tier régule la bande dont
+l'échelle est proche de son horizon. Il y a là une correspondance avec
+l'analyse spectrale : les valeurs propres se regroupent par échelle de temps,
+les tiers d'agents aussi.
+
+Le cadre conceptuel complet (filiation théorique, lien avec la plasticité
+structurelle, questions de recherche ouvertes) est dans le document dédié
+`embodied-ai-architecture.fr.md`.
 
 ## Stratégie de solveur (phasée)
 
@@ -541,7 +593,7 @@ catch les bugs immédiatement.
   reste déterministe et conservatif, et les agents qui ont autorité sur des
   actuateurs réels n'acceptent pas d'entrée LLM. En revanche, le LLM a sa
   place pour piloter des scénarios d'entraînement via la surface MCP (voir
-  `helios-project-overview.fr.md` section 8), pour assister la conception en
+  `project-overview.fr.md` section 8), pour assister la conception en
   amont, et pour produire des debriefs post-session. La frontière passe entre
   « simuler l'environnement de décision » (autorisé) et « prendre la décision
   technique à la place du système » (interdit).
@@ -552,7 +604,7 @@ catch les bugs immédiatement.
   dès le début.
 - **Ne pas confondre dynamics model et world model** : un world model décide,
   un dynamics model prédit. La différence est la fonction de coût
-  (voir `world-models-and-regulation.fr.md`).
+  (voir le document `world-models-and-regulation` dans le repo SpikyPanda).
 - **Ne pas oublier la non-stationnarité** : FFT classique suppose un signal
   stationnaire, ce qui est faux pendant démarrage, régen, perturbation.
 
@@ -606,7 +658,7 @@ extensions optionnelles.
 ### Sprint 5 : agents HELIOS priorité 1
 
 Déploiement progressif du manifest HELIOS, dans l'ordre suggéré dans
-`helios-agent-manifest-v1.fr.md` :
+`agent-manifest-v1.fr.md` :
 
 1. Pipeline e2e : R601-CONVERSION-EFFICIENCY + LOOP-MASS-BALANCE.
 2. Sécurité : R601-RUNAWAY-PREVENTION + R601-THERMAL-REGULATION
@@ -833,10 +885,11 @@ Avant de relancer le travail sur ISimGraph v2 et HELIOS :
 
 1. Re-lire les documents associés dans cet ordre :
    - Ce document (cadrage, topologie, roadmap).
-   - `helios-agent-manifest-v1.fr.md` (28 agents distribués sur le PFD).
-   - `world-models-and-regulation.fr.md` (distinction dynamics vs world model).
-   - `graph-runtime-architecture.md` (état actuel du compute graph et pipeline
-     ONNX/quantization).
+   - `agent-manifest-v1.fr.md` (28 agents distribués sur le PFD).
+   - `embodied-ai-architecture.fr.md` (le cadre conceptuel multi-niveau).
+   - Dans le repo SpikyPanda : `world-models-and-regulation` (distinction
+     dynamics vs world model) et `graph-runtime-architecture` (état du
+     compute graph et pipeline ONNX/quantization).
 2. Confirmer le langage cible du runtime (C# CyanMycelium vs C++ kernel).
 3. Décider du paradigme de simulation : **causal explicite** (recommandé pour
    démarrer) vs **acausal DAE** (cible long terme).

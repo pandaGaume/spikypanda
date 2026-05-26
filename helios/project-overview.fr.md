@@ -62,7 +62,7 @@ Les briques techniques sont là, les besoins programmatiques sont là, il manqua
 
 Le Process Flow Diagram (PFD) de HELIOS modélise une boucle fermée complète avec 10 unités opératoires et 13 tags d'équipement.
 
-![PFD HELIOS : boucle fermée CO2 vers CH4 (support vie + production carburant)](figures/helios-pfd.png)
+![PFD HELIOS : boucle fermée CO2 vers CH4 (support vie + production carburant)](figures/pfd.png)
 
 Schéma complet du procédé en 10 sections numérotées, avec légende de flux par espèce (eau/vapeur, hydrogène, oxygène, CO2, méthane, air N2/O2, mélanges). Les fenêtres opératoires typiques de chaque équipement (température, pression) sont indiquées sur le schéma, ainsi que les principaux catalyseurs et conditions de capture (habitat basse concentration vs Mars haute concentration).
 
@@ -144,7 +144,7 @@ Ces outils transforment le simulateur en un instrument de diagnostic dynamique, 
 
 ### 5. Agents distribués : le manifest HELIOS
 
-HELIOS définit **28 agents autonomes** distribués sur les équipements du PFD (voir `helios-agent-manifest-v1.fr.md` pour la spec complète).
+HELIOS définit **28 agents autonomes** distribués sur les équipements du PFD (voir `agent-manifest-v1.fr.md` pour la spec complète).
 
 **Répartition par criticité** :
 
@@ -284,6 +284,30 @@ Côté positionnement programmatique, la direction de scénario adaptative est l
 
 ---
 
+## Architecture d'IA incarnée multi-niveau
+
+Les huit sections précédentes décrivent les pièces de HELIOS. Cette section nomme ce qu'elles forment ensemble. HELIOS n'est pas un digital twin avec des agents posés dessus, c'est une instance d'un patron d'IA incarnée (embodied AI) où l'intelligence est distribuée en cinq tiers.
+
+Chaque tier a sa propre forme d'incarnation, son horizon temporel, et son substrat d'exécution. Les trois propriétés co-varient : plus un agent est lié à un corps étroit, plus son horizon est court et plus son substrat est contraint.
+
+| Tier | Incarnation | Horizon | Substrat |
+|---|---|---|---|
+| 0. Substrat physique | Le SimGraph, ou l'équipement réel | (l'environnement) | Physique |
+| 1. Agents réactifs incarnés | Un équipement unique | ms à seconde | MCU embarqué |
+| 2. Agents coordinatifs | La topologie de la boucle | minute à heure | Nœud de calcul |
+| 3. Direction délibérative | Aucun équipement | session à mission | LLM |
+| 4. Supervision humaine | Un corps humain | continu | Équipage |
+
+Les 25 agents per-node sont au Tier 1 : chacun perçoit par les capteurs de son équipement, agit par ses actuateurs, tourne sur le MCU colocalisé. Les 3 agents cross-nœuds sont au Tier 2 : ils raisonnent sur des propriétés émergentes (conservation, efficacité énergétique) qu'aucun équipement isolé ne porte. Le scenario director LLM est au Tier 3. L'équipage en VR/AR est au Tier 4.
+
+La propriété qui rend ce modèle correct est une inversion. L'autorité pour les actions de survie est distribuée à l'**inverse** de la capacité de délibération. Le Tier 3 délibère le mieux et a le moins d'autorité directe sur la sécurité. Le Tier 1 ne délibère pas et détient l'autorité absolue sur les coupures d'urgence. Un réacteur qui s'emballe n'attend pas que le LLM ait fini de raisonner. C'est l'enseignement de l'architecture de subsomption de Rodney Brooks, appliqué ici à un système thermo-fluide.
+
+Cette structure en tiers n'est pas un choix arbitraire. Elle suit la hiérarchie des échelles de temps du système physique lui-même, qui s'étale sur quatre ordres de grandeur, de la compression milliseconde au vieillissement catalyseur sur plusieurs semaines. La hiérarchie de contrôle suit la hiérarchie dynamique du plant.
+
+Le développement complet de ce cadre, sa filiation théorique, son lien avec la plasticité structurelle et les questions de recherche qu'il ouvre sont traités dans le document conceptuel dédié : [`embodied-ai-architecture.fr.md`](embodied-ai-architecture.fr.md).
+
+---
+
 ## Décisions de cadrage
 
 ### Open source et non-ITAR par construction
@@ -392,13 +416,20 @@ La phase D (sprints 12-13) couvre les extensions exploratoires : surrogate GNN p
 
 ---
 
-## Documents associés (dans ce repo)
+## Documents associés
 
+Documents HELIOS, dans ce répertoire :
+
+- [`embodied-ai-architecture.fr.md`](embodied-ai-architecture.fr.md) : cadre conceptuel de l'architecture d'IA incarnée multi-niveau.
 - [`isimgraph-v2-notes.fr.md`](isimgraph-v2-notes.fr.md) : design détaillé du framework ISimGraph v2, stratégie solveur, outils spectraux, glossaire multi-niveau de tous les acronymes utilisés.
-- [`helios-agent-manifest-v1.fr.md`](helios-agent-manifest-v1.fr.md) : spec complète des 28 agents (inputs, outputs, role par agent, criticité par nœud).
-- [`world-models-and-regulation.fr.md`](world-models-and-regulation.fr.md) : leçons du démo CO2 MPC sur la distinction dynamics model vs world model. Pertinent pour le design des agents controllers.
-- [`from-single-loop-to-coupled-systems.fr.md`](from-single-loop-to-coupled-systems.fr.md) : positionnement SpikyPanda sur la conception de systèmes couplés multi-sous-systèmes, contexte direct pour HELIOS.
-- [`graph-runtime-architecture.md`](graph-runtime-architecture.md) : référence du compute layer existant (ComputeGraph, pipeline ONNX, quantization int8). Base technique pour le runtime CyanMycelium.
+- [`agent-manifest-v1.fr.md`](agent-manifest-v1.fr.md) : spec complète des 28 agents (inputs, outputs, role par agent, criticité par nœud).
+- [`website-brief.fr.md`](website-brief.fr.md), [`website-copy.fr-en.md`](website-copy.fr-en.md), [`website-visuals-specs.fr.md`](website-visuals-specs.fr.md) : matériaux de production du site web.
+
+Documents de contexte dans le repo SpikyPanda (dépendances externes, hors de ce répertoire autonome) :
+
+- `world-models-and-regulation` : leçons du démo CO2 MPC sur la distinction dynamics model vs world model. Pertinent pour le design des agents controllers.
+- `from-single-loop-to-coupled-systems` : positionnement SpikyPanda sur la conception de systèmes couplés multi-sous-systèmes, contexte direct pour HELIOS.
+- `graph-runtime-architecture` : référence du compute layer existant (ComputeGraph, pipeline ONNX, quantization int8). Base technique pour le runtime CyanMycelium.
 
 ---
 

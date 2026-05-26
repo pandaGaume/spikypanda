@@ -1,6 +1,6 @@
 export type PortDirection = "input" | "output";
 
-export type PortType = "float" | "vec2" | "vec3" | "vec4" | "tensor" | "any" | "exec" | "matrix44" | "boolean" | "trigger";
+export type PortType = "float" | "vec2" | "vec3" | "vec4" | "tensor" | "any" | "exec" | "matrix44" | "boolean" | "trigger" | "array";
 
 export const PORT_COLORS: Record<PortType, string> = {
     float:    "#8cf",
@@ -15,12 +15,22 @@ export const PORT_COLORS: Record<PortType, string> = {
     // Control plane: boolean (state) and trigger (one-shot edge).
     boolean:  "#cf6",
     trigger:  "#fc6",
+    // Collection ports: carry an opaque array. Pair with `any` for
+    // element-level ports on array nodes (item, find result, etc.).
+    array:    "#a8d",
 };
 
 export interface PortDef {
     name: string;
     type: PortType;
     direction: PortDirection;
+}
+
+export interface VariadicPortDescriptor {
+    /** Common prefix shared by every variadic port name (e.g. "then_"). */
+    prefix: string;
+    /** Type assigned to each variadic port. */
+    type: PortType;
 }
 
 export interface NodeDef {
@@ -32,6 +42,14 @@ export interface NodeDef {
     controlInputs?: Omit<PortDef, "direction">[];
     /** Control-plane output ports (_enabled, _started, _stopped). */
     controlOutputs?: Omit<PortDef, "direction">[];
+    /** When set, the editor grows / shrinks the matching set of
+     *  input ports so exactly one trailing unconnected port stays
+     *  available at all times. Indices are appended after the prefix
+     *  ("then_0", "then_1", ...). */
+    variadicInput?:  VariadicPortDescriptor;
+    /** Same as `variadicInput` but for the output side (e.g.
+     *  Sequence's `then_*`). */
+    variadicOutput?: VariadicPortDescriptor;
     /** Interop standards the node complies with (e.g. ["onnx"]). The
      *  editor renders one badge per id in the node header. The values
      *  are resolved via the host's StandardsRegistry for display. */

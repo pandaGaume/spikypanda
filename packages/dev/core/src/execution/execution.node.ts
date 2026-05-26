@@ -3,7 +3,7 @@ import { cloneable, IOlink } from "../graph/graph.interfaces";
 import { GraphNode } from "../graph/graph.node";
 import { Nullable } from "../types";
 import { CONTROL_PORT_ENABLE, CONTROL_PORT_ENABLED, ENABLE_INPUT_PORT, ENABLED_OUTPUT_PORT, publishControlOutput } from "./control-ports";
-import { IChannel, IDeclaresControlPorts, IPortDescriptor, IRuntimeNode, ISession } from "./execution.interfaces";
+import { IChannel, IDeclaresControlPorts, IPortDescriptor, IRuntimeNode, ISession, inSlotOf } from "./execution.interfaces";
 
 /**
  * Concrete IRuntimeNode base. Provides default isReady (all non-disabled
@@ -95,7 +95,7 @@ export class RuntimeNode<B = unknown> extends GraphNode<B> implements IRuntimeNo
         let nextEnabled = prevEnabled;
 
         for (const link of this.opsc<IChannel>()) {
-            if (link.slot !== CONTROL_PORT_ENABLE) continue;
+            if (inSlotOf(link) !== CONTROL_PORT_ENABLE) continue;
             if (!link.enabled) continue;
             const idx = links.indexOf(link);
             if (idx < 0) continue;

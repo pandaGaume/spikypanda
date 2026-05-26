@@ -30,7 +30,7 @@ import {
     STOPPED_OUTPUT_PORT,
     STOP_INPUT_PORT,
 } from "./control-ports";
-import { IChannel, IPortDescriptor, ISession } from "./execution.interfaces";
+import { IChannel, IPortDescriptor, ISession, inSlotOf } from "./execution.interfaces";
 import { RuntimeNode } from "./execution.node";
 
 export abstract class RunnableNode<B = unknown> extends RuntimeNode<B> implements IRunnable {
@@ -83,10 +83,11 @@ export abstract class RunnableNode<B = unknown> extends RuntimeNode<B> implement
             const idx = links.indexOf(link);
             if (idx < 0) continue;
             if (!session.linkStates[idx].ready) continue;
-            if (link.slot === CONTROL_PORT_START) {
+            const destSlot = inSlotOf(link);
+            if (destSlot === CONTROL_PORT_START) {
                 session.consume(idx);
                 startTriggered = true;
-            } else if (link.slot === CONTROL_PORT_STOP) {
+            } else if (destSlot === CONTROL_PORT_STOP) {
                 session.consume(idx);
                 stopTriggered = true;
             }

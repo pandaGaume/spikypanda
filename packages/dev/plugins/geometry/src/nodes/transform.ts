@@ -10,13 +10,18 @@ export class Transform extends RuntimeNode implements IDeclaresPorts {
     @cloneable
     private _rotation: Quaternion = new Quaternion(0, 0, 0, 1);
 
-    public static readonly INPUT_POSITION  = "position";
-    public static readonly INPUT_ROTATION  = "rotation";
-    public static readonly OUTPUT_MATRIX   = "matrix";
+    // Input port slot names mirror the editable field names so the
+    // generic LiveBinder can map slot -> property without a custom
+    // table. "translation" is used instead of "position" because
+    // RuntimeNode already reserves `position` for the node's layout
+    // coordinates on the canvas.
+    public static readonly INPUT_TRANSLATION = "translation";
+    public static readonly INPUT_ROTATION    = "rotation";
+    public static readonly OUTPUT_MATRIX     = "matrix";
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: Transform.INPUT_POSITION, optional: true,  type: "vec3" },
-        { slot: Transform.INPUT_ROTATION, optional: true,  type: "vec4" },
+        { slot: Transform.INPUT_TRANSLATION, optional: true,  type: "vec3" },
+        { slot: Transform.INPUT_ROTATION,    optional: true,  type: "vec4" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
         { slot: Transform.OUTPUT_MATRIX, optional: false, type: "matrix44" },
@@ -59,7 +64,7 @@ export class Transform extends RuntimeNode implements IDeclaresPorts {
         // (still visible in the panel) so the user can disconnect and
         // get their configured value back without losing it.
         const eff = resolveSlotInputs(session, this, {
-            [Transform.INPUT_POSITION]: this._position as unknown,
+            [Transform.INPUT_TRANSLATION]: this._position as unknown,
             [Transform.INPUT_ROTATION]: this._rotation as unknown,
         }, {
             validator: (slot, v) => {
@@ -70,7 +75,7 @@ export class Transform extends RuntimeNode implements IDeclaresPorts {
         });
 
         publishToFirstOutput(session, this, computeTRS(
-            eff[Transform.INPUT_POSITION] as Cartesian3,
+            eff[Transform.INPUT_TRANSLATION] as Cartesian3,
             eff[Transform.INPUT_ROTATION] as Quaternion,
         ));
     }

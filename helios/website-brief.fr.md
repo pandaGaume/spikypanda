@@ -474,12 +474,13 @@ Délai indicatif suggéré : 2-3 semaines pour les mockups, 4-6 semaines pour un
 
 ## 14. Annexe : matériaux fournis
 
-Disponibles dans ce repo et utilisables directement :
+Disponibles dans le répertoire HELIOS et utilisables directement :
 
-- `docs/architecture/figures/helios-pfd.png` : le PFD principal du système.
-- `docs/architecture/helios-project-overview.fr.md` : la fiche projet complète, source de tout contenu détaillé.
-- `docs/architecture/helios-agent-manifest-v1.fr.md` : spec des 28 agents pour la section system.
-- `docs/architecture/isimgraph-v2-notes.fr.md` : design framework pour la section technique.
+- `figures/pfd.png` : le PFD principal du système.
+- `project-overview.fr.md` : la fiche projet complète, source de tout contenu détaillé.
+- `agent-manifest-v1.fr.md` : spec des 28 agents pour la section system.
+- `isimgraph-v2-notes.fr.md` : design framework pour la section technique.
+- `website-copy.fr-en.md` : contenu rédigé des 6 pages en FR et EN.
 
 D'autres visuels (schéma topologie 3 runtimes, schéma habitat avec PFD intégré, visualisation des 28 agents en overlay sur le PFD) peuvent être produits au besoin ; le designer peut les commander en complément du brief initial.
 
