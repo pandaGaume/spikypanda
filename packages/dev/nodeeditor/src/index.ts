@@ -47,6 +47,7 @@ export {
     vector4Editor,
     quaternionEditor,
     numberEditor,
+    sliderEditor,
 } from "./editors";
 export { LiveBinder } from "./live-binder";
 export { GraphRunner } from "./graph-runner";

@@ -2,7 +2,7 @@ import type { ICartesian } from "../geometry";
 import { cloneable, IOlink } from "../graph/graph.interfaces";
 import { GraphNode } from "../graph/graph.node";
 import { Nullable } from "../types";
-import { CONTROL_PORT_ENABLE, CONTROL_PORT_ENABLED, ENABLE_INPUT_PORT, ENABLED_OUTPUT_PORT, publishControlOutput } from "./control-ports";
+import { CONTROL_PORT_ENABLE, CONTROL_PORT_ENABLED, ENABLE_INPUT_PORT, ENABLED_OUTPUT_PORT, isControlSlot, publishControlOutput } from "./control-ports";
 import { IChannel, IDeclaresControlPorts, IPortDescriptor, IRuntimeNode, ISession, inSlotOf } from "./execution.interfaces";
 
 /**
@@ -50,6 +50,15 @@ export class RuntimeNode<B = unknown> extends GraphNode<B> implements IRuntimeNo
         const incoming = this.opsc<IChannel>();
         for (const link of incoming) {
             if (!link.enabled) {
+                continue;
+            }
+            // Control-plane inputs (_enable, _start, _stop, _reset, ...)
+            // are drained by `processControlInputs` BEFORE this gate, so
+            // their per-channel readiness is irrelevant to the data
+            // firing decision. Treating an unwired or empty control
+            // input as "not ready" would otherwise prevent any node
+            // with required=0 + wired control input from ever firing.
+            if (isControlSlot(inSlotOf(link))) {
                 continue;
             }
             const idx = (session.graph.links as ReadonlyArray<IChannel>).indexOf(link);

@@ -2,9 +2,11 @@ import { NodeEditor } from "../editor";
 import { EditorRegistry } from "../editor-registry";
 import { quaternionEditor, vector3Editor, vector4Editor } from "./vector";
 import { numberEditor } from "./number";
+import { sliderEditor } from "./slider";
 
 export { vector3Editor, vector4Editor, quaternionEditor } from "./vector";
 export { numberEditor } from "./number";
+export { sliderEditor } from "./slider";
 
 /**
  * Register every built-in editor that ships with the nodeeditor package
@@ -26,4 +28,5 @@ export function installBuiltinEditors(target: NodeEditor | EditorRegistry): void
     registry.register("number",     numberEditor);
     registry.register("int",        numberEditor);
     registry.register("float",      numberEditor);
+    registry.register("slider",     sliderEditor);
 }

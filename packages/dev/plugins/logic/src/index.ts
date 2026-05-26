@@ -40,6 +40,15 @@ import {
     PrintNode,
     WatchNode,
 } from "./nodes/debug.js";
+import {
+    AddNode, SubtractNode, MultiplyNode, DivideNode, ModNode,
+    MinNode, MaxNode, PowNode,
+    NegateNode, AbsNode, FloorNode, CeilNode, RoundNode, SqrtNode, SinNode, CosNode,
+    ClampNode, LerpNode,
+} from "./nodes/math.js";
+import { SelectNode } from "./nodes/select.js";
+import { ClockNode, DeltaTimeNode, NumberSliderNode } from "./nodes/time.js";
+import { TimerNode } from "./nodes/timer.js";
 
 export {
     EqualNode,
@@ -305,9 +314,106 @@ const plugin: IPlugin = {
             ],
             outputPorts: [],
         });
+
+        // ── Math ───────────────────────────────────────────────────────
+        const NUM_IN   = (slot: string) => ({ slot, optional: true,  type: "float" } as const);
+        const NUM_OUT  = { slot: "result", optional: false, type: "float" } as const;
+
+        const registerBinaryMath = (id: string, label: string, factory: () => never) => {
+            ctx.nodes.register(id, factory, {
+                label, category: "logic-math",
+                inputPorts:  [NUM_IN("a"), NUM_IN("b")],
+                outputPorts: [NUM_OUT],
+            });
+        };
+        const registerUnaryMath = (id: string, label: string, factory: () => never) => {
+            ctx.nodes.register(id, factory, {
+                label, category: "logic-math",
+                inputPorts:  [NUM_IN("a")],
+                outputPorts: [NUM_OUT],
+            });
+        };
+        registerBinaryMath("spk.logic:add",      "Add",      () => new AddNode()      as never);
+        registerBinaryMath("spk.logic:subtract", "Subtract", () => new SubtractNode() as never);
+        registerBinaryMath("spk.logic:multiply", "Multiply", () => new MultiplyNode() as never);
+        registerBinaryMath("spk.logic:divide",   "Divide",   () => new DivideNode()   as never);
+        registerBinaryMath("spk.logic:mod",      "Mod",      () => new ModNode()      as never);
+        registerBinaryMath("spk.logic:min",      "Min",      () => new MinNode()      as never);
+        registerBinaryMath("spk.logic:max",      "Max",      () => new MaxNode()      as never);
+        registerBinaryMath("spk.logic:pow",      "Pow",      () => new PowNode()      as never);
+        registerUnaryMath ("spk.logic:negate",   "Negate",   () => new NegateNode()   as never);
+        registerUnaryMath ("spk.logic:abs",      "Abs",      () => new AbsNode()      as never);
+        registerUnaryMath ("spk.logic:floor",    "Floor",    () => new FloorNode()    as never);
+        registerUnaryMath ("spk.logic:ceil",     "Ceil",     () => new CeilNode()     as never);
+        registerUnaryMath ("spk.logic:round",    "Round",    () => new RoundNode()    as never);
+        registerUnaryMath ("spk.logic:sqrt",     "Sqrt",     () => new SqrtNode()     as never);
+        registerUnaryMath ("spk.logic:sin",      "Sin",      () => new SinNode()      as never);
+        registerUnaryMath ("spk.logic:cos",      "Cos",      () => new CosNode()      as never);
+
+        ctx.nodes.register("spk.logic:clamp", () => new ClampNode(), {
+            label: "Clamp", category: "logic-math",
+            inputPorts:  [NUM_IN("value"), NUM_IN("min"), NUM_IN("max")],
+            outputPorts: [NUM_OUT],
+        });
+        ctx.nodes.register("spk.logic:lerp", () => new LerpNode(), {
+            label: "Lerp", category: "logic-math",
+            inputPorts:  [NUM_IN("a"), NUM_IN("b"), NUM_IN("t")],
+            outputPorts: [NUM_OUT],
+        });
+
+        // ── Time / inputs ──────────────────────────────────────────────
+        ctx.nodes.register("spk.logic:clock", () => new ClockNode(), {
+            label: "Clock", category: "logic-time",
+            inputPorts:  [],
+            outputPorts: [{ slot: "t", optional: false, type: "float" }],
+        });
+        ctx.nodes.register("spk.logic:deltaTime", () => new DeltaTimeNode(), {
+            label: "Delta Time", category: "logic-time",
+            inputPorts:  [],
+            outputPorts: [{ slot: "dt", optional: false, type: "float" }],
+        });
+        ctx.nodes.register("spk.logic:slider", () => new NumberSliderNode(), {
+            label: "Number Slider", category: "logic-input",
+            inputPorts:  [],
+            outputPorts: [{ slot: "value", optional: false, type: "float" }],
+        });
+        ctx.nodes.register("spk.logic:timer", () => new TimerNode(), {
+            label: "Timer", category: "logic-time",
+            inputPorts:  [
+                { slot: "duration", optional: true, type: "float" },
+                { slot: "from",     optional: true, type: "float" },
+                { slot: "to",       optional: true, type: "float" },
+            ],
+            outputPorts: [
+                { slot: "progress", optional: false, type: "float" },
+                { slot: "value",    optional: false, type: "float" },
+            ],
+        });
+
+        // ── Select ─────────────────────────────────────────────────────
+        ctx.nodes.register("spk.logic:select", () => new SelectNode(), {
+            label: "Select", category: "logic-flow",
+            inputPorts:  [
+                { slot: "a",         optional: true, type: "any"     },
+                { slot: "b",         optional: true, type: "any"     },
+                { slot: "condition", optional: true, type: "boolean" },
+            ],
+            outputPorts: [
+                { slot: "result", optional: false, type: "any" },
+            ],
+        });
     },
 };
 
-export { PrintNode, WatchNode };
+export {
+    PrintNode, WatchNode,
+    AddNode, SubtractNode, MultiplyNode, DivideNode, ModNode,
+    MinNode, MaxNode, PowNode,
+    NegateNode, AbsNode, FloorNode, CeilNode, RoundNode, SqrtNode, SinNode, CosNode,
+    ClampNode, LerpNode,
+    SelectNode,
+    ClockNode, DeltaTimeNode, NumberSliderNode,
+    TimerNode,
+};
 
 export default plugin;

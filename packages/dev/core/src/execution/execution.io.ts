@@ -55,9 +55,24 @@ export function resolveSlotInputs<T extends Record<string, unknown>>(
 }
 
 /**
- * Publish a single value on the first outgoing channel (onsc) of the
- * node. Returns true on success, false when the node has no output,
- * or when the channel cannot be located in the session's graph.
+ * Publish `value` on every outgoing channel of `node` whose source slot
+ * matches the FIRST output port — i.e. fans the value out to every
+ * downstream wired to that single port. Returns true when at least one
+ * channel was published on.
+ *
+ * The historical name kept "first output" wording because the original
+ * 1-slot scheduler did not fan out: a node had at most one wire per
+ * port and publish needed to land on that one wire. The FIFO refactor
+ * does not change that constraint per channel, but a single output
+ * port may now feed N destinations (Clock.t → Divide AND Comparator);
+ * we have to publish on each, not just `outs[0]`.
+ *
+ * Multi-output nodes (Branch with `true`/`false`, RunnableNode with
+ * `_started`/`_stopped`, ...) intentionally do NOT use this helper —
+ * they iterate onsc themselves and key on slot. Here we mirror that
+ * pattern but pin the slot to whatever the first onsc channel happens
+ * to advertise, which matches the single-output-port contract this
+ * function is documented for.
  */
 export function publishToFirstOutput(
     session: ISession,
@@ -66,8 +81,16 @@ export function publishToFirstOutput(
 ): boolean {
     const outs = node.onsc<IChannel>();
     if (outs.length === 0) return false;
-    const idx = session.graph.links.indexOf(outs[0]);
-    if (idx < 0) return false;
-    session.publish(idx, value);
-    return true;
+    const firstSlot = outs[0].slot;
+    const links = session.graph.links as ReadonlyArray<IChannel>;
+    let published = false;
+    for (const link of outs) {
+        if (link.slot !== firstSlot) continue;
+        if (!link.enabled) continue;
+        const idx = links.indexOf(link);
+        if (idx < 0) continue;
+        session.publish(idx, value);
+        published = true;
+    }
+    return published;
 }
