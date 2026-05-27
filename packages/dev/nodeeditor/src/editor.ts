@@ -11,7 +11,7 @@ import { darkSkin } from "./styles/skins/dark";
 import { heliosSkin } from "./styles/skins/helios";
 import { lightSkin } from "./styles/skins/light";
 import { transparentDarkSkin, transparentLightSkin } from "./styles/skins/transparent";
-import { ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedGraph } from "./types";
+import { arePortTypesCompatible, ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedGraph } from "./types";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -299,6 +299,11 @@ export class NodeEditor {
             const tmp = from;
             from = to;
             to = tmp;
+        }
+
+        if (!arePortTypesCompatible(from.type, to.type)) {
+            console.warn(`[editor] rejected ${from.type} → ${to.type} connection (${from.name} → ${to.name}): incompatible port types`);
+            return null;
         }
 
         const exists = this.connections.some((c) => c.from === from && c.to === to);

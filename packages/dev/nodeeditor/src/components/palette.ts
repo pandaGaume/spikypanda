@@ -33,6 +33,11 @@ export interface PaletteOptions {
     /** Folder paths to render expanded on first render. Folders not in
      *  this set default to collapsed. Pass null to expand everything. */
     expandedByDefault?: ReadonlyArray<string> | null;
+    /** When true, every folder is collapsed on first render unless it
+     *  appears in `expandedByDefault`. Overrides the legacy default
+     *  (first-level expanded, deeper collapsed). Useful when the palette
+     *  hosts many plugins and the user should drive what to expand. */
+    defaultCollapsed?: boolean;
     /** Resolves standard ids to display info (label, color, glyph) for
      *  the badge rendered next to each entry. */
     standards?: StandardsRegistry;
@@ -54,6 +59,7 @@ export class Palette {
     private readonly _listEl: HTMLDivElement;
     private readonly _title: string;
     private readonly _defaultExpandAll: boolean;
+    private readonly _defaultCollapsed: boolean;
     private readonly _defaultExpanded: Set<string>;
     private readonly _collapsedPaths = new Set<string>();
 
@@ -66,6 +72,7 @@ export class Palette {
         this.standards = options.standards ?? new StandardsRegistry();
         this._title = options.title ?? "Palette";
         this._defaultExpandAll = options.expandedByDefault === null;
+        this._defaultCollapsed = options.defaultCollapsed ?? false;
         this._defaultExpanded = new Set(options.expandedByDefault ?? []);
 
         host.classList.add("ne-palette");
@@ -148,7 +155,8 @@ export class Palette {
         if (this._collapsedPaths.has(path)) return true;
         if (this._defaultExpandAll) return false;
         if (this._defaultExpanded.has(path)) return false;
-        // Default: expanded for first-level, collapsed for deeper levels.
+        if (this._defaultCollapsed) return true;
+        // Legacy default: expanded for first-level, collapsed for deeper levels.
         return path.includes("/");
     }
 
@@ -226,22 +234,11 @@ export class Palette {
         label.textContent = entry.meta.label;
         el.appendChild(label);
 
-        // Standards badges (right-aligned). One small pill per declared
-        // standard, tooltip explains which standard it is.
-        if (entry.meta.standards && entry.meta.standards.length > 0) {
-            const badges = document.createElement("span");
-            badges.className = "ne-palette-entry-standards";
-            for (const id of entry.meta.standards) {
-                const info = this.standards.get(id);
-                const b = document.createElement("span");
-                b.className = `ne-standard-badge ne-standard-${id}`;
-                b.textContent = info?.glyph ?? id.slice(0, 1).toUpperCase();
-                b.title = info ? info.label : id;
-                if (info?.color) b.style.backgroundColor = info.color;
-                badges.appendChild(b);
-            }
-            el.appendChild(badges);
-        }
+        // Standards are intentionally not rendered as palette pills any
+        // more: the GitHub-style shields shown in the property panel
+        // when a node is selected carry richer (label + version) info
+        // without bloating every palette row. The data remains on
+        // entry.meta for the panel to read.
 
         el.addEventListener("click", () => {
             if (this.onSelect) this.onSelect(entry.type, entry.meta);

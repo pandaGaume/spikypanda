@@ -62,20 +62,93 @@ class FFTEngine {
      * Forward FFT. Returns power spectrum [size/2 + 1].
      */
     forward(buffer: Float32Array): Float32Array {
+        this._loadReal(buffer);
+        this._butterfly();
+        const nBins = this.size / 2 + 1;
+        const power = new Float32Array(nBins);
+        for (let i = 0; i < nBins; i++) {
+            power[i] = this.real[i] * this.real[i] + this.imag[i] * this.imag[i];
+        }
+        return power;
+    }
+
+    /**
+     * Forward FFT. Returns the unique half of the spectrum as interleaved
+     * real/imag pairs: [re_0, im_0, re_1, im_1, ..., re_{N/2}, im_{N/2}].
+     * Length = 2 * (N/2 + 1).
+     */
+    forwardComplex(buffer: Float32Array): Float32Array {
+        this._loadReal(buffer);
+        this._butterfly();
+        const nBins = this.size / 2 + 1;
+        const out = new Float32Array(nBins * 2);
+        for (let i = 0; i < nBins; i++) {
+            out[i * 2] = this.real[i];
+            out[i * 2 + 1] = this.imag[i];
+        }
+        return out;
+    }
+
+    /**
+     * Inverse FFT from a Hermitian half-spectrum [re_0, im_0, ..., re_{N/2}, im_{N/2}]
+     * back to an N-sample real-valued time-domain signal. Uses the conjugate
+     * trick: ifft(X) = conj(fft(conj(X))) / N.
+     */
+    inverse(complexHalf: Float32Array): Float32Array {
+        const N = this.size;
+        const half = N >> 1;
+        const reverseTable = this.reverseTable;
+        const real = this.real;
+        const imag = this.imag;
+
+        // Expand the half-spectrum into a temporary full spectrum
+        // (DC and Nyquist are real, every other bin mirrors as conjugate).
+        const fullReal = new Float64Array(N);
+        const fullImag = new Float64Array(N);
+        fullReal[0] = complexHalf[0];
+        fullReal[half] = complexHalf[half * 2];
+        for (let k = 1; k < half; k++) {
+            const re = complexHalf[k * 2];
+            const im = complexHalf[k * 2 + 1];
+            fullReal[k] = re;
+            fullImag[k] = im;
+            fullReal[N - k] = re;
+            fullImag[N - k] = -im;
+        }
+
+        // Conjugate (IFFT trick) and bit-reverse permute in one pass.
+        for (let i = 0; i < N; i++) {
+            const j = reverseTable[i];
+            real[i] = fullReal[j];
+            imag[i] = -fullImag[j];
+        }
+
+        this._butterfly();
+
+        const out = new Float32Array(N);
+        const invN = 1 / N;
+        for (let i = 0; i < N; i++) out[i] = real[i] * invN;
+        return out;
+    }
+
+    private _loadReal(buffer: Float32Array): void {
+        const N = this.size;
+        const reverseTable = this.reverseTable;
+        const real = this.real;
+        const imag = this.imag;
+        for (let i = 0; i < N; i++) {
+            real[i] = buffer[reverseTable[i]] ?? 0;
+            imag[i] = 0;
+        }
+    }
+
+    private _butterfly(): void {
         const N = this.size;
         const real = this.real;
         const imag = this.imag;
-        const reverseTable = this.reverseTable;
         const cosTable = this.cosTable;
         const sinTable = this.sinTable;
 
-        // Bit-reversal permutation
-        for (let i = 0; i < N; i++) {
-            real[i] = buffer[reverseTable[i]];
-            imag[i] = 0;
-        }
-
-        // Butterfly stages
         let halfSize = 1;
         while (halfSize < N) {
             const phaseShiftStepReal = cosTable[halfSize];
@@ -101,27 +174,76 @@ class FFTEngine {
             }
             halfSize <<= 1;
         }
-
-        // Power spectrum
-        const nBins = N / 2 + 1;
-        const power = new Float32Array(nBins);
-        for (let i = 0; i < nBins; i++) {
-            power[i] = real[i] * real[i] + imag[i] * imag[i];
-        }
-        return power;
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Window functions (ported from dsp.js)
+//
+// Window-type IDs are stable; new types append. Tukey carries an extra
+// alpha parameter (taper fraction, 0..1) defaulted at the call site.
 // ═══════════════════════════════════════════════════════════════════════════
 
+export const WINDOW_HANN = 0;
+export const WINDOW_HAMMING = 1;
+export const WINDOW_BLACKMAN = 2;
+export const WINDOW_BARTLETT = 3;
+export const WINDOW_RECTANGULAR = 4;
+export const WINDOW_TUKEY = 5;
+
 function hannWindow(length: number, index: number): number {
-    return 0.5 * (1 - Math.cos(2 * Math.PI * index / (length - 1)));
+    return 0.5 * (1 - Math.cos((2 * Math.PI * index) / (length - 1)));
 }
 
 function hammingWindow(length: number, index: number): number {
-    return 0.54 - 0.46 * Math.cos(2 * Math.PI * index / (length - 1));
+    return 0.54 - 0.46 * Math.cos((2 * Math.PI * index) / (length - 1));
+}
+
+function blackmanWindow(length: number, index: number): number {
+    const x = (2 * Math.PI * index) / (length - 1);
+    return 0.42 - 0.5 * Math.cos(x) + 0.08 * Math.cos(2 * x);
+}
+
+function bartlettWindow(length: number, index: number): number {
+    const half = (length - 1) / 2;
+    return 1 - Math.abs((index - half) / half);
+}
+
+function rectangularWindow(_length: number, _index: number): number {
+    return 1;
+}
+
+function tukeyWindow(length: number, index: number, alpha: number): number {
+    if (alpha <= 0) return 1;
+    if (alpha >= 1) return hannWindow(length, index);
+    const edge = (alpha * (length - 1)) / 2;
+    if (index < edge) {
+        return 0.5 * (1 + Math.cos(Math.PI * (index / edge - 1)));
+    }
+    if (index > length - 1 - edge) {
+        return 0.5 * (1 + Math.cos(Math.PI * ((index - (length - 1 - edge)) / edge)));
+    }
+    return 1;
+}
+
+type WindowFn = (length: number, index: number) => number;
+
+function windowFn(type: number, alpha: number): WindowFn {
+    switch (type) {
+        case WINDOW_HAMMING:
+            return hammingWindow;
+        case WINDOW_BLACKMAN:
+            return blackmanWindow;
+        case WINDOW_BARTLETT:
+            return bartlettWindow;
+        case WINDOW_RECTANGULAR:
+            return rectangularWindow;
+        case WINDOW_TUKEY:
+            return (n, i) => tukeyWindow(n, i, alpha);
+        case WINDOW_HANN:
+        default:
+            return hannWindow;
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -144,20 +266,22 @@ function buildMelFilterbank(nMels: number, nFft: number, sampleRate: number): Fl
     // Mel-spaced center frequencies
     const melPoints = new Float32Array(nMels + 2);
     for (let i = 0; i < nMels + 2; i++) {
-        melPoints[i] = melMin + (melMax - melMin) * i / (nMels + 1);
+        melPoints[i] = melMin + ((melMax - melMin) * i) / (nMels + 1);
     }
 
     // Convert to FFT bin indices
     const bins = new Int32Array(nMels + 2);
     for (let i = 0; i < nMels + 2; i++) {
-        bins[i] = Math.floor((nFft + 1) * melToHz(melPoints[i]) / sampleRate);
+        bins[i] = Math.floor(((nFft + 1) * melToHz(melPoints[i])) / sampleRate);
     }
 
     // Build triangular filters
     const fb: Float32Array[] = [];
     for (let m = 0; m < nMels; m++) {
         const row = new Float32Array(nBins);
-        const left = bins[m], center = bins[m + 1], right = bins[m + 2];
+        const left = bins[m],
+            center = bins[m + 1],
+            right = bins[m + 2];
         for (let k = left; k < center; k++) {
             if (k >= 0 && k < nBins) row[k] = (k - left) / Math.max(center - left, 1);
         }
@@ -179,7 +303,7 @@ function dctII(input: Float32Array, nOutput: number): Float32Array {
     for (let k = 0; k < nOutput; k++) {
         let sum = 0;
         for (let n = 0; n < N; n++) {
-            sum += input[n] * Math.cos(Math.PI * k * (2 * n + 1) / (2 * N));
+            sum += input[n] * Math.cos((Math.PI * k * (2 * n + 1)) / (2 * N));
         }
         out[k] = sum * 2; // DCT-II standard scaling factor
     }
@@ -202,12 +326,65 @@ function getFFTEngine(size: number): FFTEngine {
 }
 
 /**
- * SpFFT: compute power spectrum of a 1D signal.
- * Input:  [samples] — time-domain audio frame
- * Output: [nfft/2+1] — power spectrum
+ * SpFFT: forward FFT of a 1D signal.
+ * Input:  [samples] time-domain frame
+ * Output depends on `output_type`:
+ *   0 (power, default)   [nfft/2+1]
+ *   1 (magnitude)        [nfft/2+1]
+ *   2 (complex)          [nfft/2+1, 2]  interleaved real/imag
+ * Attributes: nfft (default 512), output_type (default 0)
+ */
+export const FFT_OUTPUT_POWER = 0;
+export const FFT_OUTPUT_MAGNITUDE = 1;
+export const FFT_OUTPUT_COMPLEX = 2;
+
+class SpFFTNode extends OnnxOpNode {
+    readonly outputShapes: number[][] = [];
+    private readonly nfft: number;
+    private readonly outputType: number;
+
+    constructor(info: OnnxNodeInfo) {
+        super(info);
+        this.nfft = this.attrInt("nfft", 512);
+        this.outputType = this.attrInt("output_type", FFT_OUTPUT_POWER);
+    }
+
+    execute(inputs: ITensor[]): ITensor[] {
+        const signal = inputs[0];
+        const engine = getFFTEngine(this.nfft);
+
+        const frame = new Float32Array(this.nfft);
+        const len = Math.min(signal.data.length, this.nfft);
+        for (let i = 0; i < len; i++) frame[i] = signal.data[i];
+
+        const nBins = this.nfft / 2 + 1;
+        switch (this.outputType) {
+            case FFT_OUTPUT_COMPLEX: {
+                const complex = engine.forwardComplex(frame);
+                return [makeTensor(complex, [nBins, 2])];
+            }
+            case FFT_OUTPUT_MAGNITUDE: {
+                const power = engine.forward(frame);
+                const mag = new Float32Array(nBins);
+                for (let i = 0; i < nBins; i++) mag[i] = Math.sqrt(power[i]);
+                return [makeTensor(mag, [nBins])];
+            }
+            case FFT_OUTPUT_POWER:
+            default: {
+                const power = engine.forward(frame);
+                return [makeTensor(power, [nBins])];
+            }
+        }
+    }
+}
+
+/**
+ * SpIFFT: inverse FFT from a Hermitian half-spectrum.
+ * Input:  [nfft/2+1, 2] interleaved real/imag pairs
+ * Output: [nfft] real time-domain samples
  * Attributes: nfft (default 512)
  */
-class SpFFTNode extends OnnxOpNode {
+class SpIFFTNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     private readonly nfft: number;
 
@@ -217,43 +394,409 @@ class SpFFTNode extends OnnxOpNode {
     }
 
     execute(inputs: ITensor[]): ITensor[] {
-        const signal = inputs[0];
         const engine = getFFTEngine(this.nfft);
-
-        // Pad or truncate to nfft
-        const frame = new Float32Array(this.nfft);
-        const len = Math.min(signal.data.length, this.nfft);
-        for (let i = 0; i < len; i++) frame[i] = signal.data[i];
-
-        const power = engine.forward(frame);
-        return [makeTensor(power, [power.length])];
+        const time = engine.inverse(inputs[0].data);
+        return [makeTensor(time, [this.nfft])];
     }
 }
 
 /**
- * SpWindow: apply window function to audio frame.
+ * SpMagnitude: |z| for a complex tensor stored as [..., 2] interleaved real/imag.
+ * Output keeps every leading axis and drops the trailing 2.
+ */
+class SpMagnitudeNode extends OnnxOpNode {
+    readonly outputShapes: number[][] = [];
+
+    execute(inputs: ITensor[]): ITensor[] {
+        const c = inputs[0];
+        const n = c.data.length >> 1;
+        const out = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+            const re = c.data[i * 2];
+            const im = c.data[i * 2 + 1];
+            out[i] = Math.sqrt(re * re + im * im);
+        }
+        const shape = c.shape.length >= 1 ? c.shape.slice(0, -1) : [n];
+        return [makeTensor(out, shape)];
+    }
+}
+
+/**
+ * SpPhase: atan2(im, re) for a complex tensor stored as [..., 2] interleaved.
+ */
+class SpPhaseNode extends OnnxOpNode {
+    readonly outputShapes: number[][] = [];
+
+    execute(inputs: ITensor[]): ITensor[] {
+        const c = inputs[0];
+        const n = c.data.length >> 1;
+        const out = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+            out[i] = Math.atan2(c.data[i * 2 + 1], c.data[i * 2]);
+        }
+        const shape = c.shape.length >= 1 ? c.shape.slice(0, -1) : [n];
+        return [makeTensor(out, shape)];
+    }
+}
+
+/**
+ * SpWindow: apply a window function to a 1D frame.
  * Input:  [samples]
  * Output: [samples]
- * Attributes: window_type (0=hann, 1=hamming, default 0)
+ * Attributes:
+ *   window_type   0=hann (default), 1=hamming, 2=blackman, 3=bartlett, 4=rectangular, 5=tukey
+ *   alpha         Tukey taper fraction in [0, 1] (default 0.5; ignored for other types)
  */
 class SpWindowNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     private readonly windowType: number;
+    private readonly alpha: number;
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.windowType = this.attrInt("window_type", 0);
+        this.windowType = this.attrInt("window_type", WINDOW_HANN);
+        this.alpha = this.attr("alpha", 0.5);
     }
 
     execute(inputs: ITensor[]): ITensor[] {
         const input = inputs[0];
-        const out = new Float32Array(input.data.length);
         const N = input.data.length;
-        const winFn = this.windowType === 1 ? hammingWindow : hannWindow;
+        const out = new Float32Array(N);
+        const fn = windowFn(this.windowType, this.alpha);
         for (let i = 0; i < N; i++) {
-            out[i] = input.data[i] * winFn(N, i);
+            out[i] = input.data[i] * fn(N, i);
         }
         return [makeTensor(out, [...input.shape])];
+    }
+}
+
+/**
+ * SpFrame: slice a 1D signal into overlapping frames.
+ * Input:  [samples]
+ * Output: [n_frames, frame_size]
+ * Attributes:
+ *   frame_size   number of samples per frame (default 512)
+ *   hop_length   stride between consecutive frames (default 256)
+ *   pad_mode     0=drop trailing partial frame (default), 1=zero-pad it
+ */
+class SpFrameNode extends OnnxOpNode {
+    readonly outputShapes: number[][] = [];
+    private readonly frameSize: number;
+    private readonly hopLength: number;
+    private readonly padMode: number;
+
+    constructor(info: OnnxNodeInfo) {
+        super(info);
+        this.frameSize = this.attrInt("frame_size", 512);
+        this.hopLength = this.attrInt("hop_length", 256);
+        this.padMode = this.attrInt("pad_mode", 0);
+    }
+
+    execute(inputs: ITensor[]): ITensor[] {
+        const x = inputs[0].data;
+        const N = x.length;
+        const F = this.frameSize;
+        const H = this.hopLength;
+
+        let nFrames: number;
+        if (this.padMode === 1) {
+            // Every start index < N produces a frame (trailing samples are zero-padded).
+            nFrames = N <= 0 ? 0 : Math.floor((N - 1) / H) + 1;
+        } else {
+            // Only frames that fit entirely within the signal.
+            nFrames = N < F ? 0 : Math.floor((N - F) / H) + 1;
+        }
+
+        const out = new Float32Array(nFrames * F);
+        for (let t = 0; t < nFrames; t++) {
+            const start = t * H;
+            const copyLen = Math.min(F, Math.max(0, N - start));
+            for (let i = 0; i < copyLen; i++) out[t * F + i] = x[start + i];
+        }
+        return [makeTensor(out, [nFrames, F])];
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Filters
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const BIQUAD_LOWPASS = 0;
+export const BIQUAD_HIGHPASS = 1;
+export const BIQUAD_BANDPASS = 2;
+export const BIQUAD_NOTCH = 3;
+
+/**
+ * Compute RBJ-cookbook biquad coefficients normalized by a0.
+ * Returns { b0, b1, b2, a1, a2 } ready for Direct Form I:
+ *   y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
+ */
+function biquadCoeffs(
+    type: number,
+    fs: number,
+    f0: number,
+    q: number
+): {
+    b0: number;
+    b1: number;
+    b2: number;
+    a1: number;
+    a2: number;
+} {
+    const w0 = (2 * Math.PI * f0) / fs;
+    const cosw = Math.cos(w0);
+    const sinw = Math.sin(w0);
+    const alpha = sinw / (2 * Math.max(q, 1e-6));
+    const a0 = 1 + alpha;
+
+    let b0: number, b1: number, b2: number, a1: number, a2: number;
+    switch (type) {
+        case BIQUAD_HIGHPASS:
+            b0 = (1 + cosw) / 2;
+            b1 = -(1 + cosw);
+            b2 = (1 + cosw) / 2;
+            a1 = -2 * cosw;
+            a2 = 1 - alpha;
+            break;
+        case BIQUAD_BANDPASS:
+            b0 = alpha;
+            b1 = 0;
+            b2 = -alpha;
+            a1 = -2 * cosw;
+            a2 = 1 - alpha;
+            break;
+        case BIQUAD_NOTCH:
+            b0 = 1;
+            b1 = -2 * cosw;
+            b2 = 1;
+            a1 = -2 * cosw;
+            a2 = 1 - alpha;
+            break;
+        case BIQUAD_LOWPASS:
+        default:
+            b0 = (1 - cosw) / 2;
+            b1 = 1 - cosw;
+            b2 = (1 - cosw) / 2;
+            a1 = -2 * cosw;
+            a2 = 1 - alpha;
+            break;
+    }
+    return { b0: b0 / a0, b1: b1 / a0, b2: b2 / a0, a1: a1 / a0, a2: a2 / a0 };
+}
+
+/**
+ * SpBiquadFilter: RBJ biquad applied forward over a 1D signal.
+ * Input:  [samples]
+ * Output: [samples]
+ * Attributes:
+ *   filter_type   0=LP (default), 1=HP, 2=BP, 3=Notch
+ *   sample_rate   Hz, default 16000
+ *   cutoff_hz     center/cutoff frequency, default 1000
+ *   q             quality factor, default 0.7071 (Butterworth for LP/HP)
+ *
+ * State is reset to zero at the start of every execute() call (stateless
+ * per inference). For streaming use, run repeated calls with concatenated
+ * inputs or hold an external state buffer.
+ */
+class SpBiquadFilterNode extends OnnxOpNode {
+    readonly outputShapes: number[][] = [];
+    private readonly filterType: number;
+    private readonly sampleRate: number;
+    private readonly cutoffHz: number;
+    private readonly q: number;
+
+    constructor(info: OnnxNodeInfo) {
+        super(info);
+        this.filterType = this.attrInt("filter_type", BIQUAD_LOWPASS);
+        this.sampleRate = this.attrInt("sample_rate", 16000);
+        this.cutoffHz = this.attr("cutoff_hz", 1000);
+        this.q = this.attr("q", Math.SQRT1_2);
+    }
+
+    execute(inputs: ITensor[]): ITensor[] {
+        const x = inputs[0].data;
+        const N = x.length;
+        const out = new Float32Array(N);
+        const { b0, b1, b2, a1, a2 } = biquadCoeffs(this.filterType, this.sampleRate, this.cutoffHz, this.q);
+
+        let x1 = 0,
+            x2 = 0,
+            y1 = 0,
+            y2 = 0;
+        for (let n = 0; n < N; n++) {
+            const xn = x[n];
+            const yn = b0 * xn + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+            out[n] = yn;
+            x2 = x1;
+            x1 = xn;
+            y2 = y1;
+            y1 = yn;
+        }
+        return [makeTensor(out, [...inputs[0].shape])];
+    }
+}
+
+/**
+ * SpKalman1D: scalar (1D) Kalman filter applied sample-by-sample.
+ * Random-walk model: x_{k+1} = x_k + w_k, z_k = x_k + v_k.
+ * Input:  [samples]
+ * Output: [samples] filtered estimates
+ * Attributes:
+ *   q     process noise variance (default 1e-4)
+ *   r     measurement noise variance (default 1e-2)
+ *   x0    initial state (default 0)
+ *   p0    initial covariance (default 1)
+ */
+class SpKalman1DNode extends OnnxOpNode {
+    readonly outputShapes: number[][] = [];
+    private readonly q: number;
+    private readonly r: number;
+    private readonly x0: number;
+    private readonly p0: number;
+
+    constructor(info: OnnxNodeInfo) {
+        super(info);
+        this.q = this.attr("q", 1e-4);
+        this.r = this.attr("r", 1e-2);
+        this.x0 = this.attr("x0", 0);
+        this.p0 = this.attr("p0", 1);
+    }
+
+    execute(inputs: ITensor[]): ITensor[] {
+        const z = inputs[0].data;
+        const N = z.length;
+        const out = new Float32Array(N);
+        let x = this.x0;
+        let p = this.p0;
+        for (let n = 0; n < N; n++) {
+            p = p + this.q;
+            const k = p / (p + this.r);
+            x = x + k * (z[n] - x);
+            p = (1 - k) * p;
+            out[n] = x;
+        }
+        return [makeTensor(out, [...inputs[0].shape])];
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Output analysis primitives
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * SpRMS: scalar root-mean-square of a 1D signal.
+ * Output: [1]
+ */
+class SpRMSNode extends OnnxOpNode {
+    readonly outputShapes: number[][] = [];
+
+    execute(inputs: ITensor[]): ITensor[] {
+        const x = inputs[0].data;
+        const N = x.length;
+        let sum = 0;
+        for (let i = 0; i < N; i++) sum += x[i] * x[i];
+        const rms = N > 0 ? Math.sqrt(sum / N) : 0;
+        return [makeTensor(new Float32Array([rms]), [1])];
+    }
+}
+
+/**
+ * SpZeroCrossingRate: fraction of consecutive sample pairs with opposite
+ * signs. Output: [1] in [0, 1].
+ */
+class SpZeroCrossingRateNode extends OnnxOpNode {
+    readonly outputShapes: number[][] = [];
+
+    execute(inputs: ITensor[]): ITensor[] {
+        const x = inputs[0].data;
+        const N = x.length;
+        if (N < 2) return [makeTensor(new Float32Array([0]), [1])];
+        let crossings = 0;
+        let prevSign = x[0] >= 0 ? 1 : -1;
+        for (let i = 1; i < N; i++) {
+            const sign = x[i] >= 0 ? 1 : -1;
+            if (sign !== prevSign) crossings++;
+            prevSign = sign;
+        }
+        return [makeTensor(new Float32Array([crossings / (N - 1)]), [1])];
+    }
+}
+
+/**
+ * SpMovingAverage: causal simple moving average over window_size samples.
+ * Input:  [samples]
+ * Output: [samples] (first window_size-1 samples are averaged over the partial window)
+ * Attributes: window_size (default 5)
+ */
+class SpMovingAverageNode extends OnnxOpNode {
+    readonly outputShapes: number[][] = [];
+    private readonly windowSize: number;
+
+    constructor(info: OnnxNodeInfo) {
+        super(info);
+        this.windowSize = Math.max(1, this.attrInt("window_size", 5));
+    }
+
+    execute(inputs: ITensor[]): ITensor[] {
+        const x = inputs[0].data;
+        const N = x.length;
+        const W = this.windowSize;
+        const out = new Float32Array(N);
+        let sum = 0;
+        for (let i = 0; i < N; i++) {
+            sum += x[i];
+            if (i >= W) sum -= x[i - W];
+            const count = Math.min(i + 1, W);
+            out[i] = sum / count;
+        }
+        return [makeTensor(out, [...inputs[0].shape])];
+    }
+}
+
+/**
+ * SpDetrend: remove the constant (mode=0) or linear (mode=1) trend.
+ * Input:  [samples]
+ * Output: [samples]
+ * Attributes: mode (default 1 = linear)
+ */
+class SpDetrendNode extends OnnxOpNode {
+    readonly outputShapes: number[][] = [];
+    private readonly mode: number;
+
+    constructor(info: OnnxNodeInfo) {
+        super(info);
+        this.mode = this.attrInt("mode", 1);
+    }
+
+    execute(inputs: ITensor[]): ITensor[] {
+        const x = inputs[0].data;
+        const N = x.length;
+        const out = new Float32Array(N);
+        if (N === 0) return [makeTensor(out, [...inputs[0].shape])];
+
+        if (this.mode === 0) {
+            let mean = 0;
+            for (let i = 0; i < N; i++) mean += x[i];
+            mean /= N;
+            for (let i = 0; i < N; i++) out[i] = x[i] - mean;
+        } else {
+            // Least-squares fit y = a*i + b over i = 0..N-1.
+            let sumX = 0,
+                sumY = 0,
+                sumXY = 0,
+                sumXX = 0;
+            for (let i = 0; i < N; i++) {
+                sumX += i;
+                sumY += x[i];
+                sumXY += i * x[i];
+                sumXX += i * i;
+            }
+            const denom = N * sumXX - sumX * sumX;
+            const a = denom !== 0 ? (N * sumXY - sumX * sumY) / denom : 0;
+            const b = (sumY - a * sumX) / N;
+            for (let i = 0; i < N; i++) out[i] = x[i] - (a * i + b);
+        }
+        return [makeTensor(out, [...inputs[0].shape])];
     }
 }
 
@@ -417,7 +960,7 @@ class SpMFCCNode extends OnnxOpNode {
             for (let c = 0; c < this.nMfcc; c++) {
                 let sum = 0;
                 for (let m = 0; m < this.nMels; m++) {
-                    sum += melSpec[m] * Math.cos(Math.PI * c * (2 * m + 1) / (2 * this.nMels));
+                    sum += melSpec[m] * Math.cos((Math.PI * c * (2 * m + 1)) / (2 * this.nMels));
                 }
                 mfcc[c * nFrames + t] = sum;
             }
@@ -435,11 +978,7 @@ class SpMFCCNode extends OnnxOpNode {
  * Euclidean distance between two frames extracted from [n_features, n_frames]
  * packed Float32Arrays.
  */
-function frameDist(
-    a: Float32Array, frameA: number, nFramesA: number,
-    b: Float32Array, frameB: number, nFramesB: number,
-    nFeatures: number,
-): number {
+function frameDist(a: Float32Array, frameA: number, nFramesA: number, b: Float32Array, frameB: number, nFramesB: number, nFeatures: number): number {
     let sum = 0;
     for (let f = 0; f < nFeatures; f++) {
         const d = a[f * nFramesA + frameA] - b[f * nFramesB + frameB];
@@ -454,11 +993,13 @@ function frameDist(
  * When normalize=true the cost is divided by (n+m) to be length-independent.
  */
 function dtw(
-    live: Float32Array, nFramesLive: number,
-    tmpl: Float32Array, nFramesTmpl: number,
+    live: Float32Array,
+    nFramesLive: number,
+    tmpl: Float32Array,
+    nFramesTmpl: number,
     nFeatures: number,
-    band: number,       // Sakoe-Chiba radius, -1 = no constraint
-    normalize: boolean,
+    band: number, // Sakoe-Chiba radius, -1 = no constraint
+    normalize: boolean
 ): number {
     const n = nFramesLive;
     const m = nFramesTmpl;
@@ -473,11 +1014,11 @@ function dtw(
             if (band >= 0 && Math.abs(i - j) > band) continue;
 
             const d = frameDist(live, i, n, tmpl, j, m, nFeatures);
-            const top  = i > 0 ? cost[(i - 1) * m + j] : INF;
+            const top = i > 0 ? cost[(i - 1) * m + j] : INF;
             const left = j > 0 ? cost[i * m + (j - 1)] : INF;
-            const diag = (i > 0 && j > 0) ? cost[(i - 1) * m + (j - 1)] : INF;
+            const diag = i > 0 && j > 0 ? cost[(i - 1) * m + (j - 1)] : INF;
 
-            const prev = (i === 0 && j === 0) ? 0 : Math.min(top, left, diag);
+            const prev = i === 0 && j === 0 ? 0 : Math.min(top, left, diag);
             cost[i * m + j] = d + (prev === INF ? 0 : prev);
         }
     }
@@ -522,13 +1063,7 @@ class SpDTWNode extends OnnxOpNode {
         const nFramesLive = live.shape[1] ?? 1;
         const nFramesTmpl = tmpl.shape[1] ?? 1;
 
-        const distance = dtw(
-            live.data, nFramesLive,
-            tmpl.data, nFramesTmpl,
-            nFeatures,
-            this.band,
-            this.normalize,
-        );
+        const distance = dtw(live.data, nFramesLive, tmpl.data, nFramesTmpl, nFeatures, this.band, this.normalize);
 
         return [makeTensor(new Float32Array([distance]), [1])];
     }
@@ -539,16 +1074,16 @@ class SpDTWNode extends OnnxOpNode {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface MfccParams {
-    sampleRate?: number;   // default 16000
-    nMfcc?: number;        // default 40
-    nFft?: number;         // default 512
-    hopLength?: number;    // default 160
-    nMels?: number;        // default 40
-    windowType?: number;   // 0=hann, 1=hamming, default 0
+    sampleRate?: number; // default 16000
+    nMfcc?: number; // default 40
+    nFft?: number; // default 512
+    hopLength?: number; // default 160
+    nMels?: number; // default 40
+    windowType?: number; // 0=hann, 1=hamming, default 0
 }
 
 export interface DtwTemplate {
-    data: Float32Array;    // [n_mfcc, n_frames]
+    data: Float32Array; // [n_mfcc, n_frames]
     shape: [number, number];
     params: Required<MfccParams>;
 }
@@ -559,7 +1094,9 @@ export interface DtwTemplate {
  */
 function mfccFromAudio(audio: Float32Array, p: Required<MfccParams>): { data: Float32Array; nFrames: number } {
     const nFrames = Math.floor((audio.length - p.nFft) / p.hopLength) + 1;
-    if (!mfccFromAudio._fb) { /* lazy init below */ }
+    if (!mfccFromAudio._fb) {
+        /* lazy init below */
+    }
 
     const fb = buildMelFilterbank(p.nMels, p.nFft, p.sampleRate);
     const engine = getFFTEngine(p.nFft);
@@ -584,7 +1121,7 @@ function mfccFromAudio(audio: Float32Array, p: Required<MfccParams>): { data: Fl
         for (let c = 0; c < p.nMfcc; c++) {
             let sum = 0;
             for (let m = 0; m < p.nMels; m++) {
-                sum += melSpec[m] * Math.cos(Math.PI * c * (2 * m + 1) / (2 * p.nMels));
+                sum += melSpec[m] * Math.cos((Math.PI * c * (2 * m + 1)) / (2 * p.nMels));
             }
             mfcc[c * nFrames + t] = sum;
         }
@@ -601,14 +1138,12 @@ mfccFromAudio._fb = null as null;
 function resampleMfcc(src: Float32Array, nMfcc: number, srcFrames: number, dstFrames: number): Float32Array {
     const out = new Float32Array(nMfcc * dstFrames);
     for (let t = 0; t < dstFrames; t++) {
-        const srcT = t * (srcFrames - 1) / Math.max(dstFrames - 1, 1);
+        const srcT = (t * (srcFrames - 1)) / Math.max(dstFrames - 1, 1);
         const lo = Math.floor(srcT);
         const hi = Math.min(lo + 1, srcFrames - 1);
         const frac = srcT - lo;
         for (let c = 0; c < nMfcc; c++) {
-            out[c * dstFrames + t] =
-                src[c * srcFrames + lo] * (1 - frac) +
-                src[c * srcFrames + hi] * frac;
+            out[c * dstFrames + t] = src[c * srcFrames + lo] * (1 - frac) + src[c * srcFrames + hi] * frac;
         }
     }
     return out;
@@ -635,10 +1170,10 @@ export function enroll(samples: Float32Array[], params: MfccParams = {}): DtwTem
 
     const p: Required<MfccParams> = {
         sampleRate: params.sampleRate ?? 16000,
-        nMfcc:      params.nMfcc      ?? 40,
-        nFft:       params.nFft       ?? 512,
-        hopLength:  params.hopLength  ?? 160,
-        nMels:      params.nMels      ?? 40,
+        nMfcc: params.nMfcc ?? 40,
+        nFft: params.nFft ?? 512,
+        hopLength: params.hopLength ?? 160,
+        nMels: params.nMels ?? 40,
         windowType: params.windowType ?? 0,
     };
 
@@ -652,9 +1187,7 @@ export function enroll(samples: Float32Array[], params: MfccParams = {}): DtwTem
     // Resample and average
     const avg = new Float32Array(p.nMfcc * targetFrames);
     for (const { data, nFrames } of computed) {
-        const resampled = nFrames === targetFrames
-            ? data
-            : resampleMfcc(data, p.nMfcc, nFrames, targetFrames);
+        const resampled = nFrames === targetFrames ? data : resampleMfcc(data, p.nMfcc, nFrames, targetFrames);
         for (let i = 0; i < avg.length; i++) avg[i] += resampled[i];
     }
     for (let i = 0; i < avg.length; i++) avg[i] /= samples.length;
@@ -691,10 +1224,20 @@ export function templateToTensor(t: DtwTemplate): ITensor {
 
 export function registerDspOps(registry: OnnxOpRegistry): void {
     registry.register("SpFFT", (info) => new SpFFTNode(info));
+    registry.register("SpIFFT", (info) => new SpIFFTNode(info));
+    registry.register("SpMagnitude", (info) => new SpMagnitudeNode(info));
+    registry.register("SpPhase", (info) => new SpPhaseNode(info));
     registry.register("SpWindow", (info) => new SpWindowNode(info));
+    registry.register("SpFrame", (info) => new SpFrameNode(info));
     registry.register("SpMelFilterbank", (info) => new SpMelFilterbankNode(info));
     registry.register("SpLogScale", (info) => new SpLogScaleNode(info));
     registry.register("SpDCT", (info) => new SpDCTNode(info));
     registry.register("SpMFCC", (info) => new SpMFCCNode(info));
     registry.register("SpDTW", (info) => new SpDTWNode(info));
+    registry.register("SpBiquadFilter", (info) => new SpBiquadFilterNode(info));
+    registry.register("SpKalman1D", (info) => new SpKalman1DNode(info));
+    registry.register("SpRMS", (info) => new SpRMSNode(info));
+    registry.register("SpZeroCrossingRate", (info) => new SpZeroCrossingRateNode(info));
+    registry.register("SpMovingAverage", (info) => new SpMovingAverageNode(info));
+    registry.register("SpDetrend", (info) => new SpDetrendNode(info));
 }

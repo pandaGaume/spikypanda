@@ -49,6 +49,10 @@ export class NodeUI {
      *  variadic on that side. */
     readonly variadicInput?:  { prefix: string; type: string };
     readonly variadicOutput?: { prefix: string; type: string };
+    /** Standards declarations (e.g. `["onnx", { id: "ue5", version: "5.4" }]`)
+     *  carried straight from the source NodeDef so the property panel
+     *  can render shields without going back to the node registry. */
+    readonly standards?: NodeDef["standards"];
 
     x = 0;
     y = 0;
@@ -75,6 +79,10 @@ export class NodeUI {
         this.id = `node_${nodeIdCounter++}`;
         this.label = def.label;
         this.color = def.color;
+        // Carry the standards declaration so the property panel can
+        // render its version-aware shields without re-walking the
+        // node registry. Untouched when def declares none.
+        this.standards = def.standards;
         this.item = new UIItemBase(def.data ?? def);
 
         this.el = document.createElement("div");
@@ -107,24 +115,11 @@ export class NodeUI {
         this.toolbarEl.className = "ne-node-toolbar";
         this.headerEl.appendChild(this.toolbarEl);
 
-        // Standards badges (e.g. ONNX). Rendered between the title and
-        // the toolbar so they sit near the identity of the node, not
-        // mixed with the lifecycle buttons. Empty unless def.standards
-        // declares anything.
-        if (def.standards && def.standards.length > 0) {
-            const badgeWrap = document.createElement("div");
-            badgeWrap.className = "ne-node-standards";
-            for (const id of def.standards) {
-                const info = standards?.get(id);
-                const b = document.createElement("span");
-                b.className = `ne-standard-badge ne-standard-${id}`;
-                b.textContent = info?.glyph ?? id.slice(0, 1).toUpperCase();
-                b.title = info ? info.label : id;
-                if (info?.color) b.style.backgroundColor = info.color;
-                badgeWrap.appendChild(b);
-            }
-            this.headerEl.insertBefore(badgeWrap, this.toolbarEl);
-        }
+        // Standards declarations on def.standards are no longer rendered
+        // in the node header (they were judged noisy). The data still
+        // travels with the node so the property panel can show richer
+        // version-aware shields via renderStandardShields().
+        void standards;
 
         this.el.appendChild(this.headerEl);
 

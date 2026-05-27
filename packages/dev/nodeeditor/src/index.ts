@@ -16,8 +16,8 @@ export { GraphViewer } from "./components/graph-viewer";
 export { Palette } from "./components/palette";
 export type { PaletteOptions } from "./components/palette";
 export { Permissions } from "./permissions";
-export { StandardsRegistry } from "./standards";
-export type { IStandardInfo } from "./standards";
+export { StandardsRegistry, renderStandardShields, normalizeStandardSpec } from "./standards";
+export type { IStandardInfo, IStandardEntry, StandardSpec } from "./standards";
 export { NodeRegistry, StartNode, StopNode, RunnableNode } from "spikypanda-core";
 export type { INodeRegistry, INodeMeta, NodeFactory } from "spikypanda-core";
 export {
@@ -71,7 +71,7 @@ export { transparentDarkSkin, transparentLightSkin } from "./styles/skins/transp
 // need a separate dependency on spikypanda-core just for decorators.
 export { editor, editable, viewable, getEditorSchema } from "spikypanda-core";
 export type { IEditableField, IEditorSchema } from "spikypanda-core";
-export { PORT_COLORS } from "./types";
+export { PORT_COLORS, arePortTypesCompatible } from "./types";
 export type { IPlugin, IPluginContext, IPluginManifest, IPluginNodeEntry, IPluginEditorEntry } from "./plugin.interfaces";
 export type {
     PortDirection,

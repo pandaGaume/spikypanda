@@ -12,12 +12,14 @@ export interface INodeMeta {
      *  to render control ports in a distinct row. */
     readonly controlInputPorts?:  ReadonlyArray<IPortDescriptor>;
     readonly controlOutputPorts?: ReadonlyArray<IPortDescriptor>;
-    /** Interop standards this node complies with (e.g. "onnx", "tflite").
-     *  The editor renders one badge per standard on the node and palette
-     *  entry, and validators use them to decide whether a whole graph
-     *  can be exported to a given format (it can if every node carries
-     *  the target's badge). Empty/absent = no interop guarantee. */
-    readonly standards?: ReadonlyArray<string>;
+    /** Interop standards this node complies with (e.g. "onnx", "ue5").
+     *  Each entry is either a bare id (the standards registry's default
+     *  version is used) or `{ id, version }` to pin a specific version
+     *  on this node. The property panel renders one GitHub-style shield
+     *  per entry; validators iterate ids to decide whether a whole graph
+     *  can be exported to a given target. Empty/absent = no interop
+     *  guarantee. */
+    readonly standards?: ReadonlyArray<string | { readonly id: string; readonly version?: string }>;
     /** Variadic input descriptor: when set, the editor maintains a
      *  growing/shrinking set of input ports `${prefix}0`, `${prefix}1`,
      *  ... so exactly one trailing unconnected port stays available

@@ -1,0 +1,28 @@
+{
+    "id": "spk.dsp",
+    "version": "0.1.0",
+    "displayName": "DSP",
+    "description": "Time-series DSP fundamentals: FFT/IFFT, magnitude/phase, windowing, framing, biquad and Kalman filters, MFCC pipeline, and signal analysis primitives (RMS, ZCR, moving average, detrend).",
+    "category": "dsp",
+    "entry": "bundle/SpkPluginDsp.js",
+    "nodes": [
+        { "type": "spk.dsp:fft",         "factory": "createFftNode" },
+        { "type": "spk.dsp:ifft",        "factory": "createIfftNode" },
+        { "type": "spk.dsp:magnitude",   "factory": "createMagnitudeNode" },
+        { "type": "spk.dsp:phase",       "factory": "createPhaseNode" },
+        { "type": "spk.dsp:window",      "factory": "createWindowNode" },
+        { "type": "spk.dsp:frame",       "factory": "createFrameNode" },
+        { "type": "spk.dsp:mel",         "factory": "createMelFilterbankNode" },
+        { "type": "spk.dsp:logscale",    "factory": "createLogScaleNode" },
+        { "type": "spk.dsp:dct",         "factory": "createDctNode" },
+        { "type": "spk.dsp:mfcc",        "factory": "createMfccNode" },
+        { "type": "spk.dsp:dtw",         "factory": "createDtwNode" },
+        { "type": "spk.dsp:biquad",      "factory": "createBiquadFilterNode" },
+        { "type": "spk.dsp:kalman1d",    "factory": "createKalman1DNode" },
+        { "type": "spk.dsp:rms",         "factory": "createRmsNode" },
+        { "type": "spk.dsp:zcr",         "factory": "createZeroCrossingRateNode" },
+        { "type": "spk.dsp:movavg",      "factory": "createMovingAverageNode" },
+        { "type": "spk.dsp:detrend",     "factory": "createDetrendNode" }
+    ],
+    "editors": []
+}

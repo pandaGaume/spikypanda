@@ -2,6 +2,23 @@ export type PortDirection = "input" | "output";
 
 export type PortType = "float" | "vec2" | "vec3" | "vec4" | "tensor" | "any" | "exec" | "matrix44" | "boolean" | "trigger" | "array";
 
+/**
+ * True iff a wire from a producer port of type `from` to a consumer port
+ * of type `to` is type-safe. The rule is intentionally minimal:
+ *   - identical types match
+ *   - "any" acts as a wildcard on either side (collection element ports
+ *     in the logic plugin rely on this)
+ * Everything else is rejected, including looking-alike pairs like
+ * trigger vs exec or boolean vs trigger. Editors call this from their
+ * connect() path to silently refuse drops that would produce a runtime
+ * type error downstream.
+ */
+export function arePortTypesCompatible(from: PortType, to: PortType): boolean {
+    if (from === to) return true;
+    if (from === "any" || to === "any") return true;
+    return false;
+}
+
 export const PORT_COLORS: Record<PortType, string> = {
     float:    "#8cf",
     vec2:     "#8f8",

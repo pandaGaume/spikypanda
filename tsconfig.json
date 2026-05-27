@@ -12,6 +12,7 @@
         { "path": "packages/dev/plugins/geometry/tsconfig.build.json" },
         { "path": "packages/dev/plugins/onnx/tsconfig.build.json" },
         { "path": "packages/dev/plugins/logic/tsconfig.build.json" },
+        { "path": "packages/dev/plugins/dsp/tsconfig.build.json" },
         { "path": "packages/tests/tsconfig.json" }
     ]
 }

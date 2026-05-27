@@ -10,7 +10,8 @@ import { darkSkin } from "../styles/skins/dark";
 import { heliosSkin } from "../styles/skins/helios";
 import { lightSkin } from "../styles/skins/light";
 import { transparentDarkSkin, transparentLightSkin } from "../styles/skins/transparent";
-import { ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedGraph } from "../types";
+import { arePortTypesCompatible, ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedGraph } from "../types";
+import { DebugBus } from "../debug-bus";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -61,6 +62,10 @@ export class GraphViewer {
     private isPanning = false;
     private panStart = { x: 0, y: 0 };
     private dragPort: Port | null = null;
+    /** Target port currently under the mouse during a drag-from-port,
+     *  tracked so we can clear the .ne-port-compatible / -incompatible
+     *  classes when the hover moves off. */
+    private _hoverTargetPort: Port | null = null;
     private preview: ConnectionPreview | null = null;
     private reorderPort: Port | null = null;
     private reorderNode: NodeUI | null = null;
@@ -148,8 +153,16 @@ export class GraphViewer {
     }
 
     connect(from: Port, to: Port): Connection | null {
-        if (from.direction === to.direction) return null;
+        if (from.direction === to.direction) {
+            this._reportRejection(from, to, `same direction (${from.direction})`);
+            return null;
+        }
         if (from.direction === "input") { const tmp = from; from = to; to = tmp; }
+
+        if (!arePortTypesCompatible(from.type, to.type)) {
+            this._reportRejection(from, to, `incompatible types ${from.type} → ${to.type}`);
+            return null;
+        }
 
         const exists = this.connections.some((c) => c.from === from && c.to === to);
         if (exists) return null;
@@ -158,6 +171,44 @@ export class GraphViewer {
         this.connections.push(conn);
         if (this.onConnectionAdded) this.onConnectionAdded(conn);
         return conn;
+    }
+
+    /** Surface a connection refusal both in the browser console (for
+     *  developers) and in the in-app DebugConsole (for end users). */
+    private _reportRejection(from: Port, to: Port, reason: string): void {
+        const msg = `${from.name} (${from.type}) → ${to.name} (${to.type}): ${reason}`;
+        console.warn(`[graph-viewer] rejected connection ${msg}`);
+        DebugBus.instance.log("warn", "graph-viewer", `Rejected connection ${msg}`);
+    }
+
+    /** Drag-hover feedback: while a wire is being dragged from `dragPort`,
+     *  paint the port under the cursor green (legal drop) or red with a
+     *  "not-allowed" cursor (illegal drop). No-op when no port is hovered. */
+    private _updateDragHoverFeedback(targetEl: HTMLElement): void {
+        if (!this.dragPort) return;
+        const port = this.findPortByDot(targetEl);
+        if (port === this._hoverTargetPort) return;
+        this._clearDragHoverFeedback();
+        if (!port || port === this.dragPort) return;
+        // Mirror the rule in connect(): same-direction or incompatible
+        // types both count as illegal drops here.
+        const sameDir = port.direction === this.dragPort.direction;
+        const compat  = sameDir
+            ? false
+            : (port.direction === "input"
+                ? arePortTypesCompatible(this.dragPort.type, port.type)
+                : arePortTypesCompatible(port.type, this.dragPort.type));
+        port.el.classList.add(compat ? "ne-port-compatible" : "ne-port-incompatible");
+        this.host.style.cursor = compat ? "alias" : "not-allowed";
+        this._hoverTargetPort = port;
+    }
+
+    private _clearDragHoverFeedback(): void {
+        if (this._hoverTargetPort) {
+            this._hoverTargetPort.el.classList.remove("ne-port-compatible", "ne-port-incompatible");
+            this._hoverTargetPort = null;
+        }
+        this.host.style.cursor = "";
     }
 
     removeConnection(conn: Connection): void {
@@ -728,6 +779,7 @@ export class GraphViewer {
         if (this.dragPort && this.preview) {
             const p1 = this.dragPort.getCenter();
             this.preview.updateScreen(p1.x, p1.y, e.clientX, e.clientY);
+            this._updateDragHoverFeedback(e.target as HTMLElement);
             return;
         }
         if (this.dragNode) {
@@ -774,6 +826,7 @@ export class GraphViewer {
             const target = e.target as HTMLElement;
             const targetPort = this.findPortByDot(target);
             if (targetPort && targetPort !== this.dragPort) this.connect(this.dragPort, targetPort);
+            this._clearDragHoverFeedback();
             this.dragPort = null;
             return;
         }

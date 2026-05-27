@@ -15,6 +15,7 @@ const sources = [
     join(root, "packages/dev/plugins/geometry/bundle"),
     join(root, "packages/dev/plugins/logic/bundle"),
     join(root, "packages/dev/plugins/onnx/bundle"),
+    join(root, "packages/dev/plugins/dsp/bundle"),
 ];
 
 const dest = join(root, "packages/host/www/bundle");

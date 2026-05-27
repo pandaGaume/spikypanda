@@ -777,6 +777,26 @@
     color: var(--ne-color-primary);
 }
 
+/* Drag-hover feedback driven by GraphViewer._updateDragHoverFeedback.
+ * A green halo on a port dot means "legal drop"; a red halo plus a
+ * no-entry cursor on the host means "incompatible types or direction".
+ * Both classes are added only while a wire is being dragged and are
+ * cleared as soon as the cursor leaves the port or the drag ends. */
+.ne-port-compatible .ne-port-dot {
+    box-shadow: 0 0 0 3px rgba(76, 217, 100, 0.55);
+    transform: scale(1.4);
+}
+
+.ne-port-incompatible .ne-port-dot {
+    box-shadow: 0 0 0 3px rgba(255, 90, 90, 0.65);
+    transform: scale(1.4);
+    cursor: not-allowed;
+}
+
+.ne-port-incompatible .ne-port-label {
+    color: rgb(255, 110, 110);
+}
+
 /* ── Toolbar ── */
 #toolbar {
     display: flex;
@@ -1560,47 +1580,57 @@
 .ne-palette-entry:hover .ne-palette-entry-dot { opacity: 1; }
 
 /* ============================================================
-   Standards badges (interop compliance: onnx, tflite, etc.)
+   Standards shields (GitHub-style two-tone pills)
+
+   Rendered by renderStandardShields() in the property panel when
+   a node is selected. Each shield is a flex row with a colored
+   "label" half (brand colour, e.g. ONNX blue) butted against a
+   darker "version" half (e.g. 1.18). The label-only form is also
+   supported when no version resolves.
+
+   The legacy single-glyph .ne-standard-badge / .ne-node-standards
+   / .ne-palette-entry-standards rules were removed: those pills
+   were judged noisy on every node and palette row.
    ============================================================ */
 
-.ne-standard-badge {
-    display:          inline-flex;
-    align-items:      center;
-    justify-content:  center;
-    min-width:        16px;
-    height:           16px;
-    padding:          0 4px;
-    background:       var(--ne-color-accent, #555);
-    color:            #fff;
-    font-family:      var(--ne-font-mono, monospace);
-    font-size:        9px;
-    font-weight:      600;
-    line-height:      1;
-    letter-spacing:   0.02em;
-    border-radius:    3px;
-    text-transform:   uppercase;
-    flex-shrink:      0;
+.ne-palette-entry-label { flex: 1; }
+
+.ne-standard-shields {
+    display:      flex;
+    align-items:  center;
+    flex-wrap:    wrap;
+    gap:          6px;
+    margin:       6px 0 10px;
 }
 
-/* Standards strip sits in the node header between title and toolbar. */
-.ne-node-standards {
-    display:      inline-flex;
-    align-items:  center;
-    gap:          3px;
-    margin-right: 6px;
-    flex-shrink:  0;
+.ne-standard-shield {
+    display:        inline-flex;
+    align-items:    stretch;
+    height:         18px;
+    font-family:    var(--ne-font-mono, monospace);
+    font-size:      10px;
+    font-weight:    600;
+    line-height:    1;
+    letter-spacing: 0.02em;
+    border-radius:  3px;
+    overflow:       hidden;
+    color:          #fff;
+    user-select:    none;
 }
 
-/* Standards strip on a palette entry sits at the right edge. */
-.ne-palette-entry-label {
-    flex: 1;
+.ne-standard-shield__label {
+    display:         inline-flex;
+    align-items:     center;
+    padding:         0 6px;
+    background:      var(--ne-color-accent, #555);
 }
-.ne-palette-entry-standards {
-    display:      inline-flex;
-    align-items:  center;
-    gap:          3px;
-    margin-left:  8px;
-    flex-shrink:  0;
+
+.ne-standard-shield__version {
+    display:         inline-flex;
+    align-items:     center;
+    padding:         0 6px;
+    background:      rgba(40, 40, 40, 0.9);
+    color:           #f0f0f0;
 }
 
 /* ============================================================
