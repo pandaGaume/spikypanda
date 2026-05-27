@@ -20,7 +20,7 @@
     },
     "sideEffects": false,
     "dependencies": {
-        "@dev/core": "*"
+        "@cyanmycelium/mcp-core": "*"
     },
     "devDependencies": {
         "rimraf": "~6.0.1",

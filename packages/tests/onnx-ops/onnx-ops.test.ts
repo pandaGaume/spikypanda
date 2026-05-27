@@ -16,7 +16,11 @@ import { registerConvOps } from "../../dev/onnx/src/onnx/ops/conv";
 import { registerNormOps } from "../../dev/onnx/src/onnx/ops/normalization";
 import { registerRecurrentOps } from "../../dev/onnx/src/onnx/ops/recurrent";
 import { registerMiscOps } from "../../dev/onnx/src/onnx/ops/misc";
-import { registerSpikyPandaOps } from "../../dev/onnx/src/onnx/ops/spikypanda";
+// spikypanda.ts was deleted: its Conv/Gemm/LSTM/GRU lived as priority
+// overrides on top of the generic ops, and were consolidated back into
+// their respective files (conv.ts/math.ts/recurrent.ts). The activation
+// overrides (Relu/Sigmoid/Tanh) were drop-in duplicates of activations.ts
+// and got removed too. No replacement import needed for the test setup.
 import { OnnxParser } from "../../dev/onnx/src/onnx/onnx-parser";
 import { OnnxGraphBuilder } from "../../dev/onnx/src/onnx/graph-builder";
 
@@ -100,7 +104,6 @@ beforeAll(() => {
     registerNormOps(spRegistry);
     registerRecurrentOps(spRegistry);
     registerMiscOps(spRegistry);
-    registerSpikyPandaOps(spRegistry);
 });
 
 // ---------------------------------------------------------------------------

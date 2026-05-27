@@ -1,4 +1,4 @@
-import { McpAdapterBase, McpResourceContent, McpToolResult, McpToolResults, JsonRpcMimeType } from "@dev/core";
+import { McpAdapterBase, McpResourceContent, McpToolResult, McpToolResults, JsonRpcMimeType } from "@cyanmycelium/mcp-core";
 import { mkdir, readFile, writeFile, readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve, join, basename, sep } from "node:path";

@@ -13,6 +13,9 @@ const sources = [
     join(root, "packages/dev/onnx-editor/bundle"),
     join(root, "packages/dev/mcp/bundle"),
     join(root, "packages/dev/applications/stereo/bundle"),
+    join(root, "packages/dev/plugins/geometry/bundle"),
+    join(root, "packages/dev/plugins/logic/bundle"),
+    join(root, "packages/dev/plugins/onnx/bundle"),
 ];
 
 const dest = join(root, "packages/host/www/bundle");
@@ -25,7 +28,8 @@ for (const src of sources) {
         continue;
     }
     for (const file of readdirSync(src)) {
-        if (file.endsWith(".js") || file.endsWith(".js.map")) {
+        if (file.endsWith(".js") || file.endsWith(".js.map") ||
+            file.endsWith(".css") || file.endsWith(".css.map")) {
             copyFileSync(join(src, file), join(dest, file));
             console.log(`  ${file} -> ${dest}`);
         }

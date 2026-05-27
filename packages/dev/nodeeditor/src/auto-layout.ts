@@ -1,6 +1,22 @@
-import type { NodeEditor } from "./editor.js";
-import type { NodeUI } from "./node-ui.js";
-import type { NodeDef } from "./types.js";
+import type { Connection } from "./connection";
+import type { NodeUI } from "./node-ui";
+import type { Port } from "./port";
+import type { NodeDef } from "./types";
+
+/**
+ * Minimal surface a layout strategy needs from its target editor. Both
+ * NodeEditor (legacy, all-in-one) and GraphViewer (standalone canvas)
+ * satisfy this interface, so layout code is reusable across either.
+ */
+export interface IGraphLayoutTarget {
+    readonly nodes: NodeUI[];
+    readonly connections: Connection[];
+    addNode(def: NodeDef, x?: number, y?: number): NodeUI;
+    removeNode(node: NodeUI): void;
+    connect(from: Port, to: Port): Connection | null;
+    removeConnection(conn: Connection): void;
+    updateConnections(): void;
+}
 
 const COL_GAP = 60;
 const NODE_GAP = 30;
@@ -10,7 +26,7 @@ const MIN_NODE_HEIGHT = 60;
 const MIN_COL_WIDTH = 200;
 const CLONE_OPACITY = 0.65;
 
-export type LayoutStrategy = (editor: NodeEditor) => void;
+export type LayoutStrategy = (editor: IGraphLayoutTarget) => void;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -47,7 +63,7 @@ function nodeDefFrom(node: NodeUI): NodeDef {
  * Clones are rendered at reduced opacity so users can tell them apart from
  * unique nodes.
  */
-function duplicateLeafInputs(editor: NodeEditor): void {
+function duplicateLeafInputs(editor: IGraphLayoutTarget): void {
     // Snapshot the current nodes — we'll mutate the list
     const snapshot = [...editor.nodes];
 
@@ -89,7 +105,7 @@ function duplicateLeafInputs(editor: NodeEditor): void {
 }
 
 /** Build adjacency maps from connections. */
-function buildAdjacency(editor: NodeEditor) {
+function buildAdjacency(editor: IGraphLayoutTarget) {
     const successors = new Map<string, Set<string>>();
     const predecessors = new Map<string, Set<string>>();
     for (const n of editor.nodes) {
@@ -109,7 +125,7 @@ function buildAdjacency(editor: NodeEditor) {
 
 /** Kahn's algorithm — assign nodes to layers (columns). */
 function assignLayers(
-    editor: NodeEditor,
+    editor: IGraphLayoutTarget,
     successors: Map<string, Set<string>>,
     predecessors: Map<string, Set<string>>,
 ): string[][] {
@@ -344,7 +360,7 @@ function positionNodes(
  * Input ports are sorted by the Y-position of the source node.
  * Output ports are sorted by the Y-position of the destination node.
  */
-function reorderPorts(editor: NodeEditor): void {
+function reorderPorts(editor: IGraphLayoutTarget): void {
     for (const node of editor.nodes) {
         // --- Reorder inputs by source-node Y ---
         if (node.inputs.length > 1) {
@@ -409,7 +425,7 @@ function reorderPorts(editor: NodeEditor): void {
  * 3. Position using real DOM dimensions + vertical centering
  * 4. Reorder ports to minimize link crossings
  */
-export function defaultLayout(editor: NodeEditor): void {
+export function defaultLayout(editor: IGraphLayoutTarget): void {
     if (editor.nodes.length === 0) return;
 
     // Duplicate leaf inputs that fan out to multiple consumers

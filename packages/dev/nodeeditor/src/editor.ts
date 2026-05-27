@@ -1,11 +1,17 @@
-import { defaultLayout, LayoutStrategy } from "./auto-layout.js";
-import { Camera } from "./camera.js";
-import { Connection, ConnectionPreview } from "./connection.js";
-import { FileHandler, FileHandlerRegistry } from "./file-handler.js";
-import { NodeUI } from "./node-ui.js";
-import { Port } from "./port.js";
-import { PropertyPanel } from "./property-panel.js";
-import { ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedGraph } from "./types.js";
+import { defaultLayout, LayoutStrategy } from "./auto-layout";
+import { Camera } from "./camera";
+import { Connection, ConnectionPreview } from "./connection";
+import { EditorRegistry } from "./editor-registry";
+import { FileHandler, FileHandlerRegistry } from "./file-handler";
+import { NodeUI } from "./node-ui";
+import { Port } from "./port";
+import { PropertyPanel } from "./property-panel";
+import { Skin, SkinRegistry } from "./skin-registry";
+import { darkSkin } from "./styles/skins/dark";
+import { heliosSkin } from "./styles/skins/helios";
+import { lightSkin } from "./styles/skins/light";
+import { transparentDarkSkin, transparentLightSkin } from "./styles/skins/transparent";
+import { ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedGraph } from "./types";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -23,12 +29,19 @@ export class NodeEditor {
     readonly connections: Connection[] = [];
     readonly propertyPanel: PropertyPanel;
     readonly fileHandlers: FileHandlerRegistry;
+    readonly editors: EditorRegistry;
+    readonly skins: SkinRegistry;
+
+    private currentSkinName = "dark";
+    /** Token names currently pushed inline on the container by setSkin().
+     * Tracked so a subsequent setSkin() can clear stale overrides before
+     * applying the new skin. */
+    private appliedSkinKeys: string[] = [];
 
     onConnectionAdded: ((conn: Connection) => void) | null = null;
     onConnectionRemoved: ((conn: Connection) => void) | null = null;
 
     private currentProfile: ExportProfile = EXPORT_PROFILES["dark"];
-    private currentProfileName = "dark";
     private layoutStrategy: LayoutStrategy = defaultLayout;
     private readonly selectedNodes = new Set<NodeUI>();
     private dragNode: NodeUI | null = null;
@@ -75,7 +88,16 @@ export class NodeEditor {
         this.rightPanel.className = "ne-panel ne-panel-right";
         this.container.appendChild(this.rightPanel);
 
-        this.propertyPanel = new PropertyPanel(this.rightPanel);
+        this.editors = new EditorRegistry();
+
+        this.skins = new SkinRegistry();
+        this.skins.register("dark",              darkSkin);
+        this.skins.register("light",             lightSkin);
+        this.skins.register("helios",            heliosSkin);
+        this.skins.register("transparent_dark",  transparentDarkSkin);
+        this.skins.register("transparent_light", transparentLightSkin);
+
+        this.propertyPanel = new PropertyPanel(this.rightPanel, this.editors);
         this.propertyPanel.onApply = (item, changes) => this.onPropertyApply(item, changes);
 
         this.fileHandlers = new FileHandlerRegistry();
@@ -83,10 +105,10 @@ export class NodeEditor {
 
         this.bindEvents();
         this.camera.apply(this.viewport);
-        this.setProfile("dark");
+        this.setSkin("dark");
     }
 
-    private onPropertyApply(item: import("./inspectable.js").UIItemBase<unknown>, changes: Map<string, unknown>): void {
+    private onPropertyApply(item: import("./inspectable").UIItemBase<unknown>, changes: Map<string, unknown>): void {
         const node = this.nodes.find((n) => n.item === item);
         if (node) {
             if (changes.has("label")) {
@@ -100,12 +122,10 @@ export class NodeEditor {
         }
     }
 
-    setProfile(nameOrProfile: string | ExportProfile): void {
+    private _applyProfile(nameOrProfile: string | ExportProfile): void {
         if (typeof nameOrProfile === "string") {
-            this.currentProfileName = nameOrProfile;
             this.currentProfile = EXPORT_PROFILES[nameOrProfile] ?? EXPORT_PROFILES["dark"];
         } else {
-            this.currentProfileName = "custom";
             this.currentProfile = nameOrProfile;
         }
         const p = this.currentProfile;
@@ -152,12 +172,72 @@ export class NodeEditor {
         }
     }
 
-    getProfile(): ExportProfile {
-        return this.currentProfile;
+    /**
+     * Switch the active editor skin by name. Built-in skins are
+     * "dark", "light", "helios", "transparent_dark", "transparent_light";
+     * apps add more via editor.skins.register(name, skinVars).
+     * Unknown names are silently ignored. Drops the previous skin's
+     * inline tokens before applying the new one to prevent stale
+     * overrides from accumulating across switches.
+     *
+     * Skin is the single source of truth for the editor's visual
+     * identity: it drives the live UI (CSS vars) AND the bake-in
+     * colors used by SVG export (derived ExportProfile, internal).
+     * There is no separate "profile" concept on the public API.
+     */
+    setSkin(name: string): void {
+        const skin = this.skins.getSkin(name);
+        if (!skin) return;
+
+        // Drop previous skin's inline properties so a partial new skin
+        // does not inherit stray tokens from the old one.
+        for (const key of this.appliedSkinKeys) {
+            this.container.style.removeProperty(key);
+        }
+        this.appliedSkinKeys = [];
+
+        // Toggle marker class so app CSS can target a specific skin
+        // (e.g. .ne-skin-helios .ne-node-header { letter-spacing: ... })
+        // without having to query the API.
+        this.container.classList.remove(`ne-skin-${this.currentSkinName}`);
+        this.container.classList.add(`ne-skin-${name}`);
+        this.currentSkinName = name;
+
+        for (const [key, value] of Object.entries(skin)) {
+            this.container.style.setProperty(key, value);
+            this.appliedSkinKeys.push(key);
+        }
+
+        // Drive the internal ExportProfile pipeline from the same
+        // skin tokens so the live UI canvas/nodes/ports/connections
+        // stay consistent, and so SVG export bakes colors that match.
+        this._applyProfile(this._deriveProfileFromSkin(skin));
     }
 
-    getProfileName(): string {
-        return this.currentProfileName;
+    /**
+     * Map skin tokens onto the ExportProfile shape so a single skin
+     * declaration drives both the CSS-var live UI and the inline-style
+     * canvas/nodes/ports/connection rendering. Missing keys fall back
+     * to the previously-applied profile values so a partial skin still
+     * works.
+     */
+    private _deriveProfileFromSkin(skin: Skin): ExportProfile {
+        const pick = (key: string, fallback: string): string =>
+            skin[key] !== undefined ? skin[key] : fallback;
+        const cur = this.currentProfile;
+        return {
+            background:       pick("--ne-color-bg",            cur.background ?? "#111"),
+            nodeBody:         pick("--ne-color-surface",       cur.nodeBody),
+            nodeBorder:       pick("--ne-color-border",        cur.nodeBorder),
+            headerText:       pick("--ne-color-text-strong",   cur.headerText),
+            portLabel:        pick("--ne-color-text-muted",    cur.portLabel),
+            portStroke:       pick("--ne-color-border-strong", cur.portStroke),
+            connectionStroke: pick("--ne-color-connection",    cur.connectionStroke),
+        };
+    }
+
+    getSkinName(): string {
+        return this.currentSkinName;
     }
 
     private isLightProfile(p: ExportProfile): boolean {
@@ -192,7 +272,7 @@ export class NodeEditor {
 
         const idx = this.nodes.indexOf(node);
         if (idx >= 0) this.nodes.splice(idx, 1);
-        node.el.remove();
+        node.dispose();
 
         this.selectedNodes.delete(node);
     }
@@ -503,10 +583,16 @@ export class NodeEditor {
         URL.revokeObjectURL(url);
     }
 
-    exportSVG(profile?: string | ExportProfile): string {
-        const theme: ExportProfile = profile
-            ? (typeof profile === "string" ? EXPORT_PROFILES[profile] ?? this.currentProfile : profile)
-            : this.currentProfile;
+    exportSVG(skinName?: string): string {
+        // Resolution: explicit skin name → derive from that skin;
+        // otherwise use the profile derived from the active skin.
+        let theme: ExportProfile = this.currentProfile;
+        if (skinName) {
+            const requestedSkin = this.skins.getSkin(skinName);
+            if (requestedSkin) {
+                theme = this._deriveProfileFromSkin(requestedSkin);
+            }
+        }
 
         const PADDING = 40;
         const HEADER_H = 24;

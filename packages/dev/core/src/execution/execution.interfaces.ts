@@ -1,4 +1,4 @@
-import { IEnableable, IGraph, INode, IOlink } from "../graph/graph.interfaces";
+import { IEnabled, IGraph, INode, IOlink } from "../graph/graph.interfaces";
 
 /**
  * Execution layer. Reuses the topology of core/graph (INode, IOlink,
@@ -19,19 +19,44 @@ import { IEnableable, IGraph, INode, IOlink } from "../graph/graph.interfaces";
 
 /**
  * Oriented link (inherits oini/ofin from IOlink) with execution
- * metadata. slot names the input port on the destination node; the
- * same slot string can appear on multiple links targeting one node
- * (variadic ports collapse into "multiple links sharing a slot").
+ * metadata.
+ *
+ * Two slot names live on each channel because a UE5-style editor may
+ * connect ports whose names differ across the two endpoints (e.g.
+ * Start._started → Branch.in):
+ *
+ *   - slot   names the OUTPUT port on the source node. Source-side
+ *            code (a node iterating its own `onsc()` to decide which
+ *            output a link belongs to, e.g. publishControlOutput,
+ *            StartNode.fire) matches against this field.
+ *   - toSlot names the INPUT port on the destination node. Destination-
+ *            side code (resolveSlotInputs, processControlInputs scanning
+ *            `opsc()`, the static required-inputs counter) matches
+ *            against this field. Defaults to `slot` when omitted, so
+ *            graphs whose source and destination ports share a name
+ *            (most production samples) keep their existing semantics
+ *            untouched.
  *
  * delayed channels are pre-seeded with initialValue at session reset,
  * so the target reads the initial token on its first cycle. Used to
  * break feedback cycles in DAG-topology graphs (FOC reading machine
  * state from t-1).
  */
-export interface IChannel<T = unknown> extends IOlink, IEnableable {
+export interface IChannel<T = unknown> extends IOlink, IEnabled {
     readonly slot: string | number;
+    readonly toSlot?: string | number;
     readonly delayed: boolean;
     readonly initialValue?: T;
+}
+
+/**
+ * Resolve the destination-side slot name of a channel. Returns
+ * `toSlot` when set, otherwise falls back to `slot` so legacy
+ * channels (where source and destination share the name) keep
+ * working unchanged.
+ */
+export function inSlotOf(link: IChannel): string | number {
+    return link.toSlot !== undefined ? link.toSlot : link.slot;
 }
 
 // =====================================================================
@@ -66,7 +91,7 @@ export interface IChannel<T = unknown> extends IOlink, IEnableable {
  * sessions; all mutable state lives in the session's nodeStates entry
  * for this node.
  */
-export interface IRuntimeNode<B=unknown> extends INode<B>, IEnableable {
+export interface IRuntimeNode<B=unknown> extends INode<B>, IEnabled {
     isReady(session: ISession): boolean;
     fire(session: ISession, t: number): void;
     /**
@@ -80,6 +105,17 @@ export interface IRuntimeNode<B=unknown> extends INode<B>, IEnableable {
     fireAsync(session: ISession, t: number): Promise<void>;
     reset(session: ISession): void;
     createNodeState?(): INodeState;
+
+    /**
+     * Optional pre-fire control-plane processing. The scheduler calls
+     * this immediately before `fire(session, t)`. Implementations read
+     * incoming control channels (slots prefixed with "_": _enable,
+     * _start, _stop), update the node's lifecycle state accordingly,
+     * and may publish on outgoing control channels (_enabled, _started,
+     * _stopped) to broadcast the change. Returns nothing; mutation
+     * happens on the node and on session linkStates.
+     */
+    processControlInputs?(session: ISession): void;
 }
 
 // =====================================================================
@@ -105,18 +141,23 @@ export interface IRuntimeNode<B=unknown> extends INode<B>, IEnableable {
 export type SchedulingMode = "static" | "dynamic";
 
 /**
- * Autonomous-run contract. A graph that is IRunnable can drive itself
- * without the caller having to construct a Session explicitly: it lazily
- * allocates a default Session whose state persists across run() calls
- * (so delayed channels and counters survive between ticks). Callers that
- * need explicit Session control (concurrent inferences, custom state
- * lifecycle) pass their own Session via the optional second parameter,
- * in which case the default session is bypassed entirely.
+ * Per-tick autonomous-drive contract. A graph that is ITickable can
+ * drive itself without the caller having to construct a Session
+ * explicitly: it lazily allocates a default Session whose state persists
+ * across run() calls (so delayed channels and counters survive between
+ * ticks). Callers that need explicit Session control (concurrent
+ * inferences, custom state lifecycle) pass their own Session via the
+ * optional second parameter, in which case the default session is
+ * bypassed entirely.
  *
  * The default Session is an implementation detail and is intentionally
  * not part of this contract.
+ *
+ * Distinct from IRunnable (the start/stop lifecycle contract in
+ * graph.interfaces): ITickable is one cycle of work; IRunnable is the
+ * higher-level "is the engine on or off" state.
  */
-export interface IRunnable {
+export interface ITickable {
     run(t: number, session?: ISession): void;
     runAsync(t: number, session?: ISession): Promise<void>;
 }
@@ -149,7 +190,7 @@ export interface IRunnable {
  * matched; the user drives via `new Session(graph)` as usual.
  */
 export interface IRuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChannel = IChannel>
-    extends IGraph<N, L>, IRuntimeNode, IRunnable {
+    extends IGraph<N, L>, IRuntimeNode, ITickable {
     readonly mode: SchedulingMode;
 }
 
@@ -158,9 +199,20 @@ export interface IRuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends 
 // =====================================================================
 
 /**
- * Per-channel state in a session. Single-slot in v1: one unread payload
- * at most, ready bit set by the producer, cleared by the consumer.
- * Indexed by the channel's position in graph.links.
+ * Per-channel state in a session — a backward-compatibility VIEW over
+ * the destination node's per-slot input buffer.
+ *
+ *   ready   true when the destination node has at least one un-consumed
+ *           token on this channel's incoming slot.
+ *   payload the head of the destination's per-slot buffer (next value
+ *           that will be returned by `consume`). undefined when ready
+ *           is false.
+ *
+ * Historically this was a 1-slot store; today the actual storage lives
+ * on the destination node (per `INodeState.inputBuffers`) and supports
+ * an arbitrary-capacity FIFO so loops can publish bursts without losing
+ * intermediate values. The ILinkState surface is preserved so existing
+ * nodes that probe `linkStates[idx].ready` keep working unchanged.
  */
 export interface ILinkState<T = unknown> {
     ready: boolean;
@@ -168,10 +220,19 @@ export interface ILinkState<T = unknown> {
 }
 
 /**
- * Per-node state in a session. linksReady counts how many of the node's
- * required input channels are currently marked ready; the node is
- * dispatch-eligible when linksReady equals the count of required inputs.
- * Indexed by the node's position in graph.nodes.
+ * Per-node state in a session.
+ *
+ *   inputBuffers   one FIFO queue per incoming slot, keyed by the slot
+ *                  name (toSlot of the channel feeding that slot).
+ *                  Publish appends; consume shifts. Capacity is bounded
+ *                  by the source port descriptor; overflow throws.
+ *   inputCapacity  per-slot max queue size. Defaults to 1 for slots not
+ *                  declared elsewhere.
+ *   linksReady     count of incoming gating slots whose buffer is
+ *                  currently non-empty. Maintained on publish/consume
+ *                  transitions so the scheduler can dispatch in O(1)
+ *                  per check. The node is dispatch-eligible when this
+ *                  reaches `requiredInputsOf(node)`.
  *
  * Extensible: nodes that need richer per-session state declare a
  * createNodeState() factory and return a subtype. A sub-graph node, for
@@ -179,6 +240,23 @@ export interface ILinkState<T = unknown> {
  */
 export interface INodeState {
     linksReady: number;
+    inputBuffers?: Map<string | number, unknown[]>;
+    inputCapacity?: Map<string | number, number>;
+}
+
+/**
+ * Scheduler queue items. A LinkRef is the publish-event carrier (link
+ * index + the value being delivered); IRuntimeNode entries represent
+ * a node ready-check. The drain loop alternates between them.
+ */
+export interface ILinkRef {
+    readonly kind: "linkRef";
+    readonly linkIndex: number;
+    readonly value: unknown;
+}
+
+export function isLinkRef(item: ILinkRef | IRuntimeNode): item is ILinkRef {
+    return (item as ILinkRef).kind === "linkRef";
 }
 
 /**
@@ -272,6 +350,15 @@ export interface ISession {
 
     run(t: number): void;
     reset(): void;
+
+    /**
+     * Begin-Play entry point: arms every StartNode in the graph so it
+     * fires on the next run(t) and broadcasts a trigger on its _started
+     * output. Symmetric stop() arms every StopNode (when introduced).
+     * Implementations no-op on graphs that have neither.
+     */
+    start(): void;
+    stop(): void;
 }
 
 // =====================================================================
@@ -310,6 +397,15 @@ export interface IPortDescriptor {
     readonly optional: boolean;
     readonly type?: string;
     readonly multiplicity?: "single" | "variadic";
+    /**
+     * Maximum number of un-consumed tokens this port may accumulate in
+     * its per-session FIFO buffer. Defaults to 1, which matches the
+     * historical 1-slot semantics (each publish on this port either
+     * fits the buffer or throws an overflow error). Loop / accumulator
+     * nodes raise this to allow N tokens to queue before downstream
+     * consumes them.
+     */
+    readonly capacity?: number;
 }
 
 export function declaresPorts(n: IRuntimeNode): n is IRuntimeNode & IDeclaresPorts {
@@ -318,5 +414,30 @@ export function declaresPorts(n: IRuntimeNode): n is IRuntimeNode & IDeclaresPor
     return (
         Array.isArray(candidate.inputPorts) &&
         Array.isArray(candidate.outputPorts)
+    );
+}
+
+/**
+ * Sister of IDeclaresPorts for the runtime control plane. Kept distinct
+ * from inputPorts/outputPorts so the editor can render the two groups
+ * differently (e.g., compact row at the top/bottom of the node body) and
+ * so validators know which slots correspond to lifecycle wiring vs.
+ * domain data. Slot names by convention start with "_" (see
+ * control-ports.ts).
+ *
+ * Every RuntimeNode satisfies this with at least { _enable, _enabled }.
+ * RunnableNode adds { _start, _stop, _started, _stopped }. Subclasses
+ * compose further if they need more (e.g. _pause, _reset).
+ */
+export interface IDeclaresControlPorts {
+    readonly controlInputPorts:  ReadonlyArray<IPortDescriptor>;
+    readonly controlOutputPorts: ReadonlyArray<IPortDescriptor>;
+}
+
+export function declaresControlPorts(n: IRuntimeNode): n is IRuntimeNode & IDeclaresControlPorts {
+    const candidate = n as IRuntimeNode & Partial<IDeclaresControlPorts>;
+    return (
+        Array.isArray(candidate.controlInputPorts) &&
+        Array.isArray(candidate.controlOutputPorts)
     );
 }

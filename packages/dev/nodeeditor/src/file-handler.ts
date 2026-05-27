@@ -1,4 +1,4 @@
-import type { NodeEditor } from "./editor.js";
+import type { NodeEditor } from "./editor";
 
 export interface FileHandler {
     /** File extensions this handler supports (without dot), e.g. ["onnx"] */

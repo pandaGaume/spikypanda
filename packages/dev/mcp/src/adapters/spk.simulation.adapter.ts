@@ -1,5 +1,4 @@
-import { McpAdapterBase, McpResourceContent, McpToolResult, JsonRpcMimeType } from "@dev/core";
-import { McpToolResults } from "@dev/core";
+import { McpAdapterBase, McpResourceContent, McpToolResult, McpToolResults, JsonRpcMimeType } from "@cyanmycelium/mcp-core";
 import type { SpkControlApi, SpkGraphStatus, SpkOpDef } from "../types/spk.window.js";
 
 /**

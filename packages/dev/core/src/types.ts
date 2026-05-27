@@ -2,3 +2,7 @@
 export type Nullable<T> = T | null;
 
 export type SingleOrArray<T> = T | Array<T>;
+
+export interface IDisposable {
+    dispose(): void;
+}

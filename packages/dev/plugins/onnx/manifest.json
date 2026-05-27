@@ -1,0 +1,15 @@
+{
+    "id": "spk.onnx",
+    "version": "0.1.0",
+    "displayName": "ONNX Inference",
+    "description": "Fractal ONNX model graph + individual ONNX op nodes.",
+    "category": "onnx",
+    "entry": "bundle/SpkPluginOnnx.js",
+    "nodes": [
+        { "type": "spk.onnx:model", "factory": "OnnxModelGraph" },
+        { "type": "spk.onnx:conv",  "factory": "createConvNode" }
+    ],
+    "editors": [
+        { "kind": "onnx-model", "factory": "onnxModelEditor" }
+    ]
+}

@@ -1,0 +1,56 @@
+{
+    "$schema": "https://spikypanda.dev/schemas/plugin.v1.json",
+    "id": "spk.geometry",
+    "version": "0.1.0",
+    "displayName": "Geometry",
+    "description": "3D spatial transforms (TRS matrix), attitude from Euler angles (yaw/pitch/roll to quaternion).",
+    "category": "geometry",
+    "entry": "./bundle.js",
+    "nodes": [
+        {
+            "type": "spk.geometry:transform",
+            "label": "Transform",
+            "category": "geometry",
+            "inputPorts": [
+                { "slot": "parent", "type": "frame",    "optional": true }
+            ],
+            "outputPorts": [
+                { "slot": "matrix", "type": "matrix44", "optional": false }
+            ],
+            "editors": ["transform-3d"],
+            "defaults": { "translation": [0, 0, 0], "rotation": [0, 0, 0, 1] }
+        },
+        {
+            "type": "spk.geometry:attitude",
+            "label": "Attitude",
+            "category": "geometry",
+            "inputPorts": [
+                { "slot": "yaw",   "type": "float", "optional": true },
+                { "slot": "pitch", "type": "float", "optional": true },
+                { "slot": "roll",  "type": "float", "optional": true }
+            ],
+            "outputPorts": [
+                { "slot": "rotation", "type": "vec4", "optional": false }
+            ],
+            "editors": ["attitude-3d"],
+            "defaults": { "yaw": 0, "pitch": 0, "roll": 0 }
+        },
+        {
+            "type": "spk.geometry:cartesian3",
+            "label": "Cartesian3",
+            "category": "geometry",
+            "inputPorts": [
+                { "slot": "x", "type": "float", "optional": true },
+                { "slot": "y", "type": "float", "optional": true },
+                { "slot": "z", "type": "float", "optional": true }
+            ],
+            "outputPorts": [
+                { "slot": "vec3", "type": "vec3", "optional": false }
+            ],
+            "defaults": { "x": 0, "y": 0, "z": 0 }
+        }
+    ],
+    "editors": [
+        { "kind": "attitude-3d", "factory": "attitude3DEditor" }
+    ]
+}

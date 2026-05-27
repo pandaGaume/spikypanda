@@ -11,6 +11,7 @@ export * from "./quantization";
 export * from "./neuralnetwork";
 export * from "./utils";
 export * from "./metrics";
+export * from "./events";
 
 // ensure that the global namespace is defined
 if (typeof window !== "undefined") {

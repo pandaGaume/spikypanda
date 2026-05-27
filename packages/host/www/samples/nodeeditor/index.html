@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SpikyPanda - Node Editor</title>
     <link rel="stylesheet" href="../../css/common.css" />
-    <link rel="stylesheet" href="nodeeditor.css" />
+    <link rel="stylesheet" href="../../bundle/nodeeditor.css" />
 </head>
 <body>
     <div class="sample-hero">
@@ -58,8 +58,10 @@
     <div id="ne-play-panel" class="ne-play-panel"></div>
 
     <script src="../../js/common.js"></script>
+    <script src="../../bundle/spikypanda-core.js"></script>
     <script src="../../bundle/nodeeditor.js"></script>
     <script src="../../bundle/onnx-editor.js"></script>
+    <script src="editors/transform-3d.js"></script>
     <!-- Required by the in-editor Play mode: graph executor instantiates
          Sensors.MotorCurrentSource from this bundle. -->
     <script src="../../bundle/spikypanda-sensors.js"></script>

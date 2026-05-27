@@ -1,16 +1,78 @@
-export { NodeEditor } from "./editor.js";
-export { defaultLayout } from "./auto-layout.js";
-export type { LayoutStrategy } from "./auto-layout.js";
-export { FileHandlerRegistry } from "./file-handler.js";
-export type { FileHandler } from "./file-handler.js";
-export { NodeUI } from "./node-ui.js";
-export { Port } from "./port.js";
-export { Connection, ConnectionPreview } from "./connection.js";
-export { Camera } from "./camera.js";
-export { PropertyPanel } from "./property-panel.js";
-export { UIItemBase, isInspectable, isSerializable, isRunnableNode, isToggableNode } from "./inspectable.js";
-export type { Inspectable, Serializable, PropertyEntry, IRunnableNode, IToggableNode } from "./inspectable.js";
-export { PORT_COLORS, EXPORT_PROFILES } from "./types.js";
+// reflect-metadata polyfills Reflect.{define,get}Metadata, used by
+// core's class-level decorators (e.g. @runnableAffordance). Core has
+// the same import at its barrel, but its sideEffects:false manifest
+// lets webpack tree-shake the side-effect import when only specific
+// named exports are pulled in. Importing here guarantees the polyfill
+// lands in the nodeeditor bundle.
+import "reflect-metadata";
+
+// Bundled stylesheet. mini-css-extract-plugin pulls this out of the JS
+// bundle into a sibling nodeeditor.css that embedders load via <link>.
+// Side-effect import only; nothing is named-exported from this module.
+import "./styles/nodeeditor.css";
+
+export { NodeEditor } from "./editor";
+export { GraphViewer } from "./components/graph-viewer";
+export { Palette } from "./components/palette";
+export type { PaletteOptions } from "./components/palette";
+export { Permissions } from "./permissions";
+export { StandardsRegistry } from "./standards";
+export type { IStandardInfo } from "./standards";
+export { NodeRegistry, StartNode, StopNode, RunnableNode } from "spikypanda-core";
+export type { INodeRegistry, INodeMeta, NodeFactory } from "spikypanda-core";
+export {
+    CONTROL_PORT_ENABLE,
+    CONTROL_PORT_ENABLED,
+    CONTROL_PORT_START,
+    CONTROL_PORT_STOP,
+    CONTROL_PORT_STARTED,
+    CONTROL_PORT_STOPPED,
+} from "spikypanda-core";
+export { defaultLayout } from "./auto-layout";
+export type { LayoutStrategy } from "./auto-layout";
+export { FileHandlerRegistry } from "./file-handler";
+export type { FileHandler } from "./file-handler";
+export { NodeUI } from "./node-ui";
+export { Port } from "./port";
+export { Connection, ConnectionPreview } from "./connection";
+export { Camera } from "./camera";
+export { PropertyPanel } from "./property-panel";
+export { UIItemBase, isInspectable, isSerializable } from "./inspectable";
+export type { Inspectable, Serializable, PropertyEntry } from "./inspectable";
+export { EditorRegistry } from "./editor-registry";
+export type { IEditor, EditorFactory } from "./editor-registry";
+export {
+    installBuiltinEditors,
+    vector3Editor,
+    vector4Editor,
+    quaternionEditor,
+    numberEditor,
+    sliderEditor,
+} from "./editors";
+export { LiveBinder } from "./live-binder";
+export { GraphRunner } from "./graph-runner";
+export type { RunnerState } from "./graph-runner";
+export { GraphInferrer } from "./graph-inferrer";
+export { buildSessionFromViewer, disposeChannels } from "./graph-session-builder";
+export { VariadicReconciler } from "./variadic-reconciler";
+export { DebugBus } from "./debug-bus";
+export type { DebugLevel, IDebugEntry, DebugHandler } from "./debug-bus";
+export { DebugConsole } from "./components/debug-console";
+export type { DebugConsoleOptions } from "./components/debug-console";
+export { SkinRegistry } from "./skin-registry";
+export type { Skin } from "./skin-registry";
+export { darkSkin }   from "./styles/skins/dark";
+export { lightSkin }  from "./styles/skins/light";
+export { heliosSkin } from "./styles/skins/helios";
+export { transparentDarkSkin, transparentLightSkin } from "./styles/skins/transparent";
+
+// Re-export the editor-schema authoring helpers from core so apps that
+// declare their model classes against the nodeeditor bundle do not
+// need a separate dependency on spikypanda-core just for decorators.
+export { editor, editable, viewable, getEditorSchema } from "spikypanda-core";
+export type { IEditableField, IEditorSchema } from "spikypanda-core";
+export { PORT_COLORS } from "./types";
+export type { IPlugin, IPluginContext, IPluginManifest, IPluginNodeEntry, IPluginEditorEntry } from "./plugin.interfaces";
 export type {
     PortDirection,
     PortType,
@@ -20,5 +82,4 @@ export type {
     SerializedGraph,
     SerializedNode,
     SerializedConnection,
-    ExportProfile,
-} from "./types.js";
+} from "./types";

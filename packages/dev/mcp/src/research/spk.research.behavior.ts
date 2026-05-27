@@ -1,4 +1,4 @@
-import { McpBehavior, McpBehaviorOptions, McpResource, McpResourceTemplate, McpTool, McpToolResult, McpToolResults, JsonRpcMimeType } from "@dev/core";
+import { McpBehavior, McpBehaviorOptions, McpResource, McpResourceTemplate, McpTool, McpToolResult, McpToolResults, JsonRpcMimeType } from "@cyanmycelium/mcp-core";
 import { SpkResearchAdapter } from "./spk.research.adapter.js";
 
 /**

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Node Editor v2</title>
+
+    <!-- IBM Plex (inspiration from HELIOS, no framework dependency) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" />
+
+    <!-- nodeeditor bundle CSS (node/port/connection visuals) -->
+    <link rel="stylesheet" href="../bundle/nodeeditor.css" />
+
+    <!-- v2 sample: self-contained tokens + reset + shell -->
+    <link rel="stylesheet" href="node-editor-v2.css" />
+</head>
+<body>
+    <div class="nev2-app">
+        <header class="nev2-topbar" id="nev2-toolbar">
+            <a class="nev2-brand" href="#" tabindex="-1">
+                <span class="nev2-brand-dot" aria-hidden="true"></span>
+                <span>Node Editor</span>
+                <span class="nev2-brand-sub">v2</span>
+            </a>
+            <span class="nev2-spacer"></span>
+            <!-- toolbar buttons injected by node-editor-v2.js -->
+        </header>
+
+        <main class="nev2-body">
+            <aside class="nev2-palette" id="palette">
+                <div class="nev2-section-title">Palette</div>
+                <div class="nev2-empty">No nodes registered</div>
+            </aside>
+
+            <section class="nev2-viewer" id="viewer">
+                <!-- GraphViewer mounts here -->
+            </section>
+
+            <aside class="nev2-property" id="property">
+                <div class="nev2-section-title">Properties</div>
+                <div class="nev2-empty">Select a node</div>
+            </aside>
+        </main>
+
+        <!-- DebugConsole component mounts here; styling comes from the
+             active editor skin via ne-* tokens, not from the v2 page. -->
+        <footer class="nev2-console-host" id="nev2-console"></footer>
+    </div>
+
+    <script src="../bundle/spikypanda-core.js"></script>
+    <script src="../bundle/nodeeditor.js"></script>
+    <script src="../bundle/SpkPluginGeometry.js"></script>
+    <script src="../bundle/SpkPluginLogic.js"></script>
+    <script type="module" src="node-editor-v2.js"></script>
+</body>
+</html>

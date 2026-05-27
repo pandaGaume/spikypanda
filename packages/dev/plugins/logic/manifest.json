@@ -1,0 +1,30 @@
+{
+    "$schema": "https://spikypanda.dev/schemas/plugin.v1.json",
+    "id": "spk.logic",
+    "version": "0.1.0",
+    "displayName": "Logic",
+    "description": "UE5-Blueprint-inspired logic nodes. Phase 1: scalar comparisons.",
+    "category": "logic",
+    "entry": "./bundle.js",
+    "nodes": [
+        { "type": "spk.logic:equal",            "label": "Equal",          "category": "comparison",
+          "inputPorts":  [ { "slot": "a", "type": "float" }, { "slot": "b", "type": "float" } ],
+          "outputPorts": [ { "slot": "result", "type": "boolean" } ] },
+        { "type": "spk.logic:notEqual",         "label": "Not Equal",      "category": "comparison",
+          "inputPorts":  [ { "slot": "a", "type": "float" }, { "slot": "b", "type": "float" } ],
+          "outputPorts": [ { "slot": "result", "type": "boolean" } ] },
+        { "type": "spk.logic:greater",          "label": "Greater",        "category": "comparison",
+          "inputPorts":  [ { "slot": "a", "type": "float" }, { "slot": "b", "type": "float" } ],
+          "outputPorts": [ { "slot": "result", "type": "boolean" } ] },
+        { "type": "spk.logic:less",             "label": "Less",           "category": "comparison",
+          "inputPorts":  [ { "slot": "a", "type": "float" }, { "slot": "b", "type": "float" } ],
+          "outputPorts": [ { "slot": "result", "type": "boolean" } ] },
+        { "type": "spk.logic:greaterOrEqual",   "label": "Greater or Equal", "category": "comparison",
+          "inputPorts":  [ { "slot": "a", "type": "float" }, { "slot": "b", "type": "float" } ],
+          "outputPorts": [ { "slot": "result", "type": "boolean" } ] },
+        { "type": "spk.logic:lessOrEqual",      "label": "Less or Equal",  "category": "comparison",
+          "inputPorts":  [ { "slot": "a", "type": "float" }, { "slot": "b", "type": "float" } ],
+          "outputPorts": [ { "slot": "result", "type": "boolean" } ] }
+    ],
+    "editors": []
+}

@@ -1,0 +1,1702 @@
+/* ════════════════════════════════════════════════════════════════════
+   Skin tokens. All editor-owned colors are addressed through these CSS
+   custom properties. Scoping at .ne-editor (not :root) keeps a host
+   site's own theme untouched and lets two editors coexist with
+   distinct skins on the same page. To register a custom skin, override
+   any subset of these vars on .ne-skin-<name> classes added to the
+   container (see SkinRegistry, Phase C).
+   ════════════════════════════════════════════════════════════════════ */
+.ne-editor {
+    /* Brand / accent */
+    --ne-color-primary:           #00d4ff;
+    --ne-color-primary-bg:        rgba(0, 212, 255, 0.12);
+    --ne-color-primary-bg-strong: rgba(0, 212, 255, 0.25);
+
+    /* Surfaces (panels, menus, modals, node bodies) */
+    --ne-color-bg:                #1a1a2e;
+    --ne-color-surface:           rgba(22, 33, 62, 1);
+    --ne-color-surface-faint:     rgba(22, 33, 62, 0.4);
+    --ne-color-surface-strong:    rgba(22, 33, 62, 0.85);
+    --ne-color-surface-popover:   rgba(22, 33, 62, 0.97);
+    --ne-color-node-header:       #335;
+
+    /* Recessed / sunken overlays on top of dark surfaces */
+    --ne-color-recessed-1:        var(--ne-color-recessed-1);
+    --ne-color-recessed-2:        var(--ne-color-recessed-2);
+    --ne-color-recessed-3:        rgba(0, 0, 0, 0.40);
+
+    /* Borders and separators */
+    --ne-color-border:            rgba(255, 255, 255, 0.12);
+    --ne-color-border-soft:       rgba(255, 255, 255, 0.06);
+    --ne-color-border-strong:     rgba(255, 255, 255, 0.30);
+
+    /* Text on dark surfaces */
+    --ne-color-text:              #e0e0e0;
+    --ne-color-text-strong:       #fff;
+    --ne-color-text-muted:        #aaa;
+    --ne-color-text-subtle:       rgba(255, 255, 255, 0.6);
+    --ne-color-text-faint:        rgba(255, 255, 255, 0.35);
+
+    /* Semantic state colors */
+    --ne-color-success:           #4ade80;
+    --ne-color-success-bg:        rgba(74, 222, 128, 0.18);
+    --ne-color-warning:           #fbbf24;
+    --ne-color-danger:            #f87171;
+    --ne-color-danger-bg:         rgba(239, 68, 68, 0.18);
+    --ne-color-info:              #4aaeff;
+
+    /* Connection lines between nodes (live UI + SVG export). */
+    --ne-color-connection:        #fff;
+
+    /* Node header palette per category. Apps tag their ops with
+       def.category (free-form string); the editor looks up
+       --ne-color-category-<category> (lowercased, dashed) and falls
+       back to def.color or --ne-color-node-header when no skin token
+       matches. */
+    --ne-color-category-source:       #2a6;
+    --ne-color-category-sink:         #a55;
+    --ne-color-category-compute:      #44a;
+    --ne-color-category-sensor:       #27a;
+    --ne-color-category-fault:        #a33;
+    --ne-color-category-environment:  #5a5;
+    --ne-color-category-composition:  #556;
+    --ne-color-category-dsp:          #467;
+    --ne-color-category-geometry:     #966;
+
+    /* IRunnable lifecycle status dots */
+    --ne-status-idle:             rgba(255, 255, 255, 0.35);
+    --ne-status-transition:       #fbbf24;
+    --ne-status-started:          #4ade80;
+    --ne-status-failed:           #f87171;
+    --ne-status-disabled:         #6b7280;
+
+    /* Drop shadows */
+    --ne-shadow-sm:               0 2px 8px rgba(0, 0, 0, 0.4);
+    --ne-shadow-md:               0 4px 16px rgba(0, 0, 0, 0.6);
+
+    /* Typography */
+    --ne-font-family:             "Segoe UI", system-ui, sans-serif;
+
+    font-family: var(--ne-font-family);
+}
+
+/* ── Menu bar (toolbar replacement) ──
+   The toolbar slot in the page becomes a horizontal menu bar with one
+   menu per op category. Dropdowns are absolutely positioned children
+   that the JS reveals via .ne-menu-open. */
+.ne-menubar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+
+.ne-menu {
+    position: relative;
+}
+
+.ne-menu-btn {
+    background: var(--ne-color-surface-faint);
+    border: 1px solid var(--ne-color-border);
+    color: var(--ne-color-text);
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.ne-menu-btn:hover,
+.ne-menu.ne-menu-open .ne-menu-btn {
+    background: var(--ne-color-surface-popover);
+    border-color: var(--ne-color-primary);
+    color: var(--ne-color-primary);
+}
+
+.ne-menu-caret {
+    font-size: 0.75em;
+    opacity: 0.7;
+}
+
+.ne-menu-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 200px;
+    background: var(--ne-color-surface-popover);
+    border: 1px solid var(--ne-color-border);
+    border-radius: 6px;
+    box-shadow: 0 6px 20px var(--ne-color-recessed-3);
+    backdrop-filter: blur(6px);
+    padding: 4px;
+    display: none;
+    z-index: 50;
+}
+
+.ne-menu.ne-menu-open .ne-menu-dropdown {
+    display: block;
+}
+
+.ne-menu-item {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--ne-color-text);
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.85em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ne-menu-item:hover {
+    background: var(--ne-color-primary-bg);
+    color: var(--ne-color-primary);
+}
+
+.ne-menu-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    flex: 0 0 auto;
+    box-shadow: inset 0 0 0 1px var(--ne-color-border);
+}
+
+.ne-menu-label {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Play-mode bottom panel ──
+   Always visible below the editor canvas. Header carries the Play /
+   Pause / Stop controls plus per-source run toggles (greyed when no
+   executor is active). Body shows one tab per Scope node in the graph;
+   each tab hosts a ScopeWidget instance. */
+.ne-play-panel {
+    margin: 12px 0;
+    border: 1px solid var(--ne-color-border);
+    border-radius: 8px;
+    background: var(--ne-color-surface-faint);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.ne-play-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--ne-color-recessed-2);
+    border-bottom: 1px solid var(--ne-color-border);
+    flex-wrap: wrap;
+}
+
+.ne-play-controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.ne-play-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ne-color-surface-strong);
+    border: 1px solid var(--ne-color-border);
+    border-radius: 6px;
+    color: var(--ne-color-text-muted);
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.ne-play-btn:hover:not(:disabled) {
+    background: var(--ne-color-surface);
+    color: var(--ne-color-primary);
+    border-color: var(--ne-color-primary);
+}
+
+.ne-play-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.ne-play-btn.active {
+    color: var(--ne-color-primary);
+    border-color: var(--ne-color-primary);
+    background: var(--ne-color-primary-bg);
+}
+
+.ne-play-status {
+    font-size: 0.85em;
+    color: var(--ne-color-text-muted);
+    flex: 0 0 auto;
+}
+
+.ne-play-status.running {
+    color: var(--ne-color-primary);
+    font-weight: 600;
+}
+
+.ne-play-sep {
+    width: 1px;
+    height: 24px;
+    background: var(--ne-color-border);
+    align-self: center;
+}
+
+/* On-node runtime buttons (rendered by the editor library when a node's
+   data implements IRunnableNode or IToggableNode). Lives in the node
+   header, not as a floating overlay. Disabled in Design mode by the
+   library; the library inspects data.isRunning() / isEnabled() and the
+   `data._readonly` flag the editor can set. */
+.ne-node-runtime-btn {
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ne-color-recessed-3);
+    border: 1px solid var(--ne-color-border-strong);
+    border-radius: 3px;
+    color: var(--ne-color-text-subtle);
+    cursor: pointer;
+    padding: 0;
+    margin-left: 6px;
+}
+
+.ne-node-runtime-btn:hover:not(:disabled) {
+    color: var(--ne-color-primary);
+    border-color: var(--ne-color-primary);
+}
+
+.ne-node-runtime-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+/* Play button active in Play mode: green accent */
+.ne-node-runtime-btn.ne-rtbtn-play-active {
+    color: var(--ne-color-success);
+    border-color: var(--ne-color-success);
+}
+
+/* Stop button active (source is running): red accent */
+.ne-node-runtime-btn.ne-rtbtn-stop-active {
+    color: var(--ne-color-danger);
+    border-color: var(--ne-color-danger);
+}
+
+/* Record button active (IStartableNode capturing): pulsing red dot */
+.ne-node-runtime-btn.ne-rtbtn-record-active {
+    color: var(--ne-color-danger);
+    border-color: var(--ne-color-danger);
+    animation: ne-record-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ne-record-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.45; }
+}
+
+/* Record All / Stop All controls in the play panel header */
+.ne-play-record-all {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.ne-record-all-btn {
+    background: transparent;
+    border: 1px solid var(--ne-color-border);
+    color: var(--ne-color-text-muted);
+    padding: 3px 9px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    cursor: pointer;
+    transition: border-color 0.12s, color 0.12s;
+    line-height: 1.5;
+}
+
+.ne-record-all-btn:hover:not(:disabled) {
+    border-color: var(--ne-color-danger);
+    color: var(--ne-color-danger);
+}
+
+.ne-record-all-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.ne-record-all-btn.ne-recording {
+    color: var(--ne-color-danger);
+    border-color: var(--ne-color-danger);
+    animation: ne-record-pulse 1.2s ease-in-out infinite;
+}
+
+.ne-play-source button {
+    width: 22px;
+    height: 22px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: var(--ne-color-text-muted);
+    cursor: pointer;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ne-play-source button:hover:not(:disabled) {
+    border-color: var(--ne-color-primary);
+    color: var(--ne-color-primary);
+}
+
+.ne-play-source button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ne-play-source button.running {
+    color: var(--ne-color-primary);
+}
+
+.ne-play-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 6px 12px 0 12px;
+    background: var(--ne-color-recessed-1);
+    border-bottom: 1px solid var(--ne-color-border);
+}
+
+.ne-play-tab {
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    color: var(--ne-color-text-muted);
+    padding: 6px 14px;
+    font-size: 0.85em;
+    cursor: pointer;
+}
+
+.ne-play-tab:hover {
+    color: var(--ne-color-text);
+}
+
+.ne-play-tab.active {
+    color: var(--ne-color-primary);
+    border-color: var(--ne-color-border);
+    border-bottom-color: var(--ne-color-surface-faint);
+    background: var(--ne-color-surface-faint);
+    margin-bottom: -1px;
+}
+
+.ne-play-body {
+    padding: 12px;
+    min-height: 220px;
+    background: var(--ne-color-surface-faint);
+}
+
+.ne-play-empty {
+    color: var(--ne-color-text-muted);
+    font-size: 0.85em;
+    font-style: italic;
+    text-align: center;
+    padding: 32px 16px;
+}
+
+/* Each tab content slot. We mount all ScopeWidgets up-front and toggle
+   visibility on tab switch so the rAF render loops keep ticking even on
+   inactive tabs (cheap; canvases on hidden elements skip painting). */
+.ne-play-tab-body {
+    display: none;
+}
+
+.ne-play-tab-body.active {
+    display: block;
+}
+
+/* Stack layout: all widget bodies visible simultaneously in a scrollable
+   column. Tab strip is hidden; each ScopeWidget shows its own title. */
+.ne-play-tabs.layout-hidden {
+    display: none;
+}
+
+.ne-play-body.stack-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    max-height: 70vh;
+}
+
+.ne-play-body.stack-layout .ne-play-tab-body {
+    display: block;
+}
+
+/* Layout toggle buttons in the play header */
+.ne-layout-toggle {
+    display: flex;
+    gap: 3px;
+    margin-left: auto;
+}
+
+.ne-layout-btn {
+    background: transparent;
+    border: 1px solid var(--ne-color-border);
+    border-radius: 4px;
+    color: var(--ne-color-text-muted);
+    cursor: pointer;
+    padding: 3px 8px;
+    font-size: 0.78em;
+    line-height: 1.4;
+    transition: background 0.15s, color 0.15s;
+}
+
+.ne-layout-btn:hover {
+    color: var(--ne-color-text);
+    border-color: var(--ne-color-text-muted);
+}
+
+.ne-layout-btn.active {
+    background: var(--ne-color-info);
+    color: var(--ne-color-primary);
+    border-color: var(--ne-color-primary);
+}
+
+/* ── Editor container ── */
+#editor-container {
+    width: 100%;
+    height: 70vh;
+    margin-top: 16px;
+    border-radius: 8px;
+    border: 1px solid var(--ne-color-border);
+    overflow: hidden;
+    position: relative;
+}
+
+/* ── 3-column layout ── */
+.ne-editor {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    overflow: hidden;
+}
+
+/* Disable native text selection inside any editor / viewer host.
+   Without this, dragging from an output port to an input port also
+   selects the port-label text and the surrounding node DOM. Layout
+   is intentionally left alone on .ne-viewer — its v2 host manages
+   sizing via its own classes. */
+.ne-editor,
+.ne-viewer {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.ne-panel {
+    flex-shrink: 0;
+    width: 0;
+    overflow: hidden;
+    transition: width 0.2s ease;
+    background: var(--ne-color-surface-popover);
+    border-color: var(--ne-color-border);
+}
+
+.ne-panel-left {
+    border-right: 1px solid var(--ne-color-border);
+}
+
+.ne-panel-right {
+    border-left: 1px solid var(--ne-color-border);
+}
+
+.ne-panel-right.ne-panel-open {
+    width: 240px;
+}
+
+/* ── Canvas (center) ── */
+.ne-canvas {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    background-image:
+        radial-gradient(circle, var(--ne-grid-dot, var(--ne-color-border-soft)) 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-color: var(--ne-bg, var(--ne-color-bg));
+    transition: background-color 0.25s;
+}
+
+.ne-viewport {
+    position: absolute;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+.ne-svg {
+    position: absolute;
+    width: 10000px;
+    height: 10000px;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.ne-svg .ne-connection {
+    pointer-events: stroke;
+    stroke-width: 2;
+    cursor: pointer;
+}
+
+.ne-svg .ne-connection:hover {
+    stroke: var(--ne-color-danger);
+    stroke-width: 3;
+}
+
+.ne-nodes-layer {
+    position: absolute;
+}
+
+/* ── Node ── */
+.ne-node {
+    position: absolute;
+    min-width: 140px;
+    background: var(--ne-node-body, var(--ne-color-surface));
+    border: 1px solid var(--ne-node-border, var(--ne-color-border));
+    border-radius: 8px;
+    cursor: grab;
+    overflow: hidden;
+    box-shadow: 0 2px 8px var(--ne-color-recessed-3);
+    transition: box-shadow 0.15s, background 0.25s, border-color 0.25s;
+}
+
+.ne-node:hover {
+    box-shadow: 0 4px 16px var(--ne-color-recessed-3);
+}
+
+/* Helios runs on a near-pure-black canvas (#0A0A0F) where a 1px border
+   vanishes on lower-contrast displays. Thicken to 2px so each card has a
+   crisp outline. Color is set inline !important from the skin profile
+   (--ne-color-border), so the contrast comes from the skin's token. */
+.ne-skin-helios .ne-node {
+    border-width: 2px;
+}
+
+.ne-node-selected {
+    border-color: var(--ne-color-primary) !important;
+    box-shadow: 0 0 0 2px var(--ne-color-primary), 0 4px 16px var(--ne-color-recessed-3);
+}
+
+.ne-node-header {
+    padding: 6px 10px;
+    font-size: 0.8em;
+    font-weight: 600;
+    color: var(--ne-color-text-strong);
+    background: var(--ne-color-node-header);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ne-node-title {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ne-node-toolbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ne-node-body {
+    padding: 6px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+}
+
+.ne-node-footer {
+    padding: 3px 8px;
+    background: var(--ne-color-recessed-2);
+    border-top: 1px solid var(--ne-color-border-soft);
+    font-size: 0.7em;
+    color: var(--text-muted, var(--ne-color-text-subtle));
+    letter-spacing: 0.04em;
+}
+
+.ne-node-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ne-node-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ne-status-idle);
+    flex: 0 0 auto;
+}
+
+.ne-node-status-dot.ne-status-idle,
+.ne-node-status-dot.ne-status-stopped {
+    background: var(--ne-status-idle);
+}
+
+.ne-node-status-dot.ne-status-starting,
+.ne-node-status-dot.ne-status-stopping {
+    background: var(--ne-status-transition);
+    animation: ne-status-pulse 1.0s ease-in-out infinite;
+}
+
+.ne-node-status-dot.ne-status-started {
+    background: var(--ne-status-started);
+}
+
+.ne-node-status-dot.ne-status-failed {
+    background: var(--ne-status-failed);
+}
+
+.ne-node-status-dot.ne-status-disabled {
+    background: var(--ne-status-disabled);
+}
+
+@keyframes ne-status-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+}
+
+.ne-node-inputs,
+.ne-node-outputs {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ne-node-outputs {
+    align-items: flex-end;
+}
+
+/* ── Control plane (Unreal-style exec ports row) ─────────────────────── */
+.ne-node-control-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0 4px;
+    border-bottom: 1px dashed var(--ne-color-border-soft, var(--ne-color-border));
+    min-height: 0;
+}
+/* Collapse the row entirely when both halves are empty (pure-data node). */
+.ne-node-control-row:has(> .ne-node-control-inputs:empty):has(> .ne-node-control-outputs:empty) {
+    display: none;
+}
+
+.ne-node-control-inputs,
+.ne-node-control-outputs {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.ne-node-control-outputs { align-items: flex-end; }
+
+.ne-port.ne-port-control {
+    padding: 1px 8px;
+    font-size: 0.78em;
+    opacity: 0.85;
+    letter-spacing: 0.04em;
+}
+.ne-port.ne-port-control .ne-port-dot {
+    width: 8px;
+    height: 8px;
+}
+.ne-port.ne-port-control:hover {
+    opacity: 1;
+}
+.ne-port.ne-port-control .ne-port-label {
+    text-transform: lowercase;
+    color: var(--ne-color-text-muted);
+}
+
+/* ── Port ── */
+.ne-port {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+}
+
+.ne-port-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    cursor: crosshair;
+    border: 1.5px solid var(--ne-port-stroke, var(--ne-color-border-strong));
+    transition: transform 0.1s, border-color 0.25s;
+}
+
+.ne-port-dot:hover {
+    transform: scale(1.4);
+    border-color: var(--ne-color-text-strong);
+}
+
+.ne-port-label {
+    font-size: 0.7em;
+    color: var(--ne-port-label, var(--ne-color-text-muted));
+    white-space: nowrap;
+    transition: color 0.25s;
+    cursor: ns-resize;
+}
+
+.ne-port-dragging {
+    background: var(--ne-color-primary-bg);
+    border-radius: 3px;
+}
+
+.ne-port-dragging .ne-port-label {
+    color: var(--ne-color-primary);
+}
+
+/* ── Toolbar ── */
+#toolbar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+#toolbar button {
+    padding: 6px 14px;
+    background: var(--ne-color-recessed-3);
+    border: 1px solid var(--ne-color-border);
+    color: var(--ne-color-text);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: background 0.15s;
+}
+
+#toolbar button:hover {
+    background: var(--ne-color-primary);
+    color: var(--ne-color-recessed-3);
+}
+
+/* ── Overlay action buttons (on canvas) ── */
+.ne-overlay-actions {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    gap: 6px;
+    z-index: 10;
+}
+
+.ne-overlay-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ne-color-surface-strong);
+    border: 1px solid var(--ne-color-border);
+    border-radius: 6px;
+    color: var(--ne-color-text-muted);
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    transition: background 0.15s, color 0.15s;
+    padding: 0;
+}
+
+.ne-overlay-btn:hover {
+    background: var(--ne-color-surface);
+    color: var(--ne-color-primary);
+    border-color: var(--ne-color-primary);
+}
+
+.ne-overlay-btn-flash {
+    background: var(--ne-color-primary-bg-strong) !important;
+    color: var(--ne-color-primary) !important;
+}
+
+/* Design/Play mode toggle. Green play in design mode, red stop block when
+   the editor is in Play mode. Always tinted (not just on hover) so the
+   current mode is unambiguous from across the room. */
+.ne-overlay-btn.ne-play-toggle {
+    color: var(--ne-color-success);          /* emerald 400 */
+    border-color: var(--ne-color-success);
+}
+
+.ne-overlay-btn.ne-play-toggle:hover:not(:disabled) {
+    background: var(--ne-color-success-bg);
+    color: var(--ne-color-success);
+    border-color: var(--ne-color-success);
+}
+
+.ne-overlay-btn.ne-play-toggle.ne-play-toggle-on {
+    color: var(--ne-color-danger);          /* red 500 */
+    border-color: var(--ne-color-danger);
+    background: var(--ne-color-danger-bg);
+    box-shadow: 0 0 0 1px var(--ne-color-danger);
+}
+
+.ne-overlay-btn.ne-play-toggle.ne-play-toggle-on:hover:not(:disabled) {
+    background: var(--ne-color-danger-bg);
+    color: var(--ne-color-danger);
+}
+
+.ne-overlay-select {
+    height: 32px;
+    padding: 0 8px;
+    background: var(--ne-color-surface-strong);
+    border: 1px solid var(--ne-color-border);
+    border-radius: 6px;
+    color: var(--ne-color-text-muted);
+    font-size: 0.75em;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    outline: none;
+}
+
+.ne-overlay-select:hover {
+    border-color: var(--ne-color-primary);
+    color: var(--ne-color-text);
+}
+
+/* ── Property panel (inside right panel) ── */
+.ne-property-panel {
+    width: 100%;
+    font-size: 0.8em;
+    color: inherit;
+}
+
+.ne-pp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--ne-color-border);
+}
+
+.ne-pp-title {
+    font-weight: 600;
+    color: var(--ne-color-primary);
+    font-size: 0.95em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ne-pp-close {
+    background: none;
+    border: none;
+    color: var(--ne-color-text-muted);
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+}
+
+.ne-pp-close:hover {
+    color: var(--ne-color-danger);
+}
+
+.ne-pp-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 4px 8px 0 8px;
+    border-bottom: 1px solid var(--ne-color-border);
+    background: var(--ne-color-recessed-1);
+}
+
+.ne-pp-tab {
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    color: var(--ne-color-text-muted);
+    cursor: pointer;
+    padding: 4px 10px;
+    font-size: 0.82em;
+    letter-spacing: 0.02em;
+    line-height: 1.4;
+    margin-bottom: -1px;
+}
+
+.ne-pp-tab:hover:not(.ne-pp-tab-active) {
+    color: var(--ne-color-primary);
+}
+
+.ne-pp-tab-active {
+    background: var(--ne-color-surface);
+    border-color: var(--ne-color-border);
+    color: var(--ne-color-primary);
+}
+
+.ne-pp-tab-bodies {
+    display: flex;
+    flex-direction: column;
+}
+
+.ne-pp-tab-body {
+    display: none;
+}
+
+.ne-pp-tab-body.ne-pp-tab-body-active {
+    display: block;
+}
+
+.ne-pp-content {
+    padding: 6px 0;
+}
+
+/* Block layout: a framed group with the label on top and the cell
+   stretched full-width below. Opt-in via @editable("kind", { layout: "block" })
+   for complex properties (vector3, color, transform, ...). */
+.ne-pp-row-block {
+    flex-direction: column;
+    align-items: stretch;
+    border: 1px solid var(--ne-color-border);
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin: 4px 8px;
+    background: var(--ne-color-recessed-1);
+}
+
+.ne-pp-row-block .ne-pp-key {
+    text-transform: uppercase;
+    font-size: 0.68em;
+    letter-spacing: 0.06em;
+    opacity: 0.65;
+    margin-bottom: 4px;
+}
+
+.ne-pp-row-block .ne-pp-value {
+    width: 100%;
+    text-align: left;
+}
+
+/* Alignement hints set on the value cell via field.options.alignement.
+   Sub-editors append their children naked; the cell handles layout. */
+.ne-pp-value-horizontal {
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    align-items: center;
+}
+
+.ne-pp-value-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: stretch;
+}
+
+.ne-pp-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 12px;
+    gap: 8px;
+}
+
+.ne-pp-row:hover {
+    background: var(--ne-color-border-soft);
+}
+
+/* Read-only / @viewable rows: dim and block interaction. Acts as a
+   safety net for sub-editor factories that forget to honour the
+   editable=false argument visually. */
+.ne-pp-row-readonly {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.ne-pp-key {
+    color: var(--ne-color-text-muted);
+    flex-shrink: 0;
+    font-size: 0.9em;
+}
+
+.ne-pp-value {
+    color: inherit;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: 'Cascadia Code', monospace;
+    font-size: 0.9em;
+}
+
+/* ── Editable inputs ── */
+.ne-pp-input {
+    flex: 1;
+    min-width: 0;
+    padding: 2px 6px;
+    background: var(--ne-color-recessed-2);
+    border: 1px solid var(--ne-color-border);
+    border-radius: 3px;
+    color: inherit;
+    font-family: 'Cascadia Code', monospace;
+    font-size: 0.9em;
+    outline: none;
+}
+
+.ne-pp-input:focus {
+    border-color: var(--ne-color-primary);
+}
+
+.ne-pp-input-checkbox {
+    accent-color: var(--ne-color-primary);
+}
+
+.ne-pp-select {
+    appearance: auto;
+    cursor: pointer;
+    padding-right: 4px;
+}
+.ne-pp-select option {
+    background: var(--ne-color-surface);
+    color: var(--ne-color-text);
+}
+
+/* ── Footer (Apply / Reset) ── */
+.ne-pp-footer {
+    display: flex;
+    gap: 6px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--ne-color-border);
+}
+
+.ne-pp-btn {
+    flex: 1;
+    padding: 4px 0;
+    border: 1px solid var(--ne-color-border);
+    border-radius: 4px;
+    font-size: 0.85em;
+    cursor: pointer;
+    text-align: center;
+}
+
+.ne-pp-btn-apply {
+    background: var(--ne-color-primary);
+    color: var(--ne-color-recessed-3);
+    border-color: var(--ne-color-primary);
+    font-weight: 600;
+}
+
+.ne-pp-btn-apply:hover:not(.ne-pp-btn-disabled) {
+    filter: brightness(1.1);
+}
+
+.ne-pp-btn-reset {
+    background: transparent;
+    color: var(--ne-color-text-muted);
+}
+
+.ne-pp-btn-reset:hover:not(.ne-pp-btn-disabled) {
+    color: var(--ne-color-text);
+    border-color: var(--ne-color-text-muted);
+}
+
+.ne-pp-btn-disabled {
+    opacity: 0.3;
+    cursor: default;
+    pointer-events: none;
+}
+
+/* ── Save/Load overlay separator ── */
+.ne-overlay-sep {
+    width: 1px;
+    height: 24px;
+    background: var(--ne-color-border);
+    align-self: center;
+}
+
+/* ── Selection rectangle ── */
+.ne-selection-rect {
+    position: absolute;
+    border: 1.5px dashed var(--ne-color-primary);
+    background: var(--ne-color-primary-bg);
+    pointer-events: none;
+    z-index: 5;
+}
+
+/* ── Dataset Capture widget (play-panel tab) ── */
+.spk-ds-widget {
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 280px;
+}
+.spk-ds-header {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ne-color-danger);
+    opacity: 0.85;
+}
+.spk-ds-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.spk-ds-label {
+    width: 80px;
+    font-size: 12px;
+    color: var(--text-muted, var(--ne-color-text-muted));
+    flex-shrink: 0;
+}
+.spk-ds-input {
+    flex: 1;
+    background: var(--ne-color-border-soft);
+    border: 1px solid var(--ne-color-border);
+    border-radius: 4px;
+    color: var(--ne-color-text);
+    padding: 4px 8px;
+    font-size: 12px;
+    outline: none;
+}
+.spk-ds-input:focus {
+    border-color: var(--ne-color-danger);
+}
+.spk-ds-count {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ne-color-text);
+}
+.spk-ds-table {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 20px;
+}
+.spk-ds-class-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-muted, var(--ne-color-text-muted));
+    padding: 2px 0;
+    border-bottom: 1px solid var(--ne-color-border-soft);
+}
+.spk-ds-class-name { font-style: italic; }
+.spk-ds-class-count { font-variant-numeric: tabular-nums; color: var(--ne-color-text); }
+.spk-ds-btnrow {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.spk-ds-btn {
+    padding: 6px 14px;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid var(--ne-color-border);
+    background: var(--ne-color-border-soft);
+    color: var(--ne-color-text);
+    transition: background 0.12s, border-color 0.12s;
+}
+.spk-ds-btn:hover { background: var(--ne-color-border); border-color: var(--ne-color-border-strong); }
+.spk-ds-btn-start  { border-color: var(--ne-color-success); color: var(--ne-color-success); font-weight: 600; }
+.spk-ds-btn-start:hover { background: var(--ne-color-success-bg); border-color: var(--ne-color-success); }
+.spk-ds-btn-stop   { border-color: var(--ne-color-danger); color: var(--ne-color-danger); font-weight: 600; }
+.spk-ds-btn-stop:hover  { background: var(--ne-color-danger-bg); border-color: var(--ne-color-danger); }
+.spk-ds-btn-clear  { border-color: var(--ne-color-danger); color: var(--ne-color-danger); }
+.spk-ds-btn-clear:hover { background: var(--ne-color-danger-bg); }
+.spk-ds-btn-export { border-color: var(--ne-color-info); color: var(--ne-color-info); }
+.spk-ds-btn-export:hover { background: var(--ne-color-info); border-color: var(--ne-color-info); }
+.spk-ds-active-label {
+    font-weight: 600;
+    color: var(--ne-color-text);
+    font-size: 12px;
+}
+.spk-ds-filename {
+    font-size: 11px;
+    color: var(--ne-color-border-strong);
+    font-style: italic;
+}
+.spk-ds-count.spk-ds-capturing {
+    color: var(--ne-color-success);
+    animation: spk-ds-blink 1.2s ease-in-out infinite;
+}
+@keyframes spk-ds-blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+}
+
+/* ── Dataset metrics panel ── */
+.spk-ds-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 4px 0 6px;
+    padding: 6px 8px;
+    background: var(--ne-color-border-soft);
+    border-radius: 4px;
+    border: 1px solid var(--ne-color-border-soft);
+}
+.spk-ds-metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 11px;
+    line-height: 1.55;
+}
+.spk-ds-metric-key {
+    color: var(--ne-color-border-strong);
+}
+.spk-ds-metric-val {
+    color: var(--ne-color-text);
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+}
+
+/* ── Gauge widget (play-panel tab) ──
+   SVG arc gauge + large numeric readout. */
+.spk-gauge-widget {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 18px 16px 12px;
+    gap: 4px;
+}
+
+.spk-gauge-header {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--primary, var(--ne-color-success));
+    opacity: 0.75;
+    margin-bottom: 6px;
+}
+
+.spk-gauge-svg {
+    overflow: visible;
+}
+
+.spk-gauge-track {
+    fill: none;
+    stroke: var(--ne-color-border-soft);
+    stroke-width: 8;
+    stroke-linecap: round;
+}
+
+.spk-gauge-fill {
+    fill: none;
+    stroke: var(--ne-color-info);
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke 0.25s;
+}
+
+.spk-gauge-number {
+    font-size: 22px;
+    font-weight: 700;
+    fill: var(--ne-color-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.spk-gauge-unit {
+    font-size: 10px;
+    fill: var(--ne-color-border-strong);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.spk-gauge-minmax {
+    font-size: 9px;
+    fill: var(--ne-color-border-strong);
+}
+
+/* ── PWM Driver widget (play-panel tab) ──
+   Two-row slider UI, same dark palette as the play panel. */
+.spk-pwm-widget {
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+
+.spk-pwm-header {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--primary, var(--ne-color-success));
+    opacity: 0.75;
+}
+
+.spk-pwm-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.spk-pwm-label {
+    width: 110px;
+    font-size: 12px;
+    color: var(--text-muted, var(--ne-color-text-muted));
+    flex-shrink: 0;
+}
+
+.spk-pwm-slider {
+    flex: 1;
+    height: 3px;
+    appearance: none;
+    -webkit-appearance: none;
+    background: var(--ne-color-border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.spk-pwm-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--primary, var(--ne-color-info));
+    cursor: pointer;
+    box-shadow: 0 0 6px var(--ne-color-info);
+    transition: box-shadow 0.12s;
+}
+
+.spk-pwm-slider::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 10px var(--ne-color-info);
+}
+
+.spk-pwm-slider::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    border: none;
+    background: var(--primary, var(--ne-color-info));
+    cursor: pointer;
+}
+
+.spk-pwm-value {
+    width: 80px;
+    text-align: right;
+    font-size: 12px;
+    color: var(--ne-color-text);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+/* ── Per-node muted LED ──
+   Small circle injected at the end of each runtime node's title bar.
+   Green = live data flowing. Red = output is muted (source stopped / paused).
+   Hidden in Design mode; shown only when the executor is running. */
+.ne-muted-led {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-left: 6px;
+    vertical-align: middle;
+    flex-shrink: 0;
+    transition: background-color 0.2s;
+}
+
+.ne-muted-led.ne-muted-led-green {
+    background: var(--ne-color-success);
+    box-shadow: 0 0 5px var(--ne-color-success);
+}
+
+.ne-muted-led.ne-muted-led-red {
+    background: var(--ne-color-danger);
+    box-shadow: 0 0 5px var(--ne-color-danger);
+}
+
+/* ============================================================
+   Palette component (ne-palette)
+   Renders Type entries from an INodeRegistry, grouped by
+   category. Hosts must provide a positioned container; the
+   palette fills it. All visual tokens defer to --ne-color-*.
+   ============================================================ */
+
+.ne-palette {
+    display:        flex;
+    flex-direction: column;
+    height:         100%;
+    color:          var(--ne-color-text);
+    font-family:    var(--ne-font-mono, var(--ne-font-sans, "IBM Plex Mono", ui-monospace, monospace));
+    overflow:       hidden;
+}
+
+.ne-palette-title {
+    font-family:    var(--ne-font-mono, var(--ne-font-sans, "IBM Plex Mono", ui-monospace, monospace));
+    font-size:      10px;
+    font-weight:    500;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color:          var(--ne-color-text-muted);
+    padding:        20px 18px 8px;
+    margin:         0 0 12px;
+    border-bottom:  1px solid var(--ne-color-border-strong, var(--ne-color-border));
+    flex-shrink:    0;
+}
+
+.ne-palette-list {
+    flex:           1;
+    overflow-y:     auto;
+    padding:        0 0 8px;
+}
+
+.ne-palette-empty {
+    font-size:      11px;
+    color:          var(--ne-color-text-muted);
+    padding:        12px 14px;
+    font-style:     italic;
+}
+
+/* Folder + leaf entries. Categories are tree paths ("a/b/c") and each
+   segment becomes a collapsible folder. */
+.ne-palette-folder {
+    display: block;
+}
+.ne-palette-folder-header {
+    display:        flex;
+    align-items:    center;
+    gap:            6px;
+    width:          100%;
+    text-align:     left;
+    font:           inherit;
+    font-size:      11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color:          var(--ne-color-text);
+    background:     transparent;
+    border:         0;
+    padding:        6px 10px;
+    cursor:         pointer;
+    transition:     color .12s, background-color .12s;
+}
+.ne-palette-folder-header:hover { color: var(--ne-color-accent, var(--ne-color-text)); background: var(--ne-color-surface-hover, transparent); }
+
+.ne-palette-folder-arrow {
+    display:        inline-block;
+    width:          12px;
+    color:          var(--ne-color-text-muted);
+    transition:     transform .15s ease-out;
+    transform-origin: center;
+    font-size:      10px;
+    transform:      rotate(90deg);  /* expanded */
+}
+.ne-palette-folder.is-collapsed > .ne-palette-folder-header .ne-palette-folder-arrow {
+    transform: rotate(0deg);  /* collapsed */
+}
+
+.ne-palette-folder-name {
+    flex: 1;
+}
+
+.ne-palette-folder-count {
+    font-size:      10px;
+    color:          var(--ne-color-text-muted);
+    padding:        1px 6px;
+    border:         1px solid var(--ne-color-border);
+    border-radius:  2px;
+    letter-spacing: 0;
+    font-weight:    400;
+}
+
+.ne-palette-folder-body {
+    display: block;
+}
+.ne-palette-folder.is-collapsed > .ne-palette-folder-body {
+    display: none;
+}
+
+.ne-palette-entry {
+    display:        flex;
+    align-items:    center;
+    gap:            8px;
+    width:          100%;
+    text-align:     left;
+    font:           inherit;
+    font-size:      12px;
+    color:          var(--ne-color-text);
+    background:     transparent;
+    border:         0;
+    padding:        5px 10px;
+    cursor:         pointer;
+    transition:     background-color .12s, color .12s;
+}
+.ne-palette-entry-dot {
+    display:        inline-block;
+    width:          5px;
+    height:         5px;
+    border-radius:  50%;
+    background:     var(--ne-color-accent, var(--ne-color-text-muted));
+    opacity:        .6;
+    flex-shrink:    0;
+}
+.ne-palette-entry:hover  { background: var(--ne-color-surface-hover, var(--ne-color-border)); color: var(--ne-color-text); }
+.ne-palette-entry:active { background: var(--ne-color-accent); color: var(--ne-color-bg); }
+.ne-palette-entry:hover .ne-palette-entry-dot { opacity: 1; }
+
+/* ============================================================
+   Standards badges (interop compliance: onnx, tflite, etc.)
+   ============================================================ */
+
+.ne-standard-badge {
+    display:          inline-flex;
+    align-items:      center;
+    justify-content:  center;
+    min-width:        16px;
+    height:           16px;
+    padding:          0 4px;
+    background:       var(--ne-color-accent, #555);
+    color:            #fff;
+    font-family:      var(--ne-font-mono, monospace);
+    font-size:        9px;
+    font-weight:      600;
+    line-height:      1;
+    letter-spacing:   0.02em;
+    border-radius:    3px;
+    text-transform:   uppercase;
+    flex-shrink:      0;
+}
+
+/* Standards strip sits in the node header between title and toolbar. */
+.ne-node-standards {
+    display:      inline-flex;
+    align-items:  center;
+    gap:          3px;
+    margin-right: 6px;
+    flex-shrink:  0;
+}
+
+/* Standards strip on a palette entry sits at the right edge. */
+.ne-palette-entry-label {
+    flex: 1;
+}
+.ne-palette-entry-standards {
+    display:      inline-flex;
+    align-items:  center;
+    gap:          3px;
+    margin-left:  8px;
+    flex-shrink:  0;
+}
+
+/* ============================================================
+   DebugConsole component (ne-console)
+   Footer panel rendering rows from DebugBus. Skin-aware: every
+   visible token resolves from --ne-color-*, so the helios /
+   dark / light skin theming carries through automatically.
+   ============================================================ */
+
+.ne-console {
+    display:        flex;
+    flex-direction: column;
+    height:         100%;
+    background:     var(--ne-color-bg);
+    color:          var(--ne-color-text);
+    font-family:    var(--ne-font-mono, ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace);
+    border-top:     1px solid var(--ne-color-border);
+    overflow:       hidden;
+    transition:     height 0.15s ease;
+}
+
+/* Header strip: same surface as the body — only a thin bottom border
+   separates them. Reserves --ne-color-node-header strictly for actual
+   node-card headers on the canvas. */
+.ne-console-header {
+    display:        flex;
+    align-items:    center;
+    gap:            8px;
+    height:         28px;
+    padding:        0 16px;
+    background:     transparent;
+    border-bottom:  1px solid var(--ne-color-border);
+    font-size:      10px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color:          var(--ne-color-text-muted);
+    flex-shrink:    0;
+}
+
+.ne-console-title  { font-weight: 500; }
+.ne-console-spacer { flex: 1; }
+
+.ne-console-btn {
+    font-family:    var(--ne-font-mono, ui-monospace, monospace);
+    font-size:      10px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color:          var(--ne-color-text-muted);
+    padding:        2px 8px;
+    border:         1px solid var(--ne-color-border);
+    background:     transparent;
+    cursor:         pointer;
+    transition:     color .12s, border-color .12s, background .12s;
+}
+.ne-console-btn:hover {
+    color:        var(--ne-color-text-strong);
+    border-color: var(--ne-color-border-strong);
+    background:   var(--ne-color-primary-bg, transparent);
+}
+
+.ne-console-body {
+    flex:        1;
+    overflow-y:  auto;
+    padding:     4px 0;
+    font-size:   11px;
+    line-height: 1.45;
+    background:  var(--ne-color-bg);
+}
+
+.ne-console-row {
+    display:     flex;
+    gap:         12px;
+    padding:     1px 16px;
+    white-space: pre-wrap;
+    word-break:  break-word;
+}
+.ne-console-row:hover {
+    background: var(--ne-color-recessed-1, transparent);
+}
+
+.ne-console-ts     { flex: 0 0 80px;  color: var(--ne-color-text-faint); }
+.ne-console-level  { flex: 0 0 50px;  text-transform: uppercase; letter-spacing: .14em; }
+.ne-console-source { flex: 0 0 120px; color: var(--ne-color-text-muted); }
+.ne-console-msg    { flex: 1 1 auto;  color: var(--ne-color-text); }
+
+.ne-console-level-info  { color: var(--ne-color-text-muted); }
+.ne-console-level-warn  { color: var(--ne-color-warning, #E8B62D); }
+.ne-console-level-error { color: var(--ne-color-danger,  #B84A3C); }
+.ne-console-level-watch { color: var(--ne-color-primary, var(--ne-color-info, #4DA8C7)); }
+
+.ne-console-empty {
+    padding:        12px 16px;
+    color:          var(--ne-color-text-faint);
+    font-size:      11px;
+    letter-spacing: .04em;
+}
+
+.ne-console.is-collapsed { height: 28px; }
+.ne-console.is-collapsed .ne-console-body { display: none; }

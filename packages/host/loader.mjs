@@ -1,6 +1,6 @@
 // Custom Node.js ESM resolution hook.
 //
-// Why : mcp-for-babylon's @dev/core and @dev/tunnel ship dist/ files compiled
+// Why : @cyanmycelium/mcp-core and @dev/tunnel ship dist/ files compiled
 // with TypeScript module: ES2020, which emits relative imports without the
 // `.js` extension. Under Node 22 strict ESM resolution this throws
 // ERR_MODULE_NOT_FOUND. We fall back to appending `.js` (then `/index.js`)

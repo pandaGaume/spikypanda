@@ -42,9 +42,9 @@
         "test:watch": "jest --watch"
     },
     "dependencies": {
-        "@spikypanda/root": "file:.claude/worktrees/funny-chaum-69251c",
-        "@dev/core": "file:../Gaume/mcp-for-babylon/packages/dev/core",
+        "@cyanmycelium/mcp-core": "file:../Gaume/mcp-core",
         "@dev/tunnel": "file:../Gaume/mcp-for-babylon/packages/dev/tunnel",
+        "@spikypanda/root": "file:.claude/worktrees/funny-chaum-69251c",
         "reflect-metadata": "^0.2.2",
         "tslib": "^2.8.1"
     },
@@ -54,11 +54,13 @@
         "@typescript-eslint/eslint-plugin": "^7.0.0",
         "@typescript-eslint/parser": "^7.0.0",
         "cross-env": "^7.0.3",
+        "css-loader": "^7.1.4",
         "eslint": "^8.57.0",
         "eslint-config-prettier": "^9.1.0",
         "eslint-plugin-prettier": "^5.1.0",
         "jest": "^29.5.0",
         "lint-staged": "^15.0.0",
+        "mini-css-extract-plugin": "^2.10.2",
         "prettier": "^3.2.0",
         "rimraf": "~6.0.1",
         "ts-jest": "^29.1.0",
