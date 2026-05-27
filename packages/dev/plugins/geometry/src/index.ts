@@ -21,6 +21,7 @@ const plugin: IPlugin = {
                 outputPorts: [
                     { slot: "matrix",      optional: false, type: "matrix44" },
                 ],
+                standards: ["ue5"],
             },
         );
 
@@ -38,6 +39,7 @@ const plugin: IPlugin = {
                 outputPorts: [
                     { slot: "rotation", optional: false, type: "vec4" },
                 ],
+                standards: ["ue5"],
             },
         );
 
@@ -55,6 +57,7 @@ const plugin: IPlugin = {
                 outputPorts: [
                     { slot: "vec3", optional: false, type: "vec3" },
                 ],
+                standards: ["ue5"],
             },
         );
 

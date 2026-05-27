@@ -69,7 +69,10 @@ const plugin: IPlugin = {
             label: "IFFT", category: "dsp-transform",
             inputPorts:  [tensorIn("spectrum")],
             outputPorts: [tensorOut("signal")],
-            standards: ["onnx"],
+            standards: [
+                { id: "onnx", version: "1.18" },
+                { id: "ue5",  version: "5.4"  },
+            ],
         });
         ctx.nodes.register("spk.dsp:magnitude", () => createMagnitudeNode() as never, {
             label: "Magnitude", category: "dsp-transform",
@@ -95,7 +98,10 @@ const plugin: IPlugin = {
             label: "Window", category: "dsp-window",
             inputPorts:  [tensorIn("signal")],
             outputPorts: [tensorOut("windowed")],
-            standards: ["onnx"],
+            standards: [
+                { id: "onnx", version: "1.18" },
+                { id: "ue5",  version: "5.4"  },
+            ],
         });
         ctx.nodes.register("spk.dsp:frame", () => createFrameNode() as never, {
             label: "Frame", category: "dsp-frame",
@@ -135,7 +141,11 @@ const plugin: IPlugin = {
             label: "Biquad Filter", category: "dsp-filter",
             inputPorts:  [tensorIn("signal")],
             outputPorts: [tensorOut("filtered")],
-            standards: ["onnx"],
+            // UE5 MetaSounds ships a Biquad Filter MetaSound node.
+            standards: [
+                { id: "onnx", version: "1.18" },
+                { id: "ue5",  version: "5.4"  },
+            ],
         });
         ctx.nodes.register("spk.dsp:kalman1d", () => createKalman1DNode() as never, {
             label: "Kalman 1D", category: "dsp-filter",
@@ -149,7 +159,11 @@ const plugin: IPlugin = {
             label: "RMS", category: "dsp-stats",
             inputPorts:  [tensorIn("signal")],
             outputPorts: [tensorOut("rms")],
-            standards: ["onnx"],
+            // UE5 audio engine exposes loudness/RMS via Audio Analyzer.
+            standards: [
+                { id: "onnx", version: "1.18" },
+                { id: "ue5",  version: "5.4"  },
+            ],
         });
         ctx.nodes.register("spk.dsp:zcr", () => createZeroCrossingRateNode() as never, {
             label: "Zero Crossing Rate", category: "dsp-stats",

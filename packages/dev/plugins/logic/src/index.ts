@@ -94,6 +94,10 @@ const COMPARISON_NODES: ReadonlyArray<IComparisonRegistration> = [
 
 const plugin: IPlugin = {
     activate(ctx: IPluginContext): void {
+        // Every logic node maps to a UE5 Blueprint equivalent (Branch,
+        // Sequence, ForLoop, math operators, array library, etc.) so the
+        // standards declaration is uniform across the plugin.
+        const UE5: ReadonlyArray<string> = ["ue5"];
         for (const entry of COMPARISON_NODES) {
             ctx.nodes.register(entry.type, entry.factory as () => never, {
                 label:    entry.label,
@@ -105,6 +109,7 @@ const plugin: IPlugin = {
                 outputPorts: [
                     { slot: "result", optional: false, type: "boolean" },
                 ],
+                standards: UE5,
             });
         }
 
@@ -120,6 +125,7 @@ const plugin: IPlugin = {
                 { slot: "true",  optional: false, type: "trigger" },
                 { slot: "false", optional: false, type: "trigger" },
             ],
+            standards: UE5,
         });
 
         ctx.nodes.register("spk.logic:sequence", () => new SequenceNode(), {
@@ -135,6 +141,7 @@ const plugin: IPlugin = {
             // add as many follow-up triggers as they need without
             // restarting the node.
             variadicOutput: { prefix: "then_", type: "trigger" },
+            standards: UE5,
         });
 
         ctx.nodes.register("spk.logic:doOnce", () => new DoOnceNode(), {
@@ -146,6 +153,7 @@ const plugin: IPlugin = {
             outputPorts: [
                 { slot: "then", optional: false, type: "trigger" },
             ],
+            standards: UE5,
         });
 
         ctx.nodes.register("spk.logic:gate", () => new GateNode(), {
@@ -157,6 +165,7 @@ const plugin: IPlugin = {
             outputPorts: [
                 { slot: "then", optional: false, type: "trigger" },
             ],
+            standards: UE5,
         });
 
         // ── Array (UE5 "Array Library") ─────────────────────────────────
@@ -167,6 +176,7 @@ const plugin: IPlugin = {
             outputPorts: [{ slot: "array",  optional: false, type: "array" }],
             // Grow `item_*` as the user wires the trailing slot.
             variadicInput: { prefix: "item_", type: "any" },
+            standards: UE5,
         });
 
         const ARRAY_INOUT = { slot: "array", optional: false, type: "array" } as const;
@@ -178,57 +188,70 @@ const plugin: IPlugin = {
             label: "Length",      category: "logic-array",
             inputPorts:  [ARRAY_IN],
             outputPorts: [{ slot: "length", optional: false, type: "float" }],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:arrayClear", () => new ArrayClearNode(), {
             label: "Clear",       category: "logic-array",
             inputPorts:  [ARRAY_IN], outputPorts: [ARRAY_INOUT],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:arrayShuffle", () => new ArrayShuffleNode(), {
             label: "Shuffle",     category: "logic-array",
             inputPorts:  [ARRAY_IN], outputPorts: [ARRAY_INOUT],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:arrayReverse", () => new ArrayReverseNode(), {
             label: "Reverse",     category: "logic-array",
             inputPorts:  [ARRAY_IN], outputPorts: [ARRAY_INOUT],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:arraySort", () => new ArraySortNode(), {
             label: "Sort",        category: "logic-array",
             inputPorts:  [ARRAY_IN], outputPorts: [ARRAY_INOUT],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:arrayAdd", () => new ArrayAddNode(), {
             label: "Add",         category: "logic-array",
             inputPorts:  [ARRAY_IN, ITEM_IN], outputPorts: [ARRAY_INOUT],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:arrayInsert", () => new ArrayInsertNode(), {
             label: "Insert",      category: "logic-array",
             inputPorts:  [ARRAY_IN, INDEX_IN, ITEM_IN], outputPorts: [ARRAY_INOUT],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:arraySet", () => new ArraySetNode(), {
             label: "Set Elem",    category: "logic-array",
             inputPorts:  [ARRAY_IN, INDEX_IN, ITEM_IN], outputPorts: [ARRAY_INOUT],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:arrayGet", () => new ArrayGetNode(), {
             label: "Get",         category: "logic-array",
             inputPorts:  [ARRAY_IN, INDEX_IN],
             outputPorts: [{ slot: "item", optional: false, type: "any" }],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:arrayRemove", () => new ArrayRemoveNode(), {
             label: "Remove",      category: "logic-array",
             inputPorts:  [ARRAY_IN, ITEM_IN], outputPorts: [ARRAY_INOUT],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:arrayRemoveIndex", () => new ArrayRemoveIndexNode(), {
             label: "Remove Index", category: "logic-array",
             inputPorts:  [ARRAY_IN, INDEX_IN], outputPorts: [ARRAY_INOUT],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:arrayContains", () => new ArrayContainsNode(), {
             label: "Contains",    category: "logic-array",
             inputPorts:  [ARRAY_IN, ITEM_IN],
             outputPorts: [{ slot: "result", optional: false, type: "boolean" }],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:arrayFind", () => new ArrayFindNode(), {
             label: "Find",        category: "logic-array",
             inputPorts:  [ARRAY_IN, ITEM_IN],
             outputPorts: [{ slot: "index", optional: false, type: "float" }],
+            standards: UE5,
         });
 
         // ── Loops ──────────────────────────────────────────────────────
@@ -244,6 +267,7 @@ const plugin: IPlugin = {
                 { slot: "index",     optional: false, type: "float"   },
                 { slot: "completed", optional: false, type: "trigger" },
             ],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:forEachLoop", () => new ForEachLoopNode(), {
             label: "For Each Loop", category: "logic-loop",
@@ -257,6 +281,7 @@ const plugin: IPlugin = {
                 { slot: "index",     optional: false, type: "float"   },
                 { slot: "completed", optional: false, type: "trigger" },
             ],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:whileLoop", () => new WhileLoopNode(), {
             label: "While Loop", category: "logic-loop",
@@ -268,6 +293,7 @@ const plugin: IPlugin = {
                 { slot: "body",      optional: false, type: "trigger" },
                 { slot: "completed", optional: false, type: "trigger" },
             ],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:forLoopWithBreak", () => new ForLoopWithBreakNode(), {
             label: "For Loop with Break", category: "logic-loop",
@@ -281,6 +307,7 @@ const plugin: IPlugin = {
                 { slot: "index",     optional: false, type: "float"   },
                 { slot: "completed", optional: false, type: "trigger" },
             ],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:forEachLoopWithBreak", () => new ForEachLoopWithBreakNode(), {
             label: "For Each Loop with Break", category: "logic-loop",
@@ -294,6 +321,7 @@ const plugin: IPlugin = {
                 { slot: "index",     optional: false, type: "float"   },
                 { slot: "completed", optional: false, type: "trigger" },
             ],
+            standards: UE5,
         });
 
         // ── Debug / introspection ──────────────────────────────────────
@@ -306,6 +334,7 @@ const plugin: IPlugin = {
             outputPorts: [
                 { slot: "then", optional: false, type: "trigger" },
             ],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:watch", () => new WatchNode(), {
             label: "Watch Value", category: "logic-debug",
@@ -313,6 +342,7 @@ const plugin: IPlugin = {
                 { slot: "value", optional: true, type: "any" },
             ],
             outputPorts: [],
+            standards: UE5,
         });
 
         // ── Math ───────────────────────────────────────────────────────
@@ -324,6 +354,7 @@ const plugin: IPlugin = {
                 label, category: "logic-math",
                 inputPorts:  [NUM_IN("a"), NUM_IN("b")],
                 outputPorts: [NUM_OUT],
+                standards: UE5,
             });
         };
         const registerUnaryMath = (id: string, label: string, factory: () => never) => {
@@ -331,6 +362,7 @@ const plugin: IPlugin = {
                 label, category: "logic-math",
                 inputPorts:  [NUM_IN("a")],
                 outputPorts: [NUM_OUT],
+                standards: UE5,
             });
         };
         registerBinaryMath("spk.logic:add",      "Add",      () => new AddNode()      as never);
@@ -354,11 +386,13 @@ const plugin: IPlugin = {
             label: "Clamp", category: "logic-math",
             inputPorts:  [NUM_IN("value"), NUM_IN("min"), NUM_IN("max")],
             outputPorts: [NUM_OUT],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:lerp", () => new LerpNode(), {
             label: "Lerp", category: "logic-math",
             inputPorts:  [NUM_IN("a"), NUM_IN("b"), NUM_IN("t")],
             outputPorts: [NUM_OUT],
+            standards: UE5,
         });
 
         // ── Time / inputs ──────────────────────────────────────────────
@@ -366,16 +400,19 @@ const plugin: IPlugin = {
             label: "Clock", category: "logic-time",
             inputPorts:  [],
             outputPorts: [{ slot: "t", optional: false, type: "float" }],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:deltaTime", () => new DeltaTimeNode(), {
             label: "Delta Time", category: "logic-time",
             inputPorts:  [],
             outputPorts: [{ slot: "dt", optional: false, type: "float" }],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:slider", () => new NumberSliderNode(), {
             label: "Number Slider", category: "logic-input",
             inputPorts:  [],
             outputPorts: [{ slot: "value", optional: false, type: "float" }],
+            standards: UE5,
         });
         ctx.nodes.register("spk.logic:timer", () => new TimerNode(), {
             label: "Timer", category: "logic-time",
@@ -388,6 +425,7 @@ const plugin: IPlugin = {
                 { slot: "progress", optional: false, type: "float" },
                 { slot: "value",    optional: false, type: "float" },
             ],
+            standards: UE5,
         });
 
         // ── Select ─────────────────────────────────────────────────────
@@ -401,6 +439,7 @@ const plugin: IPlugin = {
             outputPorts: [
                 { slot: "result", optional: false, type: "any" },
             ],
+            standards: UE5,
         });
     },
 };
