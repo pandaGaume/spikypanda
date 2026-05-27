@@ -1,6 +1,5 @@
 import {
     editable,
-    viewable,
     cloneable,
     IOlink,
     IDeclaresPorts,
@@ -9,7 +8,6 @@ import {
     IChannel,
     RuntimeNode,
     publishToFirstOutput,
-    resolveSlotInputs,
     inSlotOf,
 } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
@@ -118,6 +116,7 @@ abstract class UnaryArrayNode extends RuntimeNode implements IDeclaresPorts {
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
         { slot: "array", optional: true, type: "array" },
     ];
+    public abstract outputPorts: ReadonlyArray<IPortDescriptor> ;
 
     public constructor(
         onsc: Nullable<IOlink[]> = null,

@@ -45,12 +45,8 @@
             "spikypanda-onnx/*": ["dev/onnx/src/*"],
             "spikypanda-sensors": ["dev/sensors/src/index.ts"],
             "spikypanda-sensors/*": ["dev/sensors/src/*"],
-            "spikypanda-nodeeditor": ["dev/nodeeditor/src/index.ts"],
-            "spikypanda-nodeeditor/*": ["dev/nodeeditor/src/*"],
             "spikypanda-applications-stereo": ["dev/applications/stereo/src/index.ts"],
             "spikypanda-applications-stereo/*": ["dev/applications/stereo/src/*"],
-            "spikypanda-applications-mpc": ["dev/applications/mpc/src/index.ts"],
-            "spikypanda-applications-mpc/*": ["dev/applications/mpc/src/*"],
             "spikypanda-applications-cardriver": ["dev/applications/privates/cardriver/src/index.ts"],
             "spikypanda-applications-cardriver/*": ["dev/applications/privates/cardriver/src/*"]
         },
