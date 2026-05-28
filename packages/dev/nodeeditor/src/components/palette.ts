@@ -123,7 +123,12 @@ export class Palette {
         for (const type of types) {
             const meta = this.registry.meta(type);
             if (!meta) continue;
-            const segments = (meta.category ?? "Other").split("/").filter(Boolean);
+            // Category is split on both `/` and `.` so that sub-plugin
+            // dot-notation (e.g. "Physics.Electric.Motor.DC") produces a
+            // nested folder structure mirroring the id hierarchy, while
+            // legacy single-token categories ("dsp-transform") remain
+            // single-level leaves.
+            const segments = (meta.category ?? "Other").split(/[/.]/).filter(Boolean);
             let node = root;
             const acc: string[] = [];
             for (const seg of segments) {

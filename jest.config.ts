@@ -15,6 +15,11 @@ const config: Config = {
         // module so workspace entry points that `import "./foo.css"`
         // (e.g. spikypanda-nodeeditor) load without error.
         "\\.css$":                      "<rootDir>/jest-css-mock.js",
+        // Relative imports written with the ESM ".js" extension (the
+        // canonical TS-with-ESM-target style used by recent plugins like
+        // physics) must be resolved to the .ts source for jest. Catches
+        // "./foo.js", "../bar/baz.js", etc.
+        "^(\\.{1,2}/.*)\\.js$":         "$1",
         "^spikypanda-core$":            "<rootDir>/packages/dev/core/src/index.ts",
         "^spikypanda-core/(.*)$":       "<rootDir>/packages/dev/core/src/$1",
         "^spikypanda-onnx$":         "<rootDir>/packages/dev/onnx/src/index.ts",

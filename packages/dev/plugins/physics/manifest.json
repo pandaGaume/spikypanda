@@ -1,0 +1,107 @@
+{
+    "id":          "spk.physics",
+    "version":     "0.2.0",
+    "displayName": "Physics",
+    "description": "Physical phenomena nodes organized by domain (electric motors, mechanical faults). V1: brush DC, BLDC + PMSM, bearing/shaft/gear faults, friction, vibration sensor, generic fault modulator.",
+    "category":    "Physics",
+    "entry":       "bundle/SpkPluginPhysics.js",
+    "nodes":       [],
+    "editors":     [],
+    "subPlugins": [
+        {
+            "id":          "Physics.Electric.Motor.DC",
+            "displayName": "DC Motor (brush)",
+            "description": "Separately-excited brush DC motor: dynamic + steady-state, PI speed controller, tachymeter. Defaults tuned for MCSA pipelines (τ_e = 1 ms, stable to dt ≤ 100 µs).",
+            "category":    "Physics.Electric.Motor.DC",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Physics.Electric.Motor.DC:dynamic",    "factory": "createDcMotorDynamicNode",    "label": "DC Motor (Dynamic)" },
+                { "type": "Physics.Electric.Motor.DC:steady",     "factory": "createDcMotorSteadyNode",     "label": "DC Motor (Steady)" },
+                { "type": "Physics.Electric.Motor.DC:speedPI",    "factory": "createDcMotorSpeedPiNode",    "label": "DC Motor Speed PI" },
+                { "type": "Physics.Electric.Motor.DC:tachymeter", "factory": "createDcMotorTachymeterNode", "label": "Tachymeter" }
+            ]
+        },
+        {
+            "id":          "Physics.Electric.Motor.BLDC",
+            "displayName": "BLDC / PMSM",
+            "description": "3-phase brushless motors. BLDC dynamic (trapezoidal back-EMF) and PMSM dynamic (sinusoidal back-EMF) share the same electrical/mechanical structure but produce distinct current signatures. Includes 6-step inverter and BLDC speed PI controller.",
+            "category":    "Physics.Electric.Motor.BLDC",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Physics.Electric.Motor.BLDC:dynamic",  "factory": "createBldcMotorDynamicNode", "label": "BLDC Motor (Dynamic)" },
+                { "type": "Physics.Electric.Motor.BLDC:pmsm",     "factory": "createPmsmMotorDynamicNode", "label": "PMSM Motor (Dynamic, sinusoidal)" },
+                { "type": "Physics.Electric.Motor.BLDC:inverter", "factory": "createBldcInverterNode",     "label": "BLDC 6-step Inverter" },
+                { "type": "Physics.Electric.Motor.BLDC:speedPI",  "factory": "createBldcSpeedPiNode",      "label": "BLDC Speed PI" }
+            ]
+        },
+        {
+            "id":          "Physics.Mechanical.Bearing",
+            "displayName": "Bearing",
+            "description": "Rolling-element bearing fault generator: BPFO/BPFI/BSF/FTF characteristic frequencies computed from geometry and shaft speed, each with its own amplitude knob.",
+            "category":    "Physics.Mechanical.Bearing",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Physics.Mechanical.Bearing:fault", "factory": "createBearingFaultNode", "label": "Bearing Fault Generator" }
+            ]
+        },
+        {
+            "id":          "Physics.Mechanical.Shaft",
+            "displayName": "Shaft",
+            "description": "Shaft unbalance modulator (1× rotation frequency). Integrates shaft angle from omega input.",
+            "category":    "Physics.Mechanical.Shaft",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Physics.Mechanical.Shaft:unbalance", "factory": "createShaftUnbalanceNode", "label": "Shaft Unbalance (1× rotation)" }
+            ]
+        },
+        {
+            "id":          "Physics.Mechanical.Gear",
+            "displayName": "Gear",
+            "description": "Gear mesh harmonic (n_teeth × shaft frequency) plus optional once-per-revolution Gaussian pulse for broken-tooth signatures.",
+            "category":    "Physics.Mechanical.Gear",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Physics.Mechanical.Gear:mesh", "factory": "createGearMeshNode", "label": "Gear Mesh + Tooth Fault" }
+            ]
+        },
+        {
+            "id":          "Physics.Mechanical.Friction",
+            "displayName": "Friction",
+            "description": "Combined Coulomb + Stribeck + viscous friction torque. Editables can be driven over time to model wear.",
+            "category":    "Physics.Mechanical.Friction",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Physics.Mechanical.Friction:coulomb", "factory": "createCoulombFrictionNode", "label": "Coulomb + Stribeck Friction" }
+            ]
+        },
+        {
+            "id":          "Physics.Mechanical.Vibration",
+            "displayName": "Vibration",
+            "description": "Accelerometer transducer (1st-order LPF + Gaussian noise + quantization). Mechanical-domain counterpart to the Motor.DC tachymeter.",
+            "category":    "Physics.Mechanical.Vibration",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Physics.Mechanical.Vibration:accelerometer", "factory": "createAccelerometerNode", "label": "Accelerometer" }
+            ]
+        },
+        {
+            "id":          "Physics.Mechanical.Fault",
+            "displayName": "Fault (generic)",
+            "description": "Generic sinusoidal fault modulator. Composable building block used to inject ad-hoc signatures into any signal stream.",
+            "category":    "Physics.Mechanical.Fault",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Physics.Mechanical.Fault:modulator", "factory": "createFaultModulatorNode", "label": "Fault Modulator" }
+            ]
+        }
+    ],
+    "manifestRefs": []
+}

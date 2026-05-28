@@ -72,7 +72,9 @@ export { transparentDarkSkin, transparentLightSkin } from "./styles/skins/transp
 export { editor, editable, viewable, getEditorSchema } from "spikypanda-core";
 export type { IEditableField, IEditorSchema } from "spikypanda-core";
 export { PORT_COLORS, arePortTypesCompatible } from "./types";
-export type { IPlugin, IPluginContext, IPluginManifest, IPluginNodeEntry, IPluginEditorEntry } from "./plugin.interfaces";
+export type { IPlugin, IPluginContext, IPluginManifest, IPluginNodeEntry, IPluginEditorEntry, ISubPluginManifest } from "./plugin.interfaces";
+export { loadPlugin } from "./plugin.loader";
+export type { LoadPluginOptions, LoadPluginResult } from "./plugin.loader";
 export type {
     PortDirection,
     PortType,
