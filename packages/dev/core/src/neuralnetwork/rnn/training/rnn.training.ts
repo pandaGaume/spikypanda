@@ -47,7 +47,7 @@ export class RnnTrainingRuntime {
         }
 
         const firstHidden = this.graph.hiddens[0] as IRnnNeuron;
-        if ('cellState' in firstHidden) {
+        if ("cellState" in firstHidden) {
             return this._trainLstm(sequence, targets);
         } else {
             return this._trainGru(sequence, targets);
@@ -82,8 +82,8 @@ export class RnnTrainingRuntime {
 
         for (let t = 0; t < T; t++) {
             // Save previous state
-            const prevH = hiddens.map(h => h.hiddenState);
-            const prevC = hiddens.map(h => h.cellState);
+            const prevH = hiddens.map((h) => h.hiddenState);
+            const prevC = hiddens.map((h) => h.cellState);
 
             // Forward one step
             const outputs = this.runtime.step(sequence[t]);
@@ -91,14 +91,14 @@ export class RnnTrainingRuntime {
             // Capture state from context
             states.push({
                 inputs: [...sequence[t]],
-                hiddenStates: hiddens.map(h => h.hiddenState),
-                cellStates: hiddens.map(h => h.cellState),
+                hiddenStates: hiddens.map((h) => h.hiddenState),
+                cellStates: hiddens.map((h) => h.cellState),
                 prevHiddenStates: prevH,
                 prevCellStates: prevC,
-                forgetGates: hiddens.map(h => (h.bag as any).forgetGate),
-                inputGates: hiddens.map(h => (h.bag as any).inputGate),
-                cellCandidates: hiddens.map(h => (h.bag as any).cellCandidate),
-                outputGates: hiddens.map(h => (h.bag as any).outputGate),
+                forgetGates: hiddens.map((h) => (h.bag as any).forgetGate),
+                inputGates: hiddens.map((h) => (h.bag as any).inputGate),
+                cellCandidates: hiddens.map((h) => (h.bag as any).cellCandidate),
+                outputGates: hiddens.map((h) => (h.bag as any).outputGate),
                 outputs: [...outputs],
             });
         }
@@ -136,7 +136,7 @@ export class RnnTrainingRuntime {
             }
 
             // Gradient from output to hidden (via hidden->output synapses)
-            const dh = [...dh_next];  // Start with gradient from future timesteps
+            const dh = [...dh_next]; // Start with gradient from future timesteps
 
             // Accumulate gradients from output layer
             for (let h = 0; h < H; h++) {
@@ -215,12 +215,7 @@ export class RnnTrainingRuntime {
                     if (hTgt < 0) continue;
 
                     // Gradient for recurrent weights
-                    this._accumulateGrad(syn, [
-                        df[hTgt] * hPrev,
-                        di[hTgt] * hPrev,
-                        dcc[hTgt] * hPrev,
-                        doo[hTgt] * hPrev,
-                    ]);
+                    this._accumulateGrad(syn, [df[hTgt] * hPrev, di[hTgt] * hPrev, dcc[hTgt] * hPrev, doo[hTgt] * hPrev]);
 
                     // Propagate gradient to previous timestep
                     dh_next[hSrc] += df[hTgt] * syn.weights[0];
@@ -264,16 +259,16 @@ export class RnnTrainingRuntime {
         const states: IGruTimestepState[] = [];
 
         for (let t = 0; t < T; t++) {
-            const prevH = hiddens.map(h => h.hiddenState);
+            const prevH = hiddens.map((h) => h.hiddenState);
             const outputs = this.runtime.step(sequence[t]);
 
             states.push({
                 inputs: [...sequence[t]],
-                hiddenStates: hiddens.map(h => h.hiddenState),
+                hiddenStates: hiddens.map((h) => h.hiddenState),
                 prevHiddenStates: prevH,
-                resetGates: hiddens.map(h => (h.bag as any).resetGate),
-                updateGates: hiddens.map(h => (h.bag as any).updateGate),
-                candidates: hiddens.map(h => (h.bag as any).candidate),
+                resetGates: hiddens.map((h) => (h.bag as any).resetGate),
+                updateGates: hiddens.map((h) => (h.bag as any).updateGate),
+                candidates: hiddens.map((h) => (h.bag as any).candidate),
                 outputs: [...outputs],
             });
         }
@@ -390,11 +385,7 @@ export class RnnTrainingRuntime {
                     const hTgt = hiddens.indexOf(target);
                     if (hTgt < 0) continue;
 
-                    this._accumulateGrad(syn, [
-                        dr[hTgt] * hPrev,
-                        dz[hTgt] * hPrev,
-                        dhh[hTgt] * st.resetGates[hTgt] * hPrev,
-                    ]);
+                    this._accumulateGrad(syn, [dr[hTgt] * hPrev, dz[hTgt] * hPrev, dhh[hTgt] * st.resetGates[hTgt] * hPrev]);
 
                     // Propagate to previous timestep
                     dh_next[hSrc] += dr[hTgt] * syn.weights[0];
@@ -480,7 +471,7 @@ export class RnnTrainingRuntime {
                     entry.v[g] = beta2 * entry.v[g] + (1 - beta2) * grad * grad;
                     const mHat = entry.m[g] / (1 - Math.pow(beta1, t));
                     const vHat = entry.v[g] / (1 - Math.pow(beta2, t));
-                    syn.weights[g] -= this.learningRate * mHat / (Math.sqrt(vHat) + eps);
+                    syn.weights[g] -= (this.learningRate * mHat) / (Math.sqrt(vHat) + eps);
                 }
             } else {
                 // Regular synapse (hidden->output)
@@ -489,7 +480,7 @@ export class RnnTrainingRuntime {
                 entry.v[0] = beta2 * entry.v[0] + (1 - beta2) * grad * grad;
                 const mHat = entry.m[0] / (1 - Math.pow(beta1, t));
                 const vHat = entry.v[0] / (1 - Math.pow(beta2, t));
-                syn.weight -= this.learningRate * mHat / (Math.sqrt(vHat) + eps);
+                syn.weight -= (this.learningRate * mHat) / (Math.sqrt(vHat) + eps);
             }
 
             // Store optimizer state for next trainStep
@@ -497,4 +488,3 @@ export class RnnTrainingRuntime {
         }
     }
 }
-

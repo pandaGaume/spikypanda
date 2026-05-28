@@ -7,12 +7,7 @@
 // fire them one per tick.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import {
-    IChannel,
-    ISession,
-    ITensor,
-    RuntimeNode,
-} from "spikypanda-core";
+import { IChannel, ISession, ITensor, RuntimeNode } from "spikypanda-core";
 
 export class AccelSource extends RuntimeNode {
     private readonly _samples: number[][];

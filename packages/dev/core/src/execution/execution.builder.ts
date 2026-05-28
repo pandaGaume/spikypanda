@@ -17,10 +17,7 @@ import { Channel } from "./execution.channel";
 import { RuntimeGraph } from "./execution.graph";
 import { IChannel, IRuntimeNode, SchedulingMode } from "./execution.interfaces";
 
-export class RuntimeGraphBuilder<
-    N extends IRuntimeNode = IRuntimeNode,
-    L extends IChannel = IChannel
-> extends GraphBuilder<N, L> {
+export class RuntimeGraphBuilder<N extends IRuntimeNode = IRuntimeNode, L extends IChannel = IChannel> extends GraphBuilder<N, L> {
     protected _mode: SchedulingMode = "dynamic";
     protected _enabled: boolean = true;
 
@@ -53,12 +50,7 @@ export class RuntimeGraphBuilder<
      * can be omitted and defaults to `slot`. UE5-style editors that
      * connect `node.outPortA` to `otherNode.inPortB` pass both.
      */
-    public withChannel(
-        from: N,
-        to: N,
-        slot: string | number = 0,
-        toSlot?: string | number,
-    ): this {
+    public withChannel(from: N, to: N, slot: string | number = 0, toSlot?: string | number): this {
         const channel = this._createChannel(from, to, slot, false, undefined, toSlot);
         return this.withLinks(channel as unknown as L);
     }
@@ -112,7 +104,7 @@ export class RuntimeGraphBuilder<
         slot: string | number,
         delayed: boolean,
         initialValue: T | undefined,
-        toSlot?: string | number,
+        toSlot?: string | number
     ): IChannel<T> {
         return new Channel<T>(oini ?? undefined, ofin ?? undefined, slot, delayed, initialValue, true, toSlot);
     }
@@ -145,15 +137,6 @@ export class RuntimeGraphBuilder<
         // RuntimeGraph does not accept graph-as-node onsc/opsc through
         // its constructor (they are not part of its embedding contract;
         // dangling port channels carry the slot semantics instead).
-        return new RuntimeGraph<N, L>(
-            nodes,
-            links,
-            this._mode,
-            inputs,
-            outputs,
-            hiddens,
-            position,
-            this._enabled
-        );
+        return new RuntimeGraph<N, L>(nodes, links, this._mode, inputs, outputs, hiddens, position, this._enabled);
     }
 }

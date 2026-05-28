@@ -56,8 +56,8 @@ export class StandardsRegistry {
 
     public constructor(populateDefaults = true) {
         if (populateDefaults) {
-            this.register({ id: "onnx", label: "ONNX",   color: "#1B3A6B", glyph: "O", homeUrl: "https://onnx.ai",              defaultVersion: "1.18" });
-            this.register({ id: "ue5",  label: "Unreal", color: "#3FA9F5", glyph: "U", homeUrl: "https://www.unrealengine.com", defaultVersion: "5.3" });
+            this.register({ id: "onnx", label: "ONNX", color: "#1B3A6B", glyph: "O", homeUrl: "https://onnx.ai", defaultVersion: "1.18" });
+            this.register({ id: "ue5", label: "Unreal", color: "#3FA9F5", glyph: "U", homeUrl: "https://www.unrealengine.com", defaultVersion: "5.3" });
         }
     }
 
@@ -93,17 +93,13 @@ export class StandardsRegistry {
  * callers can apply additional styling or remove it later. Returns
  * null when there is nothing to render so callers can branch cleanly.
  */
-export function renderStandardShields(
-    container: HTMLElement,
-    standards: ReadonlyArray<StandardSpec> | undefined,
-    registry: StandardsRegistry,
-): HTMLDivElement | null {
+export function renderStandardShields(container: HTMLElement, standards: ReadonlyArray<StandardSpec> | undefined, registry: StandardsRegistry): HTMLDivElement | null {
     if (!standards || standards.length === 0) return null;
     const wrap = document.createElement("div");
     wrap.className = "ne-standard-shields";
     for (const spec of standards) {
         const entry = normalizeStandardSpec(spec);
-        const info  = registry.get(entry.id);
+        const info = registry.get(entry.id);
         const version = entry.version ?? info?.defaultVersion;
 
         const shield = document.createElement("span");

@@ -29,7 +29,7 @@ export class Graph<N extends INode, L extends IOlink> extends GraphNode implemen
     }
 
     public clone(): any {
-        var copy = super.clone();
+        const copy = super.clone();
         copy.nodes = this.nodes.map((n) => n.clone());
         copy.links = this.links.map((l) => {
             const cloned = l.clone();

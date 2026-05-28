@@ -1,8 +1,4 @@
-import {
-    cloneable, editable, viewable,
-    IChannel, IDeclaresPorts, IOlink, IPortDescriptor,
-    ISession, RuntimeNode, inSlotOf,
-} from "spikypanda-core";
+import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, RuntimeNode, inSlotOf } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
 
 /**
@@ -32,48 +28,76 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  *   omega_measured  filtered + noisy + quantized speed
  */
 export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts {
-    @cloneable private _noiseStd:    number = 0.5;    // [rad/s]
-    @cloneable private _resolution:  number = 0.1;    // [rad/s] (0 = disabled)
-    @cloneable private _bandwidthHz: number = 100;    // [Hz]   (0 = bypass LPF)
-    @cloneable private _seed:        number = 1;
+    @cloneable private _noiseStd: number = 0.5; // [rad/s]
+    @cloneable private _resolution: number = 0.1; // [rad/s] (0 = disabled)
+    @cloneable private _bandwidthHz: number = 100; // [Hz]   (0 = bypass LPF)
+    @cloneable private _seed: number = 1;
 
     @cloneable private _filtered: number = 0;
     @cloneable private _measured: number = 0;
-    private _rng:   number = 1;
+    private _rng: number = 1;
     private _lastT: number = -1;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
         { slot: "omega", optional: true, type: "float" },
-        { slot: "dt",    optional: true, type: "float" },
+        { slot: "dt", optional: true, type: "float" },
     ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "omega_measured", optional: false, type: "float" },
-    ];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "omega_measured", optional: false, type: "float" }];
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
-    @editable("number") public get noiseStd(): number { return this._noiseStd; }
-    public set noiseStd(v: number) { this.setField("noiseStd", this._noiseStd, v, (n) => { this._noiseStd = n; }); }
+    @editable("number") public get noiseStd(): number {
+        return this._noiseStd;
+    }
+    public set noiseStd(v: number) {
+        this.setField("noiseStd", this._noiseStd, v, (n) => {
+            this._noiseStd = n;
+        });
+    }
 
-    @editable("number") public get resolution(): number { return this._resolution; }
-    public set resolution(v: number) { this.setField("resolution", this._resolution, v, (n) => { this._resolution = n; }); }
+    @editable("number") public get resolution(): number {
+        return this._resolution;
+    }
+    public set resolution(v: number) {
+        this.setField("resolution", this._resolution, v, (n) => {
+            this._resolution = n;
+        });
+    }
 
-    @editable("number") public get bandwidthHz(): number { return this._bandwidthHz; }
-    public set bandwidthHz(v: number) { this.setField("bandwidthHz", this._bandwidthHz, v, (n) => { this._bandwidthHz = n; }); }
+    @editable("number") public get bandwidthHz(): number {
+        return this._bandwidthHz;
+    }
+    public set bandwidthHz(v: number) {
+        this.setField("bandwidthHz", this._bandwidthHz, v, (n) => {
+            this._bandwidthHz = n;
+        });
+    }
 
-    @editable("number") public get seed(): number { return this._seed; }
-    public set seed(v: number) { this.setField("seed", this._seed, v, (n) => { this._seed = n; }); }
+    @editable("number") public get seed(): number {
+        return this._seed;
+    }
+    public set seed(v: number) {
+        this.setField("seed", this._seed, v, (n) => {
+            this._seed = n;
+        });
+    }
 
-    @viewable("number") public get filtered(): number { return this._filtered; }
-    @viewable("number") public get omega_measured(): number { return this._measured; }
+    @viewable("number") public get filtered(): number {
+        return this._filtered;
+    }
+    @viewable("number") public get omega_measured(): number {
+        return this._measured;
+    }
 
     public override reset(_session: ISession): void {
-        this.setField("filtered", this._filtered, 0, (n) => { this._filtered = n; });
-        this.setField("omega_measured", this._measured, 0, (n) => { this._measured = n; });
+        this.setField("filtered", this._filtered, 0, (n) => {
+            this._filtered = n;
+        });
+        this.setField("omega_measured", this._measured, 0, (n) => {
+            this._measured = n;
+        });
         this._rng = Math.max(1, Math.floor(this._seed));
         this._lastT = -1;
     }
@@ -81,7 +105,8 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
     public override fire(session: ISession, t: number): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
 
-        let omega = 0, dt = -1;
+        let omega = 0,
+            dt = -1;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const slot = inSlotOf(link);
@@ -101,10 +126,10 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
         // to passthrough rather than overshooting (alpha would exceed 1).
         let newFiltered = this._filtered;
         if (this._bandwidthHz <= 0) {
-            newFiltered = omega;   // bypass
+            newFiltered = omega; // bypass
         } else if (dt > 0) {
             const tau = 1 / (2 * Math.PI * this._bandwidthHz);
-            const alpha = dt / (tau + dt);   // implicit Euler, always in [0,1]
+            const alpha = dt / (tau + dt); // implicit Euler, always in [0,1]
             newFiltered = this._filtered + alpha * (omega - this._filtered);
         }
 
@@ -114,8 +139,12 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
             measured = Math.round(measured / this._resolution) * this._resolution;
         }
 
-        this.setField("filtered",       this._filtered, newFiltered, (n) => { this._filtered = n; });
-        this.setField("omega_measured", this._measured, measured,    (n) => { this._measured = n; });
+        this.setField("filtered", this._filtered, newFiltered, (n) => {
+            this._filtered = n;
+        });
+        this.setField("omega_measured", this._measured, measured, (n) => {
+            this._measured = n;
+        });
 
         for (const link of this.onsc<IChannel>()) {
             if (link.slot !== "omega_measured" || !link.enabled) continue;

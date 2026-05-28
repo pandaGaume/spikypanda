@@ -10,9 +10,9 @@ import { ILayerNorm } from "./vit.interfaces";
 /// </summary>
 export function softmax(values: number[]): number[] {
     const max = Math.max(...values);
-    const exps = values.map(v => Math.exp(v - max));
+    const exps = values.map((v) => Math.exp(v - max));
     const sum = exps.reduce((a, b) => a + b, 0);
-    return exps.map(e => e / sum);
+    return exps.map((e) => e / sum);
 }
 
 /// <summary>
@@ -78,10 +78,7 @@ export function createLayerNorm(size: number, epsilon: number = 1e-5): ILayerNor
 ///
 ///   output_i = gamma_i * (x_i - mean) / sqrt(var + eps) + beta_i
 /// </summary>
-export function layerNormForward(
-    values: number[],
-    norm: ILayerNorm,
-): { output: number[]; mean: number; invStd: number; normalized: number[] } {
+export function layerNormForward(values: number[], norm: ILayerNorm): { output: number[]; mean: number; invStd: number; normalized: number[] } {
     const n = values.length;
 
     // Compute mean
@@ -114,12 +111,7 @@ export function layerNormForward(
 /// Backpropagation through layer normalization.
 /// Returns gradients w.r.t. input, gamma, and beta.
 /// </summary>
-export function layerNormBackward(
-    upstreamGrad: number[],
-    normalized: number[],
-    invStd: number,
-    norm: ILayerNorm,
-): { dInput: number[]; dGamma: number[]; dBeta: number[] } {
+export function layerNormBackward(upstreamGrad: number[], normalized: number[], invStd: number, norm: ILayerNorm): { dInput: number[]; dGamma: number[]; dBeta: number[] } {
     const n = upstreamGrad.length;
 
     // dGamma and dBeta
@@ -145,11 +137,11 @@ export function layerNormBackward(
         dmean += dnorm[i];
     }
     dvar *= -0.5 * invStd;
-    dmean = -invStd * dmean / n + dvar * (-2 / n) * normalized.reduce((s, v) => s + v, 0);
+    dmean = (-invStd * dmean) / n + dvar * (-2 / n) * normalized.reduce((s, v) => s + v, 0);
 
     const dInput = new Array(n);
     for (let i = 0; i < n; i++) {
-        dInput[i] = dnorm[i] * invStd + dvar * 2 * normalized[i] / n + dmean / n;
+        dInput[i] = dnorm[i] * invStd + (dvar * 2 * normalized[i]) / n + dmean / n;
     }
 
     return { dInput, dGamma, dBeta };

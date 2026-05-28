@@ -92,12 +92,7 @@ export class GraphItem<B = unknown> implements IGraphItem<B> {
      * Returns true if the value changed (write + notify happened),
      * false if the call was a no-op.
      */
-    protected setField<T>(
-        propertyName: string,
-        currentValue: T,
-        newValue: T,
-        writer: (value: T) => void,
-    ): boolean {
+    protected setField<T>(propertyName: string, currentValue: T, newValue: T, writer: (value: T) => void): boolean {
         if (currentValue === newValue) {
             return false;
         }

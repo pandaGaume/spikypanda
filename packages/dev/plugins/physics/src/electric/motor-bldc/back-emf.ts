@@ -12,8 +12,8 @@
  * Phase offsets follow the standard a/b/c convention: phase b lags by
  * 2π/3, phase c lags by 4π/3.
  */
-export const PHASE_OFFSET_B = -2 * Math.PI / 3;
-export const PHASE_OFFSET_C = -4 * Math.PI / 3;
+export const PHASE_OFFSET_B = (-2 * Math.PI) / 3;
+export const PHASE_OFFSET_C = (-4 * Math.PI) / 3;
 
 /**
  * Trapezoidal back-EMF shape, normalized to [-1, +1]. Pattern over one
@@ -29,9 +29,9 @@ export const PHASE_OFFSET_C = -4 * Math.PI / 3;
 export function trapezoidalBackEmf(thetaE: number): number {
     const TWO_PI = 2 * Math.PI;
     const t = ((thetaE % TWO_PI) + TWO_PI) % TWO_PI;
-    if (t < Math.PI / 3)         return -1 + (6 / Math.PI) * t;
-    if (t < Math.PI)             return 1;
-    if (t < 4 * Math.PI / 3)     return 1 - (6 / Math.PI) * (t - Math.PI);
+    if (t < Math.PI / 3) return -1 + (6 / Math.PI) * t;
+    if (t < Math.PI) return 1;
+    if (t < (4 * Math.PI) / 3) return 1 - (6 / Math.PI) * (t - Math.PI);
     return -1;
 }
 
@@ -48,6 +48,6 @@ export function sinusoidalBackEmf(thetaE: number): number {
  */
 export function hallSector(thetaE: number): number {
     const TWO_PI = 2 * Math.PI;
-    const t = ((thetaE + Math.PI / 6) % TWO_PI + TWO_PI) % TWO_PI;
+    const t = (((thetaE + Math.PI / 6) % TWO_PI) + TWO_PI) % TWO_PI;
     return Math.floor(t / (Math.PI / 3));
 }

@@ -31,15 +31,51 @@ export class VitBuilder {
         return this;
     }
 
-    public withWidth(w: number): VitBuilder { this._ensureConfig(); this._config!.width = w; return this; }
-    public withHeight(h: number): VitBuilder { this._ensureConfig(); this._config!.height = h; return this; }
-    public withChannels(c: number): VitBuilder { this._ensureConfig(); this._config!.channels = c; return this; }
-    public withPatchSize(p: number): VitBuilder { this._ensureConfig(); this._config!.patchSize = p; return this; }
-    public withEmbedDim(d: number): VitBuilder { this._ensureConfig(); this._config!.embedDim = d; return this; }
-    public withNumHeads(h: number): VitBuilder { this._ensureConfig(); this._config!.numHeads = h; return this; }
-    public withNumBlocks(b: number): VitBuilder { this._ensureConfig(); this._config!.numBlocks = b; return this; }
-    public withMlpRatio(r: number): VitBuilder { this._ensureConfig(); this._config!.mlpRatio = r; return this; }
-    public withNumClasses(c: number): VitBuilder { this._ensureConfig(); this._config!.numClasses = c; return this; }
+    public withWidth(w: number): VitBuilder {
+        this._ensureConfig();
+        this._config!.width = w;
+        return this;
+    }
+    public withHeight(h: number): VitBuilder {
+        this._ensureConfig();
+        this._config!.height = h;
+        return this;
+    }
+    public withChannels(c: number): VitBuilder {
+        this._ensureConfig();
+        this._config!.channels = c;
+        return this;
+    }
+    public withPatchSize(p: number): VitBuilder {
+        this._ensureConfig();
+        this._config!.patchSize = p;
+        return this;
+    }
+    public withEmbedDim(d: number): VitBuilder {
+        this._ensureConfig();
+        this._config!.embedDim = d;
+        return this;
+    }
+    public withNumHeads(h: number): VitBuilder {
+        this._ensureConfig();
+        this._config!.numHeads = h;
+        return this;
+    }
+    public withNumBlocks(b: number): VitBuilder {
+        this._ensureConfig();
+        this._config!.numBlocks = b;
+        return this;
+    }
+    public withMlpRatio(r: number): VitBuilder {
+        this._ensureConfig();
+        this._config!.mlpRatio = r;
+        return this;
+    }
+    public withNumClasses(c: number): VitBuilder {
+        this._ensureConfig();
+        this._config!.numClasses = c;
+        return this;
+    }
 
     /// <summary>
     /// Builds the complete ViT graph with weight matrices.
@@ -137,10 +173,14 @@ export class VitBuilder {
             const mlp2Bias = new Array(c.embedDim).fill(0);
 
             blockWeights.push({
-                qkvWeights, qkvBias,
-                projWeights, projBias,
-                mlp1Weights, mlp1Bias,
-                mlp2Weights, mlp2Bias,
+                qkvWeights,
+                qkvBias,
+                projWeights,
+                projBias,
+                mlp1Weights,
+                mlp1Bias,
+                mlp2Weights,
+                mlp2Bias,
             });
         }
 
@@ -212,9 +252,15 @@ export class VitBuilder {
     private _ensureConfig(): void {
         if (!this._config) {
             this._config = {
-                width: 28, height: 28, channels: 1,
-                patchSize: 7, embedDim: 64, numHeads: 4,
-                numBlocks: 2, mlpRatio: 2, numClasses: 10,
+                width: 28,
+                height: 28,
+                channels: 1,
+                patchSize: 7,
+                embedDim: 64,
+                numHeads: 4,
+                numBlocks: 2,
+                mlpRatio: 2,
+                numClasses: 10,
             };
         }
     }

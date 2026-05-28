@@ -1,13 +1,4 @@
-import {
-    ActivationFunctions,
-    Glorot,
-    IMlpGraph,
-    LayerConnectionBuilder,
-    LayerConnectionType,
-    MLPInferenceRuntime,
-    MlpSynapseBuilder,
-    PerceptronBuilder,
-} from "spikypanda-core";
+import { ActivationFunctions, Glorot, IMlpGraph, LayerConnectionBuilder, LayerConnectionType, MLPInferenceRuntime, MlpSynapseBuilder, PerceptronBuilder } from "spikypanda-core";
 import { SimConfig } from "./bestioles.config";
 import { ICreatureBrain } from "./bestioles.interfaces";
 

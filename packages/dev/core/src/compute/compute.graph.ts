@@ -118,7 +118,7 @@ export class ComputeGraph extends RuntimeGraph<IKernel, IDataLink> implements IC
     private _collectResults(): Map<string, ITensor> {
         const result = new Map<string, ITensor>();
         for (const node of this.outputs) {
-            const bag = node.bag ;
+            const bag = node.bag;
             if (!bag?.lastOutputs) {
                 continue;
             }

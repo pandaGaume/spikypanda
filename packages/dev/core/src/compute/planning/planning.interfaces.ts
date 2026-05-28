@@ -31,9 +31,9 @@ export type PlanDType = "float32" | "int32" | "int8" | "uint8";
 /** Bytes-per-element for each supported planning dtype. */
 export const PLAN_DTYPE_BYTES: Record<PlanDType, number> = {
     float32: 4,
-    int32:   4,
-    int8:    1,
-    uint8:   1,
+    int32: 4,
+    int8: 1,
+    uint8: 1,
 };
 
 // ─── Lifetimes (graph projection) ────────────────────────────────────────────
@@ -139,10 +139,7 @@ export interface IAllocationStrategy {
     /** Stable identifier surfaced in plan metadata and UIs. */
     readonly name: string;
 
-    plan(
-        lifetimes: readonly ITensorLifetime[],
-        schedule: readonly string[],
-    ): IAllocationPlan;
+    plan(lifetimes: readonly ITensorLifetime[], schedule: readonly string[]): IAllocationPlan;
 }
 
 /**

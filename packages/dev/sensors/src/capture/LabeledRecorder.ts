@@ -69,13 +69,13 @@ export class LabeledRecorder implements IRecorder {
     // Pick a new scenario at random, weighted by IScenario.weight (default 1
     // when unset). Useful between training windows to balance class exposure.
     public randomizeScenario(): void {
-        const weights = this.scenarios.map(s => s.weight ?? 1);
+        const weights = this.scenarios.map((s) => s.weight ?? 1);
         const picked = this._rng.pickWeighted(this.scenarios, weights);
         this.activate(picked);
     }
 
     public setScenarioByLabel(label: string): void {
-        const found = this.scenarios.find(s => s.label === label);
+        const found = this.scenarios.find((s) => s.label === label);
         if (!found) {
             throw new Error(`LabeledRecorder: unknown scenario "${label}"`);
         }

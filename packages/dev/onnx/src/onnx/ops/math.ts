@@ -115,8 +115,8 @@ class GemmNode extends OnnxOpNode {
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.alpha  = this.attr("alpha", 1.0);
-        this.beta   = this.attr("beta", 1.0);
+        this.alpha = this.attr("alpha", 1.0);
+        this.beta = this.attr("beta", 1.0);
         this.transA = this.attrInt("transA", 0) !== 0;
         this.transB = this.attrInt("transB", 0) !== 0;
     }
@@ -134,7 +134,8 @@ class GemmNode extends OnnxOpNode {
         const N = this.transB ? bR : bC;
 
         const out = new Float32Array(M * N);
-        const aData = A.data, bData = B.data;
+        const aData = A.data,
+            bData = B.data;
 
         if (!this.transA && !this.transB) {
             // Hot path: outer-i × inner-k × innermost-n with reused row.

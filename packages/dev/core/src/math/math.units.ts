@@ -6,7 +6,12 @@ export interface IUnitConverter {
 }
 
 export class Unit {
-    public constructor(public name: string, public symbol: string, public value: number = 0, public converter?: IUnitConverter) {}
+    public constructor(
+        public name: string,
+        public symbol: string,
+        public value: number = 0,
+        public converter?: IUnitConverter
+    ) {}
 }
 
 const _defaultDecimalPrecision = 6;

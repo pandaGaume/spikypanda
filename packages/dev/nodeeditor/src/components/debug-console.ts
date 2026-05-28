@@ -36,8 +36,8 @@ export interface DebugConsoleOptions {
 export class DebugConsole implements IDisposable {
     public readonly host: HTMLElement;
 
-    private readonly _bodyEl:    HTMLDivElement;
-    private readonly _emptyEl:   HTMLDivElement;
+    private readonly _bodyEl: HTMLDivElement;
+    private readonly _emptyEl: HTMLDivElement;
     private readonly _toggleBtn: HTMLButtonElement;
     private readonly _subscription: IDisposable;
     private readonly _maxRows: number;
@@ -85,8 +85,7 @@ export class DebugConsole implements IDisposable {
 
         this._emptyEl = document.createElement("div");
         this._emptyEl.className = "ne-console-empty";
-        this._emptyEl.textContent =
-            "No log entries yet. Wire a Print String node and Run Once.";
+        this._emptyEl.textContent = "No log entries yet. Wire a Print String node and Run Once.";
         this._bodyEl.appendChild(this._emptyEl);
 
         if (options.startCollapsed) this.setCollapsed(true);
@@ -162,9 +161,9 @@ export class DebugConsole implements IDisposable {
 
     private _fmtTs(ms: number): string {
         const d = new Date(ms);
-        const hh  = String(d.getHours()).padStart(2, "0");
-        const mm  = String(d.getMinutes()).padStart(2, "0");
-        const ss  = String(d.getSeconds()).padStart(2, "0");
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mm = String(d.getMinutes()).padStart(2, "0");
+        const ss = String(d.getSeconds()).padStart(2, "0");
         const mss = String(d.getMilliseconds()).padStart(3, "0");
         return hh + ":" + mm + ":" + ss + "." + mss;
     }

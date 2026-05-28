@@ -78,20 +78,29 @@ export interface IPmsmScenarioOptions {
 // coupling, so this is what one wants by default.
 export function defaultEcxPrimeEnvBuilder(): (sim: PmsmSimulation, gv: GravityVector) => ReadonlyArray<IPmsmEnvNode> {
     return (_sim, gv) => [
-        new RotorSagModel({
-            rotorMass: MAXON_ECX_PRIME_ENV_DEFAULTS.rotorMass,
-            bearingRadialStiffness: MAXON_ECX_PRIME_ENV_DEFAULTS.bearingRadialStiffness,
-            airGap: MAXON_ECX_PRIME_ENV_DEFAULTS.airGap,
-            umpRadialStiffness: MAXON_ECX_PRIME_ENV_DEFAULTS.umpRadialStiffness,
-        }, gv),
-        new BearingPreloadModel({
-            rotorMass: MAXON_ECX_PRIME_ENV_DEFAULTS.rotorMass,
-            nominalAxialPreload: MAXON_ECX_PRIME_ENV_DEFAULTS.nominalAxialPreload,
-            nominalRadialPreload: MAXON_ECX_PRIME_ENV_DEFAULTS.nominalRadialPreload,
-        }, gv),
-        new MountingComplianceModel({
-            motorMass: MAXON_ECX_PRIME_ENV_DEFAULTS.motorMass,
-        }, gv),
+        new RotorSagModel(
+            {
+                rotorMass: MAXON_ECX_PRIME_ENV_DEFAULTS.rotorMass,
+                bearingRadialStiffness: MAXON_ECX_PRIME_ENV_DEFAULTS.bearingRadialStiffness,
+                airGap: MAXON_ECX_PRIME_ENV_DEFAULTS.airGap,
+                umpRadialStiffness: MAXON_ECX_PRIME_ENV_DEFAULTS.umpRadialStiffness,
+            },
+            gv
+        ),
+        new BearingPreloadModel(
+            {
+                rotorMass: MAXON_ECX_PRIME_ENV_DEFAULTS.rotorMass,
+                nominalAxialPreload: MAXON_ECX_PRIME_ENV_DEFAULTS.nominalAxialPreload,
+                nominalRadialPreload: MAXON_ECX_PRIME_ENV_DEFAULTS.nominalRadialPreload,
+            },
+            gv
+        ),
+        new MountingComplianceModel(
+            {
+                motorMass: MAXON_ECX_PRIME_ENV_DEFAULTS.motorMass,
+            },
+            gv
+        ),
     ];
 }
 
@@ -117,8 +126,14 @@ export function buildPmsmSource(opts: IPmsmScenarioOptions): IMultiChannelSource
     const gravityVector = new GravityVector(gravityField, motorTransform);
 
     const sim = new PmsmSimulation({
-        machine, foc, modulator, inverter, housing,
-        gravityField, motorTransform, gravityVector,
+        machine,
+        foc,
+        modulator,
+        inverter,
+        housing,
+        gravityField,
+        motorTransform,
+        gravityVector,
         env: [],
         faults: [],
     });
@@ -131,8 +146,7 @@ export function buildPmsmSource(opts: IPmsmScenarioOptions): IMultiChannelSource
     (sim as unknown as { faults: ReadonlyArray<IPmsmFaultNode> }).faults = faults;
 
     const overrides = opts.overrideSensorConfig ?? {};
-    const channel = (key: string, source: IDataSource, defaultCfg: ISensorConfig): [string, IMultiChannelChannel] =>
-        [key, { source, sensorConfig: overrides[key] ?? defaultCfg }];
+    const channel = (key: string, source: IDataSource, defaultCfg: ISensorConfig): [string, IMultiChannelChannel] => [key, { source, sensorConfig: overrides[key] ?? defaultCfg }];
 
     const channels = new Map<string, IMultiChannelChannel>([
         channel("i_a", new PhaseCurrentSource(sim, 0), DEFAULT_PHASE_CURRENT),
@@ -197,11 +211,7 @@ export function pmsmEccentricityScenario(severity: number, label: string = `ecce
 // Orientation / field overrides : same scenario, different gravity context.
 // Useful for the decisive ground test (compare horizontal vs vertical) and
 // for the flight phase (microgravity).
-export function pmsmHealthyOriented(
-    motorTransform: MotorTransform,
-    gravityField: GravityField,
-    label?: string,
-): IMultiChannelScenario {
+export function pmsmHealthyOriented(motorTransform: MotorTransform, gravityField: GravityField, label?: string): IMultiChannelScenario {
     const computedLabel = label ?? `healthy__${motorTransform.label}__${gravityField.label}`;
     return buildPmsmScenario({
         label: computedLabel,

@@ -87,7 +87,7 @@ export function asymmetricParamsFromRange(min: number, max: number, dtype: Quant
     if (hi_r > lo_r) {
         scale = (hi_r - lo_r) / (hi - lo);
     } else {
-        scale = 1;  // degenerate constant tensor
+        scale = 1; // degenerate constant tensor
     }
     // zero_point picks the integer that maps real 0 onto the integer
     // grid. round_half_even avoids bias.
@@ -106,7 +106,7 @@ export function symmetricParamsFromAbsMax(absMax: number, dtype: QuantDType): { 
     if (dtype !== "int8") {
         throw new Error("symmetric quantization is only meaningful for signed int8");
     }
-    const range = absMax > 0 ? absMax : 1;  // avoid /0 on all-zero tensors
+    const range = absMax > 0 ? absMax : 1; // avoid /0 on all-zero tensors
     return { scale: range / 127, zeroPoint: 0 };
 }
 

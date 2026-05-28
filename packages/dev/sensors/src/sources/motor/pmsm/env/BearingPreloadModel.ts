@@ -22,8 +22,8 @@ import { IPmsmEnvNode } from "./IPmsmEnvNode";
 // translation into contact angle alpha_eff and into BPFI / BPFO offsets
 // belongs to BearingRaceFault.
 export interface IBearingPreloadConfig {
-    rotorMass: number;            // kg
-    nominalAxialPreload: number;  // N
+    rotorMass: number; // kg
+    nominalAxialPreload: number; // N
     nominalRadialPreload: number; // N
     label?: string;
 }
@@ -44,8 +44,12 @@ export class BearingPreloadModel implements IPmsmEnvNode {
         this.gravity = gravity;
     }
 
-    public advance(_t: number): void { /* stateless */ }
-    public reset(): void { /* stateless */ }
+    public advance(_t: number): void {
+        /* stateless */
+    }
+    public reset(): void {
+        /* stateless */
+    }
 
     // Phase 1 : preStep is a no-op (no consumer). preStep is here so
     // future Phase 2 wiring can hook into the contract uniformly.

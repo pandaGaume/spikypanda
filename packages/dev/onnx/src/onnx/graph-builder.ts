@@ -132,11 +132,7 @@ export class OnnxGraphBuilder {
                 console.warn(`No producer for tensor: ${consumer.tensorName}`);
                 continue;
             }
-            const link = new DataLink(
-                producer.node as IKernel,
-                consumer.node as IKernel,
-                consumer.inputIndex,
-            );
+            const link = new DataLink(producer.node as IKernel, consumer.node as IKernel, consumer.inputIndex);
             links.push(link);
         }
 

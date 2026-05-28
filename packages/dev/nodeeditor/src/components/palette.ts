@@ -95,7 +95,9 @@ export class Palette {
     }
 
     /** Read-only snapshot of paths the user has manually collapsed. */
-    public get collapsedPaths(): ReadonlySet<string> { return this._collapsedPaths; }
+    public get collapsedPaths(): ReadonlySet<string> {
+        return this._collapsedPaths;
+    }
 
     /** Re-read the registry and rebuild the tree. Preserves collapse state. */
     public refresh(): void {
@@ -174,7 +176,7 @@ export class Palette {
         const folder = document.createElement("div");
         folder.className = "ne-palette-folder";
         folder.dataset.depth = String(depth);
-        folder.dataset.path  = node.path;
+        folder.dataset.path = node.path;
 
         const collapsed = this._isCollapsed(node.path);
         if (collapsed) folder.classList.add("is-collapsed");

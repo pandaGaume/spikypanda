@@ -25,7 +25,7 @@ import { buildSessionFromViewer, disposeChannels } from "./graph-session-builder
  */
 export class GraphInferrer implements IDisposable {
     public onError: ((error: Error) => void) | null = null;
-    public onDone:  ((t: number) => void) | null = null;
+    public onDone: ((t: number) => void) | null = null;
 
     private readonly _viewer: GraphViewer;
     private _disposed = false;

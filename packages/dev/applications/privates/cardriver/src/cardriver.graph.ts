@@ -15,17 +15,7 @@
 // warm-up ticks.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import {
-    ActivationFunctions,
-    Channel,
-    CnnBuilder,
-    CnnInferenceRuntime,
-    IActivationFunction,
-    PoolingType,
-    RuntimeGraph,
-    RuntimeGraphBuilder,
-    RuntimeNode,
-} from "spikypanda-core";
+import { ActivationFunctions, Channel, CnnBuilder, CnnInferenceRuntime, IActivationFunction, PoolingType, RuntimeGraph, RuntimeGraphBuilder, RuntimeNode } from "spikypanda-core";
 
 import { AccelSource } from "./nodes/accel.source";
 import { WindowNode } from "./nodes/window.node";
@@ -122,9 +112,7 @@ export interface DrivingSignaturePipeline {
  * to every node so the caller can drive (feed samples) and inspect
  * (read embeddings) without hunting through graph.nodes.
  */
-export function buildDrivingSignaturePipeline(
-    opts: BuildDrivingSignaturePipelineOptions = {}
-): DrivingSignaturePipeline {
+export function buildDrivingSignaturePipeline(opts: BuildDrivingSignaturePipelineOptions = {}): DrivingSignaturePipeline {
     const samples = opts.samples ?? [];
     const activation = opts.activation ?? ActivationFunctions.relu;
     const cnnRuntime = opts.cnn ?? buildDefaultCnn(activation);
@@ -144,9 +132,7 @@ export function buildDrivingSignaturePipeline(
 
     // Pipeline chain: source → [normKernel] → window → normalize → cnn → sink.
     // When withNorm is false, the source emits 4-channel samples directly.
-    const chain: RuntimeNode[] = normKernel
-        ? [source, normKernel, window, normalizeKernel, cnnAdapter, sink]
-        : [source, window, normalizeKernel, cnnAdapter, sink];
+    const chain: RuntimeNode[] = normKernel ? [source, normKernel, window, normalizeKernel, cnnAdapter, sink] : [source, window, normalizeKernel, cnnAdapter, sink];
 
     const graph = new RuntimeGraphBuilder<RuntimeNode, Channel>()
         .withMode("dynamic")

@@ -27,14 +27,14 @@ import type { Port } from "./port";
  */
 export class VariadicReconciler implements IDisposable {
     private readonly _viewer: GraphViewer;
-    private readonly _prevAdd:    ((c: unknown) => void) | null;
+    private readonly _prevAdd: ((c: unknown) => void) | null;
     private readonly _prevRemove: ((c: unknown) => void) | null;
     private _disposed = false;
 
     public constructor(viewer: GraphViewer) {
         this._viewer = viewer;
-        this._prevAdd    = (viewer.onConnectionAdded   as unknown) as ((c: unknown) => void) | null;
-        this._prevRemove = (viewer.onConnectionRemoved as unknown) as ((c: unknown) => void) | null;
+        this._prevAdd = viewer.onConnectionAdded as unknown as ((c: unknown) => void) | null;
+        this._prevRemove = viewer.onConnectionRemoved as unknown as ((c: unknown) => void) | null;
 
         (viewer.onConnectionAdded as unknown) = (conn: unknown) => {
             if (this._prevAdd) this._prevAdd(conn);
@@ -51,7 +51,7 @@ export class VariadicReconciler implements IDisposable {
     public dispose(): void {
         if (this._disposed) return;
         this._disposed = true;
-        (this._viewer.onConnectionAdded   as unknown) = this._prevAdd;
+        (this._viewer.onConnectionAdded as unknown) = this._prevAdd;
         (this._viewer.onConnectionRemoved as unknown) = this._prevRemove;
     }
 
@@ -107,14 +107,14 @@ export class VariadicReconciler implements IDisposable {
     private _isPortConnected(port: Port): boolean {
         for (const c of this._viewer.connections) {
             if ((c as { from: Port; to: Port }).from === port) return true;
-            if ((c as { from: Port; to: Port }).to   === port) return true;
+            if ((c as { from: Port; to: Port }).to === port) return true;
         }
         return false;
     }
 
     private _addVariadicPort(node: NodeUI, direction: "input" | "output", name: string, type: string): void {
         if (direction === "input") node.addInput(name, type as never);
-        else                       node.addOutput(name, type as never);
+        else node.addOutput(name, type as never);
     }
 
     private _removeVariadicPort(node: NodeUI, port: Port): void {
@@ -128,7 +128,7 @@ export class VariadicReconciler implements IDisposable {
             remove.call(this._viewer, node, port);
         } else {
             if (port.direction === "input") node.removeInput(port);
-            else                            node.removeOutput(port);
+            else node.removeOutput(port);
         }
     }
 }

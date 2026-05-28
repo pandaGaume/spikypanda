@@ -69,15 +69,11 @@ function duplicateLeafInputs(editor: IGraphLayoutTarget): void {
 
     for (const node of snapshot) {
         // Only leaf inputs (no incoming connections)
-        const hasIncoming = editor.connections.some((c) =>
-            node.inputs.some((p) => c.to === p),
-        );
+        const hasIncoming = editor.connections.some((c) => node.inputs.some((p) => c.to === p));
         if (hasIncoming) continue;
 
         // Collect outgoing connections grouped per consumer node
-        const outConns = editor.connections.filter((c) =>
-            node.outputs.some((p) => c.from === p),
-        );
+        const outConns = editor.connections.filter((c) => node.outputs.some((p) => c.from === p));
         if (outConns.length <= 1) continue; // single consumer — no need to duplicate
 
         const def = nodeDefFrom(node);
@@ -124,11 +120,7 @@ function buildAdjacency(editor: IGraphLayoutTarget) {
 }
 
 /** Kahn's algorithm — assign nodes to layers (columns). */
-function assignLayers(
-    editor: IGraphLayoutTarget,
-    successors: Map<string, Set<string>>,
-    predecessors: Map<string, Set<string>>,
-): string[][] {
+function assignLayers(editor: IGraphLayoutTarget, successors: Map<string, Set<string>>, predecessors: Map<string, Set<string>>): string[][] {
     const inDegree = new Map<string, number>();
     for (const n of editor.nodes) {
         inDegree.set(n.id, predecessors.get(n.id)!.size);
@@ -178,11 +170,7 @@ function assignLayers(
  * graph.  Nodes that feed multiple consumers at different depths stay in
  * the earliest required layer so they never appear *after* a consumer.
  */
-function promoteLeafInputs(
-    layers: string[][],
-    successors: Map<string, Set<string>>,
-    predecessors: Map<string, Set<string>>,
-): void {
+function promoteLeafInputs(layers: string[][], successors: Map<string, Set<string>>, predecessors: Map<string, Set<string>>): void {
     // Build a quick id → layer-index lookup
     const layerOf = new Map<string, number>();
     for (let i = 0; i < layers.length; i++) {
@@ -244,12 +232,7 @@ function promoteLeafInputs(
  * fallback so that constants/initializers get sorted by the position
  * of the consumer they feed into.
  */
-function barycenterOrdering(
-    layers: string[][],
-    successors: Map<string, Set<string>>,
-    predecessors: Map<string, Set<string>>,
-    sweeps = 4,
-): void {
+function barycenterOrdering(layers: string[][], successors: Map<string, Set<string>>, predecessors: Map<string, Set<string>>, sweeps = 4): void {
     const posInLayer = new Map<string, number>();
 
     const updatePositions = () => {
@@ -275,14 +258,10 @@ function barycenterOrdering(
         return count > 0 ? sum / count : undefined;
     };
 
-    const sortByBarycenter = (
-        layer: string[],
-        primary: Map<string, Set<string>>,
-        fallback: Map<string, Set<string>>,
-    ) => {
+    const sortByBarycenter = (layer: string[], primary: Map<string, Set<string>>, fallback: Map<string, Set<string>>) => {
         const bary = new Map<string, number>();
         for (const id of layer) {
-            const val = avgPos(id, primary) ?? avgPos(id, fallback) ?? (posInLayer.get(id) ?? 0);
+            const val = avgPos(id, primary) ?? avgPos(id, fallback) ?? posInLayer.get(id) ?? 0;
             bary.set(id, val);
         }
         layer.sort((a, b) => bary.get(a)! - bary.get(b)!);
@@ -308,10 +287,7 @@ function barycenterOrdering(
  * Vertical spacing uses real node heights.
  * Shorter layers are vertically centered.
  */
-function positionNodes(
-    layers: string[][],
-    nodeMap: Map<string, NodeUI>,
-): void {
+function positionNodes(layers: string[][], nodeMap: Map<string, NodeUI>): void {
     // Compute per-layer column widths (widest node + gap)
     const colWidths: number[] = [];
     for (const layer of layers) {
@@ -369,9 +345,7 @@ function reorderPorts(editor: IGraphLayoutTarget): void {
                 const port = node.inputs[i];
                 const conn = editor.connections.find((c) => c.to === port);
                 if (conn) {
-                    const srcNode = editor.nodes.find((n) =>
-                        n.outputs.includes(conn.from),
-                    );
+                    const srcNode = editor.nodes.find((n) => n.outputs.includes(conn.from));
                     inputOrder.push({
                         portIndex: i,
                         sourceY: srcNode ? srcNode.y : node.y,
@@ -394,9 +368,7 @@ function reorderPorts(editor: IGraphLayoutTarget): void {
                 if (conns.length > 0) {
                     let sumY = 0;
                     for (const c of conns) {
-                        const dstNode = editor.nodes.find((n) =>
-                            n.inputs.includes(c.to),
-                        );
+                        const dstNode = editor.nodes.find((n) => n.inputs.includes(c.to));
                         sumY += dstNode ? dstNode.y : node.y;
                     }
                     outputOrder.push({
@@ -463,12 +435,8 @@ export function defaultLayout(editor: IGraphLayoutTarget): void {
         leaves.sort((a, b) => {
             const succsA = successors.get(a)!;
             const succsB = successors.get(b)!;
-            const avgA = succsA.size > 0
-                ? [...succsA].reduce((s, id) => s + (posInLayer.get(id) ?? 0), 0) / succsA.size
-                : 0;
-            const avgB = succsB.size > 0
-                ? [...succsB].reduce((s, id) => s + (posInLayer.get(id) ?? 0), 0) / succsB.size
-                : 0;
+            const avgA = succsA.size > 0 ? [...succsA].reduce((s, id) => s + (posInLayer.get(id) ?? 0), 0) / succsA.size : 0;
+            const avgB = succsB.size > 0 ? [...succsB].reduce((s, id) => s + (posInLayer.get(id) ?? 0), 0) / succsB.size : 0;
             return avgA - avgB;
         });
         layer.length = 0;

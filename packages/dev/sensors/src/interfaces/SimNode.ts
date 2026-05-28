@@ -27,7 +27,7 @@ export interface ISimNode {
 // X forward
 // Y right
 // Z up
-// Right-handed 
+// Right-handed
 export interface ISimTransformNode extends ISimNode {
     position: ICartesian3;
     rotation: IQuaternion;
@@ -35,10 +35,10 @@ export interface ISimTransformNode extends ISimNode {
 
 // roll  arround X
 // pitch arround Y
-// yaw   arround Z 
+// yaw   arround Z
 export interface ISimAttitude {
     yaw: number;
     pitch: number;
     roll: number;
-    toQuaternion():IQuaternion;
+    toQuaternion(): IQuaternion;
 }

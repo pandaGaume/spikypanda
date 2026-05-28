@@ -18,7 +18,7 @@ export class KahnFifoScheduler implements IScheduler {
     public linearize(graph: IComputeGraph): IKernel[] {
         const inDegree = new Map<IKernel, number>();
         for (const node of graph.nodes) {
-            const incoming = node.opsc<IDataLink>().filter(l => l.enabled !== false);
+            const incoming = node.opsc<IDataLink>().filter((l) => l.enabled !== false);
             inDegree.set(node, incoming.length);
         }
 
@@ -32,7 +32,7 @@ export class KahnFifoScheduler implements IScheduler {
             const node = queue.shift()!;
             result.push(node);
 
-            const outgoing = node.onsc<IDataLink>().filter(l => l.enabled !== false);
+            const outgoing = node.onsc<IDataLink>().filter((l) => l.enabled !== false);
             for (const link of outgoing) {
                 const target = link.ofin as IKernel | null;
                 if (!target) continue;
@@ -44,9 +44,7 @@ export class KahnFifoScheduler implements IScheduler {
 
         if (result.length !== graph.nodes.length) {
             const missing = graph.nodes.length - result.length;
-            throw new Error(
-                `KahnFifoScheduler: cycle or disconnected component detected (${missing} unresolved node(s)).`,
-            );
+            throw new Error(`KahnFifoScheduler: cycle or disconnected component detected (${missing} unresolved node(s)).`);
         }
 
         return result;

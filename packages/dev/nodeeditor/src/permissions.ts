@@ -41,12 +41,12 @@ export class Permissions {
             if (spec.length !== 3) {
                 throw new Error(`Permissions: shorthand must be exactly 3 chars (e.g. "rwx", "r-x"), got "${spec}"`);
             }
-            this.read    = spec[0] === "r";
-            this.write   = spec[1] === "w";
+            this.read = spec[0] === "r";
+            this.write = spec[1] === "w";
             this.execute = spec[2] === "x";
         } else {
-            this.read    = !!spec.read;
-            this.write   = !!spec.write;
+            this.read = !!spec.read;
+            this.write = !!spec.write;
             this.execute = !!spec.execute;
         }
     }
@@ -59,8 +59,8 @@ export class Permissions {
         return (this.read ? "r" : "-") + (this.write ? "w" : "-") + (this.execute ? "x" : "-");
     }
 
-    public static readonly NONE       = new Permissions("---");
-    public static readonly READ_ONLY  = new Permissions("r--");
+    public static readonly NONE = new Permissions("---");
+    public static readonly READ_ONLY = new Permissions("r--");
     public static readonly READ_WRITE = new Permissions("rw-");
-    public static readonly FULL       = new Permissions("rwx");
+    public static readonly FULL = new Permissions("rwx");
 }

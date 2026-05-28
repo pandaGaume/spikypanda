@@ -29,7 +29,7 @@ export class StartNode extends RuntimeNode {
     private _pending = false;
 
     /** No control inputs: StartNode is a pure source. */
-    public override readonly controlInputPorts:  ReadonlyArray<IPortDescriptor> = [];
+    public override readonly controlInputPorts: ReadonlyArray<IPortDescriptor> = [];
     /** Single trigger output: the Begin-Play signal. */
     public override readonly controlOutputPorts: ReadonlyArray<IPortDescriptor> = [STARTED_OUTPUT_PORT];
 

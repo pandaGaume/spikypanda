@@ -35,8 +35,12 @@ export class Profiler {
     }
 
     /// <summary>Enable or disable profiling at runtime.</summary>
-    public get enabled(): boolean { return this._enabled; }
-    public set enabled(v: boolean) { this._enabled = v; }
+    public get enabled(): boolean {
+        return this._enabled;
+    }
+    public set enabled(v: boolean) {
+        this._enabled = v;
+    }
 
     /// <summary>Start timing a named phase. Phases can be nested conceptually but not in timing.</summary>
     public startPhase(name: string): void {
@@ -119,26 +123,18 @@ export class Profiler {
 
         lines.push(`Profiler Summary (${s.totalTimeMs.toFixed(2)}ms, ${formatFlops(s.totalFlops)} FLOPS, ${s.totalAttentionPairs} attn pairs)`);
         lines.push("-".repeat(90));
-        lines.push(
-            "Phase".padEnd(24) +
-            "Time (ms)".padEnd(12) +
-            "Time %".padEnd(10) +
-            "FLOPS".padEnd(14) +
-            "FLOPS %".padEnd(10) +
-            "Attn pairs".padEnd(12) +
-            "Calls"
-        );
+        lines.push("Phase".padEnd(24) + "Time (ms)".padEnd(12) + "Time %".padEnd(10) + "FLOPS".padEnd(14) + "FLOPS %".padEnd(10) + "Attn pairs".padEnd(12) + "Calls");
         lines.push("-".repeat(90));
 
         for (const p of s.phases) {
             lines.push(
                 p.name.padEnd(24) +
-                p.timeMs.toFixed(2).padEnd(12) +
-                (p.timePct.toFixed(1) + "%").padEnd(10) +
-                formatFlops(p.flops).padEnd(14) +
-                (p.flopsPct.toFixed(1) + "%").padEnd(10) +
-                String(p.attentionPairs).padEnd(12) +
-                String(p.calls)
+                    p.timeMs.toFixed(2).padEnd(12) +
+                    (p.timePct.toFixed(1) + "%").padEnd(10) +
+                    formatFlops(p.flops).padEnd(14) +
+                    (p.flopsPct.toFixed(1) + "%").padEnd(10) +
+                    String(p.attentionPairs).padEnd(12) +
+                    String(p.calls)
             );
         }
 

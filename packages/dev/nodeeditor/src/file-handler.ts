@@ -34,16 +34,12 @@ export class FileHandlerRegistry {
 
     findByExtension(ext: string): FileHandler | undefined {
         const lower = ext.toLowerCase().replace(/^\./, "");
-        return this.handlers.find((h) =>
-            h.extensions.some((e) => e.toLowerCase() === lower),
-        );
+        return this.handlers.find((h) => h.extensions.some((e) => e.toLowerCase() === lower));
     }
 
     findByMime(mime: string): FileHandler | undefined {
         const lower = mime.toLowerCase();
-        return this.handlers.find((h) =>
-            h.mimeTypes?.some((m) => m.toLowerCase() === lower),
-        );
+        return this.handlers.find((h) => h.mimeTypes?.some((m) => m.toLowerCase() === lower));
     }
 
     getAll(): readonly FileHandler[] {

@@ -61,10 +61,7 @@ export interface IReadyQueueDispatchOptions<N extends INode, L extends IOlink> {
  * as soon as its incoming counter reaches zero. Returns when no more
  * nodes can fire.
  */
-export function readyQueueDispatch<N extends INode, L extends IOlink>(
-    graph: IGraph<N, L>,
-    options: IReadyQueueDispatchOptions<N, L>
-): void {
+export function readyQueueDispatch<N extends INode, L extends IOlink>(graph: IGraph<N, L>, options: IReadyQueueDispatchOptions<N, L>): void {
     void graph; // currently unused: traversal is driven from seed via node.onsc(); kept for future cycle/orphan checks.
     const ready: N[] = [...options.seed];
     while (ready.length > 0) {

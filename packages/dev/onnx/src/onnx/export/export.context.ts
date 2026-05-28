@@ -113,17 +113,16 @@ export class DefaultOnnxExportContext implements OnnxExportContext {
             if (!schema) {
                 throw new Error(
                     `OnnxExportContext.makeNode: op "${spec.opType}" has no registered schema. ` +
-                    `Declare it with @onnxOp("${spec.opType}") in onnx/export/schema/op-schemas.defs.ts ` +
-                    `(plus @attr.<kind> on each property), or use the legacy intAttrs / floatAttrs / ` +
-                    `intsAttrs / floatsAttrs buckets at this call site.`
+                        `Declare it with @onnxOp("${spec.opType}") in onnx/export/schema/op-schemas.defs.ts ` +
+                        `(plus @attr.<kind> on each property), or use the legacy intAttrs / floatAttrs / ` +
+                        `intsAttrs / floatsAttrs buckets at this call site.`
                 );
             }
             for (const [k, v] of Object.entries(spec.attrs)) {
                 const def = schema.attrs.find((a) => a.name === k);
                 if (!def) {
                     throw new Error(
-                        `Op "${spec.opType}": attribute "${k}" not declared in its schema. ` +
-                        `Known: [${schema.attrs.map((a) => `${a.name}: ${a.kind}`).join(", ")}].`
+                        `Op "${spec.opType}": attribute "${k}" not declared in its schema. ` + `Known: [${schema.attrs.map((a) => `${a.name}: ${a.kind}`).join(", ")}].`
                     );
                 }
                 this._applySchemaAttr(node, def.name, def.kind, v);

@@ -183,7 +183,7 @@ export class PmsmSimulation implements ISimNode {
     }
 
     public fundamentalElectricalHz(): number {
-        return Math.abs(this.machine.omegaM) * this.machine.cfg.polePairs / (2 * Math.PI);
+        return (Math.abs(this.machine.omegaM) * this.machine.cfg.polePairs) / (2 * Math.PI);
     }
 
     public fundamentalMechanicalHz(): number {

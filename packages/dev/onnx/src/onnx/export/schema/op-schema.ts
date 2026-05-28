@@ -54,8 +54,7 @@ const _schemas = new Map<string, OnnxOpSchema>();
  */
 export function onnxOp(opType: string, opts?: { domain?: string }): ClassDecorator {
     return ((target: Function): void => {
-        const attrs: OnnxAttrDef[] =
-            Reflect.getMetadata(_attrMetaKey, target.prototype) ?? [];
+        const attrs: OnnxAttrDef[] = Reflect.getMetadata(_attrMetaKey, target.prototype) ?? [];
         _schemas.set(opType, {
             opType,
             domain: opts?.domain,
@@ -66,8 +65,7 @@ export function onnxOp(opType: string, opts?: { domain?: string }): ClassDecorat
 
 function _attrDecorator(kind: OnnxAttrKind): PropertyDecorator {
     return (target: object, propertyKey: string | symbol): void => {
-        const list: OnnxAttrDef[] =
-            Reflect.getMetadata(_attrMetaKey, target) ?? [];
+        const list: OnnxAttrDef[] = Reflect.getMetadata(_attrMetaKey, target) ?? [];
         list.push({ name: String(propertyKey), kind });
         Reflect.defineMetadata(_attrMetaKey, list, target);
     };

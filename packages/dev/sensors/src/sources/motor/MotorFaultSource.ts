@@ -20,11 +20,16 @@ export enum MotorFaultType {
 // numeric enum value directly.
 export function motorFaultLabel(type: MotorFaultType): string {
     switch (type) {
-        case MotorFaultType.MISALIGNMENT: return "misalignment";
-        case MotorFaultType.BEARING_DEFECT: return "bearing_defect";
-        case MotorFaultType.BROKEN_BAR: return "broken_bar";
-        case MotorFaultType.ECCENTRICITY: return "eccentricity";
-        case MotorFaultType.BRUSH_FAULT: return "brush_fault";
+        case MotorFaultType.MISALIGNMENT:
+            return "misalignment";
+        case MotorFaultType.BEARING_DEFECT:
+            return "bearing_defect";
+        case MotorFaultType.BROKEN_BAR:
+            return "broken_bar";
+        case MotorFaultType.ECCENTRICITY:
+            return "eccentricity";
+        case MotorFaultType.BRUSH_FAULT:
+            return "brush_fault";
     }
 }
 
@@ -55,7 +60,8 @@ export const MOTOR_FAULT_PRESENTATION: Readonly<Record<MotorFaultType, IMotorFau
     },
     [MotorFaultType.BRUSH_FAULT]: {
         displayName: "Brush fault",
-        description: "Arcing or wear on one specific brush (selected by index). The contact force varies at the mechanical rotation rate, amplitude-modulating the commutation current. Sidebands appear at fComm ± k·fMech; the sideband phase encodes which brush is faulty.",
+        description:
+            "Arcing or wear on one specific brush (selected by index). The contact force varies at the mechanical rotation rate, amplitude-modulating the commutation current. Sidebands appear at fComm ± k·fMech; the sideband phase encodes which brush is faulty.",
     },
 });
 
@@ -75,8 +81,8 @@ export interface IMotorMisalignmentConfig extends IFault {
 // derived from ball count, contact angle, etc.; defaults are placeholders.
 export interface IMotorBearingDefectConfig extends IFault {
     type: MotorFaultType.BEARING_DEFECT;
-    bpfoFactor?: number;         // ball-pass freq outer race / f_mech (default 4.5)
-    bpfiFactor?: number;         // ball-pass freq inner race / f_mech (default 5.5)
+    bpfoFactor?: number; // ball-pass freq outer race / f_mech (default 4.5)
+    bpfiFactor?: number; // ball-pass freq inner race / f_mech (default 5.5)
 }
 
 // Broken rotor bars. Modeled as an angular asymmetry: each broken bar at
@@ -109,26 +115,19 @@ export interface IMotorEccentricityConfig extends IFault {
 // different sideband phases, which is measurable in the spectrum.
 export interface IMotorBrushFaultConfig extends IFault {
     type: MotorFaultType.BRUSH_FAULT;
-    faultyBrushIndex?: number;   // 0-based index of the defective brush (default 0)
+    faultyBrushIndex?: number; // 0-based index of the defective brush (default 0)
 }
 
-export type MotorFaultConfig =
-    | IMotorMisalignmentConfig
-    | IMotorBearingDefectConfig
-    | IMotorBrokenBarConfig
-    | IMotorEccentricityConfig
-    | IMotorBrushFaultConfig;
+export type MotorFaultConfig = IMotorMisalignmentConfig | IMotorBearingDefectConfig | IMotorBrokenBarConfig | IMotorEccentricityConfig | IMotorBrushFaultConfig;
 
 // Input shape for makeMotorFault: the caller provides the bare physics, the
 // helper fills in displayName / description from the per-type registry.
-export type MotorFaultParams<T extends MotorFaultType> =
-    Omit<Extract<MotorFaultConfig, { type: T }>, keyof IFault | "type">
-    & {
-        type: T;
-        severity: number;
-        displayName?: string;
-        description?: string;
-    };
+export type MotorFaultParams<T extends MotorFaultType> = Omit<Extract<MotorFaultConfig, { type: T }>, keyof IFault | "type"> & {
+    type: T;
+    severity: number;
+    displayName?: string;
+    description?: string;
+};
 
 // Build a MotorFaultConfig from physical parameters, auto-populating the
 // human-readable displayName / description from the registry.
@@ -147,7 +146,7 @@ export function contiguousBrokenBars(totalBars: number, count: number, startIdx:
     const out: number[] = [];
     const t = Math.max(1, totalBars);
     const n = Math.max(0, Math.min(count, t));
-    for (let i = 0; i < n; i++) out.push(((startIdx + i) % t + t) % t);
+    for (let i = 0; i < n; i++) out.push((((startIdx + i) % t) + t) % t);
     return out;
 }
 
@@ -186,7 +185,7 @@ export class MotorFaultSource implements IDataSource {
     public readonly cfg: MotorFaultConfig;
     public readonly motor: MotorCurrentSource;
     private readonly _meta: IDataSourceMeta;
-    private readonly _fMech: number;     // motorSpeedRps for spectral hint
+    private readonly _fMech: number; // motorSpeedRps for spectral hint
 
     // For broken bars: precomputed spatial Fourier amplitudes a_k and phases
     // phi_k of the broken-bar pattern. The inner sample loop just evaluates
@@ -235,10 +234,7 @@ export class MotorFaultSource implements IDataSource {
             case MotorFaultType.MISALIGNMENT: {
                 // Periodic torque load at 1× and 2× rotation perturbs the
                 // current at the same angular orders.
-                return s * (
-                    0.30 * Math.sin(theta) +
-                    0.20 * Math.sin(2.0 * theta)
-                );
+                return s * (0.3 * Math.sin(theta) + 0.2 * Math.sin(2.0 * theta));
             }
             case MotorFaultType.BEARING_DEFECT: {
                 // Race defects produce mechanical pulses at characteristic
@@ -246,10 +242,7 @@ export class MotorFaultSource implements IDataSource {
                 // as smooth tones at the BPFO / BPFI orders.
                 const ko = cfg.bpfoFactor ?? 4.5;
                 const ki = cfg.bpfiFactor ?? 5.5;
-                return s * (
-                    0.20 * Math.sin(ko * theta) +
-                    0.20 * Math.sin(ki * theta)
-                );
+                return s * (0.2 * Math.sin(ko * theta) + 0.2 * Math.sin(ki * theta));
             }
             case MotorFaultType.BROKEN_BAR: {
                 // The angular asymmetry of the broken-bar pattern was
@@ -287,10 +280,7 @@ export class MotorFaultSource implements IDataSource {
                 const faultyIdx = cfg.faultyBrushIndex ?? 0;
                 const brushAngle = (TWO_PI * faultyIdx) / Math.max(1, N);
                 const asymmetryScale = Math.sin(Math.PI / Math.max(1, N));
-                return s * asymmetryScale * (
-                    0.40 * Math.cos(theta - brushAngle) * Math.sin(bars * theta) +
-                    0.15 * Math.cos(2.0 * (theta - brushAngle)) * Math.sin(bars * theta)
-                );
+                return s * asymmetryScale * (0.4 * Math.cos(theta - brushAngle) * Math.sin(bars * theta) + 0.15 * Math.cos(2.0 * (theta - brushAngle)) * Math.sin(bars * theta));
             }
         }
     }
@@ -303,7 +293,8 @@ export class MotorFaultSource implements IDataSource {
         if (broken.length === 0) return;
         const maxOrder = Math.min(BROKEN_BAR_MAX_ORDER, Math.floor(total / 2));
         for (let k = 1; k <= maxOrder; k++) {
-            let re = 0, im = 0;
+            let re = 0,
+                im = 0;
             for (const i of broken) {
                 const theta_i = (TWO_PI * i) / total;
                 re += Math.cos(k * theta_i);
@@ -324,10 +315,7 @@ export class MotorFaultSource implements IDataSource {
             case MotorFaultType.MISALIGNMENT:
                 return [fMech, 2 * fMech];
             case MotorFaultType.BEARING_DEFECT:
-                return [
-                    (cfg.bpfoFactor ?? 4.5) * fMech,
-                    (cfg.bpfiFactor ?? 5.5) * fMech,
-                ];
+                return [(cfg.bpfoFactor ?? 4.5) * fMech, (cfg.bpfiFactor ?? 5.5) * fMech];
             case MotorFaultType.BROKEN_BAR: {
                 // Peaks live at k · f_mech for orders k where the spatial
                 // Fourier amplitude is non-zero.
@@ -342,12 +330,7 @@ export class MotorFaultSource implements IDataSource {
             case MotorFaultType.BRUSH_FAULT: {
                 const bars = this.motor.cfg.commutatorBars;
                 // Sidebands from k=1 and k=2 AM modulation at mechanical rate.
-                return [
-                    (bars - 2) * fMech,
-                    (bars - 1) * fMech,
-                    (bars + 1) * fMech,
-                    (bars + 2) * fMech,
-                ];
+                return [(bars - 2) * fMech, (bars - 1) * fMech, (bars + 1) * fMech, (bars + 2) * fMech];
             }
         }
     }

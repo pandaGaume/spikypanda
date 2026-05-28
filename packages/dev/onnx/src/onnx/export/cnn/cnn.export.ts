@@ -20,17 +20,7 @@
 // client demands them.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import {
-    ActivationFunctions,
-    CnnLayerType,
-    IActivationFunction,
-    ICnnGraph,
-    ICnnLayerDescriptor,
-    ICnnNeuron,
-    ICnnSynapse,
-    IConvKernel,
-    PoolingType,
-} from "spikypanda-core";
+import { ActivationFunctions, CnnLayerType, IActivationFunction, ICnnGraph, ICnnLayerDescriptor, ICnnNeuron, ICnnSynapse, IConvKernel, PoolingType } from "spikypanda-core";
 
 import type { OnnxExportContext } from "../export.types";
 
@@ -40,13 +30,7 @@ export class CnnGraphOnnxExporter {
      * `outputName` for the given CNN. The first descriptor (Input)
      * is metadata only; emission starts at descriptor[1].
      */
-    public static emit(
-        cnn: ICnnGraph,
-        inputName: string,
-        outputName: string,
-        ctx: OnnxExportContext,
-        scopeHint: string = "cnn"
-    ): void {
+    public static emit(cnn: ICnnGraph, inputName: string, outputName: string, ctx: OnnxExportContext, scopeHint: string = "cnn"): void {
         const descs = cnn.layerDescriptors;
         if (descs.length < 2) {
             throw new Error("CnnGraphOnnxExporter: CNN has no actual layers (only Input).");
@@ -91,14 +75,7 @@ export class CnnGraphOnnxExporter {
 
     // ── Conv ──────────────────────────────────────────────────────────
 
-    private static _emitConv(
-        prev: string,
-        out: string,
-        desc: ICnnLayerDescriptor,
-        prevDesc: ICnnLayerDescriptor,
-        ctx: OnnxExportContext,
-        scope: string
-    ): void {
+    private static _emitConv(prev: string, out: string, desc: ICnnLayerDescriptor, prevDesc: ICnnLayerDescriptor, ctx: OnnxExportContext, scope: string): void {
         if (!desc.convKernels || !desc.kernelSize || !desc.stride || !desc.padding) {
             throw new Error(`CnnGraphOnnxExporter: Conv layer missing builder metadata (convKernels/kernelSize/stride/padding).`);
         }
@@ -161,13 +138,7 @@ export class CnnGraphOnnxExporter {
 
     // ── Pool ──────────────────────────────────────────────────────────
 
-    private static _emitPool(
-        prev: string,
-        out: string,
-        desc: ICnnLayerDescriptor,
-        prevDesc: ICnnLayerDescriptor,
-        ctx: OnnxExportContext
-    ): void {
+    private static _emitPool(prev: string, out: string, desc: ICnnLayerDescriptor, prevDesc: ICnnLayerDescriptor, ctx: OnnxExportContext): void {
         if (!desc.kernelSize || !desc.stride || desc.poolType === undefined) {
             throw new Error(`CnnGraphOnnxExporter: Pool layer missing builder metadata (kernelSize/stride/poolType).`);
         }
@@ -177,8 +148,7 @@ export class CnnGraphOnnxExporter {
 
         // Promote to Global*Pool when the kernel covers the full
         // feature map (and the output is therefore 1x1).
-        const isGlobal = pH === prevDesc.height && pW === prevDesc.width
-            && desc.width === 1 && desc.height === 1;
+        const isGlobal = pH === prevDesc.height && pW === prevDesc.width && desc.width === 1 && desc.height === 1;
 
         if (isGlobal) {
             ctx.makeNode({
@@ -213,14 +183,7 @@ export class CnnGraphOnnxExporter {
 
     // ── Dense ─────────────────────────────────────────────────────────
 
-    private static _emitDense(
-        prev: string,
-        out: string,
-        desc: ICnnLayerDescriptor,
-        prevDesc: ICnnLayerDescriptor,
-        ctx: OnnxExportContext,
-        scope: string
-    ): void {
+    private static _emitDense(prev: string, out: string, desc: ICnnLayerDescriptor, prevDesc: ICnnLayerDescriptor, ctx: OnnxExportContext, scope: string): void {
         const units = desc.neurons.length;
         const prevSize = prevDesc.neurons.length;
         if (units === 0 || prevSize === 0) {
@@ -234,11 +197,12 @@ export class CnnGraphOnnxExporter {
         // Pool, Upsample, Reshape) we emit an implicit Flatten before
         // the Gemm. If a Flatten layer is already declared explicitly,
         // its output is already flat and we skip the implicit step.
-        const prevIsSpatial = prevDesc.type === CnnLayerType.Conv
-            || prevDesc.type === CnnLayerType.Pool
-            || prevDesc.type === CnnLayerType.Upsample
-            || prevDesc.type === CnnLayerType.Reshape
-            || prevDesc.type === CnnLayerType.Input;
+        const prevIsSpatial =
+            prevDesc.type === CnnLayerType.Conv ||
+            prevDesc.type === CnnLayerType.Pool ||
+            prevDesc.type === CnnLayerType.Upsample ||
+            prevDesc.type === CnnLayerType.Reshape ||
+            prevDesc.type === CnnLayerType.Input;
         let gemmInput = prev;
         if (prevIsSpatial) {
             const flat = ctx.allocateTensorName(`${scope}_flat`);
@@ -327,14 +291,22 @@ export class CnnGraphOnnxExporter {
 
     private static _typeName(t: CnnLayerType): string {
         switch (t) {
-            case CnnLayerType.Input: return "Input";
-            case CnnLayerType.Conv: return "Conv";
-            case CnnLayerType.Pool: return "Pool";
-            case CnnLayerType.Flatten: return "Flatten";
-            case CnnLayerType.Dense: return "Dense";
-            case CnnLayerType.Upsample: return "Upsample";
-            case CnnLayerType.Reshape: return "Reshape";
-            default: return `?${t}`;
+            case CnnLayerType.Input:
+                return "Input";
+            case CnnLayerType.Conv:
+                return "Conv";
+            case CnnLayerType.Pool:
+                return "Pool";
+            case CnnLayerType.Flatten:
+                return "Flatten";
+            case CnnLayerType.Dense:
+                return "Dense";
+            case CnnLayerType.Upsample:
+                return "Upsample";
+            case CnnLayerType.Reshape:
+                return "Reshape";
+            default:
+                return `?${t}`;
         }
     }
 

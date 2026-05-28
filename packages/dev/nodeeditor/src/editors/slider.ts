@@ -1,8 +1,8 @@
 import { EditorFactory, IEditor } from "../editor-registry";
 
 interface ISliderOptions {
-    readonly min?:  number;
-    readonly max?:  number;
+    readonly min?: number;
+    readonly max?: number;
     readonly step?: number;
 }
 
@@ -24,35 +24,32 @@ interface ISliderOptions {
 export const sliderEditor: EditorFactory = (host, model, propertyName, options, editable): IEditor => {
     if (!propertyName) return { dispose: () => {} };
 
-    const opts = (options && typeof options === "object") ? (options as ISliderOptions) : {};
+    const opts = options && typeof options === "object" ? (options as ISliderOptions) : {};
 
     const wrap = document.createElement("div");
     wrap.style.cssText = "display:flex;gap:8px;align-items:center;width:100%;";
 
     const input = document.createElement("input");
-    input.type     = "range";
+    input.type = "range";
     input.readOnly = editable === false;
     input.style.cssText = "flex:1;min-width:0;accent-color:var(--ne-color-primary);";
 
     const readout = document.createElement("span");
-    readout.style.cssText =
-        "font-family:var(--ne-font-mono);font-size:0.78em;min-width:48px;text-align:right;"
-        + "color:var(--ne-color-text);flex-shrink:0;";
+    readout.style.cssText = "font-family:var(--ne-font-mono);font-size:0.78em;min-width:48px;text-align:right;" + "color:var(--ne-color-text);flex-shrink:0;";
 
     const m = model as Record<string, unknown>;
-    const numOr = (v: unknown, fallback: number): number =>
-        typeof v === "number" && Number.isFinite(v) ? v : fallback;
+    const numOr = (v: unknown, fallback: number): number => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
 
     const resolveBounds = (): { min: number; max: number; step: number } => ({
-        min:  numOr(opts.min,  numOr(m.min,  0)),
-        max:  numOr(opts.max,  numOr(m.max,  1)),
+        min: numOr(opts.min, numOr(m.min, 0)),
+        max: numOr(opts.max, numOr(m.max, 1)),
         step: numOr(opts.step, numOr(m.step, 0.01)),
     });
 
     const fmtStep = (step: number): number => {
         // Choose readout precision based on the step magnitude so the
         // user sees `25.00` for a 0.01 slider and `25` for an int slider.
-        if (step >= 1)   return 0;
+        if (step >= 1) return 0;
         if (step >= 0.1) return 1;
         if (step >= 0.01) return 2;
         return 3;
@@ -60,8 +57,8 @@ export const sliderEditor: EditorFactory = (host, model, propertyName, options, 
 
     const refreshBounds = (): void => {
         const { min, max, step } = resolveBounds();
-        input.min  = String(min);
-        input.max  = String(max);
+        input.min = String(min);
+        input.max = String(max);
         input.step = String(step);
     };
     refreshBounds();

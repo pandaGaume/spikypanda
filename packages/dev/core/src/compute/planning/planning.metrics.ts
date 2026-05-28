@@ -9,10 +9,7 @@ import type { IAllocation, IAllocationPlan, ITensorLifetime } from "./planning.i
 // ─── Liveness ────────────────────────────────────────────────────────────────
 
 /** Tensors that are alive at the given schedule step. */
-export function liveAtStep(
-    lifetimes: readonly ITensorLifetime[],
-    step: number,
-): ITensorLifetime[] {
+export function liveAtStep(lifetimes: readonly ITensorLifetime[], step: number): ITensorLifetime[] {
     const out: ITensorLifetime[] = [];
     for (const t of lifetimes) {
         if (t.birthStep <= step && t.deathStep >= step) out.push(t);
@@ -24,10 +21,7 @@ export function liveAtStep(
  * Sum of bytes of live tensors at a step. This is the working-set size
  * a perfect allocator would need at that moment.
  */
-export function liveBytesAtStep(
-    lifetimes: readonly ITensorLifetime[],
-    step: number,
-): number {
+export function liveBytesAtStep(lifetimes: readonly ITensorLifetime[], step: number): number {
     let sum = 0;
     for (const t of lifetimes) {
         if (t.birthStep <= step && t.deathStep >= step) sum += t.bytes;
@@ -40,10 +34,7 @@ export function liveBytesAtStep(
  * sum of live tensor bytes`. No allocator can do better than this on
  * a fixed schedule.
  */
-export function maxSimultaneousBytes(
-    lifetimes: readonly ITensorLifetime[],
-    numSteps: number,
-): number {
+export function maxSimultaneousBytes(lifetimes: readonly ITensorLifetime[], numSteps: number): number {
     let best = 0;
     for (let s = 0; s < numSteps; s++) {
         const b = liveBytesAtStep(lifetimes, s);
@@ -68,11 +59,7 @@ export function computePeak(plan: IAllocationPlan): number {
  * High-water mark of allocated offsets at the given step (the
  * effective arena footprint when scrubbing).
  */
-export function currentMemoryAtStep(
-    plan: IAllocationPlan,
-    lifetimes: readonly ITensorLifetime[],
-    step: number,
-): number {
+export function currentMemoryAtStep(plan: IAllocationPlan, lifetimes: readonly ITensorLifetime[], step: number): number {
     let peak = 0;
     for (const t of lifetimes) {
         if (t.birthStep <= step && t.deathStep >= step) {
@@ -86,11 +73,7 @@ export function currentMemoryAtStep(
 }
 
 /** High-water marks at every step (for sparklines). */
-export function memoryOverTime(
-    plan: IAllocationPlan,
-    lifetimes: readonly ITensorLifetime[],
-    numSteps: number,
-): number[] {
+export function memoryOverTime(plan: IAllocationPlan, lifetimes: readonly ITensorLifetime[], numSteps: number): number[] {
     const out = new Array<number>(numSteps);
     for (let s = 0; s < numSteps; s++) {
         out[s] = currentMemoryAtStep(plan, lifetimes, s);
@@ -99,11 +82,7 @@ export function memoryOverTime(
 }
 
 /** Step at which `currentMemoryAtStep` reaches its maximum value. */
-export function peakStep(
-    plan: IAllocationPlan,
-    lifetimes: readonly ITensorLifetime[],
-    numSteps: number,
-): { step: number; bytes: number } {
+export function peakStep(plan: IAllocationPlan, lifetimes: readonly ITensorLifetime[], numSteps: number): { step: number; bytes: number } {
     let bestStep = 0;
     let bestBytes = 0;
     for (let s = 0; s < numSteps; s++) {
@@ -117,10 +96,7 @@ export function peakStep(
 }
 
 /** Step where the live-set count is maximal. */
-export function maxLiveCount(
-    lifetimes: readonly ITensorLifetime[],
-    numSteps: number,
-): { step: number; count: number } {
+export function maxLiveCount(lifetimes: readonly ITensorLifetime[], numSteps: number): { step: number; count: number } {
     let bestStep = 0;
     let bestCount = 0;
     for (let s = 0; s < numSteps; s++) {
@@ -128,7 +104,10 @@ export function maxLiveCount(
         for (const t of lifetimes) {
             if (t.birthStep <= s && t.deathStep >= s) c++;
         }
-        if (c > bestCount) { bestCount = c; bestStep = s; }
+        if (c > bestCount) {
+            bestCount = c;
+            bestStep = s;
+        }
     }
     return { step: bestStep, count: bestCount };
 }
@@ -156,7 +135,7 @@ export function buildPlan(
     schedulerName: string,
     schedule: readonly string[],
     allocations: Map<string, IAllocation>,
-    lifetimes: readonly ITensorLifetime[],
+    lifetimes: readonly ITensorLifetime[]
 ): IAllocationPlan {
     let peak = 0;
     for (const alloc of allocations.values()) {

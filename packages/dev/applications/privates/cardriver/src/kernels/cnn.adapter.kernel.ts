@@ -22,12 +22,7 @@ export class CnnAdapterKernel extends Kernel {
     private readonly _channels: number;
     private readonly _outputSize: number;
 
-    public constructor(opts: {
-        runtime: CnnInferenceRuntime;
-        windowSize: number;
-        channels: number;
-        outputSize: number;
-    }) {
+    public constructor(opts: { runtime: CnnInferenceRuntime; windowSize: number; channels: number; outputSize: number }) {
         super();
         this._runtime = opts.runtime;
         this._windowSize = opts.windowSize;
@@ -58,16 +53,12 @@ export class CnnAdapterKernel extends Kernel {
         }
         const t = inputs[0];
         if (t.shape.length !== 2) {
-            throw new Error(
-                `CnnAdapterKernel: expected rank-2 input, got shape [${t.shape.join(", ")}]`
-            );
+            throw new Error(`CnnAdapterKernel: expected rank-2 input, got shape [${t.shape.join(", ")}]`);
         }
         const T = t.shape[0];
         const C = t.shape[1];
         if (T !== this._windowSize || C !== this._channels) {
-            throw new Error(
-                `CnnAdapterKernel: shape mismatch, expected [${this._windowSize}, ${this._channels}], got [${T}, ${C}]`
-            );
+            throw new Error(`CnnAdapterKernel: shape mismatch, expected [${this._windowSize}, ${this._channels}], got [${T}, ${C}]`);
         }
 
         // Re-layout (T, C) channel-last into channel-major flat. The
@@ -83,14 +74,14 @@ export class CnnAdapterKernel extends Kernel {
 
         const result = this._runtime.run(flat);
         if (result.length !== this._outputSize) {
-            throw new Error(
-                `CnnAdapterKernel: runtime returned ${result.length} values, expected ${this._outputSize}`
-            );
+            throw new Error(`CnnAdapterKernel: runtime returned ${result.length} values, expected ${this._outputSize}`);
         }
-        return [{
-            data: Float32Array.from(result),
-            shape: [this._outputSize],
-            name: "embedding",
-        }];
+        return [
+            {
+                data: Float32Array.from(result),
+                shape: [this._outputSize],
+                name: "embedding",
+            },
+        ];
     }
 }

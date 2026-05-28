@@ -20,20 +20,13 @@ import type { IChannelMetrics, IMetricsConfig, IReconstructionMetrics } from "./
 /// Compute all reconstruction metrics for a pair of ground truth / prediction arrays.
 /// Arrays are in CHW format: [C0_pixel0, C0_pixel1, ..., C1_pixel0, ...].
 /// </summary>
-export function computeReconstructionMetrics(
-    groundTruth: number[],
-    prediction: number[],
-    config: IMetricsConfig
-): IReconstructionMetrics {
+export function computeReconstructionMetrics(groundTruth: number[], prediction: number[], config: IMetricsConfig): IReconstructionMetrics {
     const { width, height, channels } = config;
     const pixelsPerChannel = width * height;
     const totalPixels = channels * pixelsPerChannel;
 
     if (groundTruth.length !== totalPixels || prediction.length !== totalPixels) {
-        throw new Error(
-            `Array length mismatch: expected ${totalPixels} (${channels}x${height}x${width}), ` +
-            `got gt=${groundTruth.length}, pred=${prediction.length}`
-        );
+        throw new Error(`Array length mismatch: expected ${totalPixels} (${channels}x${height}x${width}), ` + `got gt=${groundTruth.length}, pred=${prediction.length}`);
     }
 
     const minSparse = config.minSparsePixels ?? 3;
@@ -71,7 +64,10 @@ export function computeReconstructionMetrics(
     const globalMse = globalMseSum / totalPixels;
 
     // Average sparse metrics across sparse channels only
-    let avgF1 = 0, avgERR = 0, avgTopK = 0, avgContrast = 0;
+    let avgF1 = 0,
+        avgERR = 0,
+        avgTopK = 0,
+        avgContrast = 0;
     if (sparseChannelIndices.length > 0) {
         for (const idx of sparseChannelIndices) {
             avgF1 += channelMetrics[idx].sparseF1;
@@ -159,9 +155,7 @@ function computeChannelMetrics(
         }
         sparseRecall = truePositive / sparseCount;
         sparsePrecision = predPositive > 0 ? truePositive / predPositive : 0;
-        sparseF1 = (sparseRecall + sparsePrecision) > 0
-            ? 2 * sparseRecall * sparsePrecision / (sparseRecall + sparsePrecision)
-            : 0;
+        sparseF1 = sparseRecall + sparsePrecision > 0 ? (2 * sparseRecall * sparsePrecision) / (sparseRecall + sparsePrecision) : 0;
 
         // Energy Retention Ratio
         let energyGt = 0;
@@ -242,13 +236,7 @@ function computeTopKHitRate(gt: number[], pred: number[], k: number): number {
 /// Returns the mean preservation across all sparse pixels.
 /// A value of 1.0 = perfect contrast match. Below 0.5 = severe blurring.
 /// </summary>
-function computeContrastPreservation(
-    gt: number[],
-    pred: number[],
-    threshold: number,
-    width: number,
-    height: number
-): number {
+function computeContrastPreservation(gt: number[], pred: number[], threshold: number, width: number, height: number): number {
     let totalPreservation = 0;
     let count = 0;
     const minContrast = 0.01; // Avoid division by near-zero contrast

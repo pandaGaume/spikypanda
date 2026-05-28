@@ -21,6 +21,12 @@ function buildVectorFactory(axes: ReadonlyArray<string>): EditorFactory {
             return { dispose: () => {} };
         }
 
+        // Decorator options live on _options as a Record. We pick up
+        // `unit` to mirror the number editor's behaviour: editables
+        // tagged with @editable("vector3", { unit: "m/s²" }) get a
+        // trailing greyed-out unit span after the last component.
+        const opts = (_options ?? {}) as { unit?: string };
+
         const wrap = document.createElement("div");
         wrap.style.cssText = "display:flex;gap:4px;align-items:center;width:100%;";
         const inputs: Record<string, HTMLInputElement> = {};
@@ -52,6 +58,14 @@ function buildVectorFactory(axes: ReadonlyArray<string>): EditorFactory {
             wrap.appendChild(group);
             inputs[axis] = input;
         }
+
+        if (opts.unit) {
+            const unit = document.createElement("span");
+            unit.textContent = opts.unit;
+            unit.style.cssText = "flex:0 0 auto;font-size:0.7em;color:var(--ne-color-text-muted);";
+            wrap.appendChild(unit);
+        }
+
         host.appendChild(wrap);
 
         const refresh = () => {

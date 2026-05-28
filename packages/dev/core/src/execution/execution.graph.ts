@@ -44,7 +44,7 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
 {
     /** Default control plane mirrors RuntimeNode so an embedded graph
      *  satisfies the same IEnabled wiring as a leaf node. */
-    public readonly controlInputPorts:  ReadonlyArray<IPortDescriptor> = [ENABLE_INPUT_PORT];
+    public readonly controlInputPorts: ReadonlyArray<IPortDescriptor> = [ENABLE_INPUT_PORT];
     public readonly controlOutputPorts: ReadonlyArray<IPortDescriptor> = [ENABLED_OUTPUT_PORT];
 
     /** A composite graph is enable-able by default like a leaf node. */

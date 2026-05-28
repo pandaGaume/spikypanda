@@ -42,14 +42,7 @@ export class RolloutNode extends Kernel {
     private readonly _actionDim: number;
     private readonly _deltaMode: boolean;
 
-    public constructor(opts: {
-        dynamics: ComputeGraph;
-        dynamicsInputName: string;
-        horizon: number;
-        stateDim: number;
-        actionDim: number;
-        deltaMode?: boolean;
-    }) {
+    public constructor(opts: { dynamics: ComputeGraph; dynamicsInputName: string; horizon: number; stateDim: number; actionDim: number; deltaMode?: boolean }) {
         super();
         this._dynamics = opts.dynamics;
         this._dynamicsInputName = opts.dynamicsInputName;
@@ -108,11 +101,13 @@ export class RolloutNode extends Kernel {
             }
         }
 
-        return [{
-            data: trajectory,
-            shape: [H + 1, S],
-            name: "trajectory",
-        }];
+        return [
+            {
+                data: trajectory,
+                shape: [H + 1, S],
+                name: "trajectory",
+            },
+        ];
     }
 }
 
@@ -133,13 +128,7 @@ export class RolloutNode extends Kernel {
  * cost functions (e.g. CO2 threshold penalty + energy) without baking them
  * into the node type.
  */
-export type TrajectoryCostFn = (
-    trajectory: Float32Array,
-    actions: Float32Array,
-    stateDim: number,
-    actionDim: number,
-    horizon: number,
-) => number;
+export type TrajectoryCostFn = (trajectory: Float32Array, actions: Float32Array, stateDim: number, actionDim: number, horizon: number) => number;
 
 export class ObjectiveNode extends Kernel {
     public readonly nodeType = "mpc_objective";
@@ -150,12 +139,7 @@ export class ObjectiveNode extends Kernel {
     private readonly _actionDim: number;
     private readonly _horizon: number;
 
-    public constructor(opts: {
-        costFn: TrajectoryCostFn;
-        stateDim: number;
-        actionDim: number;
-        horizon: number;
-    }) {
+    public constructor(opts: { costFn: TrajectoryCostFn; stateDim: number; actionDim: number; horizon: number }) {
         super();
         this._costFn = opts.costFn;
         this._stateDim = opts.stateDim;
@@ -166,8 +150,7 @@ export class ObjectiveNode extends Kernel {
     public execute(inputs: ITensor[]): ITensor[] {
         const trajectory = inputs[0].data;
         const actions = inputs[1].data;
-        const cost = this._costFn(trajectory, actions,
-            this._stateDim, this._actionDim, this._horizon);
+        const cost = this._costFn(trajectory, actions, this._stateDim, this._actionDim, this._horizon);
         return [{ data: new Float32Array([cost]), shape: [1], name: "cost" }];
     }
 }
@@ -194,11 +177,7 @@ export class ObjectiveNode extends Kernel {
  *   - an action sampler     (produces a [horizon * actionDim] sequence)
  *   - K (number of candidates)
  */
-export type ActionSamplerFn = (
-    horizon: number,
-    actionDim: number,
-    rng: () => number,
-) => Float32Array;
+export type ActionSamplerFn = (horizon: number, actionDim: number, rng: () => number) => Float32Array;
 
 export class ShootingSelectorNode extends Kernel {
     public readonly nodeType = "mpc_shooting";
@@ -301,11 +280,7 @@ export function makeDiscreteOneHotSampler(numActions: number): ActionSamplerFn {
  * Piecewise constant sampler: holds a random action for a random duration,
  * then picks a new one. Produces smoother trajectories than per-step random.
  */
-export function makePiecewiseConstantSampler(
-    numActions: number,
-    minSegment: number = 3,
-    maxSegment: number = 15,
-): ActionSamplerFn {
+export function makePiecewiseConstantSampler(numActions: number, minSegment: number = 3, maxSegment: number = 15): ActionSamplerFn {
     return (horizon, actionDim, rng) => {
         if (actionDim !== numActions) {
             throw new Error(`actionDim (${actionDim}) must match numActions (${numActions})`);

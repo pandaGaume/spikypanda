@@ -27,16 +27,16 @@ import { IPmsmEnvNode } from "./IPmsmEnvNode";
 // Composes multiplicatively with EccentricityFault (D4) when both are
 // active. The two contributions add in the eccentricity vector.
 export interface IRotorSagConfig {
-    rotorMass: number;              // kg
+    rotorMass: number; // kg
     bearingRadialStiffness: number; // N/m
-    airGap: number;                 // m, nominal magnetic air-gap
+    airGap: number; // m, nominal magnetic air-gap
     // Electromagnetic radial stiffness for the rotating UMP component (N/m).
     // As the rotor turns through the eccentric air gap, the interaction of
     // the rotating PM field with the fixed gap asymmetry produces a force
     // that rotates at fMech. Amplitude = umpRadialStiffness * delta_sag.
     // Set to 0 (default) to disable; use MAXON_ECX_PRIME_ENV_DEFAULTS.umpRadialStiffness
     // for a calibrated estimate.
-    umpRadialStiffness?: number;    // N/m, default 0
+    umpRadialStiffness?: number; // N/m, default 0
     label?: string;
 }
 
@@ -59,13 +59,17 @@ export class RotorSagModel implements IPmsmEnvNode {
         this.gravity = gravity;
     }
 
-    public advance(_t: number): void { /* stateless */ }
-    public reset(): void { /* stateless */ }
+    public advance(_t: number): void {
+        /* stateless */
+    }
+    public reset(): void {
+        /* stateless */
+    }
 
     public preStep(_t: number, machine: IPmsmMachineFaultHost): void {
         const gPerp = this.gravity.radialMagnitude();
-        if (gPerp < 1e-12) return;            // microgravity or vertical shaft
-        const delta = this.cfg.rotorMass * gPerp / this.cfg.bearingRadialStiffness;
+        if (gPerp < 1e-12) return; // microgravity or vertical shaft
+        const delta = (this.cfg.rotorMass * gPerp) / this.cfg.bearingRadialStiffness;
         const epsilon = delta / this.cfg.airGap;
         if (epsilon < 1e-12) return;
         const thetaGrav = this.gravity.radialAngle();
@@ -77,11 +81,15 @@ export class RotorSagModel implements IPmsmEnvNode {
     // air-gap asymmetry produces a radial force component that rotates at
     // fMech. Injected into the housing so accel_y / accel_z carry a 1x peak.
     // Skipped when umpRadialStiffness is zero (default backward-compat mode).
-    public postStep(_t: number, machine: import("../faults/PmsmFaultContracts").IPmsmMachineFaultHost, housing: import("../faults/PmsmFaultContracts").IPmsmHousingFaultHost): void {
+    public postStep(
+        _t: number,
+        machine: import("../faults/PmsmFaultContracts").IPmsmMachineFaultHost,
+        housing: import("../faults/PmsmFaultContracts").IPmsmHousingFaultHost
+    ): void {
         if (!this.cfg.umpRadialStiffness) return;
         const gPerp = this.gravity.radialMagnitude();
         if (gPerp < 1e-12) return;
-        const delta = this.cfg.rotorMass * gPerp / this.cfg.bearingRadialStiffness;
+        const delta = (this.cfg.rotorMass * gPerp) / this.cfg.bearingRadialStiffness;
         if (delta < 1e-12) return;
         const F = this.cfg.umpRadialStiffness * delta;
         const theta = machine.thetaM - this.gravity.radialAngle();

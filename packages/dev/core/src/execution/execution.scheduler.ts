@@ -1,12 +1,4 @@
-import {
-    IChannel,
-    IRuntimeGraph,
-    IRuntimeNode,
-    ISession,
-    IStaticEligibility,
-    isLinkRef,
-    inSlotOf,
-} from "./execution.interfaces";
+import { IChannel, IRuntimeGraph, IRuntimeNode, ISession, IStaticEligibility, isLinkRef, inSlotOf } from "./execution.interfaces";
 import { isControlSlot } from "./control-ports";
 import type { Session } from "./execution.session";
 

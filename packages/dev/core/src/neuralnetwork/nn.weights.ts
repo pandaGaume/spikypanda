@@ -29,8 +29,8 @@ export class WeightInit {
     /// Can be used as a general-purpose initializer.
     /// </summary>
     static Normal(mean = 0, stdDev = 1): number {
-        let u = 1 - Math.random();
-        let v = 1 - Math.random();
+        const u = 1 - Math.random();
+        const v = 1 - Math.random();
         return mean + stdDev * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
     }
 
@@ -113,15 +113,18 @@ export class He implements IWeightInitializer {
 /// Normal (Gaussian) initializer using the Box-Muller transform.
 /// </summary>
 export class Normal implements IWeightInitializer {
-    public constructor(private mean = 0, private stdDev = 1) {}
+    public constructor(
+        private mean = 0,
+        private stdDev = 1
+    ) {}
 
     public get type(): WeightInitializerType {
         return WeightInitializerType.Normal;
     }
 
     public next(): number {
-        let u = 1 - Math.random();
-        let v = 1 - Math.random();
+        const u = 1 - Math.random();
+        const v = 1 - Math.random();
         return this.mean + this.stdDev * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
     }
 }
@@ -130,7 +133,10 @@ export class Normal implements IWeightInitializer {
 /// Uniform initializer between min and max.
 /// </summary>
 export class Uniform implements IWeightInitializer {
-    public constructor(private min = -1, private max = 1) {}
+    public constructor(
+        private min = -1,
+        private max = 1
+    ) {}
 
     public get type(): WeightInitializerType {
         return WeightInitializerType.Uniform;

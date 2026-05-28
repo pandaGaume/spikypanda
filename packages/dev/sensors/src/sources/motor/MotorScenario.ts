@@ -30,7 +30,7 @@ export interface IMotorScenarioOptions {
 export function buildMotorSource(motor: IMotorCurrentConfig, faults: ReadonlyArray<MotorFaultConfig> = []): IDataSource {
     const healthy = new MotorCurrentSource(motor);
     if (faults.length === 0) return healthy;
-    const faultSources = faults.map(f => new MotorFaultSource(f, healthy));
+    const faultSources = faults.map((f) => new MotorFaultSource(f, healthy));
     return new CompositeSource([healthy, ...faultSources]);
 }
 
@@ -49,17 +49,13 @@ export function buildMotorScenario(opts: IMotorScenarioOptions): IScenario {
             // back to the scenario list. typeId is the canonical wire value
             // (matches the C++ enum); type is the human-readable label.
             mechanicalFreqHz: opts.motor.motorSpeedRps,
-            faults: (opts.faults ?? []).map(f => ({
+            faults: (opts.faults ?? []).map((f) => ({
                 typeId: f.type,
                 type: motorFaultLabel(f.type),
                 displayName: f.displayName,
                 severity: f.severity,
-                ...(f.type === MotorFaultType.BROKEN_BAR
-                    ? { totalBars: f.totalBars, brokenIndices: Array.from(f.brokenIndices) }
-                    : {}),
-                ...(f.type === MotorFaultType.BEARING_DEFECT
-                    ? { bpfoFactor: f.bpfoFactor, bpfiFactor: f.bpfiFactor }
-                    : {}),
+                ...(f.type === MotorFaultType.BROKEN_BAR ? { totalBars: f.totalBars, brokenIndices: Array.from(f.brokenIndices) } : {}),
+                ...(f.type === MotorFaultType.BEARING_DEFECT ? { bpfoFactor: f.bpfoFactor, bpfiFactor: f.bpfiFactor } : {}),
             })),
         },
     };
@@ -74,27 +70,24 @@ export const DEFAULT_MOTOR: IMotorCurrentConfig = {
     supplyVoltage: 24.0,
     resistance: 1.2,
     inductance: 0.01,
-    backEmfConstant: 0.36,  // 0.75 * 24 / 50 = 0.36 V/rps  →  back-EMF = 18 V at 50 rps
+    backEmfConstant: 0.36, // 0.75 * 24 / 50 = 0.36 V/rps  →  back-EMF = 18 V at 50 rps
     motorSpeedRps: 50.0,
     commutatorBars: 12,
     brushCount: 2,
-    nominalCurrent: 5.0,    // (24 - 18) / 1.2 = 5 A at D=1, 50 rps
+    nominalCurrent: 5.0, // (24 - 18) / 1.2 = 5 A at D=1, 50 rps
     loadFactor: 1.0,
     rippleFactor: 0.05,
     // Physical params for gravity-induced shaft sag on a horizontal-axis motor.
     // A_grav ≈ I_eq * delta / g0 = 5 * (0.15*9.81/300000) / 0.0005
     // ≈ 0.049 A (≈ 1 % of 5 A nominal) for these values.
-    rotorMass: 0.15,                  // kg
-    airGap: 0.0005,                   // m  (0.5 mm)
-    bearingRadialStiffness: 300_000,  // N/m (300 N/mm)
+    rotorMass: 0.15, // kg
+    airGap: 0.0005, // m  (0.5 mm)
+    bearingRadialStiffness: 300_000, // N/m (300 N/mm)
 };
 
 // Internal: build a MotorFaultConfig with displayName / description filled
 // in from the per-type registry. Local to keep defaultMotorScenarios short.
-function preset<T extends MotorFaultType>(
-    type: T,
-    rest: Omit<Extract<MotorFaultConfig, { type: T }>, "type" | "displayName" | "description">,
-): MotorFaultConfig {
+function preset<T extends MotorFaultType>(type: T, rest: Omit<Extract<MotorFaultConfig, { type: T }>, "type" | "displayName" | "description">): MotorFaultConfig {
     const { displayName, description } = MOTOR_FAULT_PRESENTATION[type];
     return { type, displayName, description, ...rest } as MotorFaultConfig;
 }
@@ -130,29 +123,35 @@ export function defaultMotorScenarios(motor: IMotorCurrentConfig = DEFAULT_MOTOR
         buildMotorScenario({
             motor,
             label: "broken_bar_1bar_mild",
-            faults: [preset(MotorFaultType.BROKEN_BAR, {
-                severity: 0.4,
-                totalBars: motor.commutatorBars,
-                brokenIndices: contiguousBrokenBars(motor.commutatorBars, 1),
-            })],
+            faults: [
+                preset(MotorFaultType.BROKEN_BAR, {
+                    severity: 0.4,
+                    totalBars: motor.commutatorBars,
+                    brokenIndices: contiguousBrokenBars(motor.commutatorBars, 1),
+                }),
+            ],
         }),
         buildMotorScenario({
             motor,
             label: "broken_bar_3bars_contiguous",
-            faults: [preset(MotorFaultType.BROKEN_BAR, {
-                severity: 0.7,
-                totalBars: motor.commutatorBars,
-                brokenIndices: contiguousBrokenBars(motor.commutatorBars, 3),
-            })],
+            faults: [
+                preset(MotorFaultType.BROKEN_BAR, {
+                    severity: 0.7,
+                    totalBars: motor.commutatorBars,
+                    brokenIndices: contiguousBrokenBars(motor.commutatorBars, 3),
+                }),
+            ],
         }),
         buildMotorScenario({
             motor,
             label: "broken_bar_3bars_distributed",
-            faults: [preset(MotorFaultType.BROKEN_BAR, {
-                severity: 0.7,
-                totalBars: motor.commutatorBars,
-                brokenIndices: evenlyDistributedBrokenBars(motor.commutatorBars, 3),
-            })],
+            faults: [
+                preset(MotorFaultType.BROKEN_BAR, {
+                    severity: 0.7,
+                    totalBars: motor.commutatorBars,
+                    brokenIndices: evenlyDistributedBrokenBars(motor.commutatorBars, 3),
+                }),
+            ],
         }),
         buildMotorScenario({
             motor,

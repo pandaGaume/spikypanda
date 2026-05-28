@@ -8,24 +8,14 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { buildPlan } from "../planning.metrics";
-import type {
-    IAllocation,
-    IAllocationPlan,
-    IAllocationStrategy,
-    ITensorLifetime,
-} from "../planning.interfaces";
+import type { IAllocation, IAllocationPlan, IAllocationStrategy, ITensorLifetime } from "../planning.interfaces";
 
 export class NoRecyclingStrategy implements IAllocationStrategy {
     public readonly name = "no-recycling";
     public constructor(private readonly schedulerName = "kahn-fifo") {}
 
-    public plan(
-        lifetimes: readonly ITensorLifetime[],
-        schedule: readonly string[],
-    ): IAllocationPlan {
-        const sorted = [...lifetimes].sort(
-            (a, b) => a.birthStep - b.birthStep || a.tensorId.localeCompare(b.tensorId),
-        );
+    public plan(lifetimes: readonly ITensorLifetime[], schedule: readonly string[]): IAllocationPlan {
+        const sorted = [...lifetimes].sort((a, b) => a.birthStep - b.birthStep || a.tensorId.localeCompare(b.tensorId));
 
         const allocations = new Map<string, IAllocation>();
         let offset = 0;

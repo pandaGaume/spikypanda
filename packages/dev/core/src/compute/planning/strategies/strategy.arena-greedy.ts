@@ -15,12 +15,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { buildPlan } from "../planning.metrics";
-import type {
-    IAllocation,
-    IAllocationPlan,
-    IAllocationStrategy,
-    ITensorLifetime,
-} from "../planning.interfaces";
+import type { IAllocation, IAllocationPlan, IAllocationStrategy, ITensorLifetime } from "../planning.interfaces";
 
 interface Placed extends IAllocation {
     birthStep: number;
@@ -35,19 +30,12 @@ export class ArenaGreedyStrategy implements IAllocationStrategy {
     public readonly name = "arena-planned-greedy";
     public constructor(private readonly schedulerName = "kahn-fifo") {}
 
-    public plan(
-        lifetimes: readonly ITensorLifetime[],
-        schedule: readonly string[],
-    ): IAllocationPlan {
-        const sorted = [...lifetimes].sort(
-            (a, b) => b.bytes - a.bytes || a.tensorId.localeCompare(b.tensorId),
-        );
+    public plan(lifetimes: readonly ITensorLifetime[], schedule: readonly string[]): IAllocationPlan {
+        const sorted = [...lifetimes].sort((a, b) => b.bytes - a.bytes || a.tensorId.localeCompare(b.tensorId));
 
         const placed: Placed[] = [];
         for (const t of sorted) {
-            const conflicts = placed
-                .filter(p => temporalOverlap(p, t))
-                .sort((a, b) => a.offset - b.offset);
+            const conflicts = placed.filter((p) => temporalOverlap(p, t)).sort((a, b) => a.offset - b.offset);
 
             // Best-fit: scan gaps between consecutive conflicts, keep
             // the smallest one that still fits. If none fits, append at
@@ -66,9 +54,9 @@ export class ArenaGreedyStrategy implements IAllocationStrategy {
             const offset = bestOffset >= 0 ? bestOffset : cursor;
 
             placed.push({
-                tensorId:  t.tensorId,
+                tensorId: t.tensorId,
                 offset,
-                bytes:     t.bytes,
+                bytes: t.bytes,
                 birthStep: t.birthStep,
                 deathStep: t.deathStep,
             });

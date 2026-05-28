@@ -6,11 +6,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import type { IComputeGraph, IKernel, IDataLink } from "../compute.interfaces";
-import {
-    PLAN_DTYPE_BYTES,
-    type ITensorLifetime,
-    type PlanDType,
-} from "./planning.interfaces";
+import { PLAN_DTYPE_BYTES, type ITensorLifetime, type PlanDType } from "./planning.interfaces";
 
 // ─── Node id resolution ──────────────────────────────────────────────────────
 
@@ -65,10 +61,7 @@ export function tensorBytes(shape: readonly number[], dtype: PlanDType = "float3
  * returned list so their outputs can be planned (typical for graph
  * output buffers).
  */
-function enumerateTensors(
-    graph: IComputeGraph,
-    nodeIdMap: ReadonlyMap<IKernel, string>,
-): TensorRef[] {
+function enumerateTensors(graph: IComputeGraph, nodeIdMap: ReadonlyMap<IKernel, string>): TensorRef[] {
     const refs = new Map<string, TensorRef>();
 
     const ensureRef = (producer: IKernel, outIdx: number): TensorRef => {
@@ -98,7 +91,7 @@ function enumerateTensors(
         const consumer = link.ofin as IKernel | null;
         if (!producer || !nodeIdMap.has(producer)) continue;
 
-        const outgoing = producer.onsc<IDataLink>().filter(l => l.enabled !== false);
+        const outgoing = producer.onsc<IDataLink>().filter((l) => l.enabled !== false);
         const M = Math.max(1, producer.outputShapes.length);
         const linkIdx = outgoing.indexOf(link);
         const outIdx = M > 1 ? Math.min(Math.max(0, linkIdx), M - 1) : 0;
@@ -146,10 +139,7 @@ interface TensorRef {
  * from the schedule (which would mean the schedule does not cover
  * the graph).
  */
-export function computeLifetimes(
-    graph: IComputeGraph,
-    schedule: readonly IKernel[],
-): ITensorLifetime[] {
+export function computeLifetimes(graph: IComputeGraph, schedule: readonly IKernel[]): ITensorLifetime[] {
     const nodeIdMap = buildNodeIdMap(graph);
     const position = new Map<string, number>();
     schedule.forEach((kernel, idx) => {
@@ -173,15 +163,15 @@ export function computeLifetimes(
             if (ps != null && ps > deathStep) deathStep = ps;
         }
         lifetimes.push({
-            tensorId:    ref.tensorId,
-            producerId:  ref.producerId,
+            tensorId: ref.tensorId,
+            producerId: ref.producerId,
             consumerIds: ref.consumerIds,
             outputIndex: ref.outputIndex,
             birthStep,
             deathStep,
-            shape:       ref.shape,
-            dtype:       ref.dtype,
-            bytes:       ref.bytes,
+            shape: ref.shape,
+            dtype: ref.dtype,
+            bytes: ref.bytes,
         });
     }
 
@@ -192,10 +182,7 @@ export function computeLifetimes(
  * Convenience: convert a schedule of `IKernel[]` into the stringified
  * id array expected by `IAllocationStrategy.plan`.
  */
-export function scheduleToIds(
-    graph: IComputeGraph,
-    schedule: readonly IKernel[],
-): string[] {
+export function scheduleToIds(graph: IComputeGraph, schedule: readonly IKernel[]): string[] {
     const map = buildNodeIdMap(graph);
     const out: string[] = [];
     for (const k of schedule) {

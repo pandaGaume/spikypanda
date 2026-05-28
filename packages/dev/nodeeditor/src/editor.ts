@@ -91,10 +91,10 @@ export class NodeEditor {
         this.editors = new EditorRegistry();
 
         this.skins = new SkinRegistry();
-        this.skins.register("dark",              darkSkin);
-        this.skins.register("light",             lightSkin);
-        this.skins.register("helios",            heliosSkin);
-        this.skins.register("transparent_dark",  transparentDarkSkin);
+        this.skins.register("dark", darkSkin);
+        this.skins.register("light", lightSkin);
+        this.skins.register("helios", heliosSkin);
+        this.skins.register("transparent_dark", transparentDarkSkin);
         this.skins.register("transparent_light", transparentLightSkin);
 
         this.propertyPanel = new PropertyPanel(this.rightPanel, this.editors);
@@ -148,8 +148,7 @@ export class NodeEditor {
         const gridDot = isLight ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.03)";
         const cs = this.canvas.style;
         cs.setProperty("background-color", bg, "important");
-        cs.setProperty("background-image",
-            `radial-gradient(circle, ${gridDot} 1px, transparent 1px)`, "important");
+        cs.setProperty("background-image", `radial-gradient(circle, ${gridDot} 1px, transparent 1px)`, "important");
 
         // Side panels
         for (const panel of [this.leftPanel, this.rightPanel]) {
@@ -222,17 +221,16 @@ export class NodeEditor {
      * works.
      */
     private _deriveProfileFromSkin(skin: Skin): ExportProfile {
-        const pick = (key: string, fallback: string): string =>
-            skin[key] !== undefined ? skin[key] : fallback;
+        const pick = (key: string, fallback: string): string => (skin[key] !== undefined ? skin[key] : fallback);
         const cur = this.currentProfile;
         return {
-            background:       pick("--ne-color-bg",            cur.background ?? "#111"),
-            nodeBody:         pick("--ne-color-surface",       cur.nodeBody),
-            nodeBorder:       pick("--ne-color-border",        cur.nodeBorder),
-            headerText:       pick("--ne-color-text-strong",   cur.headerText),
-            portLabel:        pick("--ne-color-text-muted",    cur.portLabel),
-            portStroke:       pick("--ne-color-border-strong", cur.portStroke),
-            connectionStroke: pick("--ne-color-connection",    cur.connectionStroke),
+            background: pick("--ne-color-bg", cur.background ?? "#111"),
+            nodeBody: pick("--ne-color-surface", cur.nodeBody),
+            nodeBorder: pick("--ne-color-border", cur.nodeBorder),
+            headerText: pick("--ne-color-text-strong", cur.headerText),
+            portLabel: pick("--ne-color-text-muted", cur.portLabel),
+            portStroke: pick("--ne-color-border-strong", cur.portStroke),
+            connectionStroke: pick("--ne-color-connection", cur.connectionStroke),
         };
     }
 
@@ -263,9 +261,7 @@ export class NodeEditor {
     }
 
     removeNode(node: NodeUI): void {
-        const connsToRemove = this.connections.filter(
-            (c) => node.getAllPorts().some((p) => c.containsPort(p)),
-        );
+        const connsToRemove = this.connections.filter((c) => node.getAllPorts().some((p) => c.containsPort(p)));
         for (const c of connsToRemove) {
             this.removeConnection(c);
         }
@@ -527,9 +523,7 @@ export class NodeEditor {
             throw new Error(`No saveable handler for .${extension}`);
         }
         const result = handler.save(this);
-        const blob = typeof result.data === "string"
-            ? new Blob([result.data], { type: result.mimeType })
-            : new Blob([result.data], { type: result.mimeType });
+        const blob = typeof result.data === "string" ? new Blob([result.data], { type: result.mimeType }) : new Blob([result.data], { type: result.mimeType });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -547,9 +541,7 @@ export class NodeEditor {
         const name = prompt(`Export as ${handler.displayName}:`, defaultName);
         if (!name) return;
         const result = handler.save(this);
-        const blob = typeof result.data === "string"
-            ? new Blob([result.data], { type: result.mimeType })
-            : new Blob([result.data], { type: result.mimeType });
+        const blob = typeof result.data === "string" ? new Blob([result.data], { type: result.mimeType }) : new Blob([result.data], { type: result.mimeType });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -655,9 +647,7 @@ export class NodeEditor {
         const oy = -minY + PADDING;
 
         const parts: string[] = [];
-        parts.push(
-            `<svg xmlns="${SVG_NS}" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">`,
-        );
+        parts.push(`<svg xmlns="${SVG_NS}" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">`);
         if (theme.background) {
             parts.push(`<rect width="100%" height="100%" fill="${theme.background}" rx="8"/>`);
         }
@@ -676,7 +666,7 @@ export class NodeEditor {
             if (!p1 || !p2) continue;
             const dx = Math.abs(p2.x - p1.x) * 0.5;
             parts.push(
-                `<path d="M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${p2.x - dx} ${p2.y}, ${p2.x} ${p2.y}" stroke="${theme.connectionStroke}" fill="none" stroke-width="2"/>`,
+                `<path d="M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${p2.x - dx} ${p2.y}, ${p2.x} ${p2.y}" stroke="${theme.connectionStroke}" fill="none" stroke-width="2"/>`
             );
         }
 
@@ -684,45 +674,32 @@ export class NodeEditor {
         for (const m of measures) {
             const nx = m.node.x + ox;
             const ny = m.node.y + oy;
-            const headerColor = m.node.el.querySelector(".ne-node-header")?.getAttribute("style")
-                ?.match(/background:\s*([^;]+)/)?.[1] || "#335";
+            const headerColor =
+                m.node.el
+                    .querySelector(".ne-node-header")
+                    ?.getAttribute("style")
+                    ?.match(/background:\s*([^;]+)/)?.[1] || "#335";
 
             parts.push(`<g>`);
-            parts.push(
-                `<rect x="${nx}" y="${ny}" width="${m.w}" height="${m.h}" rx="8" fill="${theme.nodeBody}" stroke="${theme.nodeBorder}" stroke-width="1"/>`,
-            );
-            parts.push(
-                `<rect x="${nx}" y="${ny}" width="${m.w}" height="${HEADER_H}" rx="8" fill="${headerColor}"/>`,
-            );
-            parts.push(
-                `<rect x="${nx}" y="${ny + HEADER_H - 8}" width="${m.w}" height="8" fill="${headerColor}"/>`,
-            );
-            parts.push(
-                `<text x="${nx + 10}" y="${ny + 16}" fill="${theme.headerText}" font-family="${FONT}" font-size="11" font-weight="600">${m.node.label}</text>`,
-            );
+            parts.push(`<rect x="${nx}" y="${ny}" width="${m.w}" height="${m.h}" rx="8" fill="${theme.nodeBody}" stroke="${theme.nodeBorder}" stroke-width="1"/>`);
+            parts.push(`<rect x="${nx}" y="${ny}" width="${m.w}" height="${HEADER_H}" rx="8" fill="${headerColor}"/>`);
+            parts.push(`<rect x="${nx}" y="${ny + HEADER_H - 8}" width="${m.w}" height="8" fill="${headerColor}"/>`);
+            parts.push(`<text x="${nx + 10}" y="${ny + 16}" fill="${theme.headerText}" font-family="${FONT}" font-size="11" font-weight="600">${m.node.label}</text>`);
 
             for (let i = 0; i < m.node.inputs.length; i++) {
                 const p = m.node.inputs[i];
                 const pos = allPortPos.get(p)!;
                 const color = PORT_COLORS[p.type];
-                parts.push(
-                    `<circle cx="${pos.x}" cy="${pos.y}" r="${PORT_R}" fill="${color}" stroke="${theme.portStroke}" stroke-width="1.5"/>`,
-                );
-                parts.push(
-                    `<text x="${pos.x + PORT_R + 4}" y="${pos.y + 4}" fill="${theme.portLabel}" font-family="${FONT}" font-size="9">${p.name}</text>`,
-                );
+                parts.push(`<circle cx="${pos.x}" cy="${pos.y}" r="${PORT_R}" fill="${color}" stroke="${theme.portStroke}" stroke-width="1.5"/>`);
+                parts.push(`<text x="${pos.x + PORT_R + 4}" y="${pos.y + 4}" fill="${theme.portLabel}" font-family="${FONT}" font-size="9">${p.name}</text>`);
             }
 
             for (let i = 0; i < m.node.outputs.length; i++) {
                 const p = m.node.outputs[i];
                 const pos = allPortPos.get(p)!;
                 const color = PORT_COLORS[p.type];
-                parts.push(
-                    `<circle cx="${pos.x}" cy="${pos.y}" r="${PORT_R}" fill="${color}" stroke="${theme.portStroke}" stroke-width="1.5"/>`,
-                );
-                parts.push(
-                    `<text x="${pos.x - PORT_R - 4}" y="${pos.y + 4}" fill="${theme.portLabel}" font-family="${FONT}" font-size="9" text-anchor="end">${p.name}</text>`,
-                );
+                parts.push(`<circle cx="${pos.x}" cy="${pos.y}" r="${PORT_R}" fill="${color}" stroke="${theme.portStroke}" stroke-width="1.5"/>`);
+                parts.push(`<text x="${pos.x - PORT_R - 4}" y="${pos.y + 4}" fill="${theme.portLabel}" font-family="${FONT}" font-size="9" text-anchor="end">${p.name}</text>`);
             }
 
             parts.push(`</g>`);
@@ -838,9 +815,7 @@ export class NodeEditor {
     }
 
     private findNodeForPort(port: Port): NodeUI | undefined {
-        return this.nodes.find((n) =>
-            n.inputs.includes(port) || n.outputs.includes(port),
-        );
+        return this.nodes.find((n) => n.inputs.includes(port) || n.outputs.includes(port));
     }
 
     private findConnectionByPath(el: HTMLElement): Connection | undefined {
@@ -960,9 +935,7 @@ export class NodeEditor {
 
             if (Math.abs(dy) > threshold) {
                 const direction = dy > 0 ? 1 : -1;
-                const ports = this.reorderPort.direction === "input"
-                    ? this.reorderNode.inputs
-                    : this.reorderNode.outputs;
+                const ports = this.reorderPort.direction === "input" ? this.reorderNode.inputs : this.reorderNode.outputs;
                 const idx = ports.indexOf(this.reorderPort);
                 const newIdx = idx + direction;
 
@@ -1009,10 +982,10 @@ export class NodeEditor {
             const x2 = Math.max(this.selRectStart.x, e.clientX);
             const y2 = Math.max(this.selRectStart.y, e.clientY);
             const canvasRect = this.canvas.getBoundingClientRect();
-            this.selectionRect.style.left = (x1 - canvasRect.left) + "px";
-            this.selectionRect.style.top = (y1 - canvasRect.top) + "px";
-            this.selectionRect.style.width = (x2 - x1) + "px";
-            this.selectionRect.style.height = (y2 - y1) + "px";
+            this.selectionRect.style.left = x1 - canvasRect.left + "px";
+            this.selectionRect.style.top = y1 - canvasRect.top + "px";
+            this.selectionRect.style.width = x2 - x1 + "px";
+            this.selectionRect.style.height = y2 - y1 + "px";
             return;
         }
 
@@ -1061,12 +1034,7 @@ export class NodeEditor {
             if (rect.width > 4 || rect.height > 4) {
                 const hits = this.nodes.filter((n) => {
                     const nr = n.el.getBoundingClientRect();
-                    return (
-                        nr.left < rect.right &&
-                        nr.right > rect.left &&
-                        nr.top < rect.bottom &&
-                        nr.bottom > rect.top
-                    );
+                    return nr.left < rect.right && nr.right > rect.left && nr.top < rect.bottom && nr.bottom > rect.top;
                 });
                 if (hits.length > 0) {
                     this.selectNodes(hits);

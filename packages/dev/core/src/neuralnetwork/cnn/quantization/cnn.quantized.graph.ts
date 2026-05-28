@@ -99,16 +99,10 @@ export class QuantizedCnnGraphBuilder {
      * quantized in-place via the cnn.weights marshaller; all other
      * layers contribute only their structural metadata.
      */
-    public static fromCalibration(
-        cnn: ICnnGraph,
-        opts: QuantizedCnnGraphBuilderOpts
-    ): QuantizedCnnGraph {
+    public static fromCalibration(cnn: ICnnGraph, opts: QuantizedCnnGraphBuilderOpts): QuantizedCnnGraph {
         const descs = cnn.layerDescriptors;
         if (opts.layerOutputParams.length !== descs.length) {
-            throw new Error(
-                `QuantizedCnnGraphBuilder: layerOutputParams length ${opts.layerOutputParams.length} ` +
-                `does not match cnn.layerDescriptors length ${descs.length}`
-            );
+            throw new Error(`QuantizedCnnGraphBuilder: layerOutputParams length ${opts.layerOutputParams.length} ` + `does not match cnn.layerDescriptors length ${descs.length}`);
         }
 
         const layers: QuantizedCnnLayer[] = [];
@@ -126,11 +120,7 @@ export class QuantizedCnnGraphBuilder {
         });
     }
 
-    private static _buildLayer(
-        desc: ICnnLayerDescriptor,
-        prev: ICnnLayerDescriptor | null,
-        outputParams: IQuantizationParams
-    ): QuantizedCnnLayer {
+    private static _buildLayer(desc: ICnnLayerDescriptor, prev: ICnnLayerDescriptor | null, outputParams: IQuantizationParams): QuantizedCnnLayer {
         const layer: {
             -readonly [K in keyof QuantizedCnnLayer]: QuantizedCnnLayer[K];
         } = {
@@ -159,8 +149,7 @@ export class QuantizedCnnGraphBuilder {
             case CnnLayerType.Conv: {
                 if (!desc.convKernels) {
                     throw new Error(
-                        `QuantizedCnnGraphBuilder: Conv layer is missing convKernels (the FP32 ` +
-                        `CnnGraph was built with a CnnBuilder that didn't populate this field).`
+                        `QuantizedCnnGraphBuilder: Conv layer is missing convKernels (the FP32 ` + `CnnGraph was built with a CnnBuilder that didn't populate this field).`
                     );
                 }
                 if (!prev) {

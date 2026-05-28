@@ -79,9 +79,7 @@ export interface IEditorSchema {
  */
 export function editor(kind: string): ClassDecorator {
     return (target) => {
-        const existing = (Reflect.getMetadata(EditorMetadataKey, target) as
-            | ReadonlyArray<string>
-            | undefined) ?? [];
+        const existing = (Reflect.getMetadata(EditorMetadataKey, target) as ReadonlyArray<string> | undefined) ?? [];
         if (existing.includes(kind)) {
             return;
         }
@@ -129,14 +127,8 @@ export function viewable(kind: string, options?: unknown) {
  */
 export function getEditorSchema(target: object): IEditorSchema {
     const ctor = (target as { constructor?: Function }).constructor;
-    const classEditors = ctor
-        ? ((Reflect.getMetadata(EditorMetadataKey, ctor) as
-            | ReadonlyArray<string>
-            | undefined) ?? [])
-        : [];
-    const fields = (Reflect.getMetadata(EditableFieldsMetadataKey, target) as
-        | ReadonlyArray<IEditableField>
-        | undefined) ?? [];
+    const classEditors = ctor ? ((Reflect.getMetadata(EditorMetadataKey, ctor) as ReadonlyArray<string> | undefined) ?? []) : [];
+    const fields = (Reflect.getMetadata(EditableFieldsMetadataKey, target) as ReadonlyArray<IEditableField> | undefined) ?? [];
     return { classEditors, fields };
 }
 
@@ -146,8 +138,6 @@ function appendField(target: object, entry: IEditableField): void {
     // parent-class fields. Storing the merged list on the subclass'
     // own prototype ensures inheritance is preserved without depending
     // on walking at read time.
-    const existing = (Reflect.getMetadata(EditableFieldsMetadataKey, proto) as
-        | ReadonlyArray<IEditableField>
-        | undefined) ?? [];
+    const existing = (Reflect.getMetadata(EditableFieldsMetadataKey, proto) as ReadonlyArray<IEditableField> | undefined) ?? [];
     Reflect.defineMetadata(EditableFieldsMetadataKey, [...existing, entry], proto);
 }

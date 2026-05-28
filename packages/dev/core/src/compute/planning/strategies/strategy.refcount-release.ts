@@ -14,12 +14,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { buildPlan } from "../planning.metrics";
-import type {
-    IAllocation,
-    IAllocationPlan,
-    IAllocationStrategy,
-    ITensorLifetime,
-} from "../planning.interfaces";
+import type { IAllocation, IAllocationPlan, IAllocationStrategy, ITensorLifetime } from "../planning.interfaces";
 
 interface LiveSlot {
     offset: number;
@@ -31,13 +26,8 @@ export class RefcountReleaseStrategy implements IAllocationStrategy {
     public readonly name = "refcount-release";
     public constructor(private readonly schedulerName = "kahn-fifo") {}
 
-    public plan(
-        lifetimes: readonly ITensorLifetime[],
-        schedule: readonly string[],
-    ): IAllocationPlan {
-        const sorted = [...lifetimes].sort(
-            (a, b) => a.birthStep - b.birthStep || a.tensorId.localeCompare(b.tensorId),
-        );
+    public plan(lifetimes: readonly ITensorLifetime[], schedule: readonly string[]): IAllocationPlan {
+        const sorted = [...lifetimes].sort((a, b) => a.birthStep - b.birthStep || a.tensorId.localeCompare(b.tensorId));
 
         const live: LiveSlot[] = [];
         const allocations = new Map<string, IAllocation>();

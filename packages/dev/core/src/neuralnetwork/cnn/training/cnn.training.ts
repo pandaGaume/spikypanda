@@ -1,12 +1,5 @@
 import { IBackpropSynapseContext, ILossFunction, IOptimizer, ITrainingContext } from "../../nn.training";
-import {
-    CnnLayerType,
-    ICnnGraph,
-    ICnnNeuron,
-    ICnnSynapse,
-    IConvKernel,
-    PoolingType,
-} from "../cnn.interfaces";
+import { CnnLayerType, ICnnGraph, ICnnNeuron, ICnnSynapse, IConvKernel, PoolingType } from "../cnn.interfaces";
 import { CnnInferenceRuntime } from "../cnn.inference";
 import { ICnnBackpropNeuronContext, KernelWeightSlot, KernelBiasSlot } from "./cnn.training.interfaces";
 

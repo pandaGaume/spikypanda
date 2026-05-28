@@ -36,8 +36,7 @@ class BatchNormNode extends OnnxOpNode {
             for (let n = 0; n < N; n++) {
                 for (let c = 0; c < C; c++) {
                     const idx = n * C + c;
-                    out[idx] = (X.data[idx] - mean.data[c]) / Math.sqrt(variance.data[c] + this.eps)
-                        * scale.data[c] + bias.data[c];
+                    out[idx] = ((X.data[idx] - mean.data[c]) / Math.sqrt(variance.data[c] + this.eps)) * scale.data[c] + bias.data[c];
                 }
             }
         } else if (X.shape.length === 3) {

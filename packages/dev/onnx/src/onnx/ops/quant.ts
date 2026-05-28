@@ -37,9 +37,7 @@ function readVector(t: ITensor | undefined): Float32Array {
 
 function paramsFor(scale: number | Float32Array, zeroPoint: number | Float32Array, axis?: number): IQuantizationParams {
     const scales = scale instanceof Float32Array ? scale : Float32Array.from([scale]);
-    const zpArr = zeroPoint instanceof Float32Array
-        ? Int32Array.from(zeroPoint)
-        : Int32Array.from([zeroPoint as number]);
+    const zpArr = zeroPoint instanceof Float32Array ? Int32Array.from(zeroPoint) : Int32Array.from([zeroPoint as number]);
     return {
         scheme: scales.length > 1 ? "per_channel" : "per_tensor",
         dtype: "int8",
@@ -61,7 +59,7 @@ function roundHalfEven(x: number): number {
 
 function quantizeOne(real: number, scale: number, zp: number): number {
     if (scale <= 0 || !Number.isFinite(scale)) return zp;
-    let q = roundHalfEven(real / scale) + zp;
+    const q = roundHalfEven(real / scale) + zp;
     if (q < -128) return -128;
     if (q > 127) return 127;
     return q;
@@ -88,12 +86,14 @@ class QuantizeLinearNode extends OnnxOpNode {
         for (let i = 0; i < x.data.length; i++) {
             out[i] = quantizeOne(x.data[i], scale, zp);
         }
-        return [{
-            data: out,
-            shape: [...x.shape],
-            name: x.name,
-            quantization: paramsFor(scale, zp),
-        }];
+        return [
+            {
+                data: out,
+                shape: [...x.shape],
+                name: x.name,
+                quantization: paramsFor(scale, zp),
+            },
+        ];
     }
 }
 
@@ -199,11 +199,13 @@ class QLinearConvNode extends OnnxOpNode {
             }
         }
 
-        return [{
-            data: out,
-            shape: [N, F, outH, outW],
-            quantization: paramsFor(yScale, yZp),
-        }];
+        return [
+            {
+                data: out,
+                shape: [N, F, outH, outW],
+                quantization: paramsFor(yScale, yZp),
+            },
+        ];
     }
 }
 
@@ -248,11 +250,13 @@ class QLinearMatMulNode extends OnnxOpNode {
                 out[m * Nout + n] = quantizeOne(yFp, yScale, yZp);
             }
         }
-        return [{
-            data: out,
-            shape: [M, Nout],
-            quantization: paramsFor(yScale, yZp),
-        }];
+        return [
+            {
+                data: out,
+                shape: [M, Nout],
+                quantization: paramsFor(yScale, yZp),
+            },
+        ];
     }
 }
 

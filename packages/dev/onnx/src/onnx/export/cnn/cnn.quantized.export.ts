@@ -34,14 +34,22 @@ import {
 
 function layerTypeName(t: CnnLayerType): string {
     switch (t) {
-        case CnnLayerType.Input: return "Input";
-        case CnnLayerType.Conv: return "Conv";
-        case CnnLayerType.Pool: return "Pool";
-        case CnnLayerType.Flatten: return "Flatten";
-        case CnnLayerType.Dense: return "Dense";
-        case CnnLayerType.Upsample: return "Upsample";
-        case CnnLayerType.Reshape: return "Reshape";
-        default: return `?${t}`;
+        case CnnLayerType.Input:
+            return "Input";
+        case CnnLayerType.Conv:
+            return "Conv";
+        case CnnLayerType.Pool:
+            return "Pool";
+        case CnnLayerType.Flatten:
+            return "Flatten";
+        case CnnLayerType.Dense:
+            return "Dense";
+        case CnnLayerType.Upsample:
+            return "Upsample";
+        case CnnLayerType.Reshape:
+            return "Reshape";
+        default:
+            return `?${t}`;
     }
 }
 
@@ -55,13 +63,7 @@ export class QuantizedCnnGraphOnnxExporter {
      * DequantizeLinear at the exit so the public boundary stays
      * FP32-friendly.
      */
-    public static emit(
-        qcnn: QuantizedCnnGraph,
-        inputName: string,
-        outputName: string,
-        ctx: OnnxExportContext,
-        scopeHint: string = "qcnn"
-    ): void {
+    public static emit(qcnn: QuantizedCnnGraph, inputName: string, outputName: string, ctx: OnnxExportContext, scopeHint: string = "qcnn"): void {
         const layers = qcnn.layers;
         if (layers.length < 2) {
             throw new Error("QuantizedCnnGraphOnnxExporter: CNN has no actual layers (Input only).");
@@ -110,9 +112,7 @@ export class QuantizedCnnGraphOnnxExporter {
             // (the dense path emits its own dequant + bias-add). Otherwise
             // allocate a fresh intermediate tensor.
             const denseTerminal = isLast && layer.type === CnnLayerType.Dense;
-            const layerOut = denseTerminal
-                ? outputName
-                : ctx.allocateTensorName(`${scopeHint}_L${i}_${layerTypeName(layer.type)}`);
+            const layerOut = denseTerminal ? outputName : ctx.allocateTensorName(`${scopeHint}_L${i}_${layerTypeName(layer.type)}`);
 
             switch (layer.type) {
                 case CnnLayerType.Conv:
@@ -128,9 +128,7 @@ export class QuantizedCnnGraphOnnxExporter {
                     QuantizedCnnGraphOnnxExporter._emitQLinearMatMul(prev, layerOut, layer, prevParams, prevDesc, ctx, layerScope);
                     break;
                 default:
-                    throw new Error(
-                        `QuantizedCnnGraphOnnxExporter: layer type ${layerTypeName(layer.type)} not implemented for quantized export.`
-                    );
+                    throw new Error(`QuantizedCnnGraphOnnxExporter: layer type ${layerTypeName(layer.type)} not implemented for quantized export.`);
             }
 
             if (isLast && !denseTerminal) {
@@ -227,7 +225,7 @@ export class QuantizedCnnGraphOnnxExporter {
         if (activation && activation !== "Identity" && activation !== "Relu") {
             throw new Error(
                 `QuantizedCnnGraphOnnxExporter: activation "${activation}" on a Conv layer is not yet ` +
-                `supported in quantized export (only linear / Relu are saturation-fusible).`
+                    `supported in quantized export (only linear / Relu are saturation-fusible).`
             );
         }
         const convOut = needsSeparateAct ? ctx.allocateTensorName(`${scope}_conv_out`) : out;
@@ -260,21 +258,14 @@ export class QuantizedCnnGraphOnnxExporter {
 
     // ── Pool ──────────────────────────────────────────────────────────
 
-    private static _emitPool(
-        prev: string,
-        out: string,
-        layer: QuantizedCnnLayer,
-        prevDesc: QuantizedCnnLayer,
-        ctx: OnnxExportContext
-    ): void {
+    private static _emitPool(prev: string, out: string, layer: QuantizedCnnLayer, prevDesc: QuantizedCnnLayer, ctx: OnnxExportContext): void {
         if (!layer.kernelSize || !layer.stride || layer.poolType === undefined) {
             throw new Error(`QuantizedCnnGraphOnnxExporter: Pool layer is missing metadata.`);
         }
         const [pH, pW] = layer.kernelSize;
         const [sH, sW] = layer.stride;
-        const isAvg = layer.poolType === (PoolingType.Avg);
-        const isGlobal = pH === prevDesc.height && pW === prevDesc.width
-            && layer.width === 1 && layer.height === 1;
+        const isAvg = layer.poolType === PoolingType.Avg;
+        const isGlobal = pH === prevDesc.height && pW === prevDesc.width && layer.width === 1 && layer.height === 1;
 
         if (isGlobal) {
             ctx.makeNode({
@@ -322,8 +313,7 @@ export class QuantizedCnnGraphOnnxExporter {
             throw new Error(`QuantizedCnnGraphOnnxExporter: Dense layer is missing weights or bias.`);
         }
         // Auto-Flatten when the previous layer is spatial (Conv / Pool / etc.).
-        const prevIsSpatial = prevDesc.type !== CnnLayerType.Flatten
-            && prevDesc.type !== CnnLayerType.Dense;
+        const prevIsSpatial = prevDesc.type !== CnnLayerType.Flatten && prevDesc.type !== CnnLayerType.Dense;
         let matmulInput = prev;
         if (prevIsSpatial) {
             const flat = ctx.allocateTensorName(`${scope}_flat`);
@@ -378,7 +368,7 @@ export class QuantizedCnnGraphOnnxExporter {
         if (activation && activation !== "Identity" && activation !== "Relu") {
             throw new Error(
                 `QuantizedCnnGraphOnnxExporter: activation "${activation}" on a Dense layer is not yet ` +
-                `supported in quantized export (only linear / Relu are saturation-fusible).`
+                    `supported in quantized export (only linear / Relu are saturation-fusible).`
             );
         }
 
@@ -427,12 +417,7 @@ export class QuantizedCnnGraphOnnxExporter {
      * weight, and graph-output params; per_channel weight scales are
      * emitted with their channel-length shape, not via this helper.
      */
-    private static _emitScaleAndZp(
-        ctx: OnnxExportContext,
-        params: IQuantizationParams,
-        scaleName: string,
-        zpName: string
-    ): void {
+    private static _emitScaleAndZp(ctx: OnnxExportContext, params: IQuantizationParams, scaleName: string, zpName: string): void {
         ctx.addFloatInitializer(scaleName, [], Float32Array.from([params.scales[0]]));
         const zp = new Int8Array(1);
         zp[0] = params.zeroPoints[0];
@@ -445,8 +430,6 @@ export class QuantizedCnnGraphOnnxExporter {
         if (fn === ActivationFunctions.relu) return "Relu";
         if (fn === ActivationFunctions.sigmoid) return "Sigmoid";
         if (fn === ActivationFunctions.tanh) return "Tanh";
-        throw new Error(
-            `QuantizedCnnGraphOnnxExporter: unsupported activation (only linear / relu / sigmoid / tanh).`
-        );
+        throw new Error(`QuantizedCnnGraphOnnxExporter: unsupported activation (only linear / relu / sigmoid / tanh).`);
     }
 }

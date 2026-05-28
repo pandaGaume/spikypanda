@@ -1,10 +1,10 @@
 import { EditorFactory, IEditor } from "../editor-registry";
 
 interface INumberOptions {
-    readonly unit?:    string;
-    readonly step?:    number;
-    readonly min?:     number;
-    readonly max?:     number;
+    readonly unit?: string;
+    readonly step?: number;
+    readonly min?: number;
+    readonly max?: number;
 }
 
 /**
@@ -21,14 +21,14 @@ interface INumberOptions {
 export const numberEditor: EditorFactory = (host, model, propertyName, options, editable): IEditor => {
     if (!propertyName) return { dispose: () => {} };
 
-    const opts = (options && typeof options === "object") ? (options as INumberOptions) : {};
+    const opts = options && typeof options === "object" ? (options as INumberOptions) : {};
 
     const wrap = document.createElement("div");
     wrap.style.cssText = "display:flex;align-items:center;gap:6px;width:100%;";
 
     const input = document.createElement("input");
-    input.type     = "number";
-    input.step     = opts.step != null ? String(opts.step) : "0.1";
+    input.type = "number";
+    input.step = opts.step != null ? String(opts.step) : "0.1";
     if (opts.min != null) input.min = String(opts.min);
     if (opts.max != null) input.max = String(opts.max);
     input.readOnly = editable === false;

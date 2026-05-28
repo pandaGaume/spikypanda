@@ -1,12 +1,16 @@
-import { motorDcSubPlugin }   from "./electric/motor-dc/index.js";
+import { transformSubPlugin } from "./transform/index.js";
+import { sceneSubPlugin } from "./scene/index.js";
+import { motorDcSubPlugin } from "./electric/motor-dc/index.js";
 import { motorBldcSubPlugin } from "./electric/motor-bldc/index.js";
-import { bearingSubPlugin }   from "./mechanical/bearing/index.js";
-import { shaftSubPlugin }     from "./mechanical/shaft/index.js";
-import { gearSubPlugin }      from "./mechanical/gear/index.js";
-import { frictionSubPlugin }  from "./mechanical/friction/index.js";
+import { bearingSubPlugin } from "./mechanical/bearing/index.js";
+import { shaftSubPlugin } from "./mechanical/shaft/index.js";
+import { gearSubPlugin } from "./mechanical/gear/index.js";
+import { frictionSubPlugin } from "./mechanical/friction/index.js";
 import { vibrationSubPlugin } from "./mechanical/vibration/index.js";
-import { faultSubPlugin }     from "./mechanical/fault/index.js";
+import { faultSubPlugin } from "./mechanical/fault/index.js";
 
+export * from "./transform/index.js";
+export * from "./scene/index.js";
 export * from "./electric/motor-dc/index.js";
 export * from "./electric/motor-bldc/index.js";
 export * from "./mechanical/bearing/index.js";
@@ -21,6 +25,14 @@ export * from "./mechanical/fault/index.js";
  *
  * Thematic physics nodes organized as a tree of sub-plugins under
  * `Physics.*`. V1 ships:
+ *
+ *   Transform     — world-frame transform composer; base class for every
+ *                   physical object that lives in a world reference frame
+ *                   (motors, sensors, mechanical bodies inherit it).
+ *
+ *   Scene         — environmental context broadcaster (gravity,
+ *                   temperature, pressure, time_scale). Wire its `scene`
+ *                   output to a TransformNode's `scene` input to attach.
  *
  *   Electric/
  *     Motor/
@@ -41,13 +53,15 @@ export * from "./mechanical/fault/index.js";
  */
 export default {
     subPlugins: {
-        "Physics.Electric.Motor.DC":         motorDcSubPlugin,
-        "Physics.Electric.Motor.BLDC":       motorBldcSubPlugin,
-        "Physics.Mechanical.Bearing":        bearingSubPlugin,
-        "Physics.Mechanical.Shaft":          shaftSubPlugin,
-        "Physics.Mechanical.Gear":           gearSubPlugin,
-        "Physics.Mechanical.Friction":       frictionSubPlugin,
-        "Physics.Mechanical.Vibration":      vibrationSubPlugin,
-        "Physics.Mechanical.Fault":          faultSubPlugin,
+        "Physics.Transform": transformSubPlugin,
+        "Physics.Scene": sceneSubPlugin,
+        "Physics.Electric.Motor.DC": motorDcSubPlugin,
+        "Physics.Electric.Motor.BLDC": motorBldcSubPlugin,
+        "Physics.Mechanical.Bearing": bearingSubPlugin,
+        "Physics.Mechanical.Shaft": shaftSubPlugin,
+        "Physics.Mechanical.Gear": gearSubPlugin,
+        "Physics.Mechanical.Friction": frictionSubPlugin,
+        "Physics.Mechanical.Vibration": vibrationSubPlugin,
+        "Physics.Mechanical.Fault": faultSubPlugin,
     },
 };

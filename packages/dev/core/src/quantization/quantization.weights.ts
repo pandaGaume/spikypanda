@@ -57,9 +57,7 @@ function validateShape(values: Float32Array, shape: ReadonlyArray<number>): void
     let expected = 1;
     for (const d of shape) expected *= d;
     if (expected !== values.length) {
-        throw new Error(
-            `WeightQuantizer: shape [${shape.join(", ")}] implies ${expected} elements, got ${values.length}`
-        );
+        throw new Error(`WeightQuantizer: shape [${shape.join(", ")}] implies ${expected} elements, got ${values.length}`);
     }
 }
 
@@ -162,7 +160,7 @@ export class WeightQuantizer {
         return {
             data,
             scales,
-            zeroPoints: new Int32Array(channels),  // zero-initialised
+            zeroPoints: new Int32Array(channels), // zero-initialised
             shape: [...shape],
             axis,
             symmetric: true,
@@ -185,7 +183,10 @@ export class WeightQuantizer {
             if (v < min) min = v;
             if (v > max) max = v;
         }
-        if (!Number.isFinite(min)) { min = 0; max = 0; }
+        if (!Number.isFinite(min)) {
+            min = 0;
+            max = 0;
+        }
         const { scale, zeroPoint } = asymmetricParamsFromRange(min, max, "int8");
         const { lo, hi } = dtypeBounds("int8");
         const data = new Int8Array(values.length);

@@ -58,7 +58,11 @@ export class DebugBus {
     public log(level: DebugLevel, source: string, message: string): void {
         const entry: IDebugEntry = { ts: Date.now(), level, source, message };
         for (const h of this._handlers) {
-            try { h(entry); } catch (e) { /* swallow — debug must never break run() */ void e; }
+            try {
+                h(entry);
+            } catch (e) {
+                /* swallow — debug must never break run() */ void e;
+            }
         }
     }
 }

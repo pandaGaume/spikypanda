@@ -22,13 +22,13 @@ interface IObservableModel {
  * become read-only text with a "no editor for kind X" hint.
  */
 const PRIMITIVE_KIND_TO_INPUT_TYPE: Record<string, "string" | "number" | "boolean"> = {
-    string:  "string",
-    text:    "string",
-    number:  "number",
-    int:     "number",
-    float:   "number",
+    string: "string",
+    text: "string",
+    number: "number",
+    int: "number",
+    float: "number",
     boolean: "boolean",
-    bool:    "boolean",
+    bool: "boolean",
 };
 
 /**
@@ -39,8 +39,8 @@ const PRIMITIVE_KIND_TO_INPUT_TYPE: Record<string, "string" | "number" | "boolea
  * out or on hide() / new item, all instantiated editors are disposed.
  */
 interface TabState {
-    readonly name: string;          // "properties" or the editor kind
-    readonly label: string;         // user-visible (currently kind verbatim)
+    readonly name: string; // "properties" or the editor kind
+    readonly label: string; // user-visible (currently kind verbatim)
     readonly bodyEl: HTMLDivElement;
     readonly buttonEl: HTMLButtonElement;
     readonly isProperties: boolean;
@@ -310,9 +310,7 @@ export class PropertyPanel {
         }
 
         const model = item.data;
-        const schema = (typeof model === "object" && model !== null)
-            ? getEditorSchema(model)
-            : null;
+        const schema = typeof model === "object" && model !== null ? getEditorSchema(model) : null;
 
         // Decorator-first: when the model declares any @editable /
         // @viewable, render strictly from that schema. The Inspectable
@@ -435,10 +433,7 @@ export class PropertyPanel {
         this.footerEl.style.display = hasEditable ? "" : "none";
     }
 
-    private createPrimitiveFallback(
-        model: object,
-        field: IEditableField,
-    ): { el: HTMLElement; editable: boolean } {
+    private createPrimitiveFallback(model: object, field: IEditableField): { el: HTMLElement; editable: boolean } {
         const value = (model as Record<string, unknown>)[field.propertyName];
 
         const primitiveType = PRIMITIVE_KIND_TO_INPUT_TYPE[field.kind];
@@ -507,8 +502,7 @@ export class PropertyPanel {
     }
 
     private createInput(entry: PropertyEntry): HTMLElement {
-        const type = entry.type ?? (typeof entry.value === "number" ? "number"
-            : typeof entry.value === "boolean" ? "boolean" : "string");
+        const type = entry.type ?? (typeof entry.value === "number" ? "number" : typeof entry.value === "boolean" ? "boolean" : "string");
 
         // Reads pending edits from the staged map so a re-render
         // (triggered e.g. by another field's onPropertyChanged) does

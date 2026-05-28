@@ -129,19 +129,11 @@ export class MnistLoader {
     }
 
     public static loadTrainSet(dataDir: string = "data/mnist", maxSamples?: number): IDataset {
-        return MnistLoader._load(
-            path.join(dataDir, MNIST_FILES.trainImages),
-            path.join(dataDir, MNIST_FILES.trainLabels),
-            maxSamples
-        );
+        return MnistLoader._load(path.join(dataDir, MNIST_FILES.trainImages), path.join(dataDir, MNIST_FILES.trainLabels), maxSamples);
     }
 
     public static loadTestSet(dataDir: string = "data/mnist", maxSamples?: number): IDataset {
-        return MnistLoader._load(
-            path.join(dataDir, MNIST_FILES.testImages),
-            path.join(dataDir, MNIST_FILES.testLabels),
-            maxSamples
-        );
+        return MnistLoader._load(path.join(dataDir, MNIST_FILES.testImages), path.join(dataDir, MNIST_FILES.testLabels), maxSamples);
     }
 
     private static _load(imagesPath: string, labelsPath: string, maxSamples?: number): IDataset {

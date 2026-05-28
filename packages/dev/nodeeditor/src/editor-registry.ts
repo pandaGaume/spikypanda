@@ -38,13 +38,7 @@ export interface IEditor extends IDisposable {}
  *                 a kind across both decorators check this to render an
  *                 input vs. a viewer.
  */
-export type EditorFactory = (
-    host: HTMLElement,
-    model: object,
-    propertyName?: string,
-    options?: unknown,
-    editable?: boolean,
-) => IEditor;
+export type EditorFactory = (host: HTMLElement, model: object, propertyName?: string, options?: unknown, editable?: boolean) => IEditor;
 
 /**
  * Per-NodeEditor registry mapping editor kind strings to factories.

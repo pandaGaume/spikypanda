@@ -12,12 +12,7 @@
 // once warmed up).
 // ═══════════════════════════════════════════════════════════════════════════
 
-import {
-    IChannel,
-    ISession,
-    ITensor,
-    RuntimeNode,
-} from "spikypanda-core";
+import { IChannel, ISession, ITensor, RuntimeNode } from "spikypanda-core";
 
 export class WindowNode extends RuntimeNode {
     private readonly _windowSize: number;
@@ -68,9 +63,7 @@ export class WindowNode extends RuntimeNode {
                 continue;
             }
             if (sample.data.length !== this._channels) {
-                throw new Error(
-                    `WindowNode: incoming sample length ${sample.data.length} does not match channels ${this._channels}`
-                );
+                throw new Error(`WindowNode: incoming sample length ${sample.data.length} does not match channels ${this._channels}`);
             }
             // Append to ring buffer.
             const off = this._writeHead * this._channels;

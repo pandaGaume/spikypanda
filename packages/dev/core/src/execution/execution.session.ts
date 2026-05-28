@@ -1,15 +1,6 @@
 import { IOlink } from "../graph/graph.interfaces";
 import { isControlSlot } from "./control-ports";
-import {
-    IChannel,
-    ILinkRef,
-    ILinkState,
-    INodeState,
-    IRuntimeGraph,
-    IRuntimeNode,
-    ISession,
-    inSlotOf,
-} from "./execution.interfaces";
+import { IChannel, ILinkRef, ILinkState, INodeState, IRuntimeGraph, IRuntimeNode, ISession, inSlotOf } from "./execution.interfaces";
 import { Scheduler } from "./execution.scheduler";
 import { StartNode } from "./start.node";
 import { StopNode } from "./stop.node";
@@ -52,12 +43,10 @@ export class Session implements ISession {
     public constructor(graph: IRuntimeGraph) {
         this.graph = graph;
         this.nodeStates = graph.nodes.map((n) => {
-            const base = (typeof n.createNodeState === "function")
-                ? n.createNodeState()
-                : ({ linksReady: 0 } as INodeState);
+            const base = typeof n.createNodeState === "function" ? n.createNodeState() : ({ linksReady: 0 } as INodeState);
             // Always materialise the buffer maps; createNodeState
             // subclasses may have omitted them.
-            if (!base.inputBuffers)  base.inputBuffers  = new Map();
+            if (!base.inputBuffers) base.inputBuffers = new Map();
             if (!base.inputCapacity) base.inputCapacity = new Map();
             return base;
         });
@@ -187,10 +176,7 @@ export class Session implements ISession {
         }
         const cap = state.inputCapacity.get(slot) ?? 1;
         if (buf.length >= cap) {
-            throw new Error(
-                `[Session] channel overflow on slot "${String(slot)}" `
-                + `(capacity ${cap}); raise the source port's capacity to allow burst publishes.`,
-            );
+            throw new Error(`[Session] channel overflow on slot "${String(slot)}" ` + `(capacity ${cap}); raise the source port's capacity to allow burst publishes.`);
         }
         const wasEmpty = buf.length === 0;
         buf.push(ref.value);
@@ -267,23 +253,26 @@ export class Session implements ISession {
 
     private _buildLinkStatesProxy(): ILinkState[] {
         const session = this;
-        return this.graph.links.map((_link, idx) => ({
-            get ready(): boolean {
-                const link = session.graph.links[idx] as IChannel | undefined;
-                if (!link) return false;
-                const buf = session._bufferFor(link);
-                return !!buf && buf.length > 0;
-            },
-            get payload(): unknown {
-                const link = session.graph.links[idx] as IChannel | undefined;
-                if (!link) return undefined;
-                const buf = session._bufferFor(link);
-                return buf && buf.length > 0 ? buf[0] : undefined;
-            },
-            // Setters are kept off this proxy on purpose. Old code that
-            // mutated `linkStates[i].payload = v` directly was bypassing
-            // the readiness counter; that path is no longer supported.
-        } as ILinkState));
+        return this.graph.links.map(
+            (_link, idx) =>
+                ({
+                    get ready(): boolean {
+                        const link = session.graph.links[idx] as IChannel | undefined;
+                        if (!link) return false;
+                        const buf = session._bufferFor(link);
+                        return !!buf && buf.length > 0;
+                    },
+                    get payload(): unknown {
+                        const link = session.graph.links[idx] as IChannel | undefined;
+                        if (!link) return undefined;
+                        const buf = session._bufferFor(link);
+                        return buf && buf.length > 0 ? buf[0] : undefined;
+                    },
+                    // Setters are kept off this proxy on purpose. Old code that
+                    // mutated `linkStates[i].payload = v` directly was bypassing
+                    // the readiness counter; that path is no longer supported.
+                }) as ILinkState
+        );
     }
 
     /**

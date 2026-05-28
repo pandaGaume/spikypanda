@@ -20,32 +20,46 @@ export class ConvNode extends OnnxOpNode {
     constructor(info: OnnxNodeInfo) {
         super(info);
         this._kernelShape = this.attrInt("kernel_shape", 3);
-        this._strides     = this.attrInt("strides", 1);
-        this._pads        = this.attrInt("pads", 0);
+        this._strides = this.attrInt("strides", 1);
+        this._pads = this.attrInt("pads", 0);
     }
 
     @editable("number", { min: 1, max: 11, step: 1 })
-    public get kernelShape(): number { return this._kernelShape; }
+    public get kernelShape(): number {
+        return this._kernelShape;
+    }
     public set kernelShape(v: number) {
-        this.setField("kernelShape", this._kernelShape, v, (x) => { this._kernelShape = x; });
+        this.setField("kernelShape", this._kernelShape, v, (x) => {
+            this._kernelShape = x;
+        });
     }
 
     @editable("number", { min: 1, max: 8, step: 1 })
-    public get strides(): number { return this._strides; }
+    public get strides(): number {
+        return this._strides;
+    }
     public set strides(v: number) {
-        this.setField("strides", this._strides, v, (x) => { this._strides = x; });
+        this.setField("strides", this._strides, v, (x) => {
+            this._strides = x;
+        });
     }
 
     @editable("number", { min: 0, max: 8, step: 1 })
-    public get pads(): number { return this._pads; }
+    public get pads(): number {
+        return this._pads;
+    }
     public set pads(v: number) {
-        this.setField("pads", this._pads, v, (x) => { this._pads = x; });
+        this.setField("pads", this._pads, v, (x) => {
+            this._pads = x;
+        });
     }
 
     protected override _buildInputPorts(info: OnnxNodeInfo): ReadonlyArray<IPortDescriptor> {
         // Conv inputs: X (required), W (required), B (optional bias).
         return info.inputs.map((_, i) => ({
-            slot: i, optional: i === 2, type: "tensor",
+            slot: i,
+            optional: i === 2,
+            type: "tensor",
         }));
     }
 
@@ -96,8 +110,7 @@ export class ConvNode extends OnnxOpNode {
                         for (let kk = 0; kk < kL; kk++) {
                             const il = ol * stride - pad + kk;
                             if (il >= 0 && il < L) {
-                                sum += X.data[n * C_in * L + ci * L + il]
-                                    * W.data[co * (C_in * kL) + ci * kL + kk];
+                                sum += X.data[n * C_in * L + ci * L + il] * W.data[co * (C_in * kL) + ci * kL + kk];
                             }
                         }
                     }
@@ -179,7 +192,8 @@ class AveragePoolNode extends OnnxOpNode {
             for (let n = 0; n < N; n++) {
                 for (let c = 0; c < C; c++) {
                     for (let o = 0; o < outL; o++) {
-                        let sum = 0, count = 0;
+                        let sum = 0,
+                            count = 0;
                         for (let k = 0; k < this.kernelSize; k++) {
                             const il = o * this.stride - this.pad + k;
                             if (il >= 0 && il < L) {

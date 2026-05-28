@@ -19,7 +19,7 @@ export class VitTrainingRuntime {
         runtime: VitInferenceRuntime,
         lossFn: ILossFunction,
         learningRate: number,
-        _optimizer: IOptimizer, // reserved for future use
+        _optimizer: IOptimizer // reserved for future use
     ) {
         this._graph = graph;
         this._runtime = runtime;
@@ -28,8 +28,12 @@ export class VitTrainingRuntime {
         void _optimizer;
     }
 
-    public get learningRate(): number { return this._learningRate; }
-    public set learningRate(lr: number) { this._learningRate = lr; }
+    public get learningRate(): number {
+        return this._learningRate;
+    }
+    public set learningRate(lr: number) {
+        this._learningRate = lr;
+    }
 
     /// <summary>
     /// One training step: forward + backprop + weight update.
@@ -151,7 +155,7 @@ export class VitTrainingRuntime {
             const lnIdx = block * 2;
 
             // MLP residual
-            const dMlpOut = dTokens.map(t => [...t]);
+            const dMlpOut = dTokens.map((t) => [...t]);
 
             // Backprop MLP output layer
             const mlpCache = this._runtime.mlpCache[block];
@@ -226,7 +230,7 @@ export class VitTrainingRuntime {
             }
 
             // Attention residual
-            const dAttnOut = dTokens.map(t => [...t]);
+            const dAttnOut = dTokens.map((t) => [...t]);
 
             // Projection backward
             const attnCache = this._runtime.attentionCache[block];
@@ -273,8 +277,8 @@ export class VitTrainingRuntime {
                     const dLogits = softmaxBackward(scores[tq], dScores[tq]);
                     for (let tk = 0; tk < numTokens; tk++) {
                         for (let d = 0; d < headDim; d++) {
-                            dQ[tq][offset + d] += dLogits[tk] * attnCache.K[tk][offset + d] / scale;
-                            dK[tk][offset + d] += dLogits[tk] * attnCache.Q[tq][offset + d] / scale;
+                            dQ[tq][offset + d] += (dLogits[tk] * attnCache.K[tk][offset + d]) / scale;
+                            dK[tk][offset + d] += (dLogits[tk] * attnCache.Q[tq][offset + d]) / scale;
                         }
                     }
                 }
@@ -423,7 +427,7 @@ export class VitTrainingRuntime {
 
             // ----- Backprop through MLP residual -----
             // dTokens flows through both residual and MLP path
-            const dMlpOut = dTokens.map(t => [...t]);
+            const dMlpOut = dTokens.map((t) => [...t]);
 
             // ----- Backprop through MLP output layer -----
             const mlpCache = this._runtime.mlpCache[block];
@@ -509,7 +513,7 @@ export class VitTrainingRuntime {
             }
 
             // ----- Backprop through attention residual -----
-            const dAttnOut = dTokens.map(t => [...t]);
+            const dAttnOut = dTokens.map((t) => [...t]);
 
             // ----- Backprop through output projection -----
             const attnCache = this._runtime.attentionCache[block];
@@ -562,8 +566,8 @@ export class VitTrainingRuntime {
                     const dLogits = softmaxBackward(scores[tq], dScores[tq]);
                     for (let tk = 0; tk < numTokens; tk++) {
                         for (let d = 0; d < headDim; d++) {
-                            dQ[tq][offset + d] += dLogits[tk] * attnCache.K[tk][offset + d] / scale;
-                            dK[tk][offset + d] += dLogits[tk] * attnCache.Q[tq][offset + d] / scale;
+                            dQ[tq][offset + d] += (dLogits[tk] * attnCache.K[tk][offset + d]) / scale;
+                            dK[tk][offset + d] += (dLogits[tk] * attnCache.Q[tq][offset + d]) / scale;
                         }
                     }
                 }

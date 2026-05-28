@@ -16,15 +16,7 @@ export class Channel<T = unknown> extends GraphOLink implements IChannel<T> {
     @cloneable public initialValue?: T;
     @cloneable public enabled: boolean;
 
-    public constructor(
-        oini?: INode,
-        ofin?: INode,
-        slot: string | number = 0,
-        delayed: boolean = false,
-        initialValue?: T,
-        enabled: boolean = true,
-        toSlot?: string | number,
-    ) {
+    public constructor(oini?: INode, ofin?: INode, slot: string | number = 0, delayed: boolean = false, initialValue?: T, enabled: boolean = true, toSlot?: string | number) {
         super(oini, ofin);
         this.slot = slot;
         this.toSlot = toSlot;

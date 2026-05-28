@@ -7,7 +7,11 @@ import { IDataSource, IDataSourceMeta } from "../interfaces/DataSource";
 export class ConstantSource implements IDataSource {
     private readonly _meta: IDataSourceMeta;
 
-    public constructor(public readonly amplitude: number, unit: Unit = Dimensionless.Units.none, kind: string = "constant") {
+    public constructor(
+        public readonly amplitude: number,
+        unit: Unit = Dimensionless.Units.none,
+        kind: string = "constant"
+    ) {
         this._meta = { kind, unit };
     }
 

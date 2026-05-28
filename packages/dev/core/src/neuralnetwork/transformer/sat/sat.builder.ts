@@ -83,10 +83,7 @@ export class SatBuilder {
 
                 for (let q = 0; q < numPatches; q++) {
                     const qPos = patchPositions[q];
-                    const dist = Math.max(
-                        Math.abs(pos.row - qPos.row),
-                        Math.abs(pos.col - qPos.col)
-                    );
+                    const dist = Math.max(Math.abs(pos.row - qPos.row), Math.abs(pos.col - qPos.col));
                     if (dist <= R) {
                         neighbors.push(q + 1); // +1 because token 0 is class token
                     }
@@ -109,7 +106,7 @@ export class SatBuilder {
         }
 
         const outputNeurons: VitNeuron[] = [];
-        const numOutputs = c.patchDecode ? 0 : (c.numClasses || 10);
+        const numOutputs = c.patchDecode ? 0 : c.numClasses || 10;
         for (let i = 0; i < numOutputs; i++) {
             outputNeurons.push(this._createOutputNeuron(i));
         }

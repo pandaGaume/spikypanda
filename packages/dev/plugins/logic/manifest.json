@@ -1,30 +1,148 @@
 {
-    "$schema": "https://spikypanda.dev/schemas/plugin.v1.json",
-    "id": "spk.logic",
-    "version": "0.1.0",
+    "$schema":     "https://spikypanda.dev/schemas/plugin.v1.json",
+    "id":          "spk.logic",
+    "version":     "0.2.0",
     "displayName": "Logic",
-    "description": "UE5-Blueprint-inspired logic nodes. Phase 1: scalar comparisons.",
-    "category": "logic",
-    "entry": "./bundle.js",
-    "nodes": [
-        { "type": "spk.logic:equal",            "label": "Equal",          "category": "comparison",
-          "inputPorts":  [ { "slot": "a", "type": "float" }, { "slot": "b", "type": "float" } ],
-          "outputPorts": [ { "slot": "result", "type": "boolean" } ] },
-        { "type": "spk.logic:notEqual",         "label": "Not Equal",      "category": "comparison",
-          "inputPorts":  [ { "slot": "a", "type": "float" }, { "slot": "b", "type": "float" } ],
-          "outputPorts": [ { "slot": "result", "type": "boolean" } ] },
-        { "type": "spk.logic:greater",          "label": "Greater",        "category": "comparison",
-          "inputPorts":  [ { "slot": "a", "type": "float" }, { "slot": "b", "type": "float" } ],
-          "outputPorts": [ { "slot": "result", "type": "boolean" } ] },
-        { "type": "spk.logic:less",             "label": "Less",           "category": "comparison",
-          "inputPorts":  [ { "slot": "a", "type": "float" }, { "slot": "b", "type": "float" } ],
-          "outputPorts": [ { "slot": "result", "type": "boolean" } ] },
-        { "type": "spk.logic:greaterOrEqual",   "label": "Greater or Equal", "category": "comparison",
-          "inputPorts":  [ { "slot": "a", "type": "float" }, { "slot": "b", "type": "float" } ],
-          "outputPorts": [ { "slot": "result", "type": "boolean" } ] },
-        { "type": "spk.logic:lessOrEqual",      "label": "Less or Equal",  "category": "comparison",
-          "inputPorts":  [ { "slot": "a", "type": "float" }, { "slot": "b", "type": "float" } ],
-          "outputPorts": [ { "slot": "result", "type": "boolean" } ] }
+    "description": "UE5-Blueprint-style control flow + primitives organized as 8 sub-plugins under Logic.*: Comparison, Flow, Array, Loop, Debug, Math, Time, Input. Every node maps 1:1 onto its UE5 Blueprint counterpart.",
+    "category":    "Logic",
+    "entry":       "bundle/SpkPluginLogic.js",
+    "nodes":       [],
+    "editors":     [],
+    "subPlugins": [
+        {
+            "id":          "Logic.Comparison",
+            "displayName": "Comparison",
+            "description": "Scalar comparisons returning a boolean: equal / not-equal / greater / less / ≥ / ≤.",
+            "category":    "Logic.Comparison",
+            "version":     "0.1.0",
+            "standards":   ["ue5"],
+            "nodes": [
+                { "type": "Logic.Comparison:equal",          "factory": "EqualNode",          "label": "Equal" },
+                { "type": "Logic.Comparison:notEqual",       "factory": "NotEqualNode",       "label": "Not Equal" },
+                { "type": "Logic.Comparison:greater",        "factory": "GreaterNode",        "label": "Greater" },
+                { "type": "Logic.Comparison:less",           "factory": "LessNode",           "label": "Less" },
+                { "type": "Logic.Comparison:greaterOrEqual", "factory": "GreaterOrEqualNode", "label": "Greater or Equal" },
+                { "type": "Logic.Comparison:lessOrEqual",    "factory": "LessOrEqualNode",    "label": "Less or Equal" }
+            ]
+        },
+        {
+            "id":          "Logic.Flow",
+            "displayName": "Flow control",
+            "description": "Branch, Sequence (variadic), Do Once, Gate, Select. Classic Blueprint control-flow primitives.",
+            "category":    "Logic.Flow",
+            "version":     "0.1.0",
+            "standards":   ["ue5"],
+            "nodes": [
+                { "type": "Logic.Flow:branch",   "factory": "BranchNode",   "label": "Branch" },
+                { "type": "Logic.Flow:sequence", "factory": "SequenceNode", "label": "Sequence" },
+                { "type": "Logic.Flow:doOnce",   "factory": "DoOnceNode",   "label": "Do Once" },
+                { "type": "Logic.Flow:gate",     "factory": "GateNode",     "label": "Gate" },
+                { "type": "Logic.Flow:select",   "factory": "SelectNode",   "label": "Select" }
+            ]
+        },
+        {
+            "id":          "Logic.Array",
+            "displayName": "Array library",
+            "description": "MakeArray (variadic) + 13 array operations: Length, Clear, Shuffle, Reverse, Sort, Add, Insert, Set, Get, Remove, RemoveIndex, Contains, Find.",
+            "category":    "Logic.Array",
+            "version":     "0.1.0",
+            "standards":   ["ue5"],
+            "nodes": [
+                { "type": "Logic.Array:makeArray",   "factory": "MakeArrayNode",        "label": "Make Array" },
+                { "type": "Logic.Array:length",      "factory": "ArrayLengthNode",      "label": "Length" },
+                { "type": "Logic.Array:clear",       "factory": "ArrayClearNode",       "label": "Clear" },
+                { "type": "Logic.Array:shuffle",     "factory": "ArrayShuffleNode",     "label": "Shuffle" },
+                { "type": "Logic.Array:reverse",     "factory": "ArrayReverseNode",     "label": "Reverse" },
+                { "type": "Logic.Array:sort",        "factory": "ArraySortNode",        "label": "Sort" },
+                { "type": "Logic.Array:add",         "factory": "ArrayAddNode",         "label": "Add" },
+                { "type": "Logic.Array:insert",      "factory": "ArrayInsertNode",      "label": "Insert" },
+                { "type": "Logic.Array:set",         "factory": "ArraySetNode",         "label": "Set Elem" },
+                { "type": "Logic.Array:get",         "factory": "ArrayGetNode",         "label": "Get" },
+                { "type": "Logic.Array:remove",      "factory": "ArrayRemoveNode",      "label": "Remove" },
+                { "type": "Logic.Array:removeIndex", "factory": "ArrayRemoveIndexNode", "label": "Remove Index" },
+                { "type": "Logic.Array:contains",    "factory": "ArrayContainsNode",    "label": "Contains" },
+                { "type": "Logic.Array:find",        "factory": "ArrayFindNode",        "label": "Find" }
+            ]
+        },
+        {
+            "id":          "Logic.Loop",
+            "displayName": "Loops",
+            "description": "For Loop, For Each Loop, While Loop, plus With-Break variants.",
+            "category":    "Logic.Loop",
+            "version":     "0.1.0",
+            "standards":   ["ue5"],
+            "nodes": [
+                { "type": "Logic.Loop:forLoop",              "factory": "ForLoopNode",              "label": "For Loop" },
+                { "type": "Logic.Loop:forEachLoop",          "factory": "ForEachLoopNode",          "label": "For Each Loop" },
+                { "type": "Logic.Loop:whileLoop",            "factory": "WhileLoopNode",            "label": "While Loop" },
+                { "type": "Logic.Loop:forLoopWithBreak",     "factory": "ForLoopWithBreakNode",     "label": "For Loop with Break" },
+                { "type": "Logic.Loop:forEachLoopWithBreak", "factory": "ForEachLoopWithBreakNode", "label": "For Each Loop with Break" }
+            ]
+        },
+        {
+            "id":          "Logic.Debug",
+            "displayName": "Debug",
+            "description": "Print String, Watch Value.",
+            "category":    "Logic.Debug",
+            "version":     "0.1.0",
+            "standards":   ["ue5"],
+            "nodes": [
+                { "type": "Logic.Debug:print", "factory": "PrintNode", "label": "Print String" },
+                { "type": "Logic.Debug:watch", "factory": "WatchNode", "label": "Watch Value" }
+            ]
+        },
+        {
+            "id":          "Logic.Math",
+            "displayName": "Math",
+            "description": "18 scalar math nodes (Add, Subtract, Multiply, Divide, Mod, Min, Max, Pow, Negate, Abs, Floor, Ceil, Round, Sqrt, Sin, Cos) plus Clamp and Lerp.",
+            "category":    "Logic.Math",
+            "version":     "0.1.0",
+            "standards":   ["ue5"],
+            "nodes": [
+                { "type": "Logic.Math:add",      "factory": "AddNode",      "label": "Add" },
+                { "type": "Logic.Math:subtract", "factory": "SubtractNode", "label": "Subtract" },
+                { "type": "Logic.Math:multiply", "factory": "MultiplyNode", "label": "Multiply" },
+                { "type": "Logic.Math:divide",   "factory": "DivideNode",   "label": "Divide" },
+                { "type": "Logic.Math:mod",      "factory": "ModNode",      "label": "Mod" },
+                { "type": "Logic.Math:min",      "factory": "MinNode",      "label": "Min" },
+                { "type": "Logic.Math:max",      "factory": "MaxNode",      "label": "Max" },
+                { "type": "Logic.Math:pow",      "factory": "PowNode",      "label": "Pow" },
+                { "type": "Logic.Math:negate",   "factory": "NegateNode",   "label": "Negate" },
+                { "type": "Logic.Math:abs",      "factory": "AbsNode",      "label": "Abs" },
+                { "type": "Logic.Math:floor",    "factory": "FloorNode",    "label": "Floor" },
+                { "type": "Logic.Math:ceil",     "factory": "CeilNode",     "label": "Ceil" },
+                { "type": "Logic.Math:round",    "factory": "RoundNode",    "label": "Round" },
+                { "type": "Logic.Math:sqrt",     "factory": "SqrtNode",     "label": "Sqrt" },
+                { "type": "Logic.Math:sin",      "factory": "SinNode",      "label": "Sin" },
+                { "type": "Logic.Math:cos",      "factory": "CosNode",      "label": "Cos" },
+                { "type": "Logic.Math:clamp",    "factory": "ClampNode",    "label": "Clamp" },
+                { "type": "Logic.Math:lerp",     "factory": "LerpNode",     "label": "Lerp" }
+            ]
+        },
+        {
+            "id":          "Logic.Time",
+            "displayName": "Time",
+            "description": "Clock (session t), Delta Time, Timer (UE5 Timeline analogue).",
+            "category":    "Logic.Time",
+            "version":     "0.1.0",
+            "standards":   ["ue5"],
+            "nodes": [
+                { "type": "Logic.Time:clock",     "factory": "ClockNode",     "label": "Clock" },
+                { "type": "Logic.Time:deltaTime", "factory": "DeltaTimeNode", "label": "Delta Time" },
+                { "type": "Logic.Time:timer",     "factory": "TimerNode",     "label": "Timer" }
+            ]
+        },
+        {
+            "id":          "Logic.Input",
+            "displayName": "Input",
+            "description": "Number Slider — UI-driven editable scalar source.",
+            "category":    "Logic.Input",
+            "version":     "0.1.0",
+            "standards":   ["ue5"],
+            "nodes": [
+                { "type": "Logic.Input:slider", "factory": "NumberSliderNode", "label": "Number Slider" }
+            ]
+        }
     ],
-    "editors": []
+    "manifestRefs": []
 }

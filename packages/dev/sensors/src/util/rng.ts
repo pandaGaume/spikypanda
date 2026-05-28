@@ -13,7 +13,7 @@ export class Rng {
     public constructor(seed?: number) {
         // Default to a millisecond clock when no seed is given. Force the
         // state away from 0, which would lock the generator at 0 forever.
-        const s = seed === undefined ? (Date.now() & 0xffffffff) : (seed | 0);
+        const s = seed === undefined ? Date.now() & 0xffffffff : seed | 0;
         this.state = s === 0 ? 1 : s;
     }
 
@@ -41,7 +41,7 @@ export class Rng {
     public gaussian(mean: number = 0, std: number = 1): number {
         let u1 = this.next();
         if (u1 < 1e-12) {
-            u1 = 1e-12;          // avoid log(0) when next() returns exactly 0
+            u1 = 1e-12; // avoid log(0) when next() returns exactly 0
         }
         const u2 = this.next();
         const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);

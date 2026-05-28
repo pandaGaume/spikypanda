@@ -30,15 +30,10 @@ export class RuntimeNode<B = unknown> extends GraphNode<B> implements IRuntimeNo
      * Override-by-assignment is fine since the property is declared
      * readonly here but reassigned in subclass field initialisers.
      */
-    public readonly controlInputPorts:  ReadonlyArray<IPortDescriptor> = [ENABLE_INPUT_PORT];
+    public readonly controlInputPorts: ReadonlyArray<IPortDescriptor> = [ENABLE_INPUT_PORT];
     public readonly controlOutputPorts: ReadonlyArray<IPortDescriptor> = [ENABLED_OUTPUT_PORT];
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-        enabled: boolean = true
-    ) {
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian, enabled: boolean = true) {
         super(onsc, opsc, position);
         this.enabled = enabled;
     }

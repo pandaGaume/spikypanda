@@ -87,9 +87,15 @@ export class MinMaxStrategy implements ICalibrationStrategy {
     }
 
     /** Diagnostics: observed range and sample count. */
-    public get min(): number { return this._min; }
-    public get max(): number { return this._max; }
-    public get count(): number { return this._count; }
+    public get min(): number {
+        return this._min;
+    }
+    public get max(): number {
+        return this._max;
+    }
+    public get count(): number {
+        return this._count;
+    }
 }
 
 // ─── Runner ──────────────────────────────────────────────────────────────
@@ -115,11 +121,7 @@ export class CalibrationRunner {
     private readonly _inputStrategies = new Map<string, ICalibrationStrategy>();
     private _runs = 0;
 
-    public constructor(
-        graph: ComputeGraph,
-        strategyFactory: () => ICalibrationStrategy = () => new MinMaxStrategy(),
-        dtype: QuantDType = "int8"
-    ) {
+    public constructor(graph: ComputeGraph, strategyFactory: () => ICalibrationStrategy = () => new MinMaxStrategy(), dtype: QuantDType = "int8") {
         this._graph = graph;
         this._strategyFactory = strategyFactory;
         this._dtype = dtype;
@@ -174,7 +176,10 @@ export class CalibrationRunner {
     public getActivationParams(): Map<IKernel, IQuantizationParams[]> {
         const out = new Map<IKernel, IQuantizationParams[]>();
         for (const [kernel, strategies] of this._kernelStrategies) {
-            out.set(kernel, strategies.map((s) => s.finalize(this._dtype)));
+            out.set(
+                kernel,
+                strategies.map((s) => s.finalize(this._dtype))
+            );
         }
         return out;
     }
@@ -193,7 +198,9 @@ export class CalibrationRunner {
     }
 
     /** Number of samples observed so far. */
-    public get runs(): number { return this._runs; }
+    public get runs(): number {
+        return this._runs;
+    }
 
     /**
      * Drop all accumulated statistics so the runner can be re-used

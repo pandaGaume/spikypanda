@@ -8,7 +8,13 @@ module.exports = {
         library: { name: "SpkPluginDsp", type: "umd" },
         globalObject: "globalThis",
     },
-    resolve: { extensions: [".ts", ".js"] },
+    resolve: {
+        extensions: [".ts", ".js"],
+        // Sub-plugin TS files import from sibling folders via the
+        // ESM-canonical ".js" suffix; webpack needs the alias to map
+        // those back to ".ts" sources at bundle time.
+        extensionAlias: { ".js": [".ts", ".js"] },
+    },
     module: {
         rules: [{
             test: /\.ts$/,

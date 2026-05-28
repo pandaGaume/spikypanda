@@ -20,33 +20,52 @@ import { ISimNode } from "../../../../interfaces/SimNode";
 //   - pitch = -pi/2 : shaft vertical along world +Z           (= verticalUp)
 //   - pitch = +pi/2 : shaft vertical along world -Z           (= verticalDown)
 // Aerospace "fuselage horizontal" maps to pitch = 0.
-type Mat3 = [
-    [number, number, number],
-    [number, number, number],
-    [number, number, number],
-];
+type Mat3 = [[number, number, number], [number, number, number], [number, number, number]];
 
 function identityMatrix3(): Mat3 {
-    return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    return [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+    ];
 }
 
 function rotX(a: number): Mat3 {
-    const c = Math.cos(a), s = Math.sin(a);
-    return [[1, 0, 0], [0, c, -s], [0, s, c]];
+    const c = Math.cos(a),
+        s = Math.sin(a);
+    return [
+        [1, 0, 0],
+        [0, c, -s],
+        [0, s, c],
+    ];
 }
 
 function rotY(a: number): Mat3 {
-    const c = Math.cos(a), s = Math.sin(a);
-    return [[c, 0, s], [0, 1, 0], [-s, 0, c]];
+    const c = Math.cos(a),
+        s = Math.sin(a);
+    return [
+        [c, 0, s],
+        [0, 1, 0],
+        [-s, 0, c],
+    ];
 }
 
 function rotZ(a: number): Mat3 {
-    const c = Math.cos(a), s = Math.sin(a);
-    return [[c, -s, 0], [s, c, 0], [0, 0, 1]];
+    const c = Math.cos(a),
+        s = Math.sin(a);
+    return [
+        [c, -s, 0],
+        [s, c, 0],
+        [0, 0, 1],
+    ];
 }
 
 function matMul(a: Mat3, b: Mat3): Mat3 {
-    const out: Mat3 = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    const out: Mat3 = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+    ];
     for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 3; j++) {
             out[i][j] = a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j];
@@ -66,8 +85,13 @@ export class MotorTransform implements ISimNode {
     private _R: Mat3 = identityMatrix3();
     private _label: string = "identity";
 
-    public advance(_t: number): void { /* static unless setter called */ }
-    public reset(): void { this._R = identityMatrix3(); this._label = "identity"; }
+    public advance(_t: number): void {
+        /* static unless setter called */
+    }
+    public reset(): void {
+        this._R = identityMatrix3();
+        this._label = "identity";
+    }
 
     // Setters --------------------------------------------------------------
 
@@ -110,11 +134,13 @@ export class MotorTransform implements ISimNode {
         return new Cartesian3(
             this._R[0][0] * v.x + this._R[1][0] * v.y + this._R[2][0] * v.z,
             this._R[0][1] * v.x + this._R[1][1] * v.y + this._R[2][1] * v.z,
-            this._R[0][2] * v.x + this._R[1][2] * v.y + this._R[2][2] * v.z,
+            this._R[0][2] * v.x + this._R[1][2] * v.y + this._R[2][2] * v.z
         );
     }
 
-    public get label(): string { return this._label; }
+    public get label(): string {
+        return this._label;
+    }
 
     // Presets -------------------------------------------------------------
 

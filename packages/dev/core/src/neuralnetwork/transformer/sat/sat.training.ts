@@ -19,8 +19,12 @@ export class SatTrainingRuntime {
         void _lossFn; // reserved for future use (currently MSE hardcoded in trainStepMAE)
     }
 
-    public get learningRate(): number { return this._learningRate; }
-    public set learningRate(lr: number) { this._learningRate = lr; }
+    public get learningRate(): number {
+        return this._learningRate;
+    }
+    public set learningRate(lr: number) {
+        this._learningRate = lr;
+    }
 
     /// <summary>
     /// MAE-style training step with spatial attention.
@@ -90,7 +94,7 @@ export class SatTrainingRuntime {
             const neighbors = g.neighborMaps[block];
 
             // MLP residual
-            const dMlpOut = dTokens.map(t => [...t]);
+            const dMlpOut = dTokens.map((t) => [...t]);
 
             // MLP2 backward
             const mlpCache = this._runtime.mlpCache[block];
@@ -164,7 +168,7 @@ export class SatTrainingRuntime {
             }
 
             // Attention residual
-            const dAttnOut = dTokens.map(t => [...t]);
+            const dAttnOut = dTokens.map((t) => [...t]);
 
             // Projection backward
             const attnCache = this._runtime.attentionCache[block];
@@ -218,8 +222,8 @@ export class SatTrainingRuntime {
                     for (let ni = 0; ni < numNeighbors; ni++) {
                         const tk = tokenNeighbors[ni];
                         for (let d = 0; d < headDim; d++) {
-                            dQ[tq][offset + d] += dLogits[ni] * attnCache.K[tk][offset + d] / scale;
-                            dK[tk][offset + d] += dLogits[ni] * attnCache.Q[tq][offset + d] / scale;
+                            dQ[tq][offset + d] += (dLogits[ni] * attnCache.K[tk][offset + d]) / scale;
+                            dK[tk][offset + d] += (dLogits[ni] * attnCache.Q[tq][offset + d]) / scale;
                         }
                     }
                 }

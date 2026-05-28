@@ -41,7 +41,7 @@ export interface IIDentifiable {
     id?: any;
 }
 
-export interface IHasBag<T=unknown> {
+export interface IHasBag<T = unknown> {
     /**
      * Runtime-only container for execution context.
      * Can be safely overwritten between runs.
@@ -93,13 +93,7 @@ export function supportsEnabling(target: object): boolean {
  * idle/stopped → starting → started → stopping → stopped, with failed
  * reachable from any starting/stopping transition on error.
  */
-export type RunStatus =
-    | "idle"
-    | "starting"
-    | "started"
-    | "stopping"
-    | "stopped"
-    | "failed";
+export type RunStatus = "idle" | "starting" | "started" | "stopping" | "stopped" | "failed";
 
 /**
  * UI hint for IRunnable presentation. Editors map "play" to a green
@@ -179,16 +173,12 @@ export function isRunnable(obj: unknown): obj is IRunnable {
         return false;
     }
     const candidate = obj as Partial<IRunnable>;
-    return (
-        typeof candidate.status === "string" &&
-        typeof candidate.start === "function" &&
-        typeof candidate.stop === "function"
-    );
+    return typeof candidate.status === "string" && typeof candidate.start === "function" && typeof candidate.stop === "function";
 }
 
-export interface IGraphItem<B=unknown> extends IDisposable, ICloneable, ITaggable, IIDentifiable, IHasBag<B> {}
+export interface IGraphItem<B = unknown> extends IDisposable, ICloneable, ITaggable, IIDentifiable, IHasBag<B> {}
 
-export interface INode<B=unknown> extends IGraphItem<B> {
+export interface INode<B = unknown> extends IGraphItem<B> {
     position?: ICartesian;
     onsc<L extends IOlink>(): Array<L>;
     opsc<L extends IOlink>(): Array<L>;
@@ -199,7 +189,7 @@ export interface INode<B=unknown> extends IGraphItem<B> {
 // or attach specific properties to a group of nodes or links.
 export interface INodeSet<N extends INode> extends Array<N> {}
 
-export interface IOlink<B=unknown> extends IGraphItem<B> {
+export interface IOlink<B = unknown> extends IGraphItem<B> {
     oini: Nullable<INode>;
     ofin: Nullable<INode>;
 }
@@ -222,11 +212,7 @@ export function isNode<N extends INode>(obj: unknown): obj is N {
         return false;
     }
     const candidate = obj as Partial<INode>;
-    return (
-        (candidate.position === undefined || isCartesian(candidate.position)) &&
-        typeof candidate.onsc === "function" &&
-        typeof candidate.opsc === "function"
-    );
+    return (candidate.position === undefined || isCartesian(candidate.position)) && typeof candidate.onsc === "function" && typeof candidate.opsc === "function";
 }
 
 /**

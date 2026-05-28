@@ -59,11 +59,7 @@ export interface LoadPluginResult {
  * host can log them. Logging is delegated to the host: this function
  * only `console.warn`s the missing-module case.
  */
-export async function loadPlugin(
-    globalName: string,
-    id: string,
-    options: LoadPluginOptions,
-): Promise<LoadPluginResult> {
+export async function loadPlugin(globalName: string, id: string, options: LoadPluginOptions): Promise<LoadPluginResult> {
     const ns = (globalThis as Record<string, unknown>)[globalName] as
         | { default?: IPlugin & { manifest?: IPluginManifest } }
         | (IPlugin & { manifest?: IPluginManifest })
@@ -74,7 +70,7 @@ export async function loadPlugin(
         return { activated: [], missing: [] };
     }
 
-    const plugin = (("default" in ns && ns.default) ? ns.default : ns) as IPlugin & { manifest?: IPluginManifest };
+    const plugin = ("default" in ns && ns.default ? ns.default : ns) as IPlugin & { manifest?: IPluginManifest };
     const mkCtx = (subId: string): IPluginContext => ({
         id: subId,
         nodes: options.nodes,
@@ -90,9 +86,7 @@ export async function loadPlugin(
 
     // Step 2: resolve the sub-plugin id list.
     const manifest = options.manifest ?? plugin.manifest;
-    const subIds = manifest
-        ? (await collectSubPluginEntries(manifest, options.assetUrl)).map((e) => e.id)
-        : Object.keys(plugin.subPlugins ?? {});
+    const subIds = manifest ? (await collectSubPluginEntries(manifest, options.assetUrl)).map((e) => e.id) : Object.keys(plugin.subPlugins ?? {});
 
     // Step 3: activate each sub-plugin with a scoped context.
     const activated: string[] = [];
@@ -121,10 +115,7 @@ export async function loadPlugin(
  * loading is preferred over hard failure for an optional discovery
  * mechanism.
  */
-async function collectSubPluginEntries(
-    manifest: IPluginManifest,
-    assetUrl: (rel: string) => string,
-): Promise<ISubPluginManifest[]> {
+async function collectSubPluginEntries(manifest: IPluginManifest, assetUrl: (rel: string) => string): Promise<ISubPluginManifest[]> {
     const out: ISubPluginManifest[] = [...(manifest.subPlugins ?? [])];
     for (const ref of manifest.manifestRefs ?? []) {
         try {

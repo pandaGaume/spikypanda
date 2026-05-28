@@ -25,43 +25,89 @@ import { attr, onnxOp } from "./op-schema";
 
 // ─── Activations & element-wise (no attributes) ──────────────────────────
 
-@onnxOp("Add") class _Add {}
-@onnxOp("Sub") class _Sub {}
-@onnxOp("Mul") class _Mul {}
-@onnxOp("Div") class _Div {}
-@onnxOp("Sqrt") class _Sqrt {}
-@onnxOp("Pow") class _Pow {}
-@onnxOp("Relu") class _Relu {}
-@onnxOp("Sigmoid") class _Sigmoid {}
-@onnxOp("Tanh") class _Tanh {}
-@onnxOp("Identity") class _Identity {}
-@onnxOp("Abs") class _Abs {}
-@onnxOp("Neg") class _Neg {}
-@onnxOp("Exp") class _Exp {}
-@onnxOp("Log") class _Log {}
-@onnxOp("Atan") class _Atan {}
-@onnxOp("MatMul") class _MatMul {}
-@onnxOp("GlobalAveragePool") class _GlobalAveragePool {}
-@onnxOp("GlobalMaxPool") class _GlobalMaxPool {}
-@onnxOp("Shape") class _Shape {}
-@onnxOp("Min") class _Min {}
-@onnxOp("Max") class _Max {}
-@onnxOp("Expand") class _Expand {}
+@onnxOp("Add")
+class _Add {}
+@onnxOp("Sub")
+class _Sub {}
+@onnxOp("Mul")
+class _Mul {}
+@onnxOp("Div")
+class _Div {}
+@onnxOp("Sqrt")
+class _Sqrt {}
+@onnxOp("Pow")
+class _Pow {}
+@onnxOp("Relu")
+class _Relu {}
+@onnxOp("Sigmoid")
+class _Sigmoid {}
+@onnxOp("Tanh")
+class _Tanh {}
+@onnxOp("Identity")
+class _Identity {}
+@onnxOp("Abs")
+class _Abs {}
+@onnxOp("Neg")
+class _Neg {}
+@onnxOp("Exp")
+class _Exp {}
+@onnxOp("Log")
+class _Log {}
+@onnxOp("Atan")
+class _Atan {}
+@onnxOp("MatMul")
+class _MatMul {}
+@onnxOp("GlobalAveragePool")
+class _GlobalAveragePool {}
+@onnxOp("GlobalMaxPool")
+class _GlobalMaxPool {}
+@onnxOp("Shape")
+class _Shape {}
+@onnxOp("Min")
+class _Min {}
+@onnxOp("Max")
+class _Max {}
+@onnxOp("Expand")
+class _Expand {}
 // Reshape takes the target shape as input tensor in opset 5+; no attrs.
-@onnxOp("Reshape") class _Reshape {}
+@onnxOp("Reshape")
+class _Reshape {}
 // Squeeze / Unsqueeze take axes as input tensor in opset 13+; no attrs.
-@onnxOp("Squeeze") class _Squeeze {}
-@onnxOp("Unsqueeze") class _Unsqueeze {}
+@onnxOp("Squeeze")
+class _Squeeze {}
+@onnxOp("Unsqueeze")
+class _Unsqueeze {}
 
 // ─── Single-attr ops ─────────────────────────────────────────────────────
 
-@onnxOp("Concat") class _Concat { @attr.int axis!: number; }
-@onnxOp("Flatten") class _Flatten { @attr.int axis!: number; }
-@onnxOp("Softmax") class _Softmax { @attr.int axis!: number; }
-@onnxOp("Gather") class _Gather { @attr.int axis!: number; }
-@onnxOp("LeakyRelu") class _LeakyRelu { @attr.float alpha!: number; }
-@onnxOp("Cast") class _Cast { @attr.int to!: number; }
-@onnxOp("Transpose") class _Transpose { @attr.ints perm!: number[]; }
+@onnxOp("Concat")
+class _Concat {
+    @attr.int axis!: number;
+}
+@onnxOp("Flatten")
+class _Flatten {
+    @attr.int axis!: number;
+}
+@onnxOp("Softmax")
+class _Softmax {
+    @attr.int axis!: number;
+}
+@onnxOp("Gather")
+class _Gather {
+    @attr.int axis!: number;
+}
+@onnxOp("LeakyRelu")
+class _LeakyRelu {
+    @attr.float alpha!: number;
+}
+@onnxOp("Cast")
+class _Cast {
+    @attr.int to!: number;
+}
+@onnxOp("Transpose")
+class _Transpose {
+    @attr.ints perm!: number[];
+}
 
 // ─── Reduce family ───────────────────────────────────────────────────────
 
@@ -143,8 +189,14 @@ class _Pad {
 
 // ─── Constants ───────────────────────────────────────────────────────────
 
-@onnxOp("Constant") class _Constant { @attr.tensor value!: unknown; }
-@onnxOp("ConstantOfShape") class _ConstantOfShape { @attr.tensor value!: unknown; }
+@onnxOp("Constant")
+class _Constant {
+    @attr.tensor value!: unknown;
+}
+@onnxOp("ConstantOfShape")
+class _ConstantOfShape {
+    @attr.tensor value!: unknown;
+}
 
 // ─── Quantized ops (CyanMycelium-compatible) ────────────────────────────
 
@@ -182,12 +234,52 @@ class _QLinearMatMul {}
 // the decorators have already populated the schema registry by the
 // time this module finishes loading.
 export const _registeredOpSchemas: ReadonlyArray<unknown> = [
-    _Add, _Sub, _Mul, _Div, _Sqrt, _Pow, _Relu, _Sigmoid, _Tanh, _Identity,
-    _Abs, _Neg, _Exp, _Log, _Atan, _MatMul, _GlobalAveragePool, _GlobalMaxPool,
-    _Shape, _Min, _Max, _Expand, _Reshape, _Squeeze, _Unsqueeze,
-    _Concat, _Flatten, _Softmax, _Gather, _LeakyRelu, _Cast, _Transpose,
-    _ReduceMean, _ReduceSum, _ReduceL2, _ReduceMax,
-    _Conv, _MaxPool, _AveragePool, _Gemm, _Slice, _Pad,
-    _Constant, _ConstantOfShape,
-    _QuantizeLinear, _DequantizeLinear, _QLinearConv, _QLinearMatMul,
+    _Add,
+    _Sub,
+    _Mul,
+    _Div,
+    _Sqrt,
+    _Pow,
+    _Relu,
+    _Sigmoid,
+    _Tanh,
+    _Identity,
+    _Abs,
+    _Neg,
+    _Exp,
+    _Log,
+    _Atan,
+    _MatMul,
+    _GlobalAveragePool,
+    _GlobalMaxPool,
+    _Shape,
+    _Min,
+    _Max,
+    _Expand,
+    _Reshape,
+    _Squeeze,
+    _Unsqueeze,
+    _Concat,
+    _Flatten,
+    _Softmax,
+    _Gather,
+    _LeakyRelu,
+    _Cast,
+    _Transpose,
+    _ReduceMean,
+    _ReduceSum,
+    _ReduceL2,
+    _ReduceMax,
+    _Conv,
+    _MaxPool,
+    _AveragePool,
+    _Gemm,
+    _Slice,
+    _Pad,
+    _Constant,
+    _ConstantOfShape,
+    _QuantizeLinear,
+    _DequantizeLinear,
+    _QLinearConv,
+    _QLinearMatMul,
 ];

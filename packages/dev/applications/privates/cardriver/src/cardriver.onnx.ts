@@ -11,11 +11,7 @@
 // preprocessing the deployment expects.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import {
-    CnnGraphOnnxExporter,
-    OnnxExportRegistry,
-    onnxExportRegistry,
-} from "spikypanda-onnx";
+import { CnnGraphOnnxExporter, OnnxExportRegistry, onnxExportRegistry } from "spikypanda-onnx";
 
 import { NormKernel } from "./kernels/norm.kernel";
 import { NormalizeKernel } from "./kernels/normalize.kernel";
@@ -106,8 +102,8 @@ export function registerCardriverOnnxSerializers(registry: OnnxExportRegistry = 
     });
 
     registry.register<CnnAdapterKernel>("cardriver_cnn_adapter", (kernel, naming, ctx) => {
-        const inp = naming.inputNames[0];   // [T, C]
-        const out = naming.outputNames[0];  // [E] (E = outputSize)
+        const inp = naming.inputNames[0]; // [T, C]
+        const out = naming.outputNames[0]; // [E] (E = outputSize)
 
         // 1. Re-layout (T, C) → NCHW (1, C, 1, T).
         //    Transpose perm=[1,0] gives (C, T); Reshape adds the
@@ -130,7 +126,7 @@ export function registerCardriverOnnxSerializers(registry: OnnxExportRegistry = 
         });
 
         // 2. Delegate the CNN proper to CnnGraphOnnxExporter.
-        const denseOut = ctx.allocateTensorName("dense_out");  // [1, E]
+        const denseOut = ctx.allocateTensorName("dense_out"); // [1, E]
         CnnGraphOnnxExporter.emit(kernel.runtime.graph, nchw, denseOut, ctx, "cnn");
 
         // 3. Strip the batch dim: Squeeze axis 0 → [E].

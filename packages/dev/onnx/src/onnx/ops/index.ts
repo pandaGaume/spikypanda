@@ -47,6 +47,6 @@ export function createRegistry(): OnnxOpRegistry {
 }
 
 /** @deprecated Use createRegistry(). Kept as an alias for back-compat. */
-export const createDefaultRegistry  = createRegistry;
+export const createDefaultRegistry = createRegistry;
 /** @deprecated Use createRegistry(). Kept as an alias for back-compat. */
 export const createSpikyPandaRegistry = createRegistry;

@@ -1,9 +1,4 @@
-import {
-    RuntimeGraphBuilder,
-    Session,
-    type Channel,
-    type IRuntimeNode,
-} from "spikypanda-core";
+import { RuntimeGraphBuilder, Session, type Channel, type IRuntimeNode } from "spikypanda-core";
 import type { GraphViewer } from "./components/graph-viewer";
 import type { NodeUI } from "./node-ui";
 import type { Port } from "./port";
@@ -35,22 +30,20 @@ export function buildSessionFromViewer(viewer: GraphViewer): {
         }
     }
 
-    const builder = new RuntimeGraphBuilder<IRuntimeNode, Channel>()
-        .withMode("dynamic")
-        .withNodes(...nodes);
+    const builder = new RuntimeGraphBuilder<IRuntimeNode, Channel>().withMode("dynamic").withNodes(...nodes);
 
     for (const conn of viewer.connections) {
         const fromNode = _findRuntimeNodeByPort(viewer, conn.from, "output");
-        const toNode   = _findRuntimeNodeByPort(viewer, conn.to,   "input");
+        const toNode = _findRuntimeNodeByPort(viewer, conn.to, "input");
         if (!fromNode || !toNode) continue;
         const fromSlot = (conn.from as Port).name;
-        const toSlot   = (conn.to   as Port).name;
+        const toSlot = (conn.to as Port).name;
         builder.withChannel(fromNode, toNode, fromSlot, toSlot);
     }
 
     const graph = builder.build();
     return {
-        session:  new Session(graph),
+        session: new Session(graph),
         channels: (graph.links as Channel[]).slice(),
     };
 }
@@ -58,25 +51,23 @@ export function buildSessionFromViewer(viewer: GraphViewer): {
 /** Releases every channel created by `buildSessionFromViewer`. */
 export function disposeChannels(channels: Channel[]): void {
     for (const ch of channels) {
-        try { ch.dispose(); } catch (_e) { /* swallow */ }
+        try {
+            ch.dispose();
+        } catch (_e) {
+            /* swallow */
+        }
     }
 }
 
-function _findRuntimeNodeByPort(
-    viewer: GraphViewer,
-    port: unknown,
-    direction: "input" | "output",
-): IRuntimeNode | null {
+function _findRuntimeNodeByPort(viewer: GraphViewer, port: unknown, direction: "input" | "output"): IRuntimeNode | null {
     const list = viewer.nodes as ReadonlyArray<NodeUI>;
     for (const n of list) {
         const data = n.item && (n.item as { data?: unknown }).data;
         if (!data) continue;
-        if (direction === "output"
-            && (n.outputs.includes(port as Port) || n.controlOutputs.includes(port as Port))) {
+        if (direction === "output" && (n.outputs.includes(port as Port) || n.controlOutputs.includes(port as Port))) {
             return data as IRuntimeNode;
         }
-        if (direction === "input"
-            && (n.inputs .includes(port as Port) || n.controlInputs .includes(port as Port))) {
+        if (direction === "input" && (n.inputs.includes(port as Port) || n.controlInputs.includes(port as Port))) {
             return data as IRuntimeNode;
         }
     }

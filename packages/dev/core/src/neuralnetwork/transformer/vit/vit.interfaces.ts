@@ -257,7 +257,9 @@ export interface IVitConfig {
 export const VitPresets = {
     /// <summary>Minimal ViT for quick testing</summary>
     tiny: {
-        width: 28, height: 28, channels: 1,
+        width: 28,
+        height: 28,
+        channels: 1,
         patchSize: 7,
         embedDim: 64,
         numHeads: 4,
@@ -268,7 +270,9 @@ export const VitPresets = {
 
     /// <summary>Moderate ViT for better accuracy</summary>
     small: {
-        width: 28, height: 28, channels: 1,
+        width: 28,
+        height: 28,
+        channels: 1,
         patchSize: 7,
         embedDim: 128,
         numHeads: 4,

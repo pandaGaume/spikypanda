@@ -1,7 +1,5 @@
 import { ILinkSet, INode, INodeSet, IOlink } from "../graph";
 
-
-
 /// <summary>
 /// Represents a generic neuron (node) in a neural network.
 /// This interface is extended by specific neuron types (e.g., spiking, activation-based).

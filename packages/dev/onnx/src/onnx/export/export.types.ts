@@ -116,8 +116,4 @@ export interface OnnxExportContext {
  *
  * Serializers are stateless; per-export state lives in `ctx`.
  */
-export type KernelOnnxSerializer<K extends IKernel = IKernel> = (
-    kernel: K,
-    naming: OnnxKernelNaming,
-    ctx: OnnxExportContext
-) => void;
+export type KernelOnnxSerializer<K extends IKernel = IKernel> = (kernel: K, naming: OnnxKernelNaming, ctx: OnnxExportContext) => void;

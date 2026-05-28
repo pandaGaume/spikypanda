@@ -6,20 +6,24 @@
 // optional ("pending Axiom interest") and it is excluded from the
 // simulation scope.
 export enum PmsmFaultType {
-    IMBALANCE = 1,             // D1 : rotor mass imbalance
-    BEARING_RACE = 2,          // D2 : bearing race defect (Phase 2)
-    INTER_TURN_SHORT = 3,      // D3 : stator inter-turn short (Phase 2)
-    ECCENTRICITY = 4,          // D4 : static air-gap eccentricity
+    IMBALANCE = 1, // D1 : rotor mass imbalance
+    BEARING_RACE = 2, // D2 : bearing race defect (Phase 2)
+    INTER_TURN_SHORT = 3, // D3 : stator inter-turn short (Phase 2)
+    ECCENTRICITY = 4, // D4 : static air-gap eccentricity
 }
 
 // Snake-case identifier suitable for CSV labels, log lines, and HDF5
 // metadata. Use only at API boundaries; switch on the numeric value.
 export function pmsmFaultLabel(type: PmsmFaultType): string {
     switch (type) {
-        case PmsmFaultType.IMBALANCE: return "imbalance";
-        case PmsmFaultType.BEARING_RACE: return "bearing_race";
-        case PmsmFaultType.INTER_TURN_SHORT: return "inter_turn_short";
-        case PmsmFaultType.ECCENTRICITY: return "eccentricity";
+        case PmsmFaultType.IMBALANCE:
+            return "imbalance";
+        case PmsmFaultType.BEARING_RACE:
+            return "bearing_race";
+        case PmsmFaultType.INTER_TURN_SHORT:
+            return "inter_turn_short";
+        case PmsmFaultType.ECCENTRICITY:
+            return "eccentricity";
     }
 }
 
@@ -32,7 +36,8 @@ export interface IPmsmFaultPresentation {
 export const PMSM_FAULT_PRESENTATION: Readonly<Record<PmsmFaultType, IPmsmFaultPresentation>> = Object.freeze({
     [PmsmFaultType.IMBALANCE]: {
         displayName: "Rotor imbalance",
-        description: "Off-center rotor mass producing a centripetal force at 1x mechanical rotation. Couples primarily to the housing vibration; current coupling activates in Phase 2.",
+        description:
+            "Off-center rotor mass producing a centripetal force at 1x mechanical rotation. Couples primarily to the housing vibration; current coupling activates in Phase 2.",
     },
     [PmsmFaultType.BEARING_RACE]: {
         displayName: "Bearing race defect",

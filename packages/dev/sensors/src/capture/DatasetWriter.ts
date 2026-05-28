@@ -50,7 +50,7 @@ export class DatasetWriter {
                 throw new Error("DatasetWriter: all readings in a window must share the same label");
             }
         }
-        const channel: number[] = readings.map(r => r.value);
+        const channel: number[] = readings.map((r) => r.value);
         this._classSet.add(label);
         this._windows.push({
             label,
@@ -106,8 +106,8 @@ export class DatasetWriter {
 // Quote and escape a CSV field. Required for the JSON-encoded scenario
 // metadata column, which contains commas and quotes by construction.
 function escapeCsv(s: string): string {
-    if (s.includes(",") || s.includes("\"") || s.includes("\n")) {
-        return `"${s.replace(/"/g, "\"\"")}"`;
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+        return `"${s.replace(/"/g, '""')}"`;
     }
     return s;
 }

@@ -27,7 +27,7 @@ import { IPmsmEnvNode } from "./IPmsmEnvNode";
 // Phase 3 will add orientation-dependent stiffness modulation
 // (k_eff(orientation) = k_0 * (1 + gamma * g_axis / g_0)).
 export interface IMountingComplianceConfig {
-    motorMass: number;     // kg, total motor mass hanging on the bracket
+    motorMass: number; // kg, total motor mass hanging on the bracket
     label?: string;
 }
 
@@ -45,8 +45,12 @@ export class MountingComplianceModel implements IPmsmEnvNode {
         this.gravity = gravity;
     }
 
-    public advance(_t: number): void { /* stateless */ }
-    public reset(): void { /* stateless */ }
+    public advance(_t: number): void {
+        /* stateless */
+    }
+    public reset(): void {
+        /* stateless */
+    }
 
     public postStep(_t: number, _machine: import("../faults/PmsmFaultContracts").IPmsmMachineFaultHost, housing: IPmsmHousingFaultHost): void {
         const g = this.gravity.motorFrameGravity();

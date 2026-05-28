@@ -5,7 +5,8 @@ import { OnnxOpNode, makeTensor, getInitializerData, OnnxOpRegistry } from "../r
 class DivNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     execute(inputs: ITensor[]): ITensor[] {
-        const a = inputs[0], b = inputs[1];
+        const a = inputs[0],
+            b = inputs[1];
         const size = Math.max(a.data.length, b.data.length);
         const out = new Float32Array(size);
         for (let i = 0; i < size; i++) {
@@ -18,7 +19,8 @@ class DivNode extends OnnxOpNode {
 class PowNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     execute(inputs: ITensor[]): ITensor[] {
-        const a = inputs[0], b = inputs[1];
+        const a = inputs[0],
+            b = inputs[1];
         const size = Math.max(a.data.length, b.data.length);
         const out = new Float32Array(size);
         for (let i = 0; i < size; i++) {
@@ -103,7 +105,8 @@ class ReduceL2Node extends OnnxOpNode {
         const axis = this.axis < 0 ? rank + this.axis : this.axis;
 
         if (rank === 2 && axis === 1) {
-            const rows = shape[0], cols = shape[1];
+            const rows = shape[0],
+                cols = shape[1];
             const out = new Float32Array(rows);
             for (let r = 0; r < rows; r++) {
                 let s = 0;
@@ -116,7 +119,8 @@ class ReduceL2Node extends OnnxOpNode {
             return [makeTensor(out, this.keepdims ? [rows, 1] : [rows])];
         }
         if (rank === 2 && axis === 0) {
-            const rows = shape[0], cols = shape[1];
+            const rows = shape[0],
+                cols = shape[1];
             const out = new Float32Array(cols);
             for (let c = 0; c < cols; c++) {
                 let s = 0;
@@ -154,7 +158,8 @@ class ReduceSumNode extends OnnxOpNode {
         const axis = this.axis < 0 ? rank + this.axis : this.axis;
 
         if (rank === 2 && axis === 1) {
-            const rows = shape[0], cols = shape[1];
+            const rows = shape[0],
+                cols = shape[1];
             const out = new Float32Array(rows);
             for (let r = 0; r < rows; r++) {
                 let sum = 0;
@@ -229,7 +234,10 @@ class PadNode extends OnnxOpNode {
         const [rows, cols] = X.shape;
         const p = Array.from(pads.data).map(Math.round);
         // pads format: [top, left, bottom, right] for 2D
-        const top = p[0] ?? 0, left = p[1] ?? 0, bottom = p[2] ?? 0, right = p[3] ?? 0;
+        const top = p[0] ?? 0,
+            left = p[1] ?? 0,
+            bottom = p[2] ?? 0,
+            right = p[3] ?? 0;
         const newRows = rows + top + bottom;
         const newCols = cols + left + right;
         const out = new Float32Array(newRows * newCols).fill(val);

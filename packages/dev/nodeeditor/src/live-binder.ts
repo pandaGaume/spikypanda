@@ -48,13 +48,13 @@ interface IBinding {
 export class LiveBinder implements IDisposable {
     private readonly _viewer: GraphViewer;
     private readonly _bindings = new Map<Connection, IBinding>();
-    private readonly _prevAdd:    ((c: Connection) => void) | null;
+    private readonly _prevAdd: ((c: Connection) => void) | null;
     private readonly _prevRemove: ((c: Connection) => void) | null;
     private _disposed = false;
 
     public constructor(viewer: GraphViewer) {
         this._viewer = viewer;
-        this._prevAdd    = viewer.onConnectionAdded;
+        this._prevAdd = viewer.onConnectionAdded;
         this._prevRemove = viewer.onConnectionRemoved;
 
         viewer.onConnectionAdded = (conn) => {
@@ -75,35 +75,34 @@ export class LiveBinder implements IDisposable {
         if (this._disposed) return;
         this._disposed = true;
         for (const conn of Array.from(this._bindings.keys())) this._unbind(conn);
-        this._viewer.onConnectionAdded   = this._prevAdd;
+        this._viewer.onConnectionAdded = this._prevAdd;
         this._viewer.onConnectionRemoved = this._prevRemove;
     }
 
     private _findNode(port: unknown, direction: "input" | "output"): NodeUI | null {
         for (const n of this._viewer.nodes) {
             if (direction === "output" && n.outputs.includes(port as never)) return n;
-            if (direction === "input"  && n.inputs .includes(port as never)) return n;
+            if (direction === "input" && n.inputs.includes(port as never)) return n;
         }
         return null;
     }
 
     private _bind(conn: Connection): void {
         const fromNode = this._findNode(conn.from, "output");
-        const toNode   = this._findNode(conn.to,   "input");
+        const toNode = this._findNode(conn.to, "input");
         if (!fromNode || !toNode) return;
 
         const fromData = fromNode.item && (fromNode.item as { data?: unknown }).data;
-        const toData   = toNode.item   && (toNode.item   as { data?: unknown }).data;
+        const toData = toNode.item && (toNode.item as { data?: unknown }).data;
         if (!fromData || !toData) return;
 
         const fromObservable = fromData as IObservableLike;
-        if (!fromObservable.onPropertyChanged
-            || typeof fromObservable.onPropertyChanged.add !== "function") {
+        if (!fromObservable.onPropertyChanged || typeof fromObservable.onPropertyChanged.add !== "function") {
             return;
         }
 
         const fromSlot = (conn.from as { name: string }).name;
-        const toSlot   = (conn.to   as { name: string }).name;
+        const toSlot = (conn.to as { name: string }).name;
         if (fromSlot.startsWith("_") || toSlot.startsWith("_")) return;
 
         const write = (): void => {
@@ -113,14 +112,12 @@ export class LiveBinder implements IDisposable {
                 (toData as Record<string, unknown>)[toSlot] = v;
             } catch (e) {
                 // eslint-disable-next-line no-console
-                console.warn(
-                    `[LiveBinder] write failed: ${fromSlot} -> ${toSlot}`, e,
-                );
+                console.warn(`[LiveBinder] write failed: ${fromSlot} -> ${toSlot}`, e);
             }
         };
 
         const sub = fromObservable.onPropertyChanged.add(() => write());
-        write();   // seed the downstream field with the current upstream value
+        write(); // seed the downstream field with the current upstream value
         this._bindings.set(conn, { sub });
     }
 

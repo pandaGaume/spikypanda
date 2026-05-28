@@ -7,7 +7,7 @@ export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
     protected _onsc: IOlink[];
     protected _opsc: IOlink[];
 
-    @cloneable public position?: ICartesian; 
+    @cloneable public position?: ICartesian;
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super();

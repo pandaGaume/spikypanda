@@ -20,21 +20,21 @@ export function arePortTypesCompatible(from: PortType, to: PortType): boolean {
 }
 
 export const PORT_COLORS: Record<PortType, string> = {
-    float:    "#8cf",
-    vec2:     "#8f8",
-    vec3:     "#ff8",
-    vec4:     "#f8f",
-    tensor:   "#f88",
-    any:      "#ccc",
+    float: "#8cf",
+    vec2: "#8f8",
+    vec3: "#ff8",
+    vec4: "#f8f",
+    tensor: "#f88",
+    any: "#ccc",
     matrix44: "#c8f",
     // Execution / event ports (white diamond, like UE Blueprint exec pins).
-    exec:     "#e8e8e8",
+    exec: "#e8e8e8",
     // Control plane: boolean (state) and trigger (one-shot edge).
-    boolean:  "#cf6",
-    trigger:  "#fc6",
+    boolean: "#cf6",
+    trigger: "#fc6",
     // Collection ports: carry an opaque array. Pair with `any` for
     // element-level ports on array nodes (item, find result, etc.).
-    array:    "#a8d",
+    array: "#a8d",
 };
 
 export interface PortDef {
@@ -63,7 +63,7 @@ export interface NodeDef {
      *  input ports so exactly one trailing unconnected port stays
      *  available at all times. Indices are appended after the prefix
      *  ("then_0", "then_1", ...). */
-    variadicInput?:  VariadicPortDescriptor;
+    variadicInput?: VariadicPortDescriptor;
     /** Same as `variadicInput` but for the output side (e.g.
      *  Sequence's `then_*`). */
     variadicOutput?: VariadicPortDescriptor;

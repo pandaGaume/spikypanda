@@ -15,12 +15,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { buildPlan } from "../planning.metrics";
-import type {
-    IAllocation,
-    IAllocationPlan,
-    IAllocationStrategy,
-    ITensorLifetime,
-} from "../planning.interfaces";
+import type { IAllocation, IAllocationPlan, IAllocationStrategy, ITensorLifetime } from "../planning.interfaces";
 
 interface Placed extends IAllocation {
     birthStep: number;
@@ -35,19 +30,12 @@ export class ArenaFirstFitStrategy implements IAllocationStrategy {
     public readonly name = "arena-planned-firstfit";
     public constructor(private readonly schedulerName = "kahn-fifo") {}
 
-    public plan(
-        lifetimes: readonly ITensorLifetime[],
-        schedule: readonly string[],
-    ): IAllocationPlan {
-        const sorted = [...lifetimes].sort(
-            (a, b) => a.birthStep - b.birthStep || a.tensorId.localeCompare(b.tensorId),
-        );
+    public plan(lifetimes: readonly ITensorLifetime[], schedule: readonly string[]): IAllocationPlan {
+        const sorted = [...lifetimes].sort((a, b) => a.birthStep - b.birthStep || a.tensorId.localeCompare(b.tensorId));
 
         const placed: Placed[] = [];
         for (const t of sorted) {
-            const conflicts = placed
-                .filter(p => temporalOverlap(p, t))
-                .sort((a, b) => a.offset - b.offset);
+            const conflicts = placed.filter((p) => temporalOverlap(p, t)).sort((a, b) => a.offset - b.offset);
 
             let offset = 0;
             for (const c of conflicts) {
@@ -56,9 +44,9 @@ export class ArenaFirstFitStrategy implements IAllocationStrategy {
             }
 
             placed.push({
-                tensorId:  t.tensorId,
+                tensorId: t.tensorId,
                 offset,
-                bytes:     t.bytes,
+                bytes: t.bytes,
                 birthStep: t.birthStep,
                 deathStep: t.deathStep,
             });

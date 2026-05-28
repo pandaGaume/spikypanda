@@ -10,7 +10,7 @@ export interface INodeMeta {
      *  in / _enabled out via RuntimeNode; RunnableNode adds _start /
      *  _stop / _started / _stopped). The palette and editor read these
      *  to render control ports in a distinct row. */
-    readonly controlInputPorts?:  ReadonlyArray<IPortDescriptor>;
+    readonly controlInputPorts?: ReadonlyArray<IPortDescriptor>;
     readonly controlOutputPorts?: ReadonlyArray<IPortDescriptor>;
     /** Interop standards this node complies with (e.g. "onnx", "ue5").
      *  Each entry is either a bare id (the standards registry's default
@@ -24,7 +24,7 @@ export interface INodeMeta {
      *  growing/shrinking set of input ports `${prefix}0`, `${prefix}1`,
      *  ... so exactly one trailing unconnected port stays available
      *  (the "+" slot). */
-    readonly variadicInput?:  { readonly prefix: string; readonly type: string };
+    readonly variadicInput?: { readonly prefix: string; readonly type: string };
     /** Same as `variadicInput` but for the output side (e.g. Sequence's
      *  `then_0`, `then_1`, ...). */
     readonly variadicOutput?: { readonly prefix: string; readonly type: string };

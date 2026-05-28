@@ -15,16 +15,8 @@
 // marshaller.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import {
-    QuantizedBuffer,
-    WeightQuantizer,
-} from "../../../quantization";
-import type {
-    ICnnLayerDescriptor,
-    ICnnNeuron,
-    ICnnSynapse,
-    IConvKernel,
-} from "../cnn.interfaces";
+import { QuantizedBuffer, WeightQuantizer } from "../../../quantization";
+import type { ICnnLayerDescriptor, ICnnNeuron, ICnnSynapse, IConvKernel } from "../cnn.interfaces";
 
 // ─── Conv layer ──────────────────────────────────────────────────────────
 
@@ -34,10 +26,7 @@ import type {
  * `(channel, row, col)` row-major; this routine repacks them to the
  * NCHW filter layout that ONNX QLinearConv (and CyanMycelium) expect.
  */
-export function extractConvLayerWeights(
-    kernels: ReadonlyArray<IConvKernel>,
-    inputChannels: number
-): { data: Float32Array; shape: [number, number, number, number] } {
+export function extractConvLayerWeights(kernels: ReadonlyArray<IConvKernel>, inputChannels: number): { data: Float32Array; shape: [number, number, number, number] } {
     if (kernels.length === 0) {
         throw new Error("extractConvLayerWeights: empty kernel list");
     }
@@ -49,10 +38,7 @@ export function extractConvLayerWeights(
     for (let f = 0; f < F; f++) {
         const k = kernels[f];
         if (k.height !== kH || k.width !== kW) {
-            throw new Error(
-                `extractConvLayerWeights: kernel ${f} shape (${k.height}, ${k.width}) ` +
-                `differs from kernel 0 (${kH}, ${kW})`
-            );
+            throw new Error(`extractConvLayerWeights: kernel ${f} shape (${k.height}, ${k.width}) ` + `differs from kernel 0 (${kH}, ${kW})`);
         }
         for (let ic = 0; ic < inputChannels; ic++) {
             for (let kr = 0; kr < kH; kr++) {
@@ -74,10 +60,7 @@ export function extractConvLayerWeights(
  * FP32 — the ONNX exporter scales it to int32 at emit time using
  * `(input_scale * weight_scales[f])`.
  */
-export function quantizeConvLayer(
-    kernels: ReadonlyArray<IConvKernel>,
-    inputChannels: number
-): { quantized: QuantizedBuffer; biases: Float32Array } {
+export function quantizeConvLayer(kernels: ReadonlyArray<IConvKernel>, inputChannels: number): { quantized: QuantizedBuffer; biases: Float32Array } {
     const { data, shape } = extractConvLayerWeights(kernels, inputChannels);
     const quantized = WeightQuantizer.perChannelSymmetric(data, shape, /* axis = */ 0);
     const biases = new Float32Array(kernels.length);
@@ -95,16 +78,11 @@ export function quantizeConvLayer(
  * `prevDesc.neurons`. Missing synapses (which shouldn't happen in a
  * well-formed dense layer) leave the corresponding weight at 0.
  */
-export function extractDenseLayerWeights(
-    denseDesc: ICnnLayerDescriptor,
-    prevDesc: ICnnLayerDescriptor
-): { data: Float32Array; shape: [number, number]; biases: Float32Array } {
+export function extractDenseLayerWeights(denseDesc: ICnnLayerDescriptor, prevDesc: ICnnLayerDescriptor): { data: Float32Array; shape: [number, number]; biases: Float32Array } {
     const units = denseDesc.neurons.length;
     const prevSize = prevDesc.neurons.length;
     if (units === 0 || prevSize === 0) {
-        throw new Error(
-            `extractDenseLayerWeights: empty dense layer (units=${units}, prev=${prevSize})`
-        );
+        throw new Error(`extractDenseLayerWeights: empty dense layer (units=${units}, prev=${prevSize})`);
     }
     const data = new Float32Array(units * prevSize);
     const biases = new Float32Array(units);
@@ -120,10 +98,7 @@ export function extractDenseLayerWeights(
             if (!src) continue;
             const j = prevIdx.get(src);
             if (j === undefined) {
-                throw new Error(
-                    `extractDenseLayerWeights: synapse for output neuron ${u} ` +
-                    `references a source neuron not present in the previous layer`
-                );
+                throw new Error(`extractDenseLayerWeights: synapse for output neuron ${u} ` + `references a source neuron not present in the previous layer`);
             }
             data[u * prevSize + j] = syn.weight;
         }
@@ -139,10 +114,7 @@ export function extractDenseLayerWeights(
  * This matches CyanMycelium's QLinearMatMul which only supports per-
  * tensor scales for both operands.
  */
-export function quantizeDenseLayer(
-    denseDesc: ICnnLayerDescriptor,
-    prevDesc: ICnnLayerDescriptor
-): { quantized: QuantizedBuffer; biases: Float32Array } {
+export function quantizeDenseLayer(denseDesc: ICnnLayerDescriptor, prevDesc: ICnnLayerDescriptor): { quantized: QuantizedBuffer; biases: Float32Array } {
     const { data, shape, biases } = extractDenseLayerWeights(denseDesc, prevDesc);
     const quantized = WeightQuantizer.perTensorSymmetric(data, shape);
     return { quantized, biases };

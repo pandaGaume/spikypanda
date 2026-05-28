@@ -36,20 +36,18 @@ import { RuntimeNode } from "./execution.node";
 export abstract class RunnableNode<B = unknown> extends RuntimeNode<B> implements IRunnable {
     private _status: RunStatus = "idle";
 
-    public get status(): RunStatus { return this._status; }
+    public get status(): RunStatus {
+        return this._status;
+    }
 
     /** Standard control inputs: enable + start + stop. */
-    public override readonly controlInputPorts: ReadonlyArray<IPortDescriptor> = [
-        ENABLE_INPUT_PORT, START_INPUT_PORT, STOP_INPUT_PORT,
-    ];
+    public override readonly controlInputPorts: ReadonlyArray<IPortDescriptor> = [ENABLE_INPUT_PORT, START_INPUT_PORT, STOP_INPUT_PORT];
 
     /** Standard control outputs: enabled state + started/stopped triggers. */
-    public override readonly controlOutputPorts: ReadonlyArray<IPortDescriptor> = [
-        ENABLED_OUTPUT_PORT, STARTED_OUTPUT_PORT, STOPPED_OUTPUT_PORT,
-    ];
+    public override readonly controlOutputPorts: ReadonlyArray<IPortDescriptor> = [ENABLED_OUTPUT_PORT, STARTED_OUTPUT_PORT, STOPPED_OUTPUT_PORT];
 
     public abstract start(): void | Promise<void>;
-    public abstract stop():  void | Promise<void>;
+    public abstract stop(): void | Promise<void>;
 
     /**
      * Subclasses call this from within start() at lifecycle transitions
@@ -76,7 +74,7 @@ export abstract class RunnableNode<B = unknown> extends RuntimeNode<B> implement
 
         const links = session.graph.links as ReadonlyArray<IChannel>;
         let startTriggered = false;
-        let stopTriggered  = false;
+        let stopTriggered = false;
 
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
@@ -107,8 +105,13 @@ export abstract class RunnableNode<B = unknown> extends RuntimeNode<B> implement
             const result = this.start();
             if (result instanceof Promise) {
                 result.then(
-                    () => { this._setStatus("started"); publishControlOutput(this, session, CONTROL_PORT_STARTED, true); },
-                    () => { this._setStatus("failed"); },
+                    () => {
+                        this._setStatus("started");
+                        publishControlOutput(this, session, CONTROL_PORT_STARTED, true);
+                    },
+                    () => {
+                        this._setStatus("failed");
+                    }
                 );
             } else {
                 this._setStatus("started");
@@ -125,8 +128,13 @@ export abstract class RunnableNode<B = unknown> extends RuntimeNode<B> implement
             const result = this.stop();
             if (result instanceof Promise) {
                 result.then(
-                    () => { this._setStatus("stopped"); publishControlOutput(this, session, CONTROL_PORT_STOPPED, true); },
-                    () => { this._setStatus("failed"); },
+                    () => {
+                        this._setStatus("stopped");
+                        publishControlOutput(this, session, CONTROL_PORT_STOPPED, true);
+                    },
+                    () => {
+                        this._setStatus("failed");
+                    }
                 );
             } else {
                 this._setStatus("stopped");

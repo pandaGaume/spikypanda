@@ -34,15 +34,15 @@ import { IHousingMechanicsConfig, defaultHousingMechanicsConfig } from "../env/H
 //   bearingStiffness : 100 kN/m; order-of-magnitude for a 16 mm precision bearing stack
 export const MAXON_ECX_PRIME_6M_16L: IPmsmMachineConfig = Object.freeze({
     // Per-phase values: R_terminal / 2, L_terminal / 2 (Y-connected 3-phase, no mutual).
-    resistance:       0.505,   // ohm  (1.01 ohm phase-to-phase / 2)
-    inductanceD:      1.65e-5, // H    (0.033 mH phase-to-phase / 2)
-    inductanceQ:      1.65e-5, // H    (ironless SPM: L_d = L_q)
-    rotorFluxLinkage: 4.3e-3,  // Wb   (Kt / (1.5 * p) = 0.0129 / 3)
-    polePairs:        2,        //      (4-pole rotor, confirmed on datasheet)
-    rotorInertia:     2.28e-7, // kg.m2 (2.28 g.cm2 from datasheet)
-    viscousFriction:  1e-6,    // N.m.s/rad (estimated; Phase 3 bench calibration)
-    nominalSpeedRps:  296,     // RPS  no-load at 24 V (Kn * V / 60 = 740 * 24 / 60)
-    nominalCurrentA:  2,       // A    continuous rated
+    resistance: 0.505, // ohm  (1.01 ohm phase-to-phase / 2)
+    inductanceD: 1.65e-5, // H    (0.033 mH phase-to-phase / 2)
+    inductanceQ: 1.65e-5, // H    (ironless SPM: L_d = L_q)
+    rotorFluxLinkage: 4.3e-3, // Wb   (Kt / (1.5 * p) = 0.0129 / 3)
+    polePairs: 2, //      (4-pole rotor, confirmed on datasheet)
+    rotorInertia: 2.28e-7, // kg.m2 (2.28 g.cm2 from datasheet)
+    viscousFriction: 1e-6, // N.m.s/rad (estimated; Phase 3 bench calibration)
+    nominalSpeedRps: 296, // RPS  no-load at 24 V (Kn * V / 60 = 740 * 24 / 60)
+    nominalCurrentA: 2, // A    continuous rated
 });
 
 // FOC tuning for the calibrated ECX PRIME 16 L parameters.
@@ -98,18 +98,18 @@ export function housingPresetForEcxPrime(): IHousingMechanicsConfig {
 export const MAXON_ECX_PRIME_ENV_DEFAULTS = Object.freeze({
     // Rotor-side (RotorSagModel, BearingPreloadModel).
     // rotorMass: 8-15 % of 66 g motor mass = 5.3-9.9 g; midpoint 7.6 g.
-    rotorMass:              0.0076,  // kg  (midpoint estimate; Phase 3 bench measurement)
-    bearingRadialStiffness: 1e5,     // N/m (100 kN/m; order-of-magnitude, 16 mm precision stack)
-    airGap:                 5e-4,    // m   (0.5 mm nominal; ironless 16 mm BLDC typical)
+    rotorMass: 0.0076, // kg  (midpoint estimate; Phase 3 bench measurement)
+    bearingRadialStiffness: 1e5, // N/m (100 kN/m; order-of-magnitude, 16 mm precision stack)
+    airGap: 5e-4, // m   (0.5 mm nominal; ironless 16 mm BLDC typical)
     // Electromagnetic radial stiffness for the rotating UMP (N/m).
     // Estimated from nominal torque at 2 A, rotor radius ~5 mm, air gap 0.5 mm:
     //   T_nom ~ Kt * I_nom = 0.0129 * 2 = 25.8 mNm
     //   k_UMP ~ T_nom / (r * g) = 25.8e-3 / (5e-3 * 5e-4) = 10 320 N/m
     // Drives the 1x fMech peak in accel_y / accel_z.
-    umpRadialStiffness:     1e4,     // N/m (Phase 3 bench calibration)
+    umpRadialStiffness: 1e4, // N/m (Phase 3 bench calibration)
     // Bearing assembly (BearingPreloadModel).
-    nominalAxialPreload:    5,       // N
-    nominalRadialPreload:   5,       // N
+    nominalAxialPreload: 5, // N
+    nominalRadialPreload: 5, // N
     // Whole-motor mass on the bracket (MountingComplianceModel).
-    motorMass:              0.066,   // kg  (66 g from datasheet)
+    motorMass: 0.066, // kg  (66 g from datasheet)
 });

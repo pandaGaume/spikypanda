@@ -111,10 +111,10 @@ export class GraphViewer {
         this.skinTarget = this.host;
 
         this.skins = new SkinRegistry();
-        this.skins.register("dark",              darkSkin);
-        this.skins.register("light",             lightSkin);
-        this.skins.register("helios",            heliosSkin);
-        this.skins.register("transparent_dark",  transparentDarkSkin);
+        this.skins.register("dark", darkSkin);
+        this.skins.register("light", lightSkin);
+        this.skins.register("helios", heliosSkin);
+        this.skins.register("transparent_dark", transparentDarkSkin);
         this.skins.register("transparent_light", transparentLightSkin);
 
         this.bindEvents();
@@ -133,9 +133,7 @@ export class GraphViewer {
     }
 
     removeNode(node: NodeUI): void {
-        const connsToRemove = this.connections.filter(
-            (c) => node.getAllPorts().some((p) => c.containsPort(p)),
-        );
+        const connsToRemove = this.connections.filter((c) => node.getAllPorts().some((p) => c.containsPort(p)));
         for (const c of connsToRemove) this.removeConnection(c);
 
         const idx = this.nodes.indexOf(node);
@@ -157,7 +155,11 @@ export class GraphViewer {
             this._reportRejection(from, to, `same direction (${from.direction})`);
             return null;
         }
-        if (from.direction === "input") { const tmp = from; from = to; to = tmp; }
+        if (from.direction === "input") {
+            const tmp = from;
+            from = to;
+            to = tmp;
+        }
 
         if (!arePortTypesCompatible(from.type, to.type)) {
             this._reportRejection(from, to, `incompatible types ${from.type} → ${to.type}`);
@@ -193,11 +195,7 @@ export class GraphViewer {
         // Mirror the rule in connect(): same-direction or incompatible
         // types both count as illegal drops here.
         const sameDir = port.direction === this.dragPort.direction;
-        const compat  = sameDir
-            ? false
-            : (port.direction === "input"
-                ? arePortTypesCompatible(this.dragPort.type, port.type)
-                : arePortTypesCompatible(port.type, this.dragPort.type));
+        const compat = sameDir ? false : port.direction === "input" ? arePortTypesCompatible(this.dragPort.type, port.type) : arePortTypesCompatible(port.type, this.dragPort.type);
         port.el.classList.add(compat ? "ne-port-compatible" : "ne-port-incompatible");
         this.host.style.cursor = compat ? "alias" : "not-allowed";
         this._hoverTargetPort = port;
@@ -231,12 +229,18 @@ export class GraphViewer {
 
     // ── Layout ─────────────────────────────────────────────────────────
 
-    autoLayout(): void { this.layoutStrategy(this); }
-    setLayoutStrategy(strategy: LayoutStrategy): void { this.layoutStrategy = strategy; }
+    autoLayout(): void {
+        this.layoutStrategy(this);
+    }
+    setLayoutStrategy(strategy: LayoutStrategy): void {
+        this.layoutStrategy = strategy;
+    }
 
     // ── Selection ──────────────────────────────────────────────────────
 
-    getSelectedNodes(): ReadonlySet<NodeUI> { return this.selectedNodes; }
+    getSelectedNodes(): ReadonlySet<NodeUI> {
+        return this.selectedNodes;
+    }
 
     /**
      * Externally-driven node UI refresh after a property panel commits
@@ -277,7 +281,9 @@ export class GraphViewer {
         this._applyProfile(this._deriveProfileFromSkin(skin));
     }
 
-    getSkinName(): string { return this.currentSkinName; }
+    getSkinName(): string {
+        return this.currentSkinName;
+    }
 
     /**
      * Retarget where the skin's CSS tokens are applied. Defaults to the
@@ -310,17 +316,16 @@ export class GraphViewer {
     }
 
     private _deriveProfileFromSkin(skin: Skin): ExportProfile {
-        const pick = (key: string, fallback: string): string =>
-            skin[key] !== undefined ? skin[key] : fallback;
+        const pick = (key: string, fallback: string): string => (skin[key] !== undefined ? skin[key] : fallback);
         const cur = this.currentProfile;
         return {
-            background:       pick("--ne-color-bg",            cur.background ?? "#111"),
-            nodeBody:         pick("--ne-color-surface",       cur.nodeBody),
-            nodeBorder:       pick("--ne-color-border",        cur.nodeBorder),
-            headerText:       pick("--ne-color-text-strong",   cur.headerText),
-            portLabel:        pick("--ne-color-text-muted",    cur.portLabel),
-            portStroke:       pick("--ne-color-border-strong", cur.portStroke),
-            connectionStroke: pick("--ne-color-connection",    cur.connectionStroke),
+            background: pick("--ne-color-bg", cur.background ?? "#111"),
+            nodeBody: pick("--ne-color-surface", cur.nodeBody),
+            nodeBorder: pick("--ne-color-border", cur.nodeBorder),
+            headerText: pick("--ne-color-text-strong", cur.headerText),
+            portLabel: pick("--ne-color-text-muted", cur.portLabel),
+            portStroke: pick("--ne-color-border-strong", cur.portStroke),
+            connectionStroke: pick("--ne-color-connection", cur.connectionStroke),
         };
     }
 
@@ -340,8 +345,7 @@ export class GraphViewer {
 
         const gridDot = isLight ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.03)";
         s.setProperty("background-color", bg, "important");
-        s.setProperty("background-image",
-            `radial-gradient(circle, ${gridDot} 1px, transparent 1px)`, "important");
+        s.setProperty("background-image", `radial-gradient(circle, ${gridDot} 1px, transparent 1px)`, "important");
 
         for (const n of this.nodes) this.applyProfileToNode(n);
         for (const c of this.connections) c.path.setAttribute("stroke", p.connectionStroke);
@@ -362,18 +366,22 @@ export class GraphViewer {
     serialize(): SerializedGraph {
         return {
             nodes: this.nodes.map((n) => ({
-                id: n.id, label: n.label, x: n.x, y: n.y, color: n.color,
+                id: n.id,
+                label: n.label,
+                x: n.x,
+                y: n.y,
+                color: n.color,
                 inputs: n.inputs.map((p) => ({ name: p.name, type: p.type, direction: p.direction })),
                 outputs: n.outputs.map((p) => ({ name: p.name, type: p.type, direction: p.direction })),
             })),
             connections: this.connections.map((c) => {
                 const fromNode = this.nodes.find((n) => n.outputs.includes(c.from))!;
-                const toNode   = this.nodes.find((n) => n.inputs.includes(c.to))!;
+                const toNode = this.nodes.find((n) => n.inputs.includes(c.to))!;
                 return {
-                    fromNodeId:    fromNode.id,
+                    fromNodeId: fromNode.id,
                     fromPortIndex: fromNode.outputs.indexOf(c.from),
-                    toNodeId:      toNode.id,
-                    toPortIndex:   toNode.inputs.indexOf(c.to),
+                    toNodeId: toNode.id,
+                    toPortIndex: toNode.inputs.indexOf(c.to),
                 };
             }),
         };
@@ -382,24 +390,29 @@ export class GraphViewer {
     save(): string {
         const connId = (c: Connection): string => {
             const fromNode = this.nodes.find((n) => n.outputs.includes(c.from))!;
-            const toNode   = this.nodes.find((n) => n.inputs.includes(c.to))!;
+            const toNode = this.nodes.find((n) => n.inputs.includes(c.to))!;
             return `${fromNode.id}:${c.from.name}->${toNode.id}:${c.to.name}`;
         };
         const data = {
             version: 2,
             layout: {
                 nodes: this.nodes.map((n) => ({
-                    id: n.id, x: n.x, y: n.y, color: n.color,
-                    inputs:  n.inputs.map((p)  => ({ name: p.name, type: p.type, direction: p.direction })),
+                    id: n.id,
+                    x: n.x,
+                    y: n.y,
+                    color: n.color,
+                    inputs: n.inputs.map((p) => ({ name: p.name, type: p.type, direction: p.direction })),
                     outputs: n.outputs.map((p) => ({ name: p.name, type: p.type, direction: p.direction })),
                 })),
                 connections: this.connections.map((c) => {
                     const fromNode = this.nodes.find((n) => n.outputs.includes(c.from))!;
-                    const toNode   = this.nodes.find((n) => n.inputs.includes(c.to))!;
+                    const toNode = this.nodes.find((n) => n.inputs.includes(c.to))!;
                     return {
                         id: connId(c),
-                        fromNodeId: fromNode.id, fromPortIndex: fromNode.outputs.indexOf(c.from),
-                        toNodeId:   toNode.id,   toPortIndex:   toNode.inputs.indexOf(c.to),
+                        fromNodeId: fromNode.id,
+                        fromPortIndex: fromNode.outputs.indexOf(c.from),
+                        toNodeId: toNode.id,
+                        toPortIndex: toNode.inputs.indexOf(c.to),
                     };
                 }),
             },
@@ -407,11 +420,11 @@ export class GraphViewer {
                 nodes: this.nodes.map((n) => ({ id: n.id, label: n.label, data: n.item.serialize() })),
                 connections: this.connections.map((c) => {
                     const fromNode = this.nodes.find((nd) => nd.outputs.includes(c.from))!;
-                    const toNode   = this.nodes.find((nd) => nd.inputs.includes(c.to))!;
+                    const toNode = this.nodes.find((nd) => nd.inputs.includes(c.to))!;
                     return {
                         id: connId(c),
                         from: { node: fromNode.id, port: c.from.name },
-                        to:   { node: toNode.id,   port: c.to.name },
+                        to: { node: toNode.id, port: c.to.name },
                     };
                 }),
             },
@@ -436,9 +449,11 @@ export class GraphViewer {
 
             const def: NodeDef = {
                 label,
-                inputs:  (sn.inputs  ?? []).filter((p: { direction: string }) => p.direction === "input")
+                inputs: (sn.inputs ?? [])
+                    .filter((p: { direction: string }) => p.direction === "input")
                     .map((p: { name: string; type: string }) => ({ name: p.name, type: p.type })),
-                outputs: (sn.outputs ?? []).filter((p: { direction: string }) => p.direction === "output")
+                outputs: (sn.outputs ?? [])
+                    .filter((p: { direction: string }) => p.direction === "output")
                     .map((p: { name: string; type: string }) => ({ name: p.name, type: p.type })),
                 color: sn.color,
                 data: mn?.data ?? undefined,
@@ -450,10 +465,10 @@ export class GraphViewer {
 
         for (const sc of layoutConns) {
             const fromNode = nodeMap.get(sc.fromNodeId);
-            const toNode   = nodeMap.get(sc.toNodeId);
+            const toNode = nodeMap.get(sc.toNodeId);
             if (fromNode && toNode) {
                 const fromPort = fromNode.outputs[sc.fromPortIndex];
-                const toPort   = toNode.inputs[sc.toPortIndex];
+                const toPort = toNode.inputs[sc.toPortIndex];
                 if (fromPort && toPort) this.connect(fromPort, toPort);
             }
         }
@@ -465,11 +480,11 @@ export class GraphViewer {
             nodes: this.nodes.map((n) => ({ id: n.id, label: n.label, data: n.item.serialize() })),
             connections: this.connections.map((c) => {
                 const fromNode = this.nodes.find((nd) => nd.outputs.includes(c.from))!;
-                const toNode   = this.nodes.find((nd) => nd.inputs.includes(c.to))!;
+                const toNode = this.nodes.find((nd) => nd.inputs.includes(c.to))!;
                 return {
                     id: `${fromNode.id}:${c.from.name}->${toNode.id}:${c.to.name}`,
                     from: { node: fromNode.id, port: c.from.name },
-                    to:   { node: toNode.id,   port: c.to.name },
+                    to: { node: toNode.id, port: c.to.name },
                 };
             }),
         };
@@ -485,10 +500,19 @@ export class GraphViewer {
             if (requestedSkin) theme = this._deriveProfileFromSkin(requestedSkin);
         }
 
-        const PADDING = 40, HEADER_H = 24, PORT_R = 5, PORT_SPACING = 20, PORT_PAD_TOP = 10;
+        const PADDING = 40,
+            HEADER_H = 24,
+            PORT_R = 5,
+            PORT_SPACING = 20,
+            PORT_PAD_TOP = 10;
         const FONT = "'Segoe UI', system-ui, sans-serif";
 
-        interface NodeMeasure { node: NodeUI; w: number; h: number; portPositions: Map<Port, { x: number; y: number }>; }
+        interface NodeMeasure {
+            node: NodeUI;
+            w: number;
+            h: number;
+            portPositions: Map<Port, { x: number; y: number }>;
+        }
         const measures: NodeMeasure[] = [];
 
         for (const n of this.nodes) {
@@ -507,14 +531,20 @@ export class GraphViewer {
             measures.push({ node: n, w, h, portPositions });
         }
 
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        let minX = Infinity,
+            minY = Infinity,
+            maxX = -Infinity,
+            maxY = -Infinity;
         for (const m of measures) {
-            minX = Math.min(minX, m.node.x);  minY = Math.min(minY, m.node.y);
-            maxX = Math.max(maxX, m.node.x + m.w);  maxY = Math.max(maxY, m.node.y + m.h);
+            minX = Math.min(minX, m.node.x);
+            minY = Math.min(minY, m.node.y);
+            maxX = Math.max(maxX, m.node.x + m.w);
+            maxY = Math.max(maxY, m.node.y + m.h);
         }
         const svgW = maxX - minX + PADDING * 2;
         const svgH = maxY - minY + PADDING * 2;
-        const ox = -minX + PADDING, oy = -minY + PADDING;
+        const ox = -minX + PADDING,
+            oy = -minY + PADDING;
 
         const parts: string[] = [];
         parts.push(`<svg xmlns="${SVG_NS}" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">`);
@@ -524,16 +554,23 @@ export class GraphViewer {
         for (const m of measures) for (const [p, pos] of m.portPositions) allPortPos.set(p, { x: pos.x + ox, y: pos.y + oy });
 
         for (const c of this.connections) {
-            const p1 = allPortPos.get(c.from);  const p2 = allPortPos.get(c.to);
+            const p1 = allPortPos.get(c.from);
+            const p2 = allPortPos.get(c.to);
             if (!p1 || !p2) continue;
             const dx = Math.abs(p2.x - p1.x) * 0.5;
-            parts.push(`<path d="M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${p2.x - dx} ${p2.y}, ${p2.x} ${p2.y}" stroke="${theme.connectionStroke}" fill="none" stroke-width="2"/>`);
+            parts.push(
+                `<path d="M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${p2.x - dx} ${p2.y}, ${p2.x} ${p2.y}" stroke="${theme.connectionStroke}" fill="none" stroke-width="2"/>`
+            );
         }
 
         for (const m of measures) {
-            const nx = m.node.x + ox, ny = m.node.y + oy;
-            const headerColor = m.node.el.querySelector(".ne-node-header")?.getAttribute("style")
-                ?.match(/background:\s*([^;]+)/)?.[1] || "#335";
+            const nx = m.node.x + ox,
+                ny = m.node.y + oy;
+            const headerColor =
+                m.node.el
+                    .querySelector(".ne-node-header")
+                    ?.getAttribute("style")
+                    ?.match(/background:\s*([^;]+)/)?.[1] || "#335";
             parts.push(`<g>`);
             parts.push(`<rect x="${nx}" y="${ny}" width="${m.w}" height="${m.h}" rx="8" fill="${theme.nodeBody}" stroke="${theme.nodeBorder}" stroke-width="1"/>`);
             parts.push(`<rect x="${nx}" y="${ny}" width="${m.w}" height="${HEADER_H}" rx="8" fill="${headerColor}"/>`);
@@ -541,12 +578,16 @@ export class GraphViewer {
             parts.push(`<text x="${nx + 10}" y="${ny + 16}" fill="${theme.headerText}" font-family="${FONT}" font-size="11" font-weight="600">${m.node.label}</text>`);
 
             for (let i = 0; i < m.node.inputs.length; i++) {
-                const p = m.node.inputs[i];  const pos = allPortPos.get(p)!;  const color = PORT_COLORS[p.type];
+                const p = m.node.inputs[i];
+                const pos = allPortPos.get(p)!;
+                const color = PORT_COLORS[p.type];
                 parts.push(`<circle cx="${pos.x}" cy="${pos.y}" r="${PORT_R}" fill="${color}" stroke="${theme.portStroke}" stroke-width="1.5"/>`);
                 parts.push(`<text x="${pos.x + PORT_R + 4}" y="${pos.y + 4}" fill="${theme.portLabel}" font-family="${FONT}" font-size="9">${p.name}</text>`);
             }
             for (let i = 0; i < m.node.outputs.length; i++) {
-                const p = m.node.outputs[i];  const pos = allPortPos.get(p)!;  const color = PORT_COLORS[p.type];
+                const p = m.node.outputs[i];
+                const pos = allPortPos.get(p)!;
+                const color = PORT_COLORS[p.type];
                 parts.push(`<circle cx="${pos.x}" cy="${pos.y}" r="${PORT_R}" fill="${color}" stroke="${theme.portStroke}" stroke-width="1.5"/>`);
                 parts.push(`<text x="${pos.x - PORT_R - 4}" y="${pos.y + 4}" fill="${theme.portLabel}" font-family="${FONT}" font-size="9" text-anchor="end">${p.name}</text>`);
             }
@@ -626,7 +667,10 @@ export class GraphViewer {
 
     private findPortByDot(el: HTMLElement): Port | undefined {
         if (!el.classList.contains("ne-port-dot")) return undefined;
-        for (const node of this.nodes) { const port = node.findPortByDot(el); if (port) return port; }
+        for (const node of this.nodes) {
+            const port = node.findPortByDot(el);
+            if (port) return port;
+        }
         return undefined;
     }
 
@@ -640,10 +684,7 @@ export class GraphViewer {
     }
 
     private findNodeForPort(port: Port): NodeUI | undefined {
-        return this.nodes.find((n) =>
-            n.inputs.includes(port) || n.outputs.includes(port)
-            || n.controlInputs.includes(port) || n.controlOutputs.includes(port)
-        );
+        return this.nodes.find((n) => n.inputs.includes(port) || n.outputs.includes(port) || n.controlInputs.includes(port) || n.controlOutputs.includes(port));
     }
 
     private findConnectionByPath(el: HTMLElement): Connection | undefined {
@@ -684,8 +725,12 @@ export class GraphViewer {
         // Port label drag (reorder) — write only.
         const labelPort = this.findPortByLabel(target);
         if (labelPort) {
-            if (!canWrite) { e.preventDefault(); return; }
-            e.stopPropagation(); e.preventDefault();
+            if (!canWrite) {
+                e.preventDefault();
+                return;
+            }
+            e.stopPropagation();
+            e.preventDefault();
             this.reorderPort = labelPort;
             this.reorderNode = this.findNodeForPort(labelPort) ?? null;
             this.reorderStartY = e.clientY;
@@ -758,8 +803,12 @@ export class GraphViewer {
                 // control ports, so we can tell without slot-name guessing.
                 const isCtrl = this.reorderPort.el.classList.contains("ne-port-control");
                 const ports = isCtrl
-                    ? (this.reorderPort.direction === "input" ? this.reorderNode.controlInputs : this.reorderNode.controlOutputs)
-                    : (this.reorderPort.direction === "input" ? this.reorderNode.inputs        : this.reorderNode.outputs);
+                    ? this.reorderPort.direction === "input"
+                        ? this.reorderNode.controlInputs
+                        : this.reorderNode.controlOutputs
+                    : this.reorderPort.direction === "input"
+                      ? this.reorderNode.inputs
+                      : this.reorderNode.outputs;
                 const idx = ports.indexOf(this.reorderPort);
                 const newIdx = idx + direction;
                 if (newIdx >= 0 && newIdx < ports.length) {
@@ -787,7 +836,8 @@ export class GraphViewer {
             const newX = worldMouse.x - this.dragOffset.x;
             const newY = worldMouse.y - this.dragOffset.y;
             if (this.isDraggingSelection && this.selectedNodes.size > 1) {
-                const dx = newX - this.dragNode.x, dy = newY - this.dragNode.y;
+                const dx = newX - this.dragNode.x,
+                    dy = newY - this.dragNode.y;
                 for (const n of this.selectedNodes) n.setPosition(n.x + dx, n.y + dy);
             } else {
                 this.dragNode.setPosition(newX, newY);
@@ -801,10 +851,10 @@ export class GraphViewer {
             const x2 = Math.max(this.selRectStart.x, e.clientX);
             const y2 = Math.max(this.selRectStart.y, e.clientY);
             const hostRect = this.host.getBoundingClientRect();
-            this.selectionRect.style.left   = (x1 - hostRect.left) + "px";
-            this.selectionRect.style.top    = (y1 - hostRect.top)  + "px";
-            this.selectionRect.style.width  = (x2 - x1) + "px";
-            this.selectionRect.style.height = (y2 - y1) + "px";
+            this.selectionRect.style.left = x1 - hostRect.left + "px";
+            this.selectionRect.style.top = y1 - hostRect.top + "px";
+            this.selectionRect.style.width = x2 - x1 + "px";
+            this.selectionRect.style.height = y2 - y1 + "px";
             return;
         }
         if (this.isPanning) {
@@ -818,11 +868,13 @@ export class GraphViewer {
     private onMouseUp(e: MouseEvent): void {
         if (this.reorderPort) {
             this.reorderPort.el.classList.remove("ne-port-dragging");
-            this.reorderPort = null; this.reorderNode = null;
+            this.reorderPort = null;
+            this.reorderNode = null;
             return;
         }
         if (this.dragPort && this.preview) {
-            this.preview.remove(); this.preview = null;
+            this.preview.remove();
+            this.preview = null;
             const target = e.target as HTMLElement;
             const targetPort = this.findPortByDot(target);
             if (targetPort && targetPort !== this.dragPort) this.connect(this.dragPort, targetPort);

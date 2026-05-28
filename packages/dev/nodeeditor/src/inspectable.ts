@@ -29,10 +29,7 @@ export interface Serializable {
 export function isInspectable(obj: unknown): obj is Inspectable {
     if (obj == null || typeof obj !== "object") return false;
     const candidate = obj as Record<string, unknown>;
-    return (
-        typeof candidate["getDisplayName"] === "function" &&
-        typeof candidate["getProperties"] === "function"
-    );
+    return typeof candidate["getDisplayName"] === "function" && typeof candidate["getProperties"] === "function";
 }
 
 export function isSerializable(obj: unknown): obj is Serializable {
@@ -80,9 +77,7 @@ export class UIItemBase<T> {
                     key,
                     value,
                     editable: typeof value === "string" || typeof value === "number" || typeof value === "boolean",
-                    type: (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
-                        ? typeof value as "string" | "number" | "boolean"
-                        : undefined,
+                    type: typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? (typeof value as "string" | "number" | "boolean") : undefined,
                 }));
         }
         return [{ key: "value", value: this.data }];

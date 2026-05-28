@@ -14,8 +14,13 @@ export class GravityField implements ISimNode {
     private _g: Cartesian3 = Cartesian3.Zero() as Cartesian3;
     private _label: string = "zero";
 
-    public advance(_t: number): void { /* static unless setter called */ }
-    public reset(): void { this._g = Cartesian3.Zero() as Cartesian3; this._label = "zero"; }
+    public advance(_t: number): void {
+        /* static unless setter called */
+    }
+    public reset(): void {
+        this._g = Cartesian3.Zero() as Cartesian3;
+        this._label = "zero";
+    }
 
     public setWorldGravity(g: ICartesian3, label: string = "custom"): void {
         this._g = new Cartesian3(g.x, g.y, g.z);
@@ -30,7 +35,9 @@ export class GravityField implements ISimNode {
         return this._g.magnitude();
     }
 
-    public get label(): string { return this._label; }
+    public get label(): string {
+        return this._label;
+    }
 
     // Presets ------------------------------------------------------------
 

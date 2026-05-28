@@ -18,12 +18,7 @@ export class VitSynapse extends GraphOLink implements IVitSynapse {
     @cloneable public synapseType: VitSynapseType;
     @cloneable public weights: number[];
 
-    public constructor(
-        oini: INode,
-        ofin: INode,
-        synapseType: VitSynapseType = VitSynapseType.MLP,
-        numWeights: number = 1,
-    ) {
+    public constructor(oini: INode, ofin: INode, synapseType: VitSynapseType = VitSynapseType.MLP, numWeights: number = 1) {
         super(oini, ofin);
         this.synapseType = synapseType;
         this.weights = new Array(numWeights).fill(0);

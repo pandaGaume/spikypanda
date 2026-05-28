@@ -1,28 +1,90 @@
 {
-    "id": "spk.dsp",
-    "version": "0.1.0",
+    "id":          "spk.dsp",
+    "version":     "0.2.0",
     "displayName": "DSP",
-    "description": "Time-series DSP fundamentals: FFT/IFFT, magnitude/phase, windowing, framing, biquad and Kalman filters, MFCC pipeline, and signal analysis primitives (RMS, ZCR, moving average, detrend).",
-    "category": "dsp",
-    "entry": "bundle/SpkPluginDsp.js",
-    "nodes": [
-        { "type": "spk.dsp:fft",         "factory": "createFftNode" },
-        { "type": "spk.dsp:ifft",        "factory": "createIfftNode" },
-        { "type": "spk.dsp:magnitude",   "factory": "createMagnitudeNode" },
-        { "type": "spk.dsp:phase",       "factory": "createPhaseNode" },
-        { "type": "spk.dsp:window",      "factory": "createWindowNode" },
-        { "type": "spk.dsp:frame",       "factory": "createFrameNode" },
-        { "type": "spk.dsp:mel",         "factory": "createMelFilterbankNode" },
-        { "type": "spk.dsp:logscale",    "factory": "createLogScaleNode" },
-        { "type": "spk.dsp:dct",         "factory": "createDctNode" },
-        { "type": "spk.dsp:mfcc",        "factory": "createMfccNode" },
-        { "type": "spk.dsp:dtw",         "factory": "createDtwNode" },
-        { "type": "spk.dsp:biquad",      "factory": "createBiquadFilterNode" },
-        { "type": "spk.dsp:kalman1d",    "factory": "createKalman1DNode" },
-        { "type": "spk.dsp:rms",         "factory": "createRmsNode" },
-        { "type": "spk.dsp:zcr",         "factory": "createZeroCrossingRateNode" },
-        { "type": "spk.dsp:movavg",      "factory": "createMovingAverageNode" },
-        { "type": "spk.dsp:detrend",     "factory": "createDetrendNode" }
+    "description": "Time-series DSP fundamentals organized as 6 sub-plugins under DSP.*: Transform, Window, Frame, Feature, Filter, Stats. Every node is an ONNX kernel; a subset also has UE5 Audio counterparts.",
+    "category":    "DSP",
+    "entry":       "bundle/SpkPluginDsp.js",
+    "nodes":       [],
+    "editors":     [],
+    "subPlugins": [
+        {
+            "id":          "DSP.Transform",
+            "displayName": "Transforms",
+            "description": "FFT (power/magnitude/complex modes), IFFT, Magnitude, Phase, DCT.",
+            "category":    "DSP.Transform",
+            "version":     "0.1.0",
+            "standards":   [{ "id": "onnx", "version": "1.18" }],
+            "nodes": [
+                { "type": "DSP.Transform:fft",       "factory": "createFftNode",       "label": "FFT" },
+                { "type": "DSP.Transform:ifft",      "factory": "createIfftNode",      "label": "IFFT" },
+                { "type": "DSP.Transform:magnitude", "factory": "createMagnitudeNode", "label": "Magnitude" },
+                { "type": "DSP.Transform:phase",     "factory": "createPhaseNode",     "label": "Phase" },
+                { "type": "DSP.Transform:dct",       "factory": "createDctNode",       "label": "DCT" }
+            ]
+        },
+        {
+            "id":          "DSP.Window",
+            "displayName": "Window",
+            "description": "Window function (Hann, Hamming, Blackman, Bartlett, Rectangular, Tukey) selected via the window_type attribute.",
+            "category":    "DSP.Window",
+            "version":     "0.1.0",
+            "standards":   [{ "id": "onnx", "version": "1.18" }],
+            "nodes": [
+                { "type": "DSP.Window:window", "factory": "createWindowNode", "label": "Window" }
+            ]
+        },
+        {
+            "id":          "DSP.Frame",
+            "displayName": "Frame",
+            "description": "Signal slicing into overlapping frames with hop_length and pad_mode.",
+            "category":    "DSP.Frame",
+            "version":     "0.1.0",
+            "standards":   [{ "id": "onnx", "version": "1.18" }],
+            "nodes": [
+                { "type": "DSP.Frame:frame", "factory": "createFrameNode", "label": "Frame" }
+            ]
+        },
+        {
+            "id":          "DSP.Feature",
+            "displayName": "Audio features",
+            "description": "Audio-style feature extraction: Mel filterbank, LogScale, MFCC pipeline, DTW distance.",
+            "category":    "DSP.Feature",
+            "version":     "0.1.0",
+            "standards":   [{ "id": "onnx", "version": "1.18" }],
+            "nodes": [
+                { "type": "DSP.Feature:mel",      "factory": "createMelFilterbankNode", "label": "Mel Filterbank" },
+                { "type": "DSP.Feature:logscale", "factory": "createLogScaleNode",      "label": "Log Scale" },
+                { "type": "DSP.Feature:mfcc",     "factory": "createMfccNode",          "label": "MFCC" },
+                { "type": "DSP.Feature:dtw",      "factory": "createDtwNode",           "label": "DTW" }
+            ]
+        },
+        {
+            "id":          "DSP.Filter",
+            "displayName": "Filters",
+            "description": "Biquad (LP/HP/BP/Notch via filter_type) and scalar Kalman 1D.",
+            "category":    "DSP.Filter",
+            "version":     "0.1.0",
+            "standards":   [{ "id": "onnx", "version": "1.18" }],
+            "nodes": [
+                { "type": "DSP.Filter:biquad",   "factory": "createBiquadFilterNode", "label": "Biquad Filter" },
+                { "type": "DSP.Filter:kalman1d", "factory": "createKalman1DNode",     "label": "Kalman 1D" }
+            ]
+        },
+        {
+            "id":          "DSP.Stats",
+            "displayName": "Stats",
+            "description": "Output-side signal analysis: RMS, Zero-Crossing Rate, Moving Average (causal), Detrend (constant/linear).",
+            "category":    "DSP.Stats",
+            "version":     "0.1.0",
+            "standards":   [{ "id": "onnx", "version": "1.18" }],
+            "nodes": [
+                { "type": "DSP.Stats:rms",     "factory": "createRmsNode",              "label": "RMS" },
+                { "type": "DSP.Stats:zcr",     "factory": "createZeroCrossingRateNode", "label": "Zero Crossing Rate" },
+                { "type": "DSP.Stats:movavg",  "factory": "createMovingAverageNode",    "label": "Moving Average" },
+                { "type": "DSP.Stats:detrend", "factory": "createDetrendNode",          "label": "Detrend" }
+            ]
+        }
     ],
-    "editors": []
+    "manifestRefs": []
 }

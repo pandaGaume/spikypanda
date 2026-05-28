@@ -20,14 +20,7 @@ export { StandardsRegistry, renderStandardShields, normalizeStandardSpec } from 
 export type { IStandardInfo, IStandardEntry, StandardSpec } from "./standards";
 export { NodeRegistry, StartNode, StopNode, RunnableNode } from "spikypanda-core";
 export type { INodeRegistry, INodeMeta, NodeFactory } from "spikypanda-core";
-export {
-    CONTROL_PORT_ENABLE,
-    CONTROL_PORT_ENABLED,
-    CONTROL_PORT_START,
-    CONTROL_PORT_STOP,
-    CONTROL_PORT_STARTED,
-    CONTROL_PORT_STOPPED,
-} from "spikypanda-core";
+export { CONTROL_PORT_ENABLE, CONTROL_PORT_ENABLED, CONTROL_PORT_START, CONTROL_PORT_STOP, CONTROL_PORT_STARTED, CONTROL_PORT_STOPPED } from "spikypanda-core";
 export { defaultLayout } from "./auto-layout";
 export type { LayoutStrategy } from "./auto-layout";
 export { FileHandlerRegistry } from "./file-handler";
@@ -41,14 +34,7 @@ export { UIItemBase, isInspectable, isSerializable } from "./inspectable";
 export type { Inspectable, Serializable, PropertyEntry } from "./inspectable";
 export { EditorRegistry } from "./editor-registry";
 export type { IEditor, EditorFactory } from "./editor-registry";
-export {
-    installBuiltinEditors,
-    vector3Editor,
-    vector4Editor,
-    quaternionEditor,
-    numberEditor,
-    sliderEditor,
-} from "./editors";
+export { installBuiltinEditors, vector3Editor, vector4Editor, quaternionEditor, numberEditor, sliderEditor } from "./editors";
 export { LiveBinder } from "./live-binder";
 export { GraphRunner } from "./graph-runner";
 export type { RunnerState } from "./graph-runner";
@@ -61,8 +47,8 @@ export { DebugConsole } from "./components/debug-console";
 export type { DebugConsoleOptions } from "./components/debug-console";
 export { SkinRegistry } from "./skin-registry";
 export type { Skin } from "./skin-registry";
-export { darkSkin }   from "./styles/skins/dark";
-export { lightSkin }  from "./styles/skins/light";
+export { darkSkin } from "./styles/skins/dark";
+export { lightSkin } from "./styles/skins/light";
 export { heliosSkin } from "./styles/skins/helios";
 export { transparentDarkSkin, transparentLightSkin } from "./styles/skins/transparent";
 
@@ -75,13 +61,4 @@ export { PORT_COLORS, arePortTypesCompatible } from "./types";
 export type { IPlugin, IPluginContext, IPluginManifest, IPluginNodeEntry, IPluginEditorEntry, ISubPluginManifest } from "./plugin.interfaces";
 export { loadPlugin } from "./plugin.loader";
 export type { LoadPluginOptions, LoadPluginResult } from "./plugin.loader";
-export type {
-    PortDirection,
-    PortType,
-    PortDef,
-    NodeDef,
-    Vec2,
-    SerializedGraph,
-    SerializedNode,
-    SerializedConnection,
-} from "./types";
+export type { PortDirection, PortType, PortDef, NodeDef, Vec2, SerializedGraph, SerializedNode, SerializedConnection } from "./types";

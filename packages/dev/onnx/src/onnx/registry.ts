@@ -133,13 +133,17 @@ export abstract class OnnxOpNode extends Kernel implements IDeclaresPorts {
      */
     protected _buildInputPorts(nodeInfo: OnnxNodeInfo): ReadonlyArray<IPortDescriptor> {
         return nodeInfo.inputs.map((_, i) => ({
-            slot: i, optional: false, type: "tensor",
+            slot: i,
+            optional: false,
+            type: "tensor",
         }));
     }
 
     protected _buildOutputPorts(nodeInfo: OnnxNodeInfo): ReadonlyArray<IPortDescriptor> {
         return nodeInfo.outputs.map((_, i) => ({
-            slot: i, optional: false, type: "tensor",
+            slot: i,
+            optional: false,
+            type: "tensor",
         }));
     }
 

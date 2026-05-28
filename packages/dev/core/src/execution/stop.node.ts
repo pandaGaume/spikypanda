@@ -14,13 +14,15 @@ import { RuntimeNode } from "./execution.node";
 export class StopNode extends RuntimeNode {
     private _pending = false;
 
-    public override readonly controlInputPorts:  ReadonlyArray<IPortDescriptor> = [];
+    public override readonly controlInputPorts: ReadonlyArray<IPortDescriptor> = [];
     public override readonly controlOutputPorts: ReadonlyArray<IPortDescriptor> = [STOPPED_OUTPUT_PORT];
 
     /** Always-on (see StartNode). */
     public override readonly supportsEnabling = false;
 
-    public arm(): void { this._pending = true; }
+    public arm(): void {
+        this._pending = true;
+    }
 
     public override isReady(_session: ISession): boolean {
         return this.enabled && this._pending;

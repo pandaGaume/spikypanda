@@ -24,7 +24,9 @@ export class SatInferenceRuntime {
     // Caches for backprop
     public layerNormCache: Array<{ mean: number[]; invStd: number[]; normalized: number[][] }> = [];
     public attentionCache: Array<{
-        Q: number[][]; K: number[][]; V: number[][];
+        Q: number[][];
+        K: number[][];
+        V: number[][];
         scores: number[][][]; // [head][queryToken][sparse neighbor scores]
         scoreIndices: number[][]; // [queryToken] -> neighbor indices for this block
         attnOut: number[][];
@@ -109,7 +111,7 @@ export class SatInferenceRuntime {
             const neighbors = g.neighborMaps[block];
 
             pr.startPhase("layernorm");
-            const preAttn = this.tokens.map(t => [...t]);
+            const preAttn = this.tokens.map((t) => [...t]);
 
             // LayerNorm 1
             const ln1 = g.layerNorms[lnIdx];
@@ -145,7 +147,9 @@ export class SatInferenceRuntime {
                     k[e] += bw.qkvBias[1 * embedDim + e];
                     v[e] += bw.qkvBias[2 * embedDim + e];
                 }
-                Q.push(q); K.push(k); V.push(v);
+                Q.push(q);
+                K.push(k);
+                V.push(v);
             }
             pr.addFlops("attention_qkv", 3 * numTokens * embedDim * embedDim * 2);
             pr.endPhase("attention_qkv");
@@ -192,10 +196,12 @@ export class SatInferenceRuntime {
             }
 
             this.attentionCache.push({
-                Q, K, V,
+                Q,
+                K,
+                V,
                 scores: allScores,
                 scoreIndices: neighbors,
-                attnOut: attnOut.map(t => [...t]),
+                attnOut: attnOut.map((t) => [...t]),
             });
             // FLOPS: sparse attention - sum actual pairs computed
             pr.addFlops("attention_scores", this.attentionPairsComputed * headDim * 4); // dot + weighted V
@@ -226,7 +232,7 @@ export class SatInferenceRuntime {
                 }
             }
 
-            const preMlp = this.tokens.map(t => [...t]);
+            const preMlp = this.tokens.map((t) => [...t]);
 
             // LayerNorm 2
             pr.startPhase("layernorm");

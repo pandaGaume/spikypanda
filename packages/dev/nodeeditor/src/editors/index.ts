@@ -20,13 +20,12 @@ export { sliderEditor } from "./slider";
  * same whether or not the host wraps a registry.
  */
 export function installBuiltinEditors(target: NodeEditor | EditorRegistry): void {
-    const registry: EditorRegistry =
-        target instanceof EditorRegistry ? target : target.editors;
-    registry.register("vector3",    vector3Editor);
-    registry.register("vector4",    vector4Editor);
+    const registry: EditorRegistry = target instanceof EditorRegistry ? target : target.editors;
+    registry.register("vector3", vector3Editor);
+    registry.register("vector4", vector4Editor);
     registry.register("quaternion", quaternionEditor);
-    registry.register("number",     numberEditor);
-    registry.register("int",        numberEditor);
-    registry.register("float",      numberEditor);
-    registry.register("slider",     sliderEditor);
+    registry.register("number", numberEditor);
+    registry.register("int", numberEditor);
+    registry.register("float", numberEditor);
+    registry.register("slider", sliderEditor);
 }

@@ -60,26 +60,27 @@ export class HousingMechanics implements ISimNode, IPmsmHousingFaultHost {
 
     public constructor(cfg: IHousingMechanicsConfig) {
         this.cfg = cfg;
-        this._axes = [
-            HousingMechanics._buildAxis(cfg.x),
-            HousingMechanics._buildAxis(cfg.y),
-            HousingMechanics._buildAxis(cfg.z),
-        ];
+        this._axes = [HousingMechanics._buildAxis(cfg.x), HousingMechanics._buildAxis(cfg.y), HousingMechanics._buildAxis(cfg.z)];
         // Substep capped at 1/(20 * highest natural frequency) so the
         // fastest mode resolves to ~20 substeps per period.
-        const omegaNs = this._axes.map(a => Math.sqrt(a.k / a.m));
+        const omegaNs = this._axes.map((a) => Math.sqrt(a.k / a.m));
         const omegaNMax = Math.max(...omegaNs);
         this._maxSubstep = Math.max(5e-6, 1 / (20 * omegaNMax));
     }
 
     public advance(t: number): void {
         if (!this._started) {
-            this._t = t; this._started = true; return;
+            this._t = t;
+            this._started = true;
+            return;
         }
         if (t < this._t) {
             // Time reversal : reset.
             for (const a of this._axes) {
-                a.pos = 0; a.vel = 0; a.accel = 0; a.forceAccum = 0;
+                a.pos = 0;
+                a.vel = 0;
+                a.accel = 0;
+                a.forceAccum = 0;
             }
             this._t = t;
             return;
@@ -91,7 +92,8 @@ export class HousingMechanics implements ISimNode, IPmsmHousingFaultHost {
                 const denom = a.m + dt * a.c + dt * dt * a.k;
                 const vNew = (a.m * a.vel + dt * F - dt * a.k * a.pos) / denom;
                 const xNew = a.pos + dt * vNew;
-                a.vel = vNew; a.pos = xNew;
+                a.vel = vNew;
+                a.pos = xNew;
                 a.accel = (F - a.c * vNew - a.k * xNew) / a.m;
             }
             this._t += dt;
@@ -102,18 +104,28 @@ export class HousingMechanics implements ISimNode, IPmsmHousingFaultHost {
 
     public reset(): void {
         for (const a of this._axes) {
-            a.pos = 0; a.vel = 0; a.accel = 0; a.forceAccum = 0;
+            a.pos = 0;
+            a.vel = 0;
+            a.accel = 0;
+            a.forceAccum = 0;
         }
-        this._t = 0; this._started = false;
+        this._t = 0;
+        this._started = false;
     }
 
     public addForce(axis: 0 | 1 | 2, force: number): void {
         this._axes[axis].forceAccum += force;
     }
 
-    public position(axis: 0 | 1 | 2): number { return this._axes[axis].pos; }
-    public velocity(axis: 0 | 1 | 2): number { return this._axes[axis].vel; }
-    public acceleration(axis: 0 | 1 | 2): number { return this._axes[axis].accel; }
+    public position(axis: 0 | 1 | 2): number {
+        return this._axes[axis].pos;
+    }
+    public velocity(axis: 0 | 1 | 2): number {
+        return this._axes[axis].vel;
+    }
+    public acceleration(axis: 0 | 1 | 2): number {
+        return this._axes[axis].accel;
+    }
 
     private static _buildAxis(cfg: IHousingAxisConfig): IAxisState {
         if (cfg.mass <= 0) throw new Error("HousingMechanics: mass must be > 0");

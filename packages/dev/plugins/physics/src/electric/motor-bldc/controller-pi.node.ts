@@ -1,8 +1,4 @@
-import {
-    cloneable, editable, viewable,
-    IChannel, IDeclaresPorts, IOlink, IPortDescriptor,
-    ISession, RuntimeNode, inSlotOf,
-} from "spikypanda-core";
+import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, RuntimeNode, inSlotOf } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
 
 /**
@@ -19,48 +15,72 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  * the sign directly.
  */
 export class BldcSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
-    @cloneable private _Kp:      number = 0.005;
-    @cloneable private _Ki:      number = 0.05;
+    @cloneable private _Kp: number = 0.005;
+    @cloneable private _Ki: number = 0.05;
     @cloneable private _dutyMax: number = 1;
 
     @cloneable private _integral: number = 0;
-    @cloneable private _duty:     number = 0;
+    @cloneable private _duty: number = 0;
     private _lastT: number = -1;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "omega_ref",      optional: true, type: "float" },
+        { slot: "omega_ref", optional: true, type: "float" },
         { slot: "omega_measured", optional: true, type: "float" },
-        { slot: "dt",             optional: true, type: "float" },
+        { slot: "dt", optional: true, type: "float" },
     ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "duty", optional: false, type: "float" },
-    ];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "duty", optional: false, type: "float" }];
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
-    @editable("number") public get Kp(): number { return this._Kp; }
-    public set Kp(v: number) { this.setField("Kp", this._Kp, v, (n) => { this._Kp = n; }); }
-    @editable("number") public get Ki(): number { return this._Ki; }
-    public set Ki(v: number) { this.setField("Ki", this._Ki, v, (n) => { this._Ki = n; }); }
-    @editable("number") public get dutyMax(): number { return this._dutyMax; }
-    public set dutyMax(v: number) { this.setField("dutyMax", this._dutyMax, v, (n) => { this._dutyMax = n; }); }
+    @editable("number") public get Kp(): number {
+        return this._Kp;
+    }
+    public set Kp(v: number) {
+        this.setField("Kp", this._Kp, v, (n) => {
+            this._Kp = n;
+        });
+    }
+    @editable("number") public get Ki(): number {
+        return this._Ki;
+    }
+    public set Ki(v: number) {
+        this.setField("Ki", this._Ki, v, (n) => {
+            this._Ki = n;
+        });
+    }
+    @editable("number") public get dutyMax(): number {
+        return this._dutyMax;
+    }
+    public set dutyMax(v: number) {
+        this.setField("dutyMax", this._dutyMax, v, (n) => {
+            this._dutyMax = n;
+        });
+    }
 
-    @viewable("number") public get integral(): number { return this._integral; }
-    @viewable("number") public get duty(): number     { return this._duty; }
+    @viewable("number") public get integral(): number {
+        return this._integral;
+    }
+    @viewable("number") public get duty(): number {
+        return this._duty;
+    }
 
     public override reset(_session: ISession): void {
-        this.setField("integral", this._integral, 0, (n) => { this._integral = n; });
-        this.setField("duty",     this._duty,     0, (n) => { this._duty = n; });
+        this.setField("integral", this._integral, 0, (n) => {
+            this._integral = n;
+        });
+        this.setField("duty", this._duty, 0, (n) => {
+            this._duty = n;
+        });
         this._lastT = -1;
     }
 
     public override fire(session: ISession, t: number): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
-        let omegaRef = 0, omegaMeasured = 0, dt = -1;
+        let omegaRef = 0,
+            omegaMeasured = 0,
+            dt = -1;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const slot = inSlotOf(link);
@@ -68,9 +88,9 @@ export class BldcSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
             if (idx < 0 || !session.linkStates[idx].ready) continue;
             const value = session.consume(idx);
             if (typeof value !== "number") continue;
-            if      (slot === "omega_ref")      omegaRef = value;
+            if (slot === "omega_ref") omegaRef = value;
             else if (slot === "omega_measured") omegaMeasured = value;
-            else if (slot === "dt")             dt = value;
+            else if (slot === "dt") dt = value;
         }
         if (dt < 0) dt = this._lastT < 0 ? 0 : Math.max(0, t - this._lastT);
         this._lastT = t;
@@ -89,8 +109,12 @@ export class BldcSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
             newIntegral = proposed;
         }
 
-        this.setField("integral", this._integral, newIntegral, (n) => { this._integral = n; });
-        this.setField("duty",     this._duty,     duty,        (n) => { this._duty = n; });
+        this.setField("integral", this._integral, newIntegral, (n) => {
+            this._integral = n;
+        });
+        this.setField("duty", this._duty, duty, (n) => {
+            this._duty = n;
+        });
 
         for (const link of this.onsc<IChannel>()) {
             if (link.slot !== "duty" || !link.enabled) continue;

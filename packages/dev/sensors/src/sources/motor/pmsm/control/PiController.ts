@@ -63,9 +63,7 @@ export class PiController implements ISimNode {
         const unsat = this.cfg.kp * error + this._integral;
 
         // Saturate.
-        const out = unsat < this.cfg.outMin ? this.cfg.outMin
-                  : unsat > this.cfg.outMax ? this.cfg.outMax
-                  : unsat;
+        const out = unsat < this.cfg.outMin ? this.cfg.outMin : unsat > this.cfg.outMax ? this.cfg.outMax : unsat;
 
         // Back-calculation anti-windup: when the output saturates, bleed
         // the integrator toward a value that would have produced the

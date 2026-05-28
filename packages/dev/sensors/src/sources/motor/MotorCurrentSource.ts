@@ -30,28 +30,28 @@ export interface IMotorElectricalHarmonic {
 //     the default static load torque is calibrated such that this is the
 //     steady-state speed at D=1. Raising / lowering D moves the equilibrium.
 export interface IMotorCurrentConfig {
-    supplyVoltage: number;        // V_supply (volts, DC bus)
-    resistance: number;           // R (ohms, armature)
-    inductance: number;           // L (henries, armature)
-    backEmfConstant: number;      // Ke (V per rps)
-    motorSpeedRps: number;        // nominal mechanical speed (rev / s) at D = 1
-    commutatorBars: number;       // brush-commutator bar count, drives ripple
-    brushCount?: number;          // number of brushes; 0 = brushless (default 2)
-    nominalCurrent: number;       // I_nom (A), reference / metadata only
+    supplyVoltage: number; // V_supply (volts, DC bus)
+    resistance: number; // R (ohms, armature)
+    inductance: number; // L (henries, armature)
+    backEmfConstant: number; // Ke (V per rps)
+    motorSpeedRps: number; // nominal mechanical speed (rev / s) at D = 1
+    commutatorBars: number; // brush-commutator bar count, drives ripple
+    brushCount?: number; // number of brushes; 0 = brushless (default 2)
+    nominalCurrent: number; // I_nom (A), reference / metadata only
 
     // Driver
-    pwmFrequencyHz?: number;      // PWM chopper frequency (default 10000)
-    pwmDutyCycle?: number;        // duty cycle in [0, 1] (default 1.0)
+    pwmFrequencyHz?: number; // PWM chopper frequency (default 10000)
+    pwmDutyCycle?: number; // duty cycle in [0, 1] (default 1.0)
 
     // Mechanical
-    rotorInertia?: number;        // J (kg·m^2), default 5e-5
-    viscousFriction?: number;     // B (N·m·s/rad), default auto-calibrated
-    staticLoadTorque?: number;    // τ_load (N·m), default auto-calibrated
-    torqueConstant?: number;      // Kt (N·m/A), default Ke / (2π)
+    rotorInertia?: number; // J (kg·m^2), default 5e-5
+    viscousFriction?: number; // B (N·m·s/rad), default auto-calibrated
+    staticLoadTorque?: number; // τ_load (N·m), default auto-calibrated
+    torqueConstant?: number; // Kt (N·m/A), default Ke / (2π)
 
     // Layering / decoration
-    loadFactor?: number;          // legacy: multiplies the static load torque
-    rippleFactor?: number;        // amplitude of brush-commutation ripple
+    loadFactor?: number; // legacy: multiplies the static load torque
+    rippleFactor?: number; // amplitude of brush-commutation ripple
     harmonics?: ReadonlyArray<IMotorElectricalHarmonic>;
 
     // Environment: gravity-induced shaft sag on a horizontal-axis motor.
@@ -71,17 +71,17 @@ export interface IMotorCurrentConfig {
     // derived transparently from first principles. As a fallback (calibrated
     // measurement, or quick experimentation), gravitationalEccentricity can
     // be set directly; it is ignored when all three physical params are present.
-    rotorMass?: number;                // kg, rotor + shaft assembly
-    airGap?: number;                   // m, nominal magnetic air-gap length
-    bearingRadialStiffness?: number;   // N/m, radial stiffness of the bearing pair
+    rotorMass?: number; // kg, rotor + shaft assembly
+    airGap?: number; // m, nominal magnetic air-gap length
+    bearingRadialStiffness?: number; // N/m, radial stiffness of the bearing pair
     gravitationalEccentricity?: number; // A peak, explicit override (see above)
 }
 
 interface IInternalState {
-    i: number;       // armature current (A)
-    omega: number;   // angular speed (rad/s)
-    theta: number;   // angular position (rad)
-    t: number;       // last evaluated time (s)
+    i: number; // armature current (A)
+    omega: number; // angular speed (rad/s)
+    theta: number; // angular position (rad)
+    t: number; // last evaluated time (s)
     started: boolean;
 }
 
@@ -176,8 +176,7 @@ export class MotorCurrentSource implements IDataSource {
         // When V·D < R·τ_load/Kt the load exceeds what the motor can sustain
         // and the motor stalls (ω=0). This is physically correct: a heavy load
         // requires a minimum duty cycle to spin at all.
-        const { i: iInit, omega: omegaInit } = equilState(
-            cfg.supplyVoltage, pwmDutyCycle, cfg.resistance, keRad, kt, staticLoadTorque, B);
+        const { i: iInit, omega: omegaInit } = equilState(cfg.supplyVoltage, pwmDutyCycle, cfg.resistance, keRad, kt, staticLoadTorque, B);
         this._state = { i: iInit, omega: omegaInit, theta: 0, t: 0, started: true };
         // 10 substeps per PWM cycle, capped to 5 µs minimum step to bound cost.
         this._maxSubstep = Math.max(1.0 / (10 * pwmFrequencyHz), 5e-6);
@@ -251,10 +250,18 @@ export class MotorCurrentSource implements IDataSource {
             // Going backwards in time resets to the equilibrium for the
             // current duty cycle (same formula as constructor init).
             const { i, omega } = equilState(
-                this.cfg.supplyVoltage, this.cfg.pwmDutyCycle,
-                this.cfg.resistance, this._keRad, this._kt,
-                this.cfg.staticLoadTorque, this.cfg.viscousFriction);
-            s.i = i; s.omega = omega; s.theta = 0; s.t = 0;
+                this.cfg.supplyVoltage,
+                this.cfg.pwmDutyCycle,
+                this.cfg.resistance,
+                this._keRad,
+                this._kt,
+                this.cfg.staticLoadTorque,
+                this.cfg.viscousFriction
+            );
+            s.i = i;
+            s.omega = omega;
+            s.theta = 0;
+            s.t = 0;
         }
         const cfg = this.cfg;
         const Lstep = cfg.inductance;
@@ -280,10 +287,10 @@ export class MotorCurrentSource implements IDataSource {
             // Implicit Euler on the electrical equation:
             //   L·(i_new - i)/dt + R·i_new = Vpwm - KeRad·ω
             // (using ω_old here; mechanical dynamics are slow vs PWM)
-            const iNew = (Lstep * s.i / dt + Vpwm - KeRad * s.omega) / (Lstep / dt + Rstep);
+            const iNew = ((Lstep * s.i) / dt + Vpwm - KeRad * s.omega) / (Lstep / dt + Rstep);
             // Implicit Euler on the mechanical equation:
             //   J·(ω_new - ω)/dt + B·ω_new = Kt·i_new - τ_load
-            const omegaNew = Math.max(0, (J * s.omega / dt + Kt * iNew - tauLoad) / (J / dt + B));
+            const omegaNew = Math.max(0, ((J * s.omega) / dt + Kt * iNew - tauLoad) / (J / dt + B));
             // Trapezoidal angle update so θ is consistent with ω evolution.
             const thetaNew = s.theta + 0.5 * (s.omega + omegaNew) * dt;
 
@@ -296,9 +303,7 @@ export class MotorCurrentSource implements IDataSource {
 
     private _commutationRipple(theta: number): number {
         const phi = this.cfg.commutatorBars * theta;
-        return Math.sin(phi)
-            + 0.35 * Math.sin(2.0 * phi + Math.PI / 6.0)
-            + 0.18 * Math.sin(3.0 * phi + Math.PI / 3.0);
+        return Math.sin(phi) + 0.35 * Math.sin(2.0 * phi + Math.PI / 6.0) + 0.18 * Math.sin(3.0 * phi + Math.PI / 3.0);
     }
 }
 
@@ -309,10 +314,9 @@ export class MotorCurrentSource implements IDataSource {
 // → ω_eq = max(0, (V·D - R·τ/Kt) / (Ke + R·B/Kt))
 // → I_eq = max(0, (V·D - Ke·ω_eq) / R)
 // When V·D < R·τ/Kt the load stalls the motor (ω=0, I = V·D/R).
-function equilState(V: number, D: number, R: number, Ke: number, Kt: number,
-                    tauLoad: number, B: number): { i: number; omega: number } {
+function equilState(V: number, D: number, R: number, Ke: number, Kt: number, tauLoad: number, B: number): { i: number; omega: number } {
     const denom = Ke + (R * B) / Kt;
-    const omega = denom > 0 ? Math.max(0, (V * D - R * tauLoad / Kt) / denom) : 0;
+    const omega = denom > 0 ? Math.max(0, (V * D - (R * tauLoad) / Kt) / denom) : 0;
     const i = Math.max(0, (V * D - Ke * omega) / R);
     return { i, omega };
 }
@@ -330,14 +334,19 @@ function equilState(V: number, D: number, R: number, Ke: number, Kt: number,
 // Returns the explicit gravitationalEccentricity override when the three
 // physical params are not all provided, and 0 if nothing is set.
 function computeGravEcc(cfg: IMotorCurrentConfig): number {
-    if (cfg.rotorMass !== undefined && cfg.rotorMass > 0
-        && cfg.airGap !== undefined && cfg.airGap > 0
-        && cfg.bearingRadialStiffness !== undefined && cfg.bearingRadialStiffness > 0) {
+    if (
+        cfg.rotorMass !== undefined &&
+        cfg.rotorMass > 0 &&
+        cfg.airGap !== undefined &&
+        cfg.airGap > 0 &&
+        cfg.bearingRadialStiffness !== undefined &&
+        cfg.bearingRadialStiffness > 0
+    ) {
         const keRad = cfg.backEmfConstant / TWO_PI;
         const omega = TWO_PI * cfg.motorSpeedRps;
         const Ieq = Math.max(0, (cfg.supplyVoltage - keRad * omega) / cfg.resistance);
         const delta = (cfg.rotorMass * 9.81) / cfg.bearingRadialStiffness;
-        return Ieq * delta / cfg.airGap;
+        return (Ieq * delta) / cfg.airGap;
     }
     return cfg.gravitationalEccentricity ?? 0;
 }

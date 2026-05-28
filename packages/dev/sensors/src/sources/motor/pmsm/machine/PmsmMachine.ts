@@ -102,9 +102,7 @@ export class PmsmMachine implements ISimNode, IPmsmMachineFaultHost {
         // so a single time constant resolves to ~10 substeps. Hard floor
         // 5 us so the cost stays bounded for very fast electrical dynamics.
         const tauElec = Math.min(this.cfg.inductanceD, this.cfg.inductanceQ) / this.cfg.resistance;
-        const tauMech = this.cfg.viscousFriction > 0
-            ? this.cfg.rotorInertia / this.cfg.viscousFriction
-            : Number.POSITIVE_INFINITY;
+        const tauMech = this.cfg.viscousFriction > 0 ? this.cfg.rotorInertia / this.cfg.viscousFriction : Number.POSITIVE_INFINITY;
         this._maxSubstep = Math.max(5e-6, Math.min(tauElec / 10, tauMech / 10));
     }
 
@@ -149,7 +147,9 @@ export class PmsmMachine implements ISimNode, IPmsmMachineFaultHost {
         this._thetaM = this.cfg.initialThetaM;
         this._t = 0;
         this._started = false;
-        this._vA = 0; this._vB = 0; this._vC = 0;
+        this._vA = 0;
+        this._vB = 0;
+        this._vC = 0;
         this._loadTorque = this.cfg.loadTorque;
         this._fluxEnvelope = 1;
         for (let i = 0; i < 3; i++) {
@@ -174,11 +174,21 @@ export class PmsmMachine implements ISimNode, IPmsmMachineFaultHost {
 
     // --- Outputs / queries -------------------------------------------------
 
-    public get iD(): number { return this._iD; }
-    public get iQ(): number { return this._iQ; }
-    public get omegaM(): number { return this._omegaM; }
-    public get thetaM(): number { return this._thetaM; }
-    public get thetaE(): number { return this.cfg.polePairs * this._thetaM; }
+    public get iD(): number {
+        return this._iD;
+    }
+    public get iQ(): number {
+        return this._iQ;
+    }
+    public get omegaM(): number {
+        return this._omegaM;
+    }
+    public get thetaM(): number {
+        return this._thetaM;
+    }
+    public get thetaE(): number {
+        return this.cfg.polePairs * this._thetaM;
+    }
 
     public iAbc(): [number, number, number] {
         return ThreePhaseTransforms.dqToAbc(this._iD, this._iQ, this.thetaE);
@@ -245,7 +255,7 @@ export class PmsmMachine implements ISimNode, IPmsmMachineFaultHost {
         // the new currents (consistent with implicit on i_d, i_q).
         const tEReluctant = (Ld - Lq) * iDNew * iQNew;
         const tENew = 1.5 * p * (lambdaMEff * iQNew + tEReluctant);
-        const omegaMNew = (J / dt * this._omegaM + tENew - this._loadTorque) / (J / dt + B);
+        const omegaMNew = ((J / dt) * this._omegaM + tENew - this._loadTorque) / (J / dt + B);
 
         // Trapezoidal on theta : energy-consistent under varying omega.
         const thetaMNew = this._thetaM + 0.5 * (this._omegaM + omegaMNew) * dt;

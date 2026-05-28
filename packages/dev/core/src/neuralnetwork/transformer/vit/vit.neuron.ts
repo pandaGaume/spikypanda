@@ -34,7 +34,7 @@ export class VitNeuron extends Neuron implements IVitNeuron {
         headIndex: number = -1,
         onsc: Nullable<IOlink[]> = null,
         opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
+        position?: ICartesian
     ) {
         super(onsc, opsc, position);
         this.neuronType = neuronType;

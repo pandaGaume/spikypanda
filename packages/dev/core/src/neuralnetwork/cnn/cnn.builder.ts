@@ -514,13 +514,7 @@ export class CnnBuilder {
      * Factory for CNN synapses. The base class returns a plain
      * CnnSynapse. Subclasses override for custom synapse types.
      */
-    protected _createSynapse(
-        source: ICnnNeuron,
-        target: ICnnNeuron,
-        kernel: IConvKernel | null,
-        kernelIndex: number,
-        directWeight: number = 0
-    ): ICnnSynapse {
+    protected _createSynapse(source: ICnnNeuron, target: ICnnNeuron, kernel: IConvKernel | null, kernelIndex: number, directWeight: number = 0): ICnnSynapse {
         return new CnnSynapse(source, target, kernel, kernelIndex, directWeight);
     }
 
@@ -528,13 +522,7 @@ export class CnnBuilder {
      * Factory for convolutional kernels. The base class returns a plain
      * ConvKernel. Subclasses override to instantiate custom kernels.
      */
-    protected _createKernel(
-        kernelHeight: number,
-        kernelWidth: number,
-        inputChannels: number,
-        initializer: IWeightInitializer,
-        bias: number
-    ): IConvKernel {
+    protected _createKernel(kernelHeight: number, kernelWidth: number, inputChannels: number, initializer: IWeightInitializer, bias: number): IConvKernel {
         return new ConvKernel(kernelHeight, kernelWidth, inputChannels, initializer, bias);
     }
 

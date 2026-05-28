@@ -5,12 +5,7 @@
 // embedding to a downstream classifier / radio / storage.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import {
-    IChannel,
-    ISession,
-    ITensor,
-    RuntimeNode,
-} from "spikypanda-core";
+import { IChannel, ISession, ITensor, RuntimeNode } from "spikypanda-core";
 
 export class EmbeddingSink extends RuntimeNode {
     public received: ITensor[] = [];

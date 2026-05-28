@@ -60,12 +60,18 @@ export class ThreePhaseInverter implements ISimNode {
     }
 
     public reset(): void {
-        this._dutyA = 0.5; this._dutyB = 0.5; this._dutyC = 0.5;
-        this._vA = 0; this._vB = 0; this._vC = 0;
+        this._dutyA = 0.5;
+        this._dutyB = 0.5;
+        this._dutyC = 0.5;
+        this._vA = 0;
+        this._vB = 0;
+        this._vC = 0;
     }
 
     public setDuties(dA: number, dB: number, dC: number): void {
-        this._dutyA = dA; this._dutyB = dB; this._dutyC = dC;
+        this._dutyA = dA;
+        this._dutyB = dB;
+        this._dutyC = dC;
     }
 
     public setVBus(vBus: number): void {

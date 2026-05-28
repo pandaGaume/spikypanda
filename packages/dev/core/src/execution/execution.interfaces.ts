@@ -91,7 +91,7 @@ export function inSlotOf(link: IChannel): string | number {
  * sessions; all mutable state lives in the session's nodeStates entry
  * for this node.
  */
-export interface IRuntimeNode<B=unknown> extends INode<B>, IEnabled {
+export interface IRuntimeNode<B = unknown> extends INode<B>, IEnabled {
     isReady(session: ISession): boolean;
     fire(session: ISession, t: number): void;
     /**
@@ -189,8 +189,7 @@ export interface ITickable {
  * Top-level use (no parent embedding): port channels are never
  * matched; the user drives via `new Session(graph)` as usual.
  */
-export interface IRuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChannel = IChannel>
-    extends IGraph<N, L>, IRuntimeNode, ITickable {
+export interface IRuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChannel = IChannel> extends IGraph<N, L>, IRuntimeNode, ITickable {
     readonly mode: SchedulingMode;
 }
 
@@ -411,10 +410,7 @@ export interface IPortDescriptor {
 export function declaresPorts(n: IRuntimeNode): n is IRuntimeNode & IDeclaresPorts {
     const candidate = n as IRuntimeNode & Partial<IDeclaresPorts>;
 
-    return (
-        Array.isArray(candidate.inputPorts) &&
-        Array.isArray(candidate.outputPorts)
-    );
+    return Array.isArray(candidate.inputPorts) && Array.isArray(candidate.outputPorts);
 }
 
 /**
@@ -430,14 +426,11 @@ export function declaresPorts(n: IRuntimeNode): n is IRuntimeNode & IDeclaresPor
  * compose further if they need more (e.g. _pause, _reset).
  */
 export interface IDeclaresControlPorts {
-    readonly controlInputPorts:  ReadonlyArray<IPortDescriptor>;
+    readonly controlInputPorts: ReadonlyArray<IPortDescriptor>;
     readonly controlOutputPorts: ReadonlyArray<IPortDescriptor>;
 }
 
 export function declaresControlPorts(n: IRuntimeNode): n is IRuntimeNode & IDeclaresControlPorts {
     const candidate = n as IRuntimeNode & Partial<IDeclaresControlPorts>;
-    return (
-        Array.isArray(candidate.controlInputPorts) &&
-        Array.isArray(candidate.controlOutputPorts)
-    );
+    return Array.isArray(candidate.controlInputPorts) && Array.isArray(candidate.controlOutputPorts);
 }

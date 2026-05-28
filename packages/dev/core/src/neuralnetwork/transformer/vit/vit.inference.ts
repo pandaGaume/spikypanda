@@ -31,11 +31,15 @@ export class VitInferenceRuntime {
 
     /// <summary>Caches for backpropagation</summary>
     public layerNormCache: Array<{
-        mean: number[]; invStd: number[]; normalized: number[][];
+        mean: number[];
+        invStd: number[];
+        normalized: number[][];
     }> = [];
 
     public attentionCache: Array<{
-        Q: number[][]; K: number[][]; V: number[][];
+        Q: number[][];
+        K: number[][];
+        V: number[][];
         scores: number[][][]; // [head][queryToken][keyToken]
         attnOut: number[][]; // [numTokens][embedDim]
     }> = [];
@@ -46,7 +50,8 @@ export class VitInferenceRuntime {
     }> = [];
 
     public residualCache: Array<{
-        preAttn: number[][]; preMlp: number[][];
+        preAttn: number[][];
+        preMlp: number[][];
     }> = [];
 
     constructor(graph: IVitGraph) {
@@ -115,7 +120,7 @@ export class VitInferenceRuntime {
         // 2. Add positional embeddings
         // =====================================================================
         // FLOPS: patchEmbedding = numPatches * embedDim * patchPixels * 2 (mul + add)
-        const patchPixelsCount = patchSize * patchSize * (Math.round(inputPixels.length / (g.numPatches * patchSize * patchSize)));
+        const patchPixelsCount = patchSize * patchSize * Math.round(inputPixels.length / (g.numPatches * patchSize * patchSize));
         p.addFlops("patch_embedding", g.numPatches * embedDim * patchPixelsCount * 2);
         p.endPhase("patch_embedding");
 
@@ -134,7 +139,7 @@ export class VitInferenceRuntime {
 
             // Save pre-attention for residual
             p.startPhase("layernorm");
-            const preAttn = this.tokens.map(t => [...t]);
+            const preAttn = this.tokens.map((t) => [...t]);
 
             // ----- LayerNorm 1 -----
             const ln1 = g.layerNorms[lnIdx];
@@ -171,7 +176,9 @@ export class VitInferenceRuntime {
                     k[e] += bw.qkvBias[1 * embedDim + e];
                     v[e] += bw.qkvBias[2 * embedDim + e];
                 }
-                Q.push(q); K.push(k); V.push(v);
+                Q.push(q);
+                K.push(k);
+                V.push(v);
             }
             // FLOPS QKV: 3 projections * numTokens * embedDim * embedDim * 2
             p.addFlops("attention_qkv", 3 * numTokens * embedDim * embedDim * 2);
@@ -211,7 +218,7 @@ export class VitInferenceRuntime {
                 allScores.push(headScores);
             }
 
-            this.attentionCache.push({ Q, K, V, scores: allScores, attnOut: attnOut.map(t => [...t]) });
+            this.attentionCache.push({ Q, K, V, scores: allScores, attnOut: attnOut.map((t) => [...t]) });
             // FLOPS scores: numHeads * numTokens * numTokens * headDim * 2 (dot product) + numTokens * numTokens * headDim * 2 (weighted V sum)
             p.addFlops("attention_scores", numHeads * numTokens * numTokens * headDim * 2 + numHeads * numTokens * numTokens * headDim * 2);
             p.addAttentionPairs("attention_scores", numHeads * numTokens * numTokens);
@@ -242,7 +249,7 @@ export class VitInferenceRuntime {
             }
 
             // Save pre-MLP for residual
-            const preMlp = this.tokens.map(t => [...t]);
+            const preMlp = this.tokens.map((t) => [...t]);
 
             // ----- LayerNorm 2 -----
             p.startPhase("layernorm");
@@ -329,7 +336,7 @@ export class VitInferenceRuntime {
             return softmax(logits);
         }
         // Sigmoid for autoencoder (output in [0,1] range)
-        return logits.map(v => 1 / (1 + Math.exp(-v)));
+        return logits.map((v) => 1 / (1 + Math.exp(-v)));
     }
 
     /// <summary>

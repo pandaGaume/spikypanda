@@ -24,13 +24,7 @@ import { IPhasedNodeBag, isSimSession, ISupportsPhasing, SimPhase } from "./sim.
 export class PhasedNode<B extends IPhasedNodeBag = IPhasedNodeBag> extends RuntimeNode<B> implements ISupportsPhasing {
     @cloneable public phases: ReadonlyArray<SimPhase>;
 
-    public constructor(
-        phases: ReadonlyArray<SimPhase>,
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-        enabled: boolean = true
-    ) {
+    public constructor(phases: ReadonlyArray<SimPhase>, onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian, enabled: boolean = true) {
         super(onsc, opsc, position, enabled);
         this.phases = phases;
     }

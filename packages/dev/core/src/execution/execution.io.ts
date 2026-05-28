@@ -35,7 +35,7 @@ export function resolveSlotInputs<T extends Record<string, unknown>>(
          * the upstream producer is not stalled).
          */
         validator?: (slot: string, value: unknown) => boolean;
-    },
+    }
 ): T {
     const consume = options?.consume !== false;
     const validator = options?.validator;
@@ -74,11 +74,7 @@ export function resolveSlotInputs<T extends Record<string, unknown>>(
  * to advertise, which matches the single-output-port contract this
  * function is documented for.
  */
-export function publishToFirstOutput(
-    session: ISession,
-    node: IRuntimeNode,
-    value: unknown,
-): boolean {
+export function publishToFirstOutput(session: ISession, node: IRuntimeNode, value: unknown): boolean {
     const outs = node.onsc<IChannel>();
     if (outs.length === 0) return false;
     const firstSlot = outs[0].slot;

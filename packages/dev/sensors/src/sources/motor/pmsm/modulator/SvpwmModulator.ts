@@ -67,7 +67,9 @@ export class SvpwmModulator implements ISimNode {
     public advance(_t: number): void {
         if (this._vBus <= 0) {
             // No bus voltage : park duties at the centered idle point.
-            this._dutyA = 0.5; this._dutyB = 0.5; this._dutyC = 0.5;
+            this._dutyA = 0.5;
+            this._dutyB = 0.5;
+            this._dutyC = 0.5;
             this._saturated = false;
             return;
         }
@@ -80,7 +82,9 @@ export class SvpwmModulator implements ISimNode {
         const vMax = this._vBus / Math.sqrt(3);
         if (vMagSq > vMax * vMax) {
             const scale = vMax / Math.sqrt(vMagSq);
-            vAref *= scale; vBref *= scale; vCref *= scale;
+            vAref *= scale;
+            vBref *= scale;
+            vCref *= scale;
             this._saturated = true;
         } else {
             this._saturated = false;
@@ -101,8 +105,12 @@ export class SvpwmModulator implements ISimNode {
     }
 
     public reset(): void {
-        this._vAlphaRef = 0; this._vBetaRef = 0; this._vBus = 0;
-        this._dutyA = 0.5; this._dutyB = 0.5; this._dutyC = 0.5;
+        this._vAlphaRef = 0;
+        this._vBetaRef = 0;
+        this._vBus = 0;
+        this._dutyA = 0.5;
+        this._dutyB = 0.5;
+        this._dutyC = 0.5;
         this._saturated = false;
     }
 

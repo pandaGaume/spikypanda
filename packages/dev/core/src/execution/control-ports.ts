@@ -23,25 +23,25 @@
 
 import type { IChannel, IPortDescriptor, IRuntimeNode, ISession } from "./execution.interfaces";
 
-export const CONTROL_PORT_ENABLE   = "_enable";
-export const CONTROL_PORT_ENABLED  = "_enabled";
-export const CONTROL_PORT_START    = "_start";
-export const CONTROL_PORT_STOP     = "_stop";
-export const CONTROL_PORT_STARTED  = "_started";
-export const CONTROL_PORT_STOPPED  = "_stopped";
+export const CONTROL_PORT_ENABLE = "_enable";
+export const CONTROL_PORT_ENABLED = "_enabled";
+export const CONTROL_PORT_START = "_start";
+export const CONTROL_PORT_STOP = "_stop";
+export const CONTROL_PORT_STARTED = "_started";
+export const CONTROL_PORT_STOPPED = "_stopped";
 
 /** Boolean input: when received, sets node.enabled to the value. */
-export const ENABLE_INPUT_PORT:   IPortDescriptor = { slot: CONTROL_PORT_ENABLE,   optional: true, type: "boolean" };
+export const ENABLE_INPUT_PORT: IPortDescriptor = { slot: CONTROL_PORT_ENABLE, optional: true, type: "boolean" };
 /** Boolean output: emits node.enabled state changes. */
-export const ENABLED_OUTPUT_PORT: IPortDescriptor = { slot: CONTROL_PORT_ENABLED,  optional: true, type: "boolean" };
+export const ENABLED_OUTPUT_PORT: IPortDescriptor = { slot: CONTROL_PORT_ENABLED, optional: true, type: "boolean" };
 /** Trigger input: calls IRunnable.start() on the host node. */
-export const START_INPUT_PORT:    IPortDescriptor = { slot: CONTROL_PORT_START,    optional: true, type: "trigger" };
+export const START_INPUT_PORT: IPortDescriptor = { slot: CONTROL_PORT_START, optional: true, type: "trigger" };
 /** Trigger input: calls IRunnable.stop() on the host node. */
-export const STOP_INPUT_PORT:     IPortDescriptor = { slot: CONTROL_PORT_STOP,     optional: true, type: "trigger" };
+export const STOP_INPUT_PORT: IPortDescriptor = { slot: CONTROL_PORT_STOP, optional: true, type: "trigger" };
 /** Trigger output: fired after IRunnable.start() succeeds. */
-export const STARTED_OUTPUT_PORT: IPortDescriptor = { slot: CONTROL_PORT_STARTED,  optional: true, type: "trigger" };
+export const STARTED_OUTPUT_PORT: IPortDescriptor = { slot: CONTROL_PORT_STARTED, optional: true, type: "trigger" };
 /** Trigger output: fired after IRunnable.stop() succeeds. */
-export const STOPPED_OUTPUT_PORT: IPortDescriptor = { slot: CONTROL_PORT_STOPPED,  optional: true, type: "trigger" };
+export const STOPPED_OUTPUT_PORT: IPortDescriptor = { slot: CONTROL_PORT_STOPPED, optional: true, type: "trigger" };
 
 /** Returns true if the given slot name follows the control-port convention. */
 export function isControlSlot(slot: string | number): boolean {
@@ -54,12 +54,7 @@ export function isControlSlot(slot: string | number): boolean {
  * standalone so RuntimeNode, RuntimeGraph, and any future IRuntimeNode
  * implementation can reuse it without coupling to a base class.
  */
-export function publishControlOutput(
-    node: IRuntimeNode,
-    session: ISession,
-    controlSlot: string,
-    value: unknown,
-): void {
+export function publishControlOutput(node: IRuntimeNode, session: ISession, controlSlot: string, value: unknown): void {
     const links = session.graph.links as ReadonlyArray<IChannel>;
     for (const link of node.onsc<IChannel>()) {
         if (link.slot !== controlSlot) continue;

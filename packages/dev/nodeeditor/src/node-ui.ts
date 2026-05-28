@@ -4,11 +4,13 @@ import { Port } from "./port";
 import { StandardsRegistry } from "./standards";
 import { NodeDef, PortType } from "./types";
 
-const RUN_PLAY_SVG  = '<svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><path d="M4 3l9 5-9 5V3z"/></svg>';
-const RUN_STOP_SVG  = '<svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg>';
-const REC_SVG       = '<svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="5"/></svg>';
-const ENABLED_SVG   = '<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8 7 12 13 4"/></svg>';
-const DISABLED_SVG  = '<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>';
+const RUN_PLAY_SVG = '<svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><path d="M4 3l9 5-9 5V3z"/></svg>';
+const RUN_STOP_SVG = '<svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg>';
+const REC_SVG = '<svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="5"/></svg>';
+const ENABLED_SVG =
+    '<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8 7 12 13 4"/></svg>';
+const DISABLED_SVG =
+    '<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>';
 
 const GRID = 20;
 
@@ -47,7 +49,7 @@ export class NodeUI {
      *  VariadicReconciler reads these to keep exactly one trailing
      *  unconnected port for each set. Undefined when the node is not
      *  variadic on that side. */
-    readonly variadicInput?:  { prefix: string; type: string };
+    readonly variadicInput?: { prefix: string; type: string };
     readonly variadicOutput?: { prefix: string; type: string };
     /** Standards declarations (e.g. `["onnx", { id: "ue5", version: "5.4" }]`)
      *  carried straight from the source NodeDef so the property panel
@@ -69,8 +71,8 @@ export class NodeUI {
     private readonly statusEl: HTMLSpanElement;
     private readonly statusDotEl: HTMLSpanElement;
     private readonly statusTextEl: HTMLSpanElement;
-    private runBtn: HTMLButtonElement | null = null;    // start button (lifecycle)
-    private stopBtn: HTMLButtonElement | null = null;   // stop button (lifecycle)
+    private runBtn: HTMLButtonElement | null = null; // start button (lifecycle)
+    private stopBtn: HTMLButtonElement | null = null; // stop button (lifecycle)
     private toggleBtn: HTMLButtonElement | null = null; // enable / disable
     private _inPlayMode = false;
     private _modelSubscription: IDisposable | null = null;
@@ -304,9 +306,7 @@ export class NodeUI {
     private reorderPorts(ports: Port[], container: HTMLDivElement, order: number[] | string[]): void {
         const resolved: Port[] = [];
         for (const ref of order) {
-            const port = typeof ref === "number"
-                ? ports[ref]
-                : ports.find((p) => p.name === ref);
+            const port = typeof ref === "number" ? ports[ref] : ports.find((p) => p.name === ref);
             if (port) resolved.push(port);
         }
         // Append any ports not mentioned in order (keep them at the end)
@@ -371,13 +371,13 @@ export class NodeUI {
             const transitioning = s === "starting" || s === "stopping";
             const started = s === "started";
             const canStart = !started && !transitioning;
-            const canStop  =  started && !transitioning;
+            const canStop = started && !transitioning;
             const affordance = getRunnableAffordance(data);
             const isRecord = affordance === "record";
 
             this.runBtn.disabled = !inPlay || !canStart;
-            this.runBtn.classList.toggle("ne-rtbtn-play-active",   inPlay && canStart && !isRecord);
-            this.runBtn.classList.toggle("ne-rtbtn-record-active", inPlay && canStart &&  isRecord);
+            this.runBtn.classList.toggle("ne-rtbtn-play-active", inPlay && canStart && !isRecord);
+            this.runBtn.classList.toggle("ne-rtbtn-record-active", inPlay && canStart && isRecord);
             this.stopBtn.disabled = !inPlay || !canStop;
             this.stopBtn.classList.toggle("ne-rtbtn-stop-active", inPlay && canStop);
         }
@@ -407,7 +407,7 @@ export class NodeUI {
         const runnable = isRunnable(data) ? data : null;
         // Skip IEnabled status entirely when the node opts out of
         // enable semantics (StartNode / StopNode etc.).
-        const enableable = (isEnabled(data) && supportsEnabling(data)) ? data : null;
+        const enableable = isEnabled(data) && supportsEnabling(data) ? data : null;
 
         if (!runnable && !enableable) {
             this.footerEl.style.display = "none";
@@ -477,7 +477,7 @@ export class NodeUI {
             playBtn.title = isRecord ? "Record" : "Start";
             playBtn.innerHTML = isRecord ? REC_SVG : RUN_PLAY_SVG;
             playBtn.addEventListener("pointerdown", blockDrag, { capture: true });
-            playBtn.addEventListener("mousedown",   blockDrag, { capture: true });
+            playBtn.addEventListener("mousedown", blockDrag, { capture: true });
             playBtn.addEventListener("click", (ev: MouseEvent) => {
                 ev.stopPropagation();
                 ev.stopImmediatePropagation();
@@ -496,7 +496,7 @@ export class NodeUI {
             stopBtn.title = isRecord ? "Stop recording" : "Stop";
             stopBtn.innerHTML = RUN_STOP_SVG;
             stopBtn.addEventListener("pointerdown", blockDrag, { capture: true });
-            stopBtn.addEventListener("mousedown",   blockDrag, { capture: true });
+            stopBtn.addEventListener("mousedown", blockDrag, { capture: true });
             stopBtn.addEventListener("click", (ev: MouseEvent) => {
                 ev.stopPropagation();
                 ev.stopImmediatePropagation();
@@ -515,7 +515,7 @@ export class NodeUI {
             btn.type = "button";
             btn.className = "ne-node-runtime-btn";
             btn.addEventListener("pointerdown", blockDrag, { capture: true });
-            btn.addEventListener("mousedown",   blockDrag, { capture: true });
+            btn.addEventListener("mousedown", blockDrag, { capture: true });
             btn.addEventListener("click", (ev: MouseEvent) => {
                 ev.stopPropagation();
                 ev.stopImmediatePropagation();

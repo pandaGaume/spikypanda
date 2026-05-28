@@ -55,12 +55,12 @@ export interface OnnxExportOptions {
 // ─── Per-kernel internal scratchpad ──────────────────────────────────────
 
 interface KernelMeta {
-    idx: number;             // position in graph.nodes
-    id: string;              // kernel.id or auto-generated
-    outputCount: number;     // number of distinct output tensors
-    outputNames: string[];   // ONNX tensor name per output slot
-    isInput: boolean;        // empty opsc
-    isOutput: boolean;       // empty onsc
+    idx: number; // position in graph.nodes
+    id: string; // kernel.id or auto-generated
+    outputCount: number; // number of distinct output tensors
+    outputNames: string[]; // ONNX tensor name per output slot
+    isInput: boolean; // empty opsc
+    isOutput: boolean; // empty onsc
 }
 
 // ─── Exporter ─────────────────────────────────────────────────────────────
@@ -200,13 +200,7 @@ export class OnnxGraphExporter {
 
     // ── 4. Per-kernel naming for serializer call ──────────────────────
 
-    private static _namingFor(
-        kernel: IKernel,
-        meta: KernelMeta,
-        linkNames: Map<IDataLink, string>,
-        options: OnnxExportOptions,
-        graphInputs: OnnxValueInfo[]
-    ): OnnxKernelNaming {
+    private static _namingFor(kernel: IKernel, meta: KernelMeta, linkNames: Map<IDataLink, string>, options: OnnxExportOptions, graphInputs: OnnxValueInfo[]): OnnxKernelNaming {
         // Input names from incoming links (slot-sorted when numeric).
         const incoming = kernel.opsc<IDataLink>();
         const sorted = [...incoming].sort((a, b) => {
@@ -214,9 +208,7 @@ export class OnnxGraphExporter {
             const sb = typeof b.slot === "number" ? b.slot : Number.MAX_SAFE_INTEGER;
             return sa - sb;
         });
-        const inputNames: string[] = sorted
-            .map((l) => linkNames.get(l))
-            .filter((n): n is string => n !== undefined);
+        const inputNames: string[] = sorted.map((l) => linkNames.get(l)).filter((n): n is string => n !== undefined);
 
         // Boundary inputs: virtual names for input kernels.
         if (meta.isInput) {
@@ -243,12 +235,7 @@ export class OnnxGraphExporter {
 
     // ── 5. Boundary outputs ───────────────────────────────────────────
 
-    private static _collectGraphOutputs(
-        kernel: IKernel,
-        meta: KernelMeta,
-        options: OnnxExportOptions,
-        graphOutputs: OnnxValueInfo[]
-    ): void {
+    private static _collectGraphOutputs(kernel: IKernel, meta: KernelMeta, options: OnnxExportOptions, graphOutputs: OnnxValueInfo[]): void {
         const suppliedShapes = options.outputShapes?.get(kernel);
         for (let i = 0; i < meta.outputNames.length; i++) {
             graphOutputs.push({

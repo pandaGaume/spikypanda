@@ -79,16 +79,22 @@ export class FocController implements ISimNode {
         this._vBus = cfg.vBusForSat;
 
         this._piSpeed = new PiController({
-            kp: cfg.speedKp, ki: cfg.speedKi,
-            outMin: -cfg.iMax, outMax: cfg.iMax,
+            kp: cfg.speedKp,
+            ki: cfg.speedKi,
+            outMin: -cfg.iMax,
+            outMax: cfg.iMax,
         });
         this._piId = new PiController({
-            kp: cfg.currentKp, ki: cfg.currentKi,
-            outMin: -cfg.vMaxPerAxis, outMax: cfg.vMaxPerAxis,
+            kp: cfg.currentKp,
+            ki: cfg.currentKi,
+            outMin: -cfg.vMaxPerAxis,
+            outMax: cfg.vMaxPerAxis,
         });
         this._piIq = new PiController({
-            kp: cfg.currentKp, ki: cfg.currentKi,
-            outMin: -cfg.vMaxPerAxis, outMax: cfg.vMaxPerAxis,
+            kp: cfg.currentKp,
+            ki: cfg.currentKi,
+            outMin: -cfg.vMaxPerAxis,
+            outMax: cfg.vMaxPerAxis,
         });
     }
 
@@ -124,9 +130,15 @@ export class FocController implements ISimNode {
         this._piId.reset();
         this._piIq.reset();
         this._omegaRef = 0;
-        this._iD = 0; this._iQ = 0; this._omegaM = 0; this._thetaE = 0;
-        this._vAlphaRef = 0; this._vBetaRef = 0;
-        this._vDRef = 0; this._vQRef = 0; this._iQRef = 0;
+        this._iD = 0;
+        this._iQ = 0;
+        this._omegaM = 0;
+        this._thetaE = 0;
+        this._vAlphaRef = 0;
+        this._vBetaRef = 0;
+        this._vDRef = 0;
+        this._vQRef = 0;
+        this._iQRef = 0;
         this._saturatedVoltage = false;
     }
 
@@ -154,8 +166,16 @@ export class FocController implements ISimNode {
         return [this._vAlphaRef, this._vBetaRef];
     }
 
-    public get vDRef(): number { return this._vDRef; }
-    public get vQRef(): number { return this._vQRef; }
-    public get iQRef(): number { return this._iQRef; }
-    public get saturatedVoltage(): boolean { return this._saturatedVoltage; }
+    public get vDRef(): number {
+        return this._vDRef;
+    }
+    public get vQRef(): number {
+        return this._vQRef;
+    }
+    public get iQRef(): number {
+        return this._iQRef;
+    }
+    public get saturatedVoltage(): boolean {
+        return this._saturatedVoltage;
+    }
 }

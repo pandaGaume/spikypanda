@@ -142,9 +142,14 @@ export class AutoencoderBuilder {
     }
 
     private _buildAutoencoder(
-        inputWidth: number, inputHeight: number, inputChannels: number,
-        latentDim: number, flatSize: number,
-        lastW: number, lastH: number, lastC: number,
+        inputWidth: number,
+        inputHeight: number,
+        inputChannels: number,
+        latentDim: number,
+        flatSize: number,
+        lastW: number,
+        lastH: number,
+        lastC: number,
         dims: { w: number; h: number; c: number }[]
     ): ICnnGraph {
         const builder = new CnnBuilder();
