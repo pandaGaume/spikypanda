@@ -84,17 +84,11 @@ export class StereoCnnBuilder {
             }
 
             // Build conv layer for left branch using shared kernels
-            const leftConvDesc = this._buildConvLayer(
-                "left", prevLeft, layerKernels, filters, kernelSize,
-                allNeurons, allSynapses, layerDepth
-            );
+            const leftConvDesc = this._buildConvLayer("left", prevLeft, layerKernels, filters, kernelSize, allNeurons, allSynapses, layerDepth);
             leftDescriptors.push(leftConvDesc);
 
             // Build conv layer for right branch using SAME shared kernels
-            const rightConvDesc = this._buildConvLayer(
-                "right", prevRight, layerKernels, filters, kernelSize,
-                allNeurons, allSynapses, layerDepth + 0.5
-            );
+            const rightConvDesc = this._buildConvLayer("right", prevRight, layerKernels, filters, kernelSize, allNeurons, allSynapses, layerDepth + 0.5);
             rightDescriptors.push(rightConvDesc);
 
             // ── Cross-synapses if this layer is in crossLayers ──────────
@@ -107,10 +101,7 @@ export class StereoCnnBuilder {
                 const crossKernel = this._createKernel(1, 1, crossChannels, crossInitializer, 0);
                 crossKernels.push(crossKernel);
 
-                this._buildCrossSynapses(
-                    leftConvDesc, rightConvDesc, crossKernel,
-                    config.maxDisparity, allSynapses
-                );
+                this._buildCrossSynapses(leftConvDesc, rightConvDesc, crossKernel, config.maxDisparity, allSynapses);
             }
 
             prevLeft = leftConvDesc;
@@ -120,30 +111,21 @@ export class StereoCnnBuilder {
 
         // ── Merge layer ─────────────────────────────────────────────────
         layerDepth++;
-        const mergeDesc = this._buildMergeLayer(
-            prevLeft, prevRight, config.mergeStrategy,
-            allNeurons, allSynapses, layerDepth
-        );
+        const mergeDesc = this._buildMergeLayer(prevLeft, prevRight, config.mergeStrategy, allNeurons, allSynapses, layerDepth);
 
         // ── Flatten ─────────────────────────────────────────────────────
         layerDepth++;
-        const flattenDesc = this._buildFlattenLayer(
-            mergeDesc, allNeurons, allSynapses, layerDepth
-        );
+        const flattenDesc = this._buildFlattenLayer(mergeDesc, allNeurons, allSynapses, layerDepth);
 
         // ── Dense output layer ──────────────────────────────────────────
         layerDepth++;
         const outputUnits = config.outputWidth * config.outputHeight;
-        const outputDesc = this._buildDenseLayer(
-            flattenDesc, outputUnits, allNeurons, allSynapses, layerDepth
-        );
+        const outputDesc = this._buildDenseLayer(flattenDesc, outputUnits, allNeurons, allSynapses, layerDepth);
 
         // ── Assemble graph ──────────────────────────────────────────────
         const inputNeurons = [...leftInputDesc.neurons, ...rightInputDesc.neurons] as IStereoCnnNeuron[];
         const outputNeurons = outputDesc.neurons as IStereoCnnNeuron[];
-        const hiddenNeurons = allNeurons.filter(
-            (n) => !inputNeurons.includes(n) && !outputNeurons.includes(n)
-        );
+        const hiddenNeurons = allNeurons.filter((n) => !inputNeurons.includes(n) && !outputNeurons.includes(n));
 
         // Combine all layer descriptors for the unified graph
         const allDescriptors: ICnnLayerDescriptor[] = [];
@@ -183,7 +165,7 @@ export class StereoCnnBuilder {
         // Pre-compute intraSynapseCount for each neuron (excludes cross-synapses)
         for (const neuron of allNeurons) {
             const all = (neuron as StereoCnnNeuron).opsc<IStereoCnnSynapse>() ?? [];
-            (neuron as StereoCnnNeuron).intraSynapseCount = all.filter(s => !s.cross).length;
+            (neuron as StereoCnnNeuron).intraSynapseCount = all.filter((s) => !s.cross).length;
         }
 
         // Return as IStereoCnnGraph with extra metadata
@@ -200,11 +182,7 @@ export class StereoCnnBuilder {
         return stereoGraph;
     }
 
-    private _buildInputLayer(
-        branch: "left" | "right",
-        allNeurons: IStereoCnnNeuron[],
-        layerDepth: number
-    ): ICnnLayerDescriptor {
+    private _buildInputLayer(branch: "left" | "right", allNeurons: IStereoCnnNeuron[], layerDepth: number): ICnnLayerDescriptor {
         const { width, height, channels } = this._config;
         const neurons: IStereoCnnNeuron[] = [];
 
@@ -220,7 +198,9 @@ export class StereoCnnBuilder {
 
         return {
             type: CnnLayerType.Input,
-            width, height, channels,
+            width,
+            height,
+            channels,
             neurons: neurons as ICnnNeuron[],
         };
     }
@@ -373,7 +353,8 @@ export class StereoCnnBuilder {
 
             return {
                 type: CnnLayerType.Flatten,
-                width, height,
+                width,
+                height,
                 channels: mergeChannels,
                 neurons: neurons as ICnnNeuron[],
             };
@@ -402,19 +383,15 @@ export class StereoCnnBuilder {
 
             return {
                 type: CnnLayerType.Flatten,
-                width, height,
+                width,
+                height,
                 channels,
                 neurons: neurons as ICnnNeuron[],
             };
         }
     }
 
-    private _buildFlattenLayer(
-        prev: ICnnLayerDescriptor,
-        allNeurons: IStereoCnnNeuron[],
-        allSynapses: IStereoCnnSynapse[],
-        layerDepth: number
-    ): ICnnLayerDescriptor {
+    private _buildFlattenLayer(prev: ICnnLayerDescriptor, allNeurons: IStereoCnnNeuron[], allSynapses: IStereoCnnSynapse[], layerDepth: number): ICnnLayerDescriptor {
         const totalUnits = prev.width * prev.height * prev.channels;
         const neurons: IStereoCnnNeuron[] = [];
 
@@ -443,13 +420,7 @@ export class StereoCnnBuilder {
         };
     }
 
-    private _buildDenseLayer(
-        prev: ICnnLayerDescriptor,
-        units: number,
-        allNeurons: IStereoCnnNeuron[],
-        allSynapses: IStereoCnnSynapse[],
-        layerDepth: number
-    ): ICnnLayerDescriptor {
+    private _buildDenseLayer(prev: ICnnLayerDescriptor, units: number, allNeurons: IStereoCnnNeuron[], allSynapses: IStereoCnnSynapse[], layerDepth: number): ICnnLayerDescriptor {
         // Sigmoid output for disparity in [0,1] range
         const activation = ActivationFunctions.sigmoid;
         const fanIn = prev.neurons.length;
@@ -512,13 +483,7 @@ export class StereoCnnBuilder {
     }
 
     /** Factory for shared (and cross) convolutional kernels. */
-    protected _createKernel(
-        kernelHeight: number,
-        kernelWidth: number,
-        inputChannels: number,
-        initializer: IWeightInitializer,
-        bias: number
-    ): ConvKernel {
+    protected _createKernel(kernelHeight: number, kernelWidth: number, inputChannels: number, initializer: IWeightInitializer, bias: number): ConvKernel {
         return new ConvKernel(kernelHeight, kernelWidth, inputChannels, initializer, bias);
     }
 

@@ -1,14 +1,4 @@
-import {
-    editable,
-    cloneable,
-    IOlink,
-    IDeclaresPorts,
-    IPortDescriptor,
-    ISession,
-    IChannel,
-    RuntimeNode,
-    inSlotOf,
-} from "spikypanda-core";
+import { editable, cloneable, IOlink, IDeclaresPorts, IPortDescriptor, ISession, IChannel, RuntimeNode, inSlotOf } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
 import { DebugBus } from "spikypanda-nodeeditor";
 
@@ -44,12 +34,7 @@ function consumeReady(session: ISession, node: RuntimeNode, slot: string): boole
     return triggered;
 }
 
-function readSlot<T>(
-    session: ISession,
-    node: RuntimeNode,
-    slot: string,
-    fallback: T,
-): T {
+function readSlot<T>(session: ISession, node: RuntimeNode, slot: string, fallback: T): T {
     const links = session.graph.links as ReadonlyArray<IChannel>;
     for (const link of node.opsc<IChannel>()) {
         if (inSlotOf(link) !== slot) continue;
@@ -87,30 +72,38 @@ function stringify(v: unknown): string {
 // ── PrintNode ────────────────────────────────────────────────────────
 
 export class PrintNode extends RuntimeNode implements IDeclaresPorts {
-    @cloneable private _text:  string = "";
+    @cloneable private _text: string = "";
     @cloneable private _label: string = "Print";
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "in",   optional: true, type: "trigger" },
-        { slot: "text", optional: true, type: "string"  },
+        { slot: "in", optional: true, type: "trigger" },
+        { slot: "text", optional: true, type: "string" },
     ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "then", optional: false, type: "trigger" },
-    ];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "then", optional: false, type: "trigger" }];
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
     @editable("string")
-    public get text(): string { return this._text; }
-    public set text(v: string) { this.setField("text", this._text, v, (s) => { this._text = s; }); }
+    public get text(): string {
+        return this._text;
+    }
+    public set text(v: string) {
+        this.setField("text", this._text, v, (s) => {
+            this._text = s;
+        });
+    }
 
     @editable("string")
-    public get label(): string { return this._label; }
-    public set label(v: string) { this.setField("label", this._label, v, (s) => { this._label = s; }); }
+    public get label(): string {
+        return this._label;
+    }
+    public set label(v: string) {
+        this.setField("label", this._label, v, (s) => {
+            this._label = s;
+        });
+    }
 
     public override fire(session: ISession, _t: number): void {
         if (!consumeReady(session, this, "in")) return;
@@ -125,20 +118,22 @@ export class PrintNode extends RuntimeNode implements IDeclaresPorts {
 export class WatchNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _label: string = "Watch";
 
-    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "value", optional: true, type: "any" },
-    ];
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "value", optional: true, type: "any" }];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [];
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
     @editable("string")
-    public get label(): string { return this._label; }
-    public set label(v: string) { this.setField("label", this._label, v, (s) => { this._label = s; }); }
+    public get label(): string {
+        return this._label;
+    }
+    public set label(v: string) {
+        this.setField("label", this._label, v, (s) => {
+            this._label = s;
+        });
+    }
 
     public override fire(session: ISession, _t: number): void {
         const v = readSlot<unknown>(session, this, "value", undefined);

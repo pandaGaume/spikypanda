@@ -3,17 +3,22 @@ import type { IDisposable } from "spikypanda-core";
 import type { OnnxModelGraph } from "../graphs/model.graph";
 
 const ZONE_STYLE = [
-    "display:flex", "flex-direction:column", "align-items:center",
-    "justify-content:center", "gap:8px", "padding:16px",
-    "border:2px dashed #555", "border-radius:6px",
-    "cursor:pointer", "user-select:none", "transition:border-color .15s",
-    "min-height:80px", "text-align:center",
+    "display:flex",
+    "flex-direction:column",
+    "align-items:center",
+    "justify-content:center",
+    "gap:8px",
+    "padding:16px",
+    "border:2px dashed #555",
+    "border-radius:6px",
+    "cursor:pointer",
+    "user-select:none",
+    "transition:border-color .15s",
+    "min-height:80px",
+    "text-align:center",
 ].join(";");
 
-const STATUS_STYLE = [
-    "padding:8px 0", "font-size:11px", "color:#aaa",
-    "word-break:break-all",
-].join(";");
+const STATUS_STYLE = ["padding:8px 0", "font-size:11px", "color:#aaa", "word-break:break-all"].join(";");
 
 const ERROR_STYLE = "color:#e05;font-size:11px;padding:4px 0;word-break:break-all;";
 
@@ -69,7 +74,7 @@ export const onnxModelEditor: EditorFactory = (host, model): IEditor => {
 
     function loadFile(file: File): void {
         if (!file.name.endsWith(".onnx")) return;
-        file.arrayBuffer().then(bytes => node.loadModel(bytes, file.name));
+        file.arrayBuffer().then((bytes) => node.loadModel(bytes, file.name));
     }
 
     zone.addEventListener("click", () => fileInput.click());

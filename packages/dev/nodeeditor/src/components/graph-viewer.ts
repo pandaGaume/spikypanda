@@ -12,6 +12,7 @@ import { lightSkin } from "../styles/skins/light";
 import { transparentDarkSkin, transparentLightSkin } from "../styles/skins/transparent";
 import { arePortTypesCompatible, ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedGraph } from "../types";
 import { DebugBus } from "../debug-bus";
+import type { INodeRegistry } from "spikypanda-core";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -368,6 +369,7 @@ export class GraphViewer {
             nodes: this.nodes.map((n) => ({
                 id: n.id,
                 label: n.label,
+                typeId: n.typeId,
                 x: n.x,
                 y: n.y,
                 color: n.color,
@@ -394,10 +396,15 @@ export class GraphViewer {
             return `${fromNode.id}:${c.from.name}->${toNode.id}:${c.to.name}`;
         };
         const data = {
-            version: 2,
+            // v3 adds `typeId` per node in BOTH layout and model so load()
+            // can rebind every node to a fresh runtime IRuntimeNode via
+            // a NodeRegistry. v2 saves still load (typeId is optional);
+            // the runtime model just isn't rebuildable from them.
+            version: 3,
             layout: {
                 nodes: this.nodes.map((n) => ({
                     id: n.id,
+                    typeId: n.typeId,
                     x: n.x,
                     y: n.y,
                     color: n.color,
@@ -417,7 +424,12 @@ export class GraphViewer {
                 }),
             },
             model: {
-                nodes: this.nodes.map((n) => ({ id: n.id, label: n.label, data: n.item.serialize() })),
+                nodes: this.nodes.map((n) => ({
+                    id: n.id,
+                    label: n.label,
+                    typeId: n.typeId,
+                    data: n.item.serialize(),
+                })),
                 connections: this.connections.map((c) => {
                     const fromNode = this.nodes.find((nd) => nd.outputs.includes(c.from))!;
                     const toNode = this.nodes.find((nd) => nd.inputs.includes(c.to))!;
@@ -432,7 +444,26 @@ export class GraphViewer {
         return JSON.stringify(data, null, 2);
     }
 
-    load(json: string): void {
+    /**
+     * Rebuild the graph from a JSON string previously produced by
+     * `save()`. Optionally takes a `NodeRegistry`: when provided AND
+     * the saved JSON carries a `typeId` per node (v3 saves), each node
+     * is rebound to a fresh `IRuntimeNode` via `registry.create(typeId)`
+     * and the saved state is restored on that instance through
+     * `node.item.deserialize(savedData)`.
+     *
+     * Without a registry (or for legacy v2 saves with no typeId), the
+     * load is layout-only: ports / positions / connections are restored
+     * but the runtime model is just the raw saved JSON value, so play
+     * mode won't actually fire those nodes — useful for previewing a
+     * graph topology without a runtime context.
+     *
+     * The graph is cleared before reload. Errors during JSON parsing or
+     * registry lookup bubble up to the caller; partial loads are
+     * possible if some typeIds aren't registered (those nodes fall back
+     * to layout-only).
+     */
+    load(json: string, registry?: INodeRegistry): void {
         const data = JSON.parse(json);
         this.clear();
 
@@ -446,9 +477,27 @@ export class GraphViewer {
         for (const sn of layoutNodes) {
             const mn = modelNodes?.find((m: { id: string }) => m.id === sn.id);
             const label = mn?.label ?? sn.label ?? "Node";
+            // typeId can live on either side (model or layout); prefer
+            // model (closer to runtime truth) and fall back to layout.
+            const typeId: string | undefined = mn?.typeId ?? sn.typeId;
+
+            // Try the registry first: when both typeId and registry are
+            // present, instantiate a fresh runtime IRuntimeNode that
+            // play mode can actually fire(). Otherwise stay layout-only
+            // and pass the saved JSON as the model (legacy behavior).
+            let runtimeData: unknown = mn?.data ?? undefined;
+            if (registry && typeId) {
+                const instance = registry.create(typeId);
+                if (instance) {
+                    runtimeData = instance;
+                } else if (typeof console !== "undefined") {
+                    console.warn(`[graph-viewer] load: typeId "${typeId}" not in registry; falling back to layout-only for node "${sn.id}"`);
+                }
+            }
 
             const def: NodeDef = {
                 label,
+                typeId,
                 inputs: (sn.inputs ?? [])
                     .filter((p: { direction: string }) => p.direction === "input")
                     .map((p: { name: string; type: string }) => ({ name: p.name, type: p.type })),
@@ -456,10 +505,18 @@ export class GraphViewer {
                     .filter((p: { direction: string }) => p.direction === "output")
                     .map((p: { name: string; type: string }) => ({ name: p.name, type: p.type })),
                 color: sn.color,
-                data: mn?.data ?? undefined,
+                data: runtimeData,
             };
             const node = this.addNode(def, sn.x, sn.y);
-            if (mn?.data != null) node.item.deserialize(mn.data);
+            // Restore state only when we built a real runtime instance
+            // (the deserialize contract is on IRuntimeNode, not on a
+            // raw JSON payload that the legacy path leaves in def.data).
+            if (registry && typeId && mn?.data !== null && mn?.data !== undefined) {
+                const item = node.item.data as { deserialize?: (saved: unknown) => void };
+                if (typeof item?.deserialize === "function") {
+                    item.deserialize(mn.data);
+                }
+            }
             nodeMap.set(sn.id, node);
         }
 
@@ -607,6 +664,46 @@ export class GraphViewer {
 
     downloadExport(filename = "model.json"): void {
         this.downloadFile(this.exportModel(), filename, "application/json");
+    }
+
+    /**
+     * Open the browser file picker for a `.json` saved graph, read it,
+     * and replace the current graph via `load(text, registry)`. Mirrors
+     * the `downloadSave` UX path on the read side.
+     *
+     * `registry` is forwarded to `load`: pass the same NodeRegistry the
+     * palette is bound to so saved typeIds resolve back to fresh runtime
+     * IRuntimeNode instances. Without it the load is layout-only.
+     *
+     * `onError` receives anything thrown by JSON.parse or load() — typically
+     * the host shows a toast / alert.
+     */
+    pickAndLoad(registry?: INodeRegistry, opts?: { onError?: (e: unknown) => void; accept?: string }): void {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = opts?.accept ?? "application/json,.json";
+        input.style.display = "none";
+        input.addEventListener("change", () => {
+            const file = input.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onerror = () => {
+                opts?.onError?.(reader.error ?? new Error("FileReader error"));
+            };
+            reader.onload = () => {
+                try {
+                    this.load(String(reader.result ?? ""), registry);
+                } catch (e) {
+                    opts?.onError?.(e);
+                }
+            };
+            reader.readAsText(file);
+        });
+        // Append-and-click pattern keeps the input GC-safe across browsers
+        // that ignore click() on detached inputs.
+        document.body.appendChild(input);
+        input.click();
+        document.body.removeChild(input);
     }
 
     private downloadFile(content: string, filename: string, type: string): void {

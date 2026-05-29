@@ -83,8 +83,8 @@ export function createBiquadFilterNode(): Kernel {
     return make("SpBiquadFilter", ["x"], ["y"], {
         filter_type: 0,
         sample_rate: 16000,
-        cutoff_hz:   1000,
-        q:           Math.SQRT1_2,
+        cutoff_hz: 1000,
+        q: Math.SQRT1_2,
     });
 }
 export function createKalman1DNode(): Kernel {

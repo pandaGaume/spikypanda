@@ -37,6 +37,11 @@ export class NodeUI {
     readonly id: string;
     readonly el: HTMLDivElement;
     readonly label: string;
+    /** Registry type id this node was instantiated from (when known).
+     *  Plumbed straight from `def.typeId`. Consumed by GraphViewer.save()
+     *  to emit a self-contained record that GraphViewer.load() can use
+     *  to recreate the runtime IRuntimeNode via NodeRegistry.create(). */
+    readonly typeId?: string;
     readonly color?: string;
     readonly inputs: Port[] = [];
     readonly outputs: Port[] = [];
@@ -80,6 +85,7 @@ export class NodeUI {
     constructor(def: NodeDef, parent: HTMLElement, standards?: StandardsRegistry) {
         this.id = `node_${nodeIdCounter++}`;
         this.label = def.label;
+        this.typeId = def.typeId;
         this.color = def.color;
         // Carry the standards declaration so the property panel can
         // render its version-aware shields without re-walking the

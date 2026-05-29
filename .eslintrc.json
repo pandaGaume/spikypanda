@@ -6,9 +6,19 @@
         "sourceType": "module",
         "project": [
             "./packages/dev/core/tsconfig.build.json",
+            "./packages/dev/onnx/tsconfig.build.json",
+            "./packages/dev/applications/mpc/tsconfig.build.json",
+            "./packages/dev/applications/stereo/tsconfig.build.json",
+            "./packages/dev/applications/privates/cardriver/tsconfig.build.json",
+            "./packages/dev/sensors/tsconfig.build.json",
             "./packages/dev/bestioles/tsconfig.build.json",
             "./packages/dev/babylonjs/tsconfig.build.json",
-            "./packages/dev/onnx/tsconfig.build.json",
+            "./packages/dev/nodeeditor/tsconfig.build.json",
+            "./packages/dev/plugins/geometry/tsconfig.build.json",
+            "./packages/dev/plugins/onnx/tsconfig.build.json",
+            "./packages/dev/plugins/logic/tsconfig.build.json",
+            "./packages/dev/plugins/dsp/tsconfig.build.json",
+            "./packages/dev/plugins/physics/tsconfig.build.json",
             "./packages/tests/tsconfig.json"
         ]
     },

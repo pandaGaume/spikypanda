@@ -1,15 +1,4 @@
-import {
-    editable,
-    viewable,
-    cloneable,
-    IOlink,
-    IDeclaresPorts,
-    IPortDescriptor,
-    ISession,
-    RuntimeNode,
-    publishToFirstOutput,
-    resolveSlotInputs,
-} from "spikypanda-core";
+import { editable, viewable, cloneable, IOlink, IDeclaresPorts, IPortDescriptor, ISession, RuntimeNode, publishToFirstOutput, resolveSlotInputs } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
 
 /**
@@ -32,39 +21,51 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  * upstream.
  */
 export class SelectNode extends RuntimeNode implements IDeclaresPorts {
-    @cloneable private _a:         unknown = undefined;
-    @cloneable private _b:         unknown = undefined;
+    @cloneable private _a: unknown = undefined;
+    @cloneable private _b: unknown = undefined;
     @cloneable private _condition: boolean = false;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "a",         optional: true, type: "any"     },
-        { slot: "b",         optional: true, type: "any"     },
+        { slot: "a", optional: true, type: "any" },
+        { slot: "b", optional: true, type: "any" },
         { slot: "condition", optional: true, type: "boolean" },
     ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "result", optional: false, type: "any" },
-    ];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "result", optional: false, type: "any" }];
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
     // a / b are property-only (no @editable) because the value can be
     // anything — there is no generic editor for `any`. They still need
     // public setters so the LiveBinder can mirror upstream values into
     // the runtime instance on connection-changed events.
-    public get a(): unknown { return this._a; }
-    public set a(v: unknown) { this.setField("a", this._a, v, (x) => { this._a = x; }); }
+    public get a(): unknown {
+        return this._a;
+    }
+    public set a(v: unknown) {
+        this.setField("a", this._a, v, (x) => {
+            this._a = x;
+        });
+    }
 
-    public get b(): unknown { return this._b; }
-    public set b(v: unknown) { this.setField("b", this._b, v, (x) => { this._b = x; }); }
+    public get b(): unknown {
+        return this._b;
+    }
+    public set b(v: unknown) {
+        this.setField("b", this._b, v, (x) => {
+            this._b = x;
+        });
+    }
 
     @editable("boolean")
-    public get condition(): boolean { return this._condition; }
+    public get condition(): boolean {
+        return this._condition;
+    }
     public set condition(v: boolean) {
-        this.setField("condition", this._condition, v, (x) => { this._condition = x; });
+        this.setField("condition", this._condition, v, (x) => {
+            this._condition = x;
+        });
     }
 
     @viewable("any")
@@ -74,8 +75,8 @@ export class SelectNode extends RuntimeNode implements IDeclaresPorts {
 
     public override fire(session: ISession, _t: number): void {
         const { a, b, condition } = resolveSlotInputs(session, this, {
-            a:         this._a,
-            b:         this._b,
+            a: this._a,
+            b: this._b,
             condition: this._condition,
         });
         publishToFirstOutput(session, this, condition ? a : b);

@@ -1,13 +1,4 @@
-import {
-    cloneable,
-    CnnLayerType,
-    CnnNeuron,
-    IActivationFunction,
-    ICartesian,
-    IOlink,
-    Nullable,
-    PoolingType,
-} from "spikypanda-core";
+import { cloneable, CnnLayerType, CnnNeuron, IActivationFunction, ICartesian, IOlink, Nullable, PoolingType } from "spikypanda-core";
 import type { IStereoCnnNeuron, IStereoCnnSynapse, StereoBranch } from "./stereo.interfaces";
 
 /// <summary>
@@ -48,6 +39,6 @@ export class StereoCnnNeuron extends CnnNeuron implements IStereoCnnNeuron {
     public getIntraInputCount(): number {
         if (this.intraSynapseCount >= 0) return this.intraSynapseCount;
         const all = this.opsc<IStereoCnnSynapse>() ?? [];
-        return all.filter(s => !s.cross).length;
+        return all.filter((s) => !s.cross).length;
     }
 }

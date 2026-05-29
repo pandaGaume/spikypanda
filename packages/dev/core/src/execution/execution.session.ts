@@ -252,20 +252,26 @@ export class Session implements ISession {
     }
 
     private _buildLinkStatesProxy(): ILinkState[] {
-        const session = this;
+        // Bind the session methods/properties the getters need without
+        // aliasing `this` to a local variable (which the @typescript-eslint
+        // no-this-alias rule flags). Capturing arrow-functions around the
+        // bound methods gives the same closure semantics with a typed
+        // surface and no `const session = this` line.
+        const linksFor = (): ReadonlyArray<IChannel> => this.graph.links as ReadonlyArray<IChannel>;
+        const bufferFor = (link: IChannel): unknown[] | undefined => this._bufferFor(link);
         return this.graph.links.map(
             (_link, idx) =>
                 ({
                     get ready(): boolean {
-                        const link = session.graph.links[idx] as IChannel | undefined;
+                        const link = linksFor()[idx] as IChannel | undefined;
                         if (!link) return false;
-                        const buf = session._bufferFor(link);
+                        const buf = bufferFor(link);
                         return !!buf && buf.length > 0;
                     },
                     get payload(): unknown {
-                        const link = session.graph.links[idx] as IChannel | undefined;
+                        const link = linksFor()[idx] as IChannel | undefined;
                         if (!link) return undefined;
-                        const buf = session._bufferFor(link);
+                        const buf = bufferFor(link);
                         return buf && buf.length > 0 ? buf[0] : undefined;
                     },
                     // Setters are kept off this proxy on purpose. Old code that

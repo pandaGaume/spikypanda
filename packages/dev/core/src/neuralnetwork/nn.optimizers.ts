@@ -9,7 +9,7 @@ export class Optimizers {
     /// Stochastic Gradient Descent (SGD) optimizer
     /// </summary>
     public static SGD = (): IOptimizer => ({
-        apply(synapse, lr, gradient, ctx) {
+        apply(synapse, lr, gradient, _ctx) {
             const bag = (synapse.bag ??= { gradient: gradient }) as IBackpropSynapseContext;
 
             bag.gradient = gradient;
@@ -23,7 +23,7 @@ export class Optimizers {
     /// SGD with Momentum optimizer
     /// </summary>
     public static MomentumSGD = (momentum: number): IOptimizer => ({
-        apply(synapse, lr, gradient, ctx) {
+        apply(synapse, lr, gradient, _ctx) {
             const bag = (synapse.bag ??= { gradient: gradient }) as IBackpropSynapseContext;
 
             bag.gradient = gradient;
@@ -40,7 +40,7 @@ export class Optimizers {
     /// Nesterov Accelerated Gradient (NAG) optimizer
     /// </summary>
     public static NAG = (momentum: number = 0.9): IOptimizer => ({
-        apply(synapse, lr, gradient, ctx) {
+        apply(synapse, lr, gradient, _ctx) {
             const bag = (synapse.bag ??= { gradient: gradient }) as IBackpropSynapseContext;
 
             bag.gradient = gradient;

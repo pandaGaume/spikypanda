@@ -1,12 +1,4 @@
-import {
-    ActivationFunctions,
-    CnnLayerType,
-    IActivationFunction,
-    ICnnInferenceContext,
-    ICnnNeuron,
-    ICnnSynapse,
-    PoolingType,
-} from "spikypanda-core";
+import { ActivationFunctions, CnnLayerType, IActivationFunction, ICnnInferenceContext, ICnnNeuron, ICnnSynapse, PoolingType } from "spikypanda-core";
 import { IStereoCnnGraph, IStereoCnnSynapse } from "./stereo.interfaces";
 import { StereoCnnNeuron } from "./stereo.neuron";
 

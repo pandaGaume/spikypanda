@@ -53,7 +53,7 @@ const _schemas = new Map<string, OnnxOpSchema>();
  * `opType` in the module-level registry.
  */
 export function onnxOp(opType: string, opts?: { domain?: string }): ClassDecorator {
-    return ((target: Function): void => {
+    return ((target: { prototype: object }): void => {
         const attrs: OnnxAttrDef[] = Reflect.getMetadata(_attrMetaKey, target.prototype) ?? [];
         _schemas.set(opType, {
             opType,

@@ -1,17 +1,17 @@
 import { dspTransformSubPlugin } from "./transform/index.js";
-import { dspWindowSubPlugin }    from "./window/index.js";
-import { dspFrameSubPlugin }     from "./frame/index.js";
-import { dspFeatureSubPlugin }   from "./feature/index.js";
-import { dspFilterSubPlugin }    from "./filter/index.js";
-import { dspStatsSubPlugin }     from "./stats/index.js";
+import { dspWindowSubPlugin } from "./window/index.js";
+import { dspFrameSubPlugin } from "./frame/index.js";
+import { dspFeatureSubPlugin } from "./feature/index.js";
+import { dspFilterSubPlugin } from "./filter/index.js";
+import { dspStatsSubPlugin } from "./stats/index.js";
 
 export * from "./nodes/factories.js";
 export { dspTransformSubPlugin } from "./transform/index.js";
-export { dspWindowSubPlugin }    from "./window/index.js";
-export { dspFrameSubPlugin }     from "./frame/index.js";
-export { dspFeatureSubPlugin }   from "./feature/index.js";
-export { dspFilterSubPlugin }    from "./filter/index.js";
-export { dspStatsSubPlugin }     from "./stats/index.js";
+export { dspWindowSubPlugin } from "./window/index.js";
+export { dspFrameSubPlugin } from "./frame/index.js";
+export { dspFeatureSubPlugin } from "./feature/index.js";
+export { dspFilterSubPlugin } from "./filter/index.js";
+export { dspStatsSubPlugin } from "./stats/index.js";
 
 /**
  * @spikypanda/plugin-dsp
@@ -37,10 +37,10 @@ export { dspStatsSubPlugin }     from "./stats/index.js";
 export default {
     subPlugins: {
         "DSP.Transform": dspTransformSubPlugin,
-        "DSP.Window":    dspWindowSubPlugin,
-        "DSP.Frame":     dspFrameSubPlugin,
-        "DSP.Feature":   dspFeatureSubPlugin,
-        "DSP.Filter":    dspFilterSubPlugin,
-        "DSP.Stats":     dspStatsSubPlugin,
+        "DSP.Window": dspWindowSubPlugin,
+        "DSP.Frame": dspFrameSubPlugin,
+        "DSP.Feature": dspFeatureSubPlugin,
+        "DSP.Filter": dspFilterSubPlugin,
+        "DSP.Stats": dspStatsSubPlugin,
     },
 };

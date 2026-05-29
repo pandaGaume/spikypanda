@@ -249,7 +249,7 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
             this._inputPortMap = new Map();
             for (let i = 0; i < this.links.length; i++) {
                 const link = this.links[i] as unknown as IChannel;
-                if (link.oini == null) {
+                if (link.oini === null || link.oini === undefined) {
                     this._inputPortMap.set(link.slot, i);
                 }
             }
@@ -263,7 +263,7 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
             this._outputPortMap = new Map();
             for (let i = 0; i < this.links.length; i++) {
                 const link = this.links[i] as unknown as IChannel;
-                if (link.ofin == null) {
+                if (link.ofin === null || link.ofin === undefined) {
                     this._outputPortMap.set(link.slot, i);
                 }
             }

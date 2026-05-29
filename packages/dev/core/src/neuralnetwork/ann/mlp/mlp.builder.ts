@@ -21,10 +21,10 @@ export class MlpNeuronBuilder extends GraphNodeBuilder {
         return this;
     }
     public override build(): IMlpNeuron {
-        if (this._bias == undefined) {
+        if (this._bias === undefined) {
             throw new Error("Bias must be provided.");
         }
-        if (this._activationFn == undefined) {
+        if (this._activationFn === undefined) {
             throw new Error("Activation function must be provided.");
         }
         return super.build() as IMlpNeuron;
@@ -87,7 +87,7 @@ export class PerceptronBuilder {
             this._layerCount++;
             return this;
         }
-        if (bias == undefined || activation == undefined) {
+        if (bias === undefined || activation === undefined) {
             throw new Error("Bias and activation function must be provided when using count.");
         }
         this._inputLayerBuilder = this._inputLayerBuilder ?? new MlpLayerBuilder();
@@ -115,7 +115,7 @@ export class PerceptronBuilder {
             }
             return this;
         }
-        if (bias == undefined || activation == undefined) {
+        if (bias === undefined || activation === undefined) {
             throw new Error("Bias and activation function must be provided when using count.");
         }
         this._hiddenLayerBuilders[this._hiddenLayerCount] = this._hiddenLayerBuilders[this._hiddenLayerCount] ?? new MlpLayerBuilder();
@@ -130,7 +130,7 @@ export class PerceptronBuilder {
             this._layerCount++;
             return this;
         }
-        if (bias == undefined || activation == undefined) {
+        if (bias === undefined || activation === undefined) {
             throw new Error("Bias and activation function must be provided when using count.");
         }
         this._outputLayerBuilder = this._outputLayerBuilder ?? new MlpLayerBuilder();
@@ -141,8 +141,8 @@ export class PerceptronBuilder {
 
     public withConnectionBuilder(connBuilder?: ILayerConnectionBuilder, from?: number, to?: number): PerceptronBuilder {
         const b = connBuilder ?? this._defaultLayerConnBuilder ?? new LayerConnectionBuilder();
-        const f = from != undefined ? from : this._layerCount - 2;
-        const t = to != undefined ? to : this._layerCount - 1;
+        const f = from !== undefined ? from : this._layerCount - 2;
+        const t = to !== undefined ? to : this._layerCount - 1;
         if (f >= 0 && t >= 0) {
             this._connectionBuilders.push({ conn: b, from: f, to: t });
         }
@@ -162,7 +162,7 @@ export class PerceptronBuilder {
         layers.push(...this._hiddenLayerBuilders.map((b) => b.build()));
         layers.push(this._outputLayerBuilder.build());
 
-        for (let i = 0; i != this._connectionBuilders.length; i++) {
+        for (let i = 0; i !== this._connectionBuilders.length; i++) {
             let layerIndex = this._connectionBuilders[i].from;
             if (layerIndex < 0 || layerIndex >= layers.length) {
                 continue;

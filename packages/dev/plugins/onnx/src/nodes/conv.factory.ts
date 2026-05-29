@@ -10,14 +10,14 @@ import type { OnnxNodeInfo } from "spikypanda-onnx";
  */
 export function createConvNode(): ConvNode {
     const info: OnnxNodeInfo = {
-        opType:     "Conv",
-        name:       "",
-        inputs:     ["X", "W", "B"],
-        outputs:    ["Y"],
+        opType: "Conv",
+        name: "",
+        inputs: ["X", "W", "B"],
+        outputs: ["Y"],
         attributes: new Map([
             ["kernel_shape", 3],
-            ["strides",      1],
-            ["pads",         0],
+            ["strides", 1],
+            ["pads", 0],
         ]),
     };
     return new ConvNode(info);

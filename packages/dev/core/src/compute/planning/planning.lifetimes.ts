@@ -16,7 +16,7 @@ import { PLAN_DTYPE_BYTES, type ITensorLifetime, type PlanDType } from "./planni
  * index-based slug when neither `id` nor `tag` is set.
  */
 export function nodeIdOf(node: IKernel, fallbackIndex: number): string {
-    if (node.id != null) return String(node.id);
+    if (node.id !== null && node.id !== undefined) return String(node.id);
     if (node.tag) return String(node.tag);
     return `node_${fallbackIndex}`;
 }
@@ -144,7 +144,7 @@ export function computeLifetimes(graph: IComputeGraph, schedule: readonly IKerne
     const position = new Map<string, number>();
     schedule.forEach((kernel, idx) => {
         const id = nodeIdMap.get(kernel);
-        if (id != null) position.set(id, idx);
+        if (id !== null && id !== undefined) position.set(id, idx);
     });
 
     const refs = enumerateTensors(graph, nodeIdMap);
@@ -152,7 +152,7 @@ export function computeLifetimes(graph: IComputeGraph, schedule: readonly IKerne
 
     for (const ref of refs) {
         const birthStep = position.get(ref.producerId);
-        if (birthStep == null) {
+        if (birthStep === null || birthStep === undefined) {
             // Producer not in schedule: skip rather than crash. This can
             // happen for disabled / orphaned kernels.
             continue;
@@ -160,7 +160,7 @@ export function computeLifetimes(graph: IComputeGraph, schedule: readonly IKerne
         let deathStep = birthStep;
         for (const c of ref.consumerIds) {
             const ps = position.get(c);
-            if (ps != null && ps > deathStep) deathStep = ps;
+            if (ps !== null && ps !== undefined && ps > deathStep) deathStep = ps;
         }
         lifetimes.push({
             tensorId: ref.tensorId,
@@ -187,7 +187,7 @@ export function scheduleToIds(graph: IComputeGraph, schedule: readonly IKernel[]
     const out: string[] = [];
     for (const k of schedule) {
         const id = map.get(k);
-        if (id != null) out.push(id);
+        if (id !== null && id !== undefined) out.push(id);
     }
     return out;
 }

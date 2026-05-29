@@ -1,14 +1,4 @@
-import {
-    editable,
-    cloneable,
-    IOlink,
-    IDeclaresPorts,
-    IPortDescriptor,
-    ISession,
-    IChannel,
-    RuntimeNode,
-    inSlotOf,
-} from "spikypanda-core";
+import { editable, cloneable, IOlink, IDeclaresPorts, IPortDescriptor, ISession, IChannel, RuntimeNode, inSlotOf } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
 
 /**
@@ -94,27 +84,31 @@ export class BranchNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _condition: boolean = false;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "in",        optional: true, type: "trigger" },
+        { slot: "in", optional: true, type: "trigger" },
         { slot: "condition", optional: true, type: "boolean" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "true",  optional: false, type: "trigger" },
+        { slot: "true", optional: false, type: "trigger" },
         { slot: "false", optional: false, type: "trigger" },
     ];
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
     @editable("boolean")
-    public get condition(): boolean { return this._condition; }
-    public set condition(v: boolean) { this.setField("condition", this._condition, v, (b) => { this._condition = b; }); }
+    public get condition(): boolean {
+        return this._condition;
+    }
+    public set condition(v: boolean) {
+        this.setField("condition", this._condition, v, (b) => {
+            this._condition = b;
+        });
+    }
 
     public override fire(session: ISession, _t: number): void {
         const fired = consumeReady(session, this, "in");
-        const cond  = readBoolean(session, this, "condition", this._condition);
+        const cond = readBoolean(session, this, "condition", this._condition);
         if (!fired) return;
         publishTrigger(session, this, cond ? "true" : "false");
     }
@@ -132,21 +126,15 @@ export class BranchNode extends RuntimeNode implements IDeclaresPorts {
  * preserve the visible declaration order.
  */
 export class SequenceNode extends RuntimeNode implements IDeclaresPorts {
-    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "in", optional: true, type: "trigger" },
-    ];
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "in", optional: true, type: "trigger" }];
     // Start with a single output; the editor adds further slots as
     // they get wired. `outputPorts` is informational only — `fire`
     // does not key off it.
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "then_0", optional: false, type: "trigger" },
-    ];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "then_0", optional: false, type: "trigger" }];
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
     public override fire(session: ISession, _t: number): void {
         if (!consumeReady(session, this, "in")) return;
@@ -186,30 +174,26 @@ export class DoOnceNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _startClosed: boolean = false;
     private _used: boolean = false;
 
-    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "in", optional: true, type: "trigger" },
-    ];
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "in", optional: true, type: "trigger" }];
     public override readonly controlInputPorts: ReadonlyArray<IPortDescriptor> = [
         { slot: "_enable", optional: true, type: "boolean" },
-        { slot: "_reset",  optional: true, type: "trigger" },
+        { slot: "_reset", optional: true, type: "trigger" },
     ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "then", optional: false, type: "trigger" },
-    ];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "then", optional: false, type: "trigger" }];
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) {
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
         this._used = this._startClosed;
     }
 
     @editable("boolean")
-    public get startClosed(): boolean { return this._startClosed; }
+    public get startClosed(): boolean {
+        return this._startClosed;
+    }
     public set startClosed(v: boolean) {
-        this.setField("startClosed", this._startClosed, v, (b) => { this._startClosed = b; });
+        this.setField("startClosed", this._startClosed, v, (b) => {
+            this._startClosed = b;
+        });
     }
 
     public override reset(_session: ISession): void {
@@ -243,32 +227,28 @@ export class GateNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _startClosed: boolean = false;
     private _open: boolean = true;
 
-    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "in", optional: true, type: "trigger" },
-    ];
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "in", optional: true, type: "trigger" }];
     public override readonly controlInputPorts: ReadonlyArray<IPortDescriptor> = [
         { slot: "_enable", optional: true, type: "boolean" },
-        { slot: "_open",   optional: true, type: "trigger" },
-        { slot: "_close",  optional: true, type: "trigger" },
+        { slot: "_open", optional: true, type: "trigger" },
+        { slot: "_close", optional: true, type: "trigger" },
         { slot: "_toggle", optional: true, type: "trigger" },
     ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "then", optional: false, type: "trigger" },
-    ];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "then", optional: false, type: "trigger" }];
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) {
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
         this._open = !this._startClosed;
     }
 
     @editable("boolean")
-    public get startClosed(): boolean { return this._startClosed; }
+    public get startClosed(): boolean {
+        return this._startClosed;
+    }
     public set startClosed(v: boolean) {
-        this.setField("startClosed", this._startClosed, v, (b) => { this._startClosed = b; });
+        this.setField("startClosed", this._startClosed, v, (b) => {
+            this._startClosed = b;
+        });
     }
 
     public override reset(_session: ISession): void {
@@ -277,8 +257,8 @@ export class GateNode extends RuntimeNode implements IDeclaresPorts {
 
     public override processControlInputs(session: ISession): void {
         super.processControlInputs(session);
-        if (consumeReady(session, this, "_open"))   this._open = true;
-        if (consumeReady(session, this, "_close"))  this._open = false;
+        if (consumeReady(session, this, "_open")) this._open = true;
+        if (consumeReady(session, this, "_close")) this._open = false;
         if (consumeReady(session, this, "_toggle")) this._open = !this._open;
     }
 

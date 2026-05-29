@@ -19,9 +19,15 @@ export class OnnxModelGraph extends OnnxGraph {
         super([], []);
     }
 
-    public get modelName(): string { return this._modelName; }
-    public get loadError(): string | null { return this._loadError; }
-    public get isLoaded(): boolean { return this.nodes.length > 0; }
+    public get modelName(): string {
+        return this._modelName;
+    }
+    public get loadError(): string | null {
+        return this._loadError;
+    }
+    public get isLoaded(): boolean {
+        return this.nodes.length > 0;
+    }
 
     public loadModel(bytes: ArrayBuffer, name = "model.onnx"): void {
         const prev = this._modelName;

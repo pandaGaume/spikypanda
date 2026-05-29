@@ -28,9 +28,9 @@ export const numberEditor: EditorFactory = (host, model, propertyName, options, 
 
     const input = document.createElement("input");
     input.type = "number";
-    input.step = opts.step != null ? String(opts.step) : "0.1";
-    if (opts.min != null) input.min = String(opts.min);
-    if (opts.max != null) input.max = String(opts.max);
+    input.step = opts.step !== null && opts.step !== undefined ? String(opts.step) : "0.1";
+    if (opts.min !== null && opts.min !== undefined) input.min = String(opts.min);
+    if (opts.max !== null && opts.max !== undefined) input.max = String(opts.max);
     input.readOnly = editable === false;
     input.style.cssText = "flex:1;min-width:0;font-size:0.82em;padding:2px 4px;";
 

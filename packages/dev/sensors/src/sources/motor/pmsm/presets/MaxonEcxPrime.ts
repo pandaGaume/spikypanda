@@ -57,7 +57,7 @@ export const MAXON_ECX_PRIME_6M_16L: IPmsmMachineConfig = Object.freeze({
 //   Ki_W = omega_bw_W * B / Kt  = 628  * 1e-6    / 0.0129 = 4.87e-5
 //
 // iMax = 5 A gives startup transient headroom without exceeding bench protection.
-export function focPresetForEcxPrime(vBus: number = 24, omegaTargetRps: number = 50): IFocControllerConfig {
+export function focPresetForEcxPrime(vBus: number = 24, _omegaTargetRps: number = 50): IFocControllerConfig {
     const m = MAXON_ECX_PRIME_6M_16L;
     const omegaBwI = 2 * Math.PI * 1000;
     const omegaBwW = 2 * Math.PI * 100;

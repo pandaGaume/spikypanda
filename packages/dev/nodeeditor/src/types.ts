@@ -52,6 +52,17 @@ export interface VariadicPortDescriptor {
 
 export interface NodeDef {
     label: string;
+    /**
+     * Registry type identifier for this node (e.g. `Physics.Scene:earth`).
+     * When set, `save()` writes it into the serialized form so that
+     * `load(json, registry)` can instantiate a fresh runtime IRuntimeNode
+     * via `registry.create(typeId)` and restore the node's state through
+     * `node.item.deserialize(savedData)`. Without a typeId, load falls
+     * back to a layout-only restore (ports + positions, no runtime
+     * binding) — useful when the user picked a generic node off-palette
+     * or built one programmatically.
+     */
+    typeId?: string;
     inputs: Omit<PortDef, "direction">[];
     outputs: Omit<PortDef, "direction">[];
     /** Control-plane input ports (e.g. _enable, _start, _stop). Rendered
@@ -102,6 +113,10 @@ export interface SerializedPort {
 export interface SerializedNode {
     id: string;
     label: string;
+    /** Registry type id (e.g. `Physics.Scene:earth`) for runtime
+     *  rebinding on load. Optional for back-compat with v2 saves and
+     *  programmatically-built nodes that never carried a type. */
+    typeId?: string;
     x: number;
     y: number;
     inputs: SerializedPort[];

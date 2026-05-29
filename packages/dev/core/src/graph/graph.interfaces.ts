@@ -133,7 +133,7 @@ export function getRunnableAffordance(target: object): RunnableAffordance {
     if (inline === "play" || inline === "record") {
         return inline;
     }
-    const ctor = (target as { constructor?: Function }).constructor;
+    const ctor = (target as { constructor?: new (...args: unknown[]) => unknown }).constructor;
     if (ctor) {
         const meta = Reflect.getMetadata(RunnableAffordanceMetadataKey, ctor);
         if (meta === "play" || meta === "record") {

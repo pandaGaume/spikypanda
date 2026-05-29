@@ -442,7 +442,7 @@ export class NodeEditor {
                 data: mn?.data ?? undefined,
             };
             const node = this.addNode(def, sn.x, sn.y);
-            if (mn?.data != null) {
+            if (mn?.data !== null && mn?.data !== undefined) {
                 node.item.deserialize(mn.data);
             }
             nodeMap.set(sn.id, node);

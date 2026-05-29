@@ -1,7 +1,19 @@
 import type { ICartesian } from "spikypanda-core";
-import { Cartesian3, Quaternion, editable, viewable, cloneable, IOlink, IDeclaresPorts, IPortDescriptor, ISession, publishToFirstOutput, resolveSlotInputs, RuntimeNode } from "spikypanda-core";
+import {
+    Cartesian3,
+    Quaternion,
+    editable,
+    viewable,
+    cloneable,
+    IOlink,
+    IDeclaresPorts,
+    IPortDescriptor,
+    ISession,
+    publishToFirstOutput,
+    resolveSlotInputs,
+    RuntimeNode,
+} from "spikypanda-core";
 import type { Nullable } from "spikypanda-core";
-
 
 export class Transform extends RuntimeNode implements IDeclaresPorts {
     @cloneable
@@ -16,22 +28,16 @@ export class Transform extends RuntimeNode implements IDeclaresPorts {
     // RuntimeNode already reserves `position` for the node's layout
     // coordinates on the canvas.
     public static readonly INPUT_TRANSLATION = "translation";
-    public static readonly INPUT_ROTATION    = "rotation";
-    public static readonly OUTPUT_MATRIX     = "matrix";
+    public static readonly INPUT_ROTATION = "rotation";
+    public static readonly OUTPUT_MATRIX = "matrix";
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: Transform.INPUT_TRANSLATION, optional: true,  type: "vec3" },
-        { slot: Transform.INPUT_ROTATION,    optional: true,  type: "vec4" },
+        { slot: Transform.INPUT_TRANSLATION, optional: true, type: "vec3" },
+        { slot: Transform.INPUT_ROTATION, optional: true, type: "vec4" },
     ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: Transform.OUTPUT_MATRIX, optional: false, type: "matrix44" },
-    ];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: Transform.OUTPUT_MATRIX, optional: false, type: "matrix44" }];
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) {
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
     }
 
@@ -41,7 +47,9 @@ export class Transform extends RuntimeNode implements IDeclaresPorts {
     }
 
     public set translation(v: Cartesian3) {
-        this.setField("translation", this._position, v, (x) => { this._position = x; });
+        this.setField("translation", this._position, v, (x) => {
+            this._position = x;
+        });
     }
 
     @editable("quaternion", { layout: "block", alignement: "horizontal" })
@@ -50,7 +58,9 @@ export class Transform extends RuntimeNode implements IDeclaresPorts {
     }
 
     public set rotation(v: Quaternion) {
-        this.setField("rotation", this._rotation, v, (x) => { this._rotation = x; });
+        this.setField("rotation", this._rotation, v, (x) => {
+            this._rotation = x;
+        });
     }
 
     @viewable("matrix4")
@@ -59,38 +69,58 @@ export class Transform extends RuntimeNode implements IDeclaresPorts {
     }
 
     public override fire(session: ISession, _t: number): void {
-       // Resolve effective position / rotation: a ready input channel
+        // Resolve effective position / rotation: a ready input channel
         // wins over the editable default. The editable stays unchanged
         // (still visible in the panel) so the user can disconnect and
         // get their configured value back without losing it.
-        const eff = resolveSlotInputs(session, this, {
-            [Transform.INPUT_TRANSLATION]: this._position as unknown,
-            [Transform.INPUT_ROTATION]: this._rotation as unknown,
-        }, {
-            validator: (slot, v) => {
-                if (!v || typeof v !== "object" || !("x" in v)) return false;
-                if (slot === Transform.INPUT_ROTATION) return "w" in v;
-                return true;
+        const eff = resolveSlotInputs(
+            session,
+            this,
+            {
+                [Transform.INPUT_TRANSLATION]: this._position as unknown,
+                [Transform.INPUT_ROTATION]: this._rotation as unknown,
             },
-        });
+            {
+                validator: (slot, v) => {
+                    if (!v || typeof v !== "object" || !("x" in v)) return false;
+                    if (slot === Transform.INPUT_ROTATION) return "w" in v;
+                    return true;
+                },
+            }
+        );
 
-        publishToFirstOutput(session, this, computeTRS(
-            eff[Transform.INPUT_TRANSLATION] as Cartesian3,
-            eff[Transform.INPUT_ROTATION] as Quaternion,
-        ));
+        publishToFirstOutput(session, this, computeTRS(eff[Transform.INPUT_TRANSLATION] as Cartesian3, eff[Transform.INPUT_ROTATION] as Quaternion));
     }
 }
 
 function computeTRS(p: Cartesian3, r: Quaternion): ReadonlyArray<number> {
     const { x: qx, y: qy, z: qz, w: qw } = r;
     const { x: tx, y: ty, z: tz } = p;
-    const xx = qx * qx, yy = qy * qy, zz = qz * qz;
-    const xy = qx * qy, xz = qx * qz, yz = qy * qz;
-    const wx = qw * qx, wy = qw * qy, wz = qw * qz;
+    const xx = qx * qx,
+        yy = qy * qy,
+        zz = qz * qz;
+    const xy = qx * qy,
+        xz = qx * qz,
+        yz = qy * qz;
+    const wx = qw * qx,
+        wy = qw * qy,
+        wz = qw * qz;
     return [
-        1 - 2 * (yy + zz),  2 * (xy + wz),      2 * (xz - wy),      0,
-        2 * (xy - wz),      1 - 2 * (xx + zz),  2 * (yz + wx),      0,
-        2 * (xz + wy),      2 * (yz - wx),      1 - 2 * (xx + yy),  0,
-        tx,                 ty,                 tz,                  1,
+        1 - 2 * (yy + zz),
+        2 * (xy + wz),
+        2 * (xz - wy),
+        0,
+        2 * (xy - wz),
+        1 - 2 * (xx + zz),
+        2 * (yz + wx),
+        0,
+        2 * (xz + wy),
+        2 * (yz - wx),
+        1 - 2 * (xx + yy),
+        0,
+        tx,
+        ty,
+        tz,
+        1,
     ];
 }

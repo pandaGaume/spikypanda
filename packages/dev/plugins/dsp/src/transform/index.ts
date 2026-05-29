@@ -1,10 +1,8 @@
 import type { IPlugin, IPluginContext } from "spikypanda-nodeeditor";
 import type { IPortDescriptor } from "spikypanda-core";
-import {
-    createFftNode, createIfftNode, createMagnitudeNode, createPhaseNode, createDctNode,
-} from "../nodes/factories.js";
+import { createFftNode, createIfftNode, createMagnitudeNode, createPhaseNode, createDctNode } from "../nodes/factories.js";
 
-const tensorIn  = (slot: string): IPortDescriptor => ({ slot, optional: false, type: "tensor" });
+const tensorIn = (slot: string): IPortDescriptor => ({ slot, optional: false, type: "tensor" });
 const tensorOut = (slot: string): IPortDescriptor => ({ slot, optional: false, type: "tensor" });
 
 /**
@@ -17,38 +15,43 @@ const tensorOut = (slot: string): IPortDescriptor => ({ slot, optional: false, t
 export const dspTransformSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
         ctx.nodes.register("DSP.Transform:fft", () => createFftNode() as never, {
-            label: "FFT", category: "DSP.Transform",
-            inputPorts:  [tensorIn("signal")],
+            label: "FFT",
+            category: "DSP.Transform",
+            inputPorts: [tensorIn("signal")],
             outputPorts: [tensorOut("spectrum")],
             standards: [
                 { id: "onnx", version: "1.18" },
-                { id: "ue5",  version: "5.4"  },
+                { id: "ue5", version: "5.4" },
             ],
         });
         ctx.nodes.register("DSP.Transform:ifft", () => createIfftNode() as never, {
-            label: "IFFT", category: "DSP.Transform",
-            inputPorts:  [tensorIn("spectrum")],
+            label: "IFFT",
+            category: "DSP.Transform",
+            inputPorts: [tensorIn("spectrum")],
             outputPorts: [tensorOut("signal")],
             standards: [
                 { id: "onnx", version: "1.18" },
-                { id: "ue5",  version: "5.4"  },
+                { id: "ue5", version: "5.4" },
             ],
         });
         ctx.nodes.register("DSP.Transform:magnitude", () => createMagnitudeNode() as never, {
-            label: "Magnitude", category: "DSP.Transform",
-            inputPorts:  [tensorIn("complex")],
+            label: "Magnitude",
+            category: "DSP.Transform",
+            inputPorts: [tensorIn("complex")],
             outputPorts: [tensorOut("magnitude")],
             standards: [{ id: "onnx", version: "1.18" }],
         });
         ctx.nodes.register("DSP.Transform:phase", () => createPhaseNode() as never, {
-            label: "Phase", category: "DSP.Transform",
-            inputPorts:  [tensorIn("complex")],
+            label: "Phase",
+            category: "DSP.Transform",
+            inputPorts: [tensorIn("complex")],
             outputPorts: [tensorOut("phase")],
             standards: [{ id: "onnx", version: "1.18" }],
         });
         ctx.nodes.register("DSP.Transform:dct", () => createDctNode() as never, {
-            label: "DCT", category: "DSP.Transform",
-            inputPorts:  [tensorIn("x")],
+            label: "DCT",
+            category: "DSP.Transform",
+            inputPorts: [tensorIn("x")],
             outputPorts: [tensorOut("dct")],
             standards: [{ id: "onnx", version: "1.18" }],
         });

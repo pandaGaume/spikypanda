@@ -1,14 +1,4 @@
-import {
-    editable,
-    cloneable,
-    IOlink,
-    IDeclaresPorts,
-    IPortDescriptor,
-    ISession,
-    IChannel,
-    RuntimeNode,
-    inSlotOf,
-} from "spikypanda-core";
+import { editable, cloneable, IOlink, IDeclaresPorts, IPortDescriptor, ISession, IChannel, RuntimeNode, inSlotOf } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
 
 /**
@@ -55,13 +45,7 @@ function consumeReady(session: ISession, node: RuntimeNode, slot: string): boole
     return triggered;
 }
 
-function readSlot<T>(
-    session: ISession,
-    node: RuntimeNode,
-    slot: string,
-    fallback: T,
-    validate?: (v: unknown) => boolean,
-): T {
+function readSlot<T>(session: ISession, node: RuntimeNode, slot: string, fallback: T, validate?: (v: unknown) => boolean): T {
     const links = session.graph.links as ReadonlyArray<IChannel>;
     for (const link of node.opsc<IChannel>()) {
         if (inSlotOf(link) !== slot) continue;
@@ -91,14 +75,14 @@ const isFiniteNumber = (v: unknown): boolean => typeof v === "number" && Number.
 // ── ForLoop (sync) ───────────────────────────────────────────────────
 
 export class ForLoopNode extends RuntimeNode implements IDeclaresPorts {
-    @cloneable private _firstIndex:    number = 0;
-    @cloneable private _lastIndex:     number = 4;
+    @cloneable private _firstIndex: number = 0;
+    @cloneable private _lastIndex: number = 4;
     @cloneable private _maxIterations: number = 256;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "in",         optional: true, type: "trigger" },
-        { slot: "firstIndex", optional: true, type: "float"   },
-        { slot: "lastIndex",  optional: true, type: "float"   },
+        { slot: "in", optional: true, type: "trigger" },
+        { slot: "firstIndex", optional: true, type: "float" },
+        { slot: "lastIndex", optional: true, type: "float" },
     ];
 
     /**
@@ -110,44 +94,57 @@ export class ForLoopNode extends RuntimeNode implements IDeclaresPorts {
     public get outputPorts(): ReadonlyArray<IPortDescriptor> {
         const cap = Math.max(1, this._maxIterations) + 1; // +1 for `completed`
         return [
-            { slot: "body",      optional: false, type: "trigger", capacity: cap },
-            { slot: "index",     optional: false, type: "float",   capacity: cap },
+            { slot: "body", optional: false, type: "trigger", capacity: cap },
+            { slot: "index", optional: false, type: "float", capacity: cap },
             { slot: "completed", optional: false, type: "trigger" },
         ];
     }
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
     @editable("number")
-    public get firstIndex(): number { return this._firstIndex; }
-    public set firstIndex(v: number) { this.setField("firstIndex", this._firstIndex, v, (n) => { this._firstIndex = n; }); }
+    public get firstIndex(): number {
+        return this._firstIndex;
+    }
+    public set firstIndex(v: number) {
+        this.setField("firstIndex", this._firstIndex, v, (n) => {
+            this._firstIndex = n;
+        });
+    }
 
     @editable("number")
-    public get lastIndex(): number { return this._lastIndex; }
-    public set lastIndex(v: number) { this.setField("lastIndex", this._lastIndex, v, (n) => { this._lastIndex = n; }); }
+    public get lastIndex(): number {
+        return this._lastIndex;
+    }
+    public set lastIndex(v: number) {
+        this.setField("lastIndex", this._lastIndex, v, (n) => {
+            this._lastIndex = n;
+        });
+    }
 
     @editable("number")
-    public get maxIterations(): number { return this._maxIterations; }
-    public set maxIterations(v: number) { this.setField("maxIterations", this._maxIterations, v, (n) => { this._maxIterations = n; }); }
+    public get maxIterations(): number {
+        return this._maxIterations;
+    }
+    public set maxIterations(v: number) {
+        this.setField("maxIterations", this._maxIterations, v, (n) => {
+            this._maxIterations = n;
+        });
+    }
 
     public override fire(session: ISession, _t: number): void {
         if (!consumeReady(session, this, "in")) return;
         const first = readSlot<number>(session, this, "firstIndex", this._firstIndex, isFiniteNumber);
-        const last  = readSlot<number>(session, this, "lastIndex",  this._lastIndex,  isFiniteNumber);
+        const last = readSlot<number>(session, this, "lastIndex", this._lastIndex, isFiniteNumber);
         const count = Math.floor(last - first + 1);
         if (count <= 0) {
             publishOnSlot(session, this, "completed", true);
             return;
         }
         if (count > this._maxIterations) {
-            throw new Error(
-                `[ForLoop] count ${count} exceeds maxIterations ${this._maxIterations}; `
-                + `raise maxIterations or narrow the range.`,
-            );
+            throw new Error(`[ForLoop] count ${count} exceeds maxIterations ${this._maxIterations}; ` + `raise maxIterations or narrow the range.`);
         }
         for (let i = 0; i < count; i++) {
             const idx = Math.floor(first) + i;
@@ -164,29 +161,33 @@ export class ForEachLoopNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _maxIterations: number = 256;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "in",    optional: true, type: "trigger" },
-        { slot: "array", optional: true, type: "array"   },
+        { slot: "in", optional: true, type: "trigger" },
+        { slot: "array", optional: true, type: "array" },
     ];
 
     public get outputPorts(): ReadonlyArray<IPortDescriptor> {
         const cap = Math.max(1, this._maxIterations) + 1;
         return [
-            { slot: "body",      optional: false, type: "trigger", capacity: cap },
-            { slot: "element",   optional: false, type: "any",     capacity: cap },
-            { slot: "index",     optional: false, type: "float",   capacity: cap },
+            { slot: "body", optional: false, type: "trigger", capacity: cap },
+            { slot: "element", optional: false, type: "any", capacity: cap },
+            { slot: "index", optional: false, type: "float", capacity: cap },
             { slot: "completed", optional: false, type: "trigger" },
         ];
     }
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
     @editable("number")
-    public get maxIterations(): number { return this._maxIterations; }
-    public set maxIterations(v: number) { this.setField("maxIterations", this._maxIterations, v, (n) => { this._maxIterations = n; }); }
+    public get maxIterations(): number {
+        return this._maxIterations;
+    }
+    public set maxIterations(v: number) {
+        this.setField("maxIterations", this._maxIterations, v, (n) => {
+            this._maxIterations = n;
+        });
+    }
 
     public override fire(session: ISession, _t: number): void {
         if (!consumeReady(session, this, "in")) return;
@@ -196,9 +197,7 @@ export class ForEachLoopNode extends RuntimeNode implements IDeclaresPorts {
             return;
         }
         if (arr.length > this._maxIterations) {
-            throw new Error(
-                `[ForEachLoop] array length ${arr.length} exceeds maxIterations ${this._maxIterations}.`,
-            );
+            throw new Error(`[ForEachLoop] array length ${arr.length} exceeds maxIterations ${this._maxIterations}.`);
         }
         for (let i = 0; i < arr.length; i++) {
             publishOnSlot(session, this, "body", true);
@@ -222,34 +221,44 @@ export class ForEachLoopNode extends RuntimeNode implements IDeclaresPorts {
  * with `completed` so a runaway condition cannot freeze the runtime.
  */
 export class WhileLoopNode extends RuntimeNode implements IDeclaresPorts {
-    @cloneable private _condition:     boolean = false;
-    @cloneable private _maxIterations: number  = 10000;
+    @cloneable private _condition: boolean = false;
+    @cloneable private _maxIterations: number = 10000;
 
-    private _active:   boolean = false;
-    private _iter:     number  = 0;
+    private _active: boolean = false;
+    private _iter: number = 0;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "in",        optional: true, type: "trigger" },
+        { slot: "in", optional: true, type: "trigger" },
         { slot: "condition", optional: true, type: "boolean" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "body",      optional: false, type: "trigger" },
+        { slot: "body", optional: false, type: "trigger" },
         { slot: "completed", optional: false, type: "trigger" },
     ];
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
     @editable("boolean")
-    public get condition(): boolean { return this._condition; }
-    public set condition(v: boolean) { this.setField("condition", this._condition, v, (b) => { this._condition = b; }); }
+    public get condition(): boolean {
+        return this._condition;
+    }
+    public set condition(v: boolean) {
+        this.setField("condition", this._condition, v, (b) => {
+            this._condition = b;
+        });
+    }
 
     @editable("number")
-    public get maxIterations(): number { return this._maxIterations; }
-    public set maxIterations(v: number) { this.setField("maxIterations", this._maxIterations, v, (n) => { this._maxIterations = n; }); }
+    public get maxIterations(): number {
+        return this._maxIterations;
+    }
+    public set maxIterations(v: number) {
+        this.setField("maxIterations", this._maxIterations, v, (n) => {
+            this._maxIterations = n;
+        });
+    }
 
     public override reset(_session: ISession): void {
         this._active = false;
@@ -291,41 +300,51 @@ export class WhileLoopNode extends RuntimeNode implements IDeclaresPorts {
 // ── ForLoopWithBreak (cross-tick) ────────────────────────────────────
 
 export class ForLoopWithBreakNode extends RuntimeNode implements IDeclaresPorts {
-    @cloneable private _firstIndex:    number = 0;
-    @cloneable private _lastIndex:     number = 4;
+    @cloneable private _firstIndex: number = 0;
+    @cloneable private _lastIndex: number = 4;
 
     private _active: boolean = false;
-    private _index:  number  = 0;
-    private _last:   number  = 0;
+    private _index: number = 0;
+    private _last: number = 0;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "in",         optional: true, type: "trigger" },
-        { slot: "firstIndex", optional: true, type: "float"   },
-        { slot: "lastIndex",  optional: true, type: "float"   },
+        { slot: "in", optional: true, type: "trigger" },
+        { slot: "firstIndex", optional: true, type: "float" },
+        { slot: "lastIndex", optional: true, type: "float" },
     ];
     public override readonly controlInputPorts: ReadonlyArray<IPortDescriptor> = [
         { slot: "_enable", optional: true, type: "boolean" },
-        { slot: "_break",  optional: true, type: "trigger" },
+        { slot: "_break", optional: true, type: "trigger" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "body",      optional: false, type: "trigger" },
-        { slot: "index",     optional: false, type: "float"   },
+        { slot: "body", optional: false, type: "trigger" },
+        { slot: "index", optional: false, type: "float" },
         { slot: "completed", optional: false, type: "trigger" },
     ];
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
     @editable("number")
-    public get firstIndex(): number { return this._firstIndex; }
-    public set firstIndex(v: number) { this.setField("firstIndex", this._firstIndex, v, (n) => { this._firstIndex = n; }); }
+    public get firstIndex(): number {
+        return this._firstIndex;
+    }
+    public set firstIndex(v: number) {
+        this.setField("firstIndex", this._firstIndex, v, (n) => {
+            this._firstIndex = n;
+        });
+    }
 
     @editable("number")
-    public get lastIndex(): number { return this._lastIndex; }
-    public set lastIndex(v: number) { this.setField("lastIndex", this._lastIndex, v, (n) => { this._lastIndex = n; }); }
+    public get lastIndex(): number {
+        return this._lastIndex;
+    }
+    public set lastIndex(v: number) {
+        this.setField("lastIndex", this._lastIndex, v, (n) => {
+            this._lastIndex = n;
+        });
+    }
 
     public override reset(_session: ISession): void {
         this._active = false;
@@ -353,9 +372,9 @@ export class ForLoopWithBreakNode extends RuntimeNode implements IDeclaresPorts 
         if (!this._active) {
             if (!consumeReady(session, this, "in")) return;
             const first = readSlot<number>(session, this, "firstIndex", this._firstIndex, isFiniteNumber);
-            const last  = readSlot<number>(session, this, "lastIndex",  this._lastIndex,  isFiniteNumber);
+            const last = readSlot<number>(session, this, "lastIndex", this._lastIndex, isFiniteNumber);
             this._index = Math.floor(first);
-            this._last  = Math.floor(last);
+            this._last = Math.floor(last);
             this._active = true;
         }
         if (this._index > this._last) {
@@ -372,30 +391,28 @@ export class ForLoopWithBreakNode extends RuntimeNode implements IDeclaresPorts 
 // ── ForEachLoopWithBreak (cross-tick) ────────────────────────────────
 
 export class ForEachLoopWithBreakNode extends RuntimeNode implements IDeclaresPorts {
-    private _active:  boolean   = false;
-    private _array:   unknown[] = [];
-    private _index:   number    = 0;
+    private _active: boolean = false;
+    private _array: unknown[] = [];
+    private _index: number = 0;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "in",    optional: true, type: "trigger" },
-        { slot: "array", optional: true, type: "array"   },
+        { slot: "in", optional: true, type: "trigger" },
+        { slot: "array", optional: true, type: "array" },
     ];
     public override readonly controlInputPorts: ReadonlyArray<IPortDescriptor> = [
         { slot: "_enable", optional: true, type: "boolean" },
-        { slot: "_break",  optional: true, type: "trigger" },
+        { slot: "_break", optional: true, type: "trigger" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "body",      optional: false, type: "trigger" },
-        { slot: "element",   optional: false, type: "any"     },
-        { slot: "index",     optional: false, type: "float"   },
+        { slot: "body", optional: false, type: "trigger" },
+        { slot: "element", optional: false, type: "any" },
+        { slot: "index", optional: false, type: "float" },
         { slot: "completed", optional: false, type: "trigger" },
     ];
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
     public override reset(_session: ISession): void {
         this._active = false;

@@ -27,13 +27,13 @@ export interface Serializable {
 }
 
 export function isInspectable(obj: unknown): obj is Inspectable {
-    if (obj == null || typeof obj !== "object") return false;
+    if (obj === null || obj === undefined || typeof obj !== "object") return false;
     const candidate = obj as Record<string, unknown>;
     return typeof candidate["getDisplayName"] === "function" && typeof candidate["getProperties"] === "function";
 }
 
 export function isSerializable(obj: unknown): obj is Serializable {
-    if (obj == null || typeof obj !== "object") return false;
+    if (obj === null || obj === undefined || typeof obj !== "object") return false;
     return typeof (obj as Record<string, unknown>)["serialize"] === "function";
 }
 
@@ -56,7 +56,7 @@ export class UIItemBase<T> {
         if (this.isInspectable()) {
             return this.data.getDisplayName();
         }
-        if (this.data != null && typeof this.data === "object") {
+        if (this.data !== null && this.data !== undefined && typeof this.data === "object") {
             const obj = this.data as Record<string, unknown>;
             if (typeof obj["label"] === "string") return obj["label"];
             if (typeof obj["name"] === "string") return obj["name"];
@@ -70,7 +70,7 @@ export class UIItemBase<T> {
         if (this.isInspectable()) {
             return this.data.getProperties();
         }
-        if (this.data != null && typeof this.data === "object") {
+        if (this.data !== null && this.data !== undefined && typeof this.data === "object") {
             return Object.entries(this.data as Record<string, unknown>)
                 .filter(([, v]) => v !== undefined)
                 .map(([key, value]) => ({
@@ -88,7 +88,7 @@ export class UIItemBase<T> {
             this.data.setProperty(key, value);
             return;
         }
-        if (this.data != null && typeof this.data === "object") {
+        if (this.data !== null && this.data !== undefined && typeof this.data === "object") {
             (this.data as Record<string, unknown>)[key] = value;
         }
     }

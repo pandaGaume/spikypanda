@@ -126,14 +126,14 @@ export function viewable(kind: string, options?: unknown) {
  * has been declared.
  */
 export function getEditorSchema(target: object): IEditorSchema {
-    const ctor = (target as { constructor?: Function }).constructor;
+    const ctor = (target as { constructor?: new (...args: unknown[]) => unknown }).constructor;
     const classEditors = ctor ? ((Reflect.getMetadata(EditorMetadataKey, ctor) as ReadonlyArray<string> | undefined) ?? []) : [];
     const fields = (Reflect.getMetadata(EditableFieldsMetadataKey, target) as ReadonlyArray<IEditableField> | undefined) ?? [];
     return { classEditors, fields };
 }
 
 function appendField(target: object, entry: IEditableField): void {
-    const proto = target.constructor.prototype;
+    const proto = (target.constructor as { prototype: object }).prototype;
     // Reflect.getMetadata walks the prototype chain, so this picks up
     // parent-class fields. Storing the merged list on the subclass'
     // own prototype ensures inheritance is preserved without depending
