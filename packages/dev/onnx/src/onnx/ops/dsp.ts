@@ -17,6 +17,7 @@
  */
 
 import type { ITensor } from "spikypanda-core";
+import { cloneable, editable } from "spikypanda-core";
 import type { OnnxNodeInfo } from "../onnx-types";
 import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "../registry";
 
@@ -340,25 +341,41 @@ export const FFT_OUTPUT_COMPLEX = 2;
 
 class SpFFTNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
-    private readonly nfft: number;
-    private readonly outputType: number;
+    @cloneable private _nfft: number;
+    @cloneable private _outputType: number;
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.nfft = this.attrInt("nfft", 512);
-        this.outputType = this.attrInt("output_type", FFT_OUTPUT_POWER);
+        this._nfft = this.attrInt("nfft", 512);
+        this._outputType = this.attrInt("output_type", FFT_OUTPUT_POWER);
+    }
+
+    @editable("number", { min: 16, step: 16, unit: "bins" })
+    public get nfft(): number { return this._nfft; }
+    public set nfft(v: number) {
+        // FFT engine tables are sized to nfft; the shared module-level
+        // cache (getFFTEngine) auto-builds a new one on first request,
+        // so we only need to update the field — no per-instance cache
+        // to invalidate.
+        this.setField("nfft", this._nfft, v, (x) => { this._nfft = x; });
+    }
+
+    @editable("number", { min: 0, max: 2, step: 1, unit: "0=power 1=mag 2=complex" })
+    public get outputType(): number { return this._outputType; }
+    public set outputType(v: number) {
+        this.setField("outputType", this._outputType, v, (x) => { this._outputType = x; });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
         const signal = inputs[0];
-        const engine = getFFTEngine(this.nfft);
+        const engine = getFFTEngine(this._nfft);
 
-        const frame = new Float32Array(this.nfft);
-        const len = Math.min(signal.data.length, this.nfft);
+        const frame = new Float32Array(this._nfft);
+        const len = Math.min(signal.data.length, this._nfft);
         for (let i = 0; i < len; i++) frame[i] = signal.data[i];
 
-        const nBins = this.nfft / 2 + 1;
-        switch (this.outputType) {
+        const nBins = this._nfft / 2 + 1;
+        switch (this._outputType) {
             case FFT_OUTPUT_COMPLEX: {
                 const complex = engine.forwardComplex(frame);
                 return [makeTensor(complex, [nBins, 2])];
@@ -386,17 +403,23 @@ class SpFFTNode extends OnnxOpNode {
  */
 class SpIFFTNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
-    private readonly nfft: number;
+    @cloneable private _nfft: number;
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.nfft = this.attrInt("nfft", 512);
+        this._nfft = this.attrInt("nfft", 512);
+    }
+
+    @editable("number", { min: 16, step: 16, unit: "bins" })
+    public get nfft(): number { return this._nfft; }
+    public set nfft(v: number) {
+        this.setField("nfft", this._nfft, v, (x) => { this._nfft = x; });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
-        const engine = getFFTEngine(this.nfft);
+        const engine = getFFTEngine(this._nfft);
         const time = engine.inverse(inputs[0].data);
-        return [makeTensor(time, [this.nfft])];
+        return [makeTensor(time, [this._nfft])];
     }
 }
 
@@ -449,20 +472,32 @@ class SpPhaseNode extends OnnxOpNode {
  */
 class SpWindowNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
-    private readonly windowType: number;
-    private readonly alpha: number;
+    @cloneable private _windowType: number;
+    @cloneable private _alpha: number;
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.windowType = this.attrInt("window_type", WINDOW_HANN);
-        this.alpha = this.attr("alpha", 0.5);
+        this._windowType = this.attrInt("window_type", WINDOW_HANN);
+        this._alpha = this.attr("alpha", 0.5);
+    }
+
+    @editable("number", { min: 0, max: 5, step: 1, unit: "0=hann 1=hamm 2=black 3=bart 4=rect 5=tukey" })
+    public get windowType(): number { return this._windowType; }
+    public set windowType(v: number) {
+        this.setField("windowType", this._windowType, v, (x) => { this._windowType = x; });
+    }
+
+    @editable("number", { min: 0, max: 1, step: 0.05 })
+    public get alpha(): number { return this._alpha; }
+    public set alpha(v: number) {
+        this.setField("alpha", this._alpha, v, (x) => { this._alpha = x; });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
         const input = inputs[0];
         const N = input.data.length;
         const out = new Float32Array(N);
-        const fn = windowFn(this.windowType, this.alpha);
+        const fn = windowFn(this._windowType, this._alpha);
         for (let i = 0; i < N; i++) {
             out[i] = input.data[i] * fn(N, i);
         }
@@ -481,25 +516,43 @@ class SpWindowNode extends OnnxOpNode {
  */
 class SpFrameNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
-    private readonly frameSize: number;
-    private readonly hopLength: number;
-    private readonly padMode: number;
+    @cloneable private _frameSize: number;
+    @cloneable private _hopLength: number;
+    @cloneable private _padMode: number;
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.frameSize = this.attrInt("frame_size", 512);
-        this.hopLength = this.attrInt("hop_length", 256);
-        this.padMode = this.attrInt("pad_mode", 0);
+        this._frameSize = this.attrInt("frame_size", 512);
+        this._hopLength = this.attrInt("hop_length", 256);
+        this._padMode = this.attrInt("pad_mode", 0);
+    }
+
+    @editable("number", { min: 2, step: 2, unit: "samples" })
+    public get frameSize(): number { return this._frameSize; }
+    public set frameSize(v: number) {
+        this.setField("frameSize", this._frameSize, v, (x) => { this._frameSize = x; });
+    }
+
+    @editable("number", { min: 1, step: 1, unit: "samples" })
+    public get hopLength(): number { return this._hopLength; }
+    public set hopLength(v: number) {
+        this.setField("hopLength", this._hopLength, v, (x) => { this._hopLength = x; });
+    }
+
+    @editable("number", { min: 0, max: 1, step: 1, unit: "0=drop 1=zero-pad" })
+    public get padMode(): number { return this._padMode; }
+    public set padMode(v: number) {
+        this.setField("padMode", this._padMode, v, (x) => { this._padMode = x; });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
         const x = inputs[0].data;
         const N = x.length;
-        const F = this.frameSize;
-        const H = this.hopLength;
+        const F = this._frameSize;
+        const H = this._hopLength;
 
         let nFrames: number;
-        if (this.padMode === 1) {
+        if (this._padMode === 1) {
             // Every start index < N produces a frame (trailing samples are zero-padded).
             nFrames = N <= 0 ? 0 : Math.floor((N - 1) / H) + 1;
         } else {
@@ -600,24 +653,48 @@ function biquadCoeffs(
  */
 class SpBiquadFilterNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
-    private readonly filterType: number;
-    private readonly sampleRate: number;
-    private readonly cutoffHz: number;
-    private readonly q: number;
+    @cloneable private _filterType: number;
+    @cloneable private _sampleRate: number;
+    @cloneable private _cutoffHz: number;
+    @cloneable private _q: number;
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.filterType = this.attrInt("filter_type", BIQUAD_LOWPASS);
-        this.sampleRate = this.attrInt("sample_rate", 16000);
-        this.cutoffHz = this.attr("cutoff_hz", 1000);
-        this.q = this.attr("q", Math.SQRT1_2);
+        this._filterType = this.attrInt("filter_type", BIQUAD_LOWPASS);
+        this._sampleRate = this.attrInt("sample_rate", 16000);
+        this._cutoffHz = this.attr("cutoff_hz", 1000);
+        this._q = this.attr("q", Math.SQRT1_2);
+    }
+
+    @editable("number", { min: 0, max: 3, step: 1, unit: "0=LP 1=HP 2=BP 3=Notch" })
+    public get filterType(): number { return this._filterType; }
+    public set filterType(v: number) {
+        this.setField("filterType", this._filterType, v, (x) => { this._filterType = x; });
+    }
+
+    @editable("number", { min: 1, step: 1, unit: "Hz" })
+    public get sampleRate(): number { return this._sampleRate; }
+    public set sampleRate(v: number) {
+        this.setField("sampleRate", this._sampleRate, v, (x) => { this._sampleRate = x; });
+    }
+
+    @editable("number", { min: 0, step: 10, unit: "Hz" })
+    public get cutoffHz(): number { return this._cutoffHz; }
+    public set cutoffHz(v: number) {
+        this.setField("cutoffHz", this._cutoffHz, v, (x) => { this._cutoffHz = x; });
+    }
+
+    @editable("number", { min: 0.01, step: 0.1 })
+    public get q(): number { return this._q; }
+    public set q(v: number) {
+        this.setField("q", this._q, v, (x) => { this._q = x; });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
         const x = inputs[0].data;
         const N = x.length;
         const out = new Float32Array(N);
-        const { b0, b1, b2, a1, a2 } = biquadCoeffs(this.filterType, this.sampleRate, this.cutoffHz, this.q);
+        const { b0, b1, b2, a1, a2 } = biquadCoeffs(this._filterType, this._sampleRate, this._cutoffHz, this._q);
 
         let x1 = 0,
             x2 = 0,
@@ -649,28 +726,44 @@ class SpBiquadFilterNode extends OnnxOpNode {
  */
 class SpKalman1DNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
-    private readonly q: number;
-    private readonly r: number;
-    private readonly x0: number;
-    private readonly p0: number;
+    @cloneable private _q: number;
+    @cloneable private _r: number;
+    @cloneable private _x0: number;
+    @cloneable private _p0: number;
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.q = this.attr("q", 1e-4);
-        this.r = this.attr("r", 1e-2);
-        this.x0 = this.attr("x0", 0);
-        this.p0 = this.attr("p0", 1);
+        this._q = this.attr("q", 1e-4);
+        this._r = this.attr("r", 1e-2);
+        this._x0 = this.attr("x0", 0);
+        this._p0 = this.attr("p0", 1);
     }
+
+    @editable("number", { min: 0, step: 1e-5 })
+    public get q(): number { return this._q; }
+    public set q(v: number) { this.setField("q", this._q, v, (x) => { this._q = x; }); }
+
+    @editable("number", { min: 0, step: 1e-3 })
+    public get r(): number { return this._r; }
+    public set r(v: number) { this.setField("r", this._r, v, (x) => { this._r = x; }); }
+
+    @editable("number")
+    public get x0(): number { return this._x0; }
+    public set x0(v: number) { this.setField("x0", this._x0, v, (x) => { this._x0 = x; }); }
+
+    @editable("number", { min: 0 })
+    public get p0(): number { return this._p0; }
+    public set p0(v: number) { this.setField("p0", this._p0, v, (x) => { this._p0 = x; }); }
 
     execute(inputs: ITensor[]): ITensor[] {
         const z = inputs[0].data;
         const N = z.length;
         const out = new Float32Array(N);
-        let x = this.x0;
-        let p = this.p0;
+        let x = this._x0;
+        let p = this._p0;
         for (let n = 0; n < N; n++) {
-            p = p + this.q;
-            const k = p / (p + this.r);
+            p = p + this._q;
+            const k = p / (p + this._r);
             x = x + k * (z[n] - x);
             p = (1 - k) * p;
             out[n] = x;
@@ -730,17 +823,24 @@ class SpZeroCrossingRateNode extends OnnxOpNode {
  */
 class SpMovingAverageNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
-    private readonly windowSize: number;
+    @cloneable private _windowSize: number;
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.windowSize = Math.max(1, this.attrInt("window_size", 5));
+        this._windowSize = Math.max(1, this.attrInt("window_size", 5));
+    }
+
+    @editable("number", { min: 1, step: 1, unit: "samples" })
+    public get windowSize(): number { return this._windowSize; }
+    public set windowSize(v: number) {
+        const next = Math.max(1, Math.floor(v));
+        this.setField("windowSize", this._windowSize, next, (x) => { this._windowSize = x; });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
         const x = inputs[0].data;
         const N = x.length;
-        const W = this.windowSize;
+        const W = this._windowSize;
         const out = new Float32Array(N);
         let sum = 0;
         for (let i = 0; i < N; i++) {
@@ -761,11 +861,17 @@ class SpMovingAverageNode extends OnnxOpNode {
  */
 class SpDetrendNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
-    private readonly mode: number;
+    @cloneable private _mode: number;
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.mode = this.attrInt("mode", 1);
+        this._mode = this.attrInt("mode", 1);
+    }
+
+    @editable("number", { min: 0, max: 1, step: 1, unit: "0=constant 1=linear" })
+    public get mode(): number { return this._mode; }
+    public set mode(v: number) {
+        this.setField("mode", this._mode, v, (x) => { this._mode = x; });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -774,7 +880,7 @@ class SpDetrendNode extends OnnxOpNode {
         const out = new Float32Array(N);
         if (N === 0) return [makeTensor(out, [...inputs[0].shape])];
 
-        if (this.mode === 0) {
+        if (this._mode === 0) {
             let mean = 0;
             for (let i = 0; i < N; i++) mean += x[i];
             mean /= N;
@@ -809,25 +915,43 @@ class SpDetrendNode extends OnnxOpNode {
 class SpMelFilterbankNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     private fb: Float32Array[] | null = null;
-    private readonly nMels: number;
-    private readonly nfft: number;
-    private readonly sampleRate: number;
+    @cloneable private _nMels: number;
+    @cloneable private _nfft: number;
+    @cloneable private _sampleRate: number;
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.nMels = this.attrInt("n_mels", 40);
-        this.nfft = this.attrInt("nfft", 512);
-        this.sampleRate = this.attrInt("sample_rate", 16000);
+        this._nMels = this.attrInt("n_mels", 40);
+        this._nfft = this.attrInt("nfft", 512);
+        this._sampleRate = this.attrInt("sample_rate", 16000);
+    }
+
+    @editable("number", { min: 1, step: 1, unit: "bands" })
+    public get nMels(): number { return this._nMels; }
+    public set nMels(v: number) {
+        this.setField("nMels", this._nMels, v, (x) => { this._nMels = x; this.fb = null; });
+    }
+
+    @editable("number", { min: 16, step: 16, unit: "bins" })
+    public get nfft(): number { return this._nfft; }
+    public set nfft(v: number) {
+        this.setField("nfft", this._nfft, v, (x) => { this._nfft = x; this.fb = null; });
+    }
+
+    @editable("number", { min: 1, step: 1, unit: "Hz" })
+    public get sampleRate(): number { return this._sampleRate; }
+    public set sampleRate(v: number) {
+        this.setField("sampleRate", this._sampleRate, v, (x) => { this._sampleRate = x; this.fb = null; });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
         if (!this.fb) {
-            this.fb = buildMelFilterbank(this.nMels, this.nfft, this.sampleRate);
+            this.fb = buildMelFilterbank(this._nMels, this._nfft, this._sampleRate);
         }
         const spectrum = inputs[0];
-        const nBins = this.nfft / 2 + 1;
-        const out = new Float32Array(this.nMels);
-        for (let m = 0; m < this.nMels; m++) {
+        const nBins = this._nfft / 2 + 1;
+        const out = new Float32Array(this._nMels);
+        for (let m = 0; m < this._nMels; m++) {
             let sum = 0;
             const row = this.fb[m];
             for (let k = 0; k < nBins; k++) {
@@ -835,7 +959,7 @@ class SpMelFilterbankNode extends OnnxOpNode {
             }
             out[m] = sum;
         }
-        return [makeTensor(out, [this.nMels])];
+        return [makeTensor(out, [this._nMels])];
     }
 }
 
@@ -847,18 +971,24 @@ class SpMelFilterbankNode extends OnnxOpNode {
  */
 class SpLogScaleNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
-    private readonly floor: number;
+    @cloneable private _floor: number;
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.floor = this.attr("floor", 1e-10);
+        this._floor = this.attr("floor", 1e-10);
+    }
+
+    @editable("number", { min: 0, step: 1e-12 })
+    public get floor(): number { return this._floor; }
+    public set floor(v: number) {
+        this.setField("floor", this._floor, v, (x) => { this._floor = x; });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
         const input = inputs[0];
         const out = new Float32Array(input.data.length);
         for (let i = 0; i < input.data.length; i++) {
-            out[i] = Math.log(Math.max(input.data[i], this.floor));
+            out[i] = Math.log(Math.max(input.data[i], this._floor));
         }
         return [makeTensor(out, [...input.shape])];
     }
@@ -872,17 +1002,23 @@ class SpLogScaleNode extends OnnxOpNode {
  */
 class SpDCTNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
-    private readonly nOutput: number;
+    @cloneable private _nOutput: number;
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.nOutput = this.attrInt("n_output", 40);
+        this._nOutput = this.attrInt("n_output", 40);
+    }
+
+    @editable("number", { min: 1, step: 1, unit: "coeffs" })
+    public get nOutput(): number { return this._nOutput; }
+    public set nOutput(v: number) {
+        this.setField("nOutput", this._nOutput, v, (x) => { this._nOutput = x; });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
         const input = inputs[0];
-        const out = dctII(input.data, this.nOutput);
-        return [makeTensor(out, [this.nOutput])];
+        const out = dctII(input.data, this._nOutput);
+        return [makeTensor(out, [this._nOutput])];
     }
 }
 
@@ -902,54 +1038,97 @@ class SpDCTNode extends OnnxOpNode {
  */
 class SpMFCCNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
-    private readonly sampleRate: number;
-    private readonly nMfcc: number;
-    private readonly nFft: number;
-    private readonly hopLength: number;
-    private readonly nMels: number;
-    private readonly windowType: number;
+    @cloneable private _sampleRate: number;
+    @cloneable private _nMfcc: number;
+    @cloneable private _nFft: number;
+    @cloneable private _hopLength: number;
+    @cloneable private _nMels: number;
+    @cloneable private _windowType: number;
     private fb: Float32Array[] | null = null;
     private fftEngine: FFTEngine | null = null;
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.sampleRate = this.attrInt("sample_rate", 16000);
-        this.nMfcc = this.attrInt("n_mfcc", 40);
-        this.nFft = this.attrInt("n_fft", 512);
-        this.hopLength = this.attrInt("hop_length", 160);
-        this.nMels = this.attrInt("n_mels", 40);
-        this.windowType = this.attrInt("window_type", 0);
+        this._sampleRate = this.attrInt("sample_rate", 16000);
+        this._nMfcc = this.attrInt("n_mfcc", 40);
+        this._nFft = this.attrInt("n_fft", 512);
+        this._hopLength = this.attrInt("hop_length", 160);
+        this._nMels = this.attrInt("n_mels", 40);
+        this._windowType = this.attrInt("window_type", 0);
+    }
+
+    // Mel + FFT caches are sized by (n_mels, n_fft, sample_rate); any
+    // change invalidates them so the next execute() rebuilds.
+    private _invalidateCaches(): void {
+        this.fb = null;
+        this.fftEngine = null;
+    }
+
+    @editable("number", { min: 1, step: 1, unit: "Hz" })
+    public get sampleRate(): number { return this._sampleRate; }
+    public set sampleRate(v: number) {
+        this.setField("sampleRate", this._sampleRate, v, (x) => { this._sampleRate = x; this._invalidateCaches(); });
+    }
+
+    @editable("number", { min: 1, step: 1, unit: "coeffs" })
+    public get nMfcc(): number { return this._nMfcc; }
+    public set nMfcc(v: number) {
+        this.setField("nMfcc", this._nMfcc, v, (x) => { this._nMfcc = x; });
+    }
+
+    @editable("number", { min: 16, step: 16, unit: "bins" })
+    public get nFft(): number { return this._nFft; }
+    public set nFft(v: number) {
+        this.setField("nFft", this._nFft, v, (x) => { this._nFft = x; this._invalidateCaches(); });
+    }
+
+    @editable("number", { min: 1, step: 1, unit: "samples" })
+    public get hopLength(): number { return this._hopLength; }
+    public set hopLength(v: number) {
+        this.setField("hopLength", this._hopLength, v, (x) => { this._hopLength = x; });
+    }
+
+    @editable("number", { min: 1, step: 1, unit: "bands" })
+    public get nMels(): number { return this._nMels; }
+    public set nMels(v: number) {
+        this.setField("nMels", this._nMels, v, (x) => { this._nMels = x; this._invalidateCaches(); });
+    }
+
+    @editable("number", { min: 0, max: 1, step: 1, unit: "0=hann 1=hamm" })
+    public get windowType(): number { return this._windowType; }
+    public set windowType(v: number) {
+        this.setField("windowType", this._windowType, v, (x) => { this._windowType = x; });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
         const audio = inputs[0].data;
-        const nFrames = Math.floor((audio.length - this.nFft) / this.hopLength) + 1;
+        const nFrames = Math.floor((audio.length - this._nFft) / this._hopLength) + 1;
 
         // Lazy init
-        if (!this.fb) this.fb = buildMelFilterbank(this.nMels, this.nFft, this.sampleRate);
-        if (!this.fftEngine) this.fftEngine = getFFTEngine(this.nFft);
+        if (!this.fb) this.fb = buildMelFilterbank(this._nMels, this._nFft, this._sampleRate);
+        if (!this.fftEngine) this.fftEngine = getFFTEngine(this._nFft);
 
-        const winFn = this.windowType === 1 ? hammingWindow : hannWindow;
-        const nBins = this.nFft / 2 + 1;
-        const mfcc = new Float32Array(this.nMfcc * nFrames);
+        const winFn = this._windowType === 1 ? hammingWindow : hannWindow;
+        const nBins = this._nFft / 2 + 1;
+        const mfcc = new Float32Array(this._nMfcc * nFrames);
 
-        const frame = new Float32Array(this.nFft);
-        const melSpec = new Float32Array(this.nMels);
+        const frame = new Float32Array(this._nFft);
+        const melSpec = new Float32Array(this._nMels);
 
         for (let t = 0; t < nFrames; t++) {
-            const start = t * this.hopLength;
+            const start = t * this._hopLength;
 
             // Window
-            for (let i = 0; i < this.nFft; i++) {
+            for (let i = 0; i < this._nFft; i++) {
                 const idx = start + i;
-                frame[i] = idx < audio.length ? audio[idx] * winFn(this.nFft, i) : 0;
+                frame[i] = idx < audio.length ? audio[idx] * winFn(this._nFft, i) : 0;
             }
 
             // FFT → power spectrum
             const power = this.fftEngine.forward(frame);
 
             // Mel filterbank
-            for (let m = 0; m < this.nMels; m++) {
+            for (let m = 0; m < this._nMels; m++) {
                 let sum = 0;
                 const row = this.fb[m];
                 for (let k = 0; k < nBins; k++) sum += row[k] * power[k];
@@ -957,16 +1136,16 @@ class SpMFCCNode extends OnnxOpNode {
             }
 
             // DCT → MFCC
-            for (let c = 0; c < this.nMfcc; c++) {
+            for (let c = 0; c < this._nMfcc; c++) {
                 let sum = 0;
-                for (let m = 0; m < this.nMels; m++) {
-                    sum += melSpec[m] * Math.cos((Math.PI * c * (2 * m + 1)) / (2 * this.nMels));
+                for (let m = 0; m < this._nMels; m++) {
+                    sum += melSpec[m] * Math.cos((Math.PI * c * (2 * m + 1)) / (2 * this._nMels));
                 }
                 mfcc[c * nFrames + t] = sum;
             }
         }
 
-        return [makeTensor(mfcc, [this.nMfcc, nFrames])];
+        return [makeTensor(mfcc, [this._nMfcc, nFrames])];
     }
 }
 
@@ -1045,13 +1224,25 @@ function dtw(
  */
 class SpDTWNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
-    private readonly normalize: boolean;
-    private readonly band: number;
+    @cloneable private _normalize: boolean;
+    @cloneable private _band: number;
 
     constructor(info: OnnxNodeInfo) {
         super(info);
-        this.normalize = this.attrInt("normalize", 1) !== 0;
-        this.band = this.attrInt("band", -1);
+        this._normalize = this.attrInt("normalize", 1) !== 0;
+        this._band = this.attrInt("band", -1);
+    }
+
+    @editable("boolean")
+    public get normalize(): boolean { return this._normalize; }
+    public set normalize(v: boolean) {
+        this.setField("normalize", this._normalize, v, (x) => { this._normalize = x; });
+    }
+
+    @editable("number", { min: -1, step: 1, unit: "frames (-1=no constraint)" })
+    public get band(): number { return this._band; }
+    public set band(v: number) {
+        this.setField("band", this._band, v, (x) => { this._band = x; });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -1063,7 +1254,7 @@ class SpDTWNode extends OnnxOpNode {
         const nFramesLive = live.shape[1] ?? 1;
         const nFramesTmpl = tmpl.shape[1] ?? 1;
 
-        const distance = dtw(live.data, nFramesLive, tmpl.data, nFramesTmpl, nFeatures, this.band, this.normalize);
+        const distance = dtw(live.data, nFramesLive, tmpl.data, nFramesTmpl, nFeatures, this._band, this._normalize);
 
         return [makeTensor(new Float32Array([distance]), [1])];
     }

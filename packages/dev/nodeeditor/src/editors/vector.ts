@@ -62,7 +62,13 @@ function buildVectorFactory(axes: ReadonlyArray<string>): EditorFactory {
         if (opts.unit) {
             const unit = document.createElement("span");
             unit.textContent = opts.unit;
-            unit.style.cssText = "flex:0 0 auto;font-size:0.7em;color:var(--ne-color-text-muted);";
+            // Same approach as the number editor: ellipsis-truncated
+            // inline with a hover title for the full text, so long
+            // unit strings can't push the vector components off-screen.
+            unit.title = opts.unit;
+            unit.style.cssText =
+                "flex:0 1 auto;max-width:30%;overflow:hidden;text-overflow:ellipsis;"
+                + "white-space:nowrap;font-size:0.7em;color:var(--ne-color-text-muted);";
             wrap.appendChild(unit);
         }
 

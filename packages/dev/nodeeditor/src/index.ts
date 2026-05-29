@@ -37,7 +37,7 @@ export type { IEditor, EditorFactory } from "./editor-registry";
 export { installBuiltinEditors, vector3Editor, vector4Editor, quaternionEditor, numberEditor, sliderEditor } from "./editors";
 export { LiveBinder } from "./live-binder";
 export { GraphRunner } from "./graph-runner";
-export type { RunnerState } from "./graph-runner";
+export type { RunnerState, RunnerMode } from "./graph-runner";
 export { GraphInferrer } from "./graph-inferrer";
 export { buildSessionFromViewer, disposeChannels } from "./graph-session-builder";
 export { VariadicReconciler } from "./variadic-reconciler";
@@ -62,3 +62,6 @@ export type { IPlugin, IPluginContext, IPluginManifest, IPluginNodeEntry, IPlugi
 export { loadPlugin } from "./plugin.loader";
 export type { LoadPluginOptions, LoadPluginResult } from "./plugin.loader";
 export type { PortDirection, PortType, PortDef, NodeDef, Vec2, SerializedGraph, SerializedNode, SerializedConnection } from "./types";
+
+export { Dashboard, isRenderable } from "./dashboard";
+export type { IRenderable, ISerializedTile, ISerializedDashboard } from "./dashboard";

@@ -15,6 +15,12 @@ const config: Config = {
         // module so workspace entry points that `import "./foo.css"`
         // (e.g. spikypanda-nodeeditor) load without error.
         "\\.css$":                      "<rootDir>/jest-css-mock.js",
+        // GridStack ships ESM-only, which ts-jest does not transform
+        // since it lives in node_modules. Stub it with the same empty
+        // module pattern as CSS — tests don't drive the Dashboard
+        // class directly, they only need the imports to resolve.
+        "^gridstack$":                  "<rootDir>/jest-css-mock.js",
+        "^gridstack/(.*)$":             "<rootDir>/jest-css-mock.js",
         // Relative imports written with the ESM ".js" extension (the
         // canonical TS-with-ESM-target style used by recent plugins like
         // physics) must be resolved to the .ts source for jest. Catches

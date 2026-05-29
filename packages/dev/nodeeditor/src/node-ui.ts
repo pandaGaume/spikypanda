@@ -24,6 +24,19 @@ let nodeIdCounter = 0;
  * The chain is expressed with var() fallbacks so a runtime skin switch
  * propagates without rebuilding the node DOM.
  */
+/** Normalise a NodeDef's variadic descriptor (single OR array form)
+ *  into the same shape the field is declared as. Each descriptor is
+ *  shallow-copied so the reconciler reads frozen values. */
+function _copyVariadic(
+    src: NodeDef["variadicInput"],
+): { prefix: string; type: string } | ReadonlyArray<{ prefix: string; type: string }> | undefined {
+    if (!src) return undefined;
+    if (Array.isArray(src)) {
+        return src.map((d) => ({ prefix: d.prefix, type: d.type }));
+    }
+    return { prefix: src.prefix, type: src.type };
+}
+
 function computeNodeHeaderBackground(def: NodeDef): string | null {
     const fallback = def.color ? def.color : "var(--ne-color-node-header)";
     if (def.category) {
@@ -53,9 +66,11 @@ export class NodeUI {
     /** Variadic port descriptors copied from the NodeDef. The editor's
      *  VariadicReconciler reads these to keep exactly one trailing
      *  unconnected port for each set. Undefined when the node is not
-     *  variadic on that side. */
-    readonly variadicInput?: { prefix: string; type: string };
-    readonly variadicOutput?: { prefix: string; type: string };
+     *  variadic on that side. Accepts either a single descriptor OR
+     *  an array of descriptors for nodes with multiple parallel
+     *  variadic groups on the same side (e.g. Stem's paired f_/A_). */
+    readonly variadicInput?: { prefix: string; type: string } | ReadonlyArray<{ prefix: string; type: string }>;
+    readonly variadicOutput?: { prefix: string; type: string } | ReadonlyArray<{ prefix: string; type: string }>;
     /** Standards declarations (e.g. `["onnx", { id: "ue5", version: "5.4" }]`)
      *  carried straight from the source NodeDef so the property panel
      *  can render shields without going back to the node registry. */
@@ -194,15 +209,13 @@ export class NodeUI {
         for (const out of def.outputs) {
             this.addOutput(out.name, out.type);
         }
-        // Stash the variadic descriptors from the NodeDef. We freeze a
-        // shallow copy so the reconciler can read them without holding
-        // a reference into caller-owned state.
-        if (def.variadicInput) {
-            this.variadicInput = { prefix: def.variadicInput.prefix, type: def.variadicInput.type };
-        }
-        if (def.variadicOutput) {
-            this.variadicOutput = { prefix: def.variadicOutput.prefix, type: def.variadicOutput.type };
-        }
+        // Stash the variadic descriptors from the NodeDef. Single-form
+        // and array-form (multi-group) are both supported; we normalise
+        // to whichever shape the caller passed. Shallow-frozen copies
+        // so the reconciler can read them without holding a reference
+        // into caller-owned state.
+        this.variadicInput  = _copyVariadic(def.variadicInput);
+        this.variadicOutput = _copyVariadic(def.variadicOutput);
     }
 
     addControlInput(name: string, type: PortType): Port {

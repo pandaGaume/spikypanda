@@ -1730,3 +1730,64 @@
 
 .ne-console.is-collapsed { height: 28px; }
 .ne-console.is-collapsed .ne-console-body { display: none; }
+
+/* ──────────────────────────────────────────────────────────────────────
+   Dashboard panel (GridStack tiles for IRenderable nodes)
+   ────────────────────────────────────────────────────────────────────── */
+.ne-dashboard {
+    background: var(--ne-color-bg);
+    color:      var(--ne-color-text);
+    overflow:   auto;
+    height:     100%;
+    box-sizing: border-box;
+}
+
+/* GridStack item content: the box that holds our tile chrome. We
+   override the default white background to match the skin. */
+.ne-dashboard .grid-stack-item-content {
+    background:    var(--ne-color-surface);
+    border:        1px solid var(--ne-color-border);
+    border-radius: 6px;
+    overflow:      hidden;
+    display:       flex;
+    flex-direction: column;
+}
+
+.ne-dashboard-tile-header {
+    display:         flex;
+    align-items:     center;
+    justify-content: space-between;
+    padding:         4px 10px;
+    background:      var(--ne-color-node-header);
+    border-bottom:   1px solid var(--ne-color-border);
+    flex-shrink:     0;
+    cursor:          move;
+    user-select:     none;
+}
+.ne-dashboard-tile-title {
+    font-family:    var(--ne-font-mono);
+    font-size:      11px;
+    color:          var(--ne-color-text);
+    letter-spacing: .04em;
+    overflow:       hidden;
+    text-overflow:  ellipsis;
+    white-space:    nowrap;
+}
+.ne-dashboard-tile-close {
+    background:    transparent;
+    border:        none;
+    color:         var(--ne-color-text-faint);
+    cursor:        pointer;
+    font-size:     16px;
+    line-height:   1;
+    padding:       0 6px;
+}
+.ne-dashboard-tile-close:hover { color: var(--ne-color-danger, #B84A3C); }
+
+/* The body is the actual rendering surface handed to mountInto(). */
+.ne-dashboard-tile-body {
+    flex:       1 1 auto;
+    min-height: 0;
+    overflow:   hidden;
+    position:   relative;
+}

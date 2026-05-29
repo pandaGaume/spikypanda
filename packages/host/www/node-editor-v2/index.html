@@ -44,6 +44,15 @@
             </aside>
         </main>
 
+        <!-- Splitter between the graph area above and the dashboard
+             below. Dragged vertically; drives the row sizes of .nev2-app. -->
+        <div class="nev2-splitter nev2-splitter-h" id="nev2-splitter-dashboard"></div>
+
+        <!-- Dashboard panel: GridStack lives here. Tiles for nodes that
+             implement IRenderable (Viz.Plot:line and future tile types)
+             are auto-added/removed as those nodes enter/leave the graph. -->
+        <section class="nev2-dashboard-host" id="nev2-dashboard"></section>
+
         <!-- DebugConsole component mounts here; styling comes from the
              active editor skin via ne-* tokens, not from the v2 page. -->
         <footer class="nev2-console-host" id="nev2-console"></footer>
@@ -56,6 +65,7 @@
     <script src="../bundle/SpkPluginLogic.js"></script>
     <script src="../bundle/SpkPluginDsp.js"></script>
     <script src="../bundle/SpkPluginPhysics.js"></script>
+    <script src="../bundle/SpkPluginViz.js"></script>
     <script type="module" src="node-editor-v2.js"></script>
 </body>
 </html>

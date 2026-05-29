@@ -17,6 +17,9 @@
         "bundle:dev": "webpack --mode development --config webpack.config.js"
     },
     "sideEffects": ["*.css"],
+    "dependencies": {
+        "gridstack": "^11.0.0"
+    },
     "devDependencies": {
         "rimraf": "~6.0.1",
         "ts-loader": "^9.5.0"

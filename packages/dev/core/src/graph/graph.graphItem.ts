@@ -64,6 +64,77 @@ export class GraphItem<B = unknown> implements IGraphItem<B> {
         return clone;
     }
 
+    /**
+     * JSON-friendly snapshot of every `@cloneable` field. Used by the
+     * editor's save/load to round-trip user-edited values (editables)
+     * and persistent runtime state (counters, accumulators, last poses).
+     *
+     * The rule: any port input that has NO incoming wire falls back to
+     * the matching editable, so the editable IS the live value and must
+     * persist. We treat every `@cloneable` field as belonging to that
+     * persistable set — same metadata Reflect-key as clone() so the
+     * two operations stay in sync (cloneable ⇔ savable, by construction).
+     *
+     * Field handling:
+     *   - Primitives (number / boolean / string / null) pass through
+     *   - Class instances with own enumerable props (Cartesian3, etc.)
+     *     are spread to a plain `{...obj}` snapshot — the type is
+     *     reconstructed in deserialize() by Object.assign'ing back into
+     *     the live instance, preserving the prototype + methods
+     *   - Typed arrays are intentionally NOT supported in V1: they're
+     *     almost always runtime state that should be excluded from
+     *     @cloneable anyway. Future support would JSON-encode them
+     *     under a sentinel wrapper.
+     *
+     * Returns a plain object suitable for `JSON.stringify`.
+     */
+    public serialize(): Record<string, unknown> {
+        const props: ReadonlyArray<string> = Reflect.getMetadata(CloneMetadataKey, this) || [];
+        const out: Record<string, unknown> = {};
+        for (const key of props) {
+            const value = (this as Record<string, unknown>)[key];
+            out[key] = serializeField(value);
+        }
+        return out;
+    }
+
+    /**
+     * Restore the fields captured by `serialize()`. Counterpart that
+     * mutates `this` in place. Missing keys leave the existing value
+     * untouched, so a forward-compatible save (a future version added
+     * a new editable) still loads cleanly on an older runtime — the
+     * new field stays at its constructor-time default.
+     *
+     * For class-instance fields we use Object.assign onto the live
+     * instance instead of replacing the reference. Two reasons:
+     *   1. Preserves the prototype + methods (Cartesian3.distance(),
+     *      etc.) — the vector3 editor relies on `cur.constructor` for
+     *      its rebuild path, which only works on a real Cartesian3.
+     *   2. Avoids firing setField (which expects to be called by the
+     *      user via the @editable setter, not by load). The runtime
+     *      sees the new value on the very next tick.
+     */
+    public deserialize(blob: unknown): void {
+        if (!blob || typeof blob !== "object") return;
+        const data = blob as Record<string, unknown>;
+        const props: ReadonlyArray<string> = Reflect.getMetadata(CloneMetadataKey, this) || [];
+        for (const key of props) {
+            if (!Object.prototype.hasOwnProperty.call(data, key)) continue;
+            const stored = data[key];
+            const current = (this as Record<string, unknown>)[key];
+            if (current && typeof current === "object" && stored && typeof stored === "object"
+                && !Array.isArray(current) && !Array.isArray(stored)
+            ) {
+                // Class-instance field (Cartesian3, Quaternion, ...).
+                // Mutate the existing instance to keep its prototype
+                // intact for downstream editors / methods.
+                Object.assign(current as object, stored);
+            } else {
+                (this as Record<string, unknown>)[key] = stored;
+            }
+        }
+    }
+
     protected notifyPropertyChanged<T>(propertyName: string, oldValue: T, newValue: T): void {
         if (oldValue === newValue) {
             return;
@@ -100,4 +171,31 @@ export class GraphItem<B = unknown> implements IGraphItem<B> {
         this.notifyPropertyChanged(propertyName, currentValue, newValue);
         return true;
     }
+}
+
+/**
+ * Recursive JSON-friendly conversion of a single field value. Centralised
+ * so serialize() above stays readable. The shape mirrors what
+ * deserialize expects to see come back from JSON.parse().
+ *
+ * Primitives pass through as-is. Plain objects (including class instances
+ * like Cartesian3) become `{...obj}` snapshots — `JSON.stringify` would
+ * do the same, but doing it explicitly here means nested @cloneable
+ * objects could recurse into their own serialize() if desired (future
+ * extension; V1 just spreads).
+ */
+function serializeField(value: unknown): unknown {
+    if (value === null || value === undefined) return value;
+    const t = typeof value;
+    if (t === "number" || t === "string" || t === "boolean") return value;
+    if (Array.isArray(value)) {
+        return value.map(serializeField);
+    }
+    if (t === "object") {
+        // Spread strips methods + symbols, keeping just own enumerable
+        // data props — exactly what JSON.stringify would emit.
+        return { ...(value as Record<string, unknown>) };
+    }
+    // Functions, symbols: not serializable, drop silently.
+    return undefined;
 }

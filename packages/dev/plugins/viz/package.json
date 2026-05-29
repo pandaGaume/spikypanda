@@ -1,0 +1,32 @@
+{
+    "name": "@spikypanda/plugin-viz",
+    "version": "0.1.0",
+    "description": "Visualization plugin for SpikyPanda: dashboard tile node types (uPlot time-series, PixiJS spectrogram, ECharts charts). Each tile is a graph node implementing IRenderable; tiles bind data via the standard token-publishing graph flow and render into the Dashboard panel.",
+    "private": true,
+    "type": "module",
+    "main": "dist/index.js",
+    "module": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "files": ["dist", "bundle", "src", "manifest.json"],
+    "scripts": {
+        "build":      "npm run clean && npm run compile",
+        "clean":      "rimraf dist bundle tsconfig.build.tsbuildinfo",
+        "compile":    "tsc -b tsconfig.build.json",
+        "watch":      "tsc -b tsconfig.build.json -w",
+        "bundle":     "webpack --mode production --config webpack.config.cjs",
+        "bundle:dev": "webpack --mode development --config webpack.config.cjs"
+    },
+    "sideEffects": false,
+    "dependencies": {
+        "@spiky-panda/core":       "*",
+        "@spikypanda/nodeeditor":  "*",
+        "uplot":                   "^1.6.30",
+        "pixi.js":                 "^7.4.0",
+        "marked":                  "^12.0.2",
+        "nexusui":                 "^2.1.6"
+    },
+    "devDependencies": {
+        "rimraf":    "~6.0.1",
+        "ts-loader": "^9.5.0"
+    }
+}

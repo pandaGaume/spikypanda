@@ -62,9 +62,27 @@ export class VariadicReconciler implements IDisposable {
         }
     }
 
+    /**
+     * Reconcile one side (input or output). Handles both the single-
+     * descriptor form (`variadicInput: { prefix, type }`) AND the
+     * multi-group form (`variadicInput: [{ prefix: "f_", ... }, { prefix: "A_", ... }]`).
+     * Each group is reconciled independently — wiring `f_0` grows the
+     * `f_*` group without touching the `A_*` group, and vice versa.
+     */
     private _reconcileSide(node: NodeUI, direction: "input" | "output"): void {
-        const desc = direction === "input" ? node.variadicInput! : node.variadicOutput!;
+        const raw = direction === "input" ? node.variadicInput! : node.variadicOutput!;
+        const descs = Array.isArray(raw) ? raw : [raw];
+        for (const desc of descs) this._reconcileGroup(node, direction, desc);
+    }
+
+    private _reconcileGroup(
+        node: NodeUI,
+        direction: "input" | "output",
+        desc: { prefix: string; type: string },
+    ): void {
         const all = direction === "input" ? node.inputs : node.outputs;
+        // Each variadic group is keyed on its own prefix; ports from
+        // other groups (different prefix) are not picked up here.
         const variadic = all.filter((p) => p.name.indexOf(desc.prefix) === 0);
 
         // Seed: ensure at least one variadic port exists.

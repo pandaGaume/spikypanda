@@ -335,3 +335,30 @@ a {
 
 /* GraphViewer creates .ne-viewport + .ne-svg + .ne-nodes-layer inside
    .nev2-viewer; nodeeditor.css already styles them with full sizing. */
+
+/* ── 9. Dashboard panel + horizontal splitter ─────────────────────── */
+/* The dashboard host sits below the graph body; user resizes via the
+   thin splitter above it. Height is driven by a CSS variable so the
+   splitter JS only needs to set --nev2-dash-h. */
+:root { --nev2-dash-h: 280px; }
+
+.nev2-dashboard-host {
+    height:     var(--nev2-dash-h);
+    flex:       0 0 auto;
+    background: var(--ne-color-bg);
+    border-top: 1px solid var(--ne-color-border-strong);
+    overflow:   hidden;
+    box-sizing: border-box;
+}
+
+.nev2-splitter-h {
+    height:     5px;
+    flex:       0 0 auto;
+    background: transparent;
+    cursor:     ns-resize;
+    border-top:    1px solid var(--ne-color-border);
+    border-bottom: 1px solid var(--ne-color-border);
+    transition: background 0.12s;
+}
+.nev2-splitter-h:hover,
+.nev2-splitter-h.is-dragging { background: var(--ne-color-primary); }

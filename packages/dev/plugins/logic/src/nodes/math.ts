@@ -1,4 +1,4 @@
-import { editable, viewable, cloneable, IOlink, IDeclaresPorts, IPortDescriptor, ISession, RuntimeNode, publishToFirstOutput, resolveSlotInputs } from "spikypanda-core";
+import { editable, viewable, cloneable, IChannel, IOlink, IDeclaresPorts, IPortDescriptor, ISession, RuntimeNode, inSlotOf, publishToFirstOutput, resolveSlotInputs } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
 
 /**
@@ -336,5 +336,80 @@ export class LerpNode extends RuntimeNode implements IDeclaresPorts {
             { validator: (_slot, v) => typeof v === "number" }
         );
         publishToFirstOutput(session, this, a + (b - a) * t);
+    }
+}
+
+// ── Variadic Sum ─────────────────────────────────────────────────────
+
+/**
+ * Variadic N-input adder: sums every wired `in_N` scalar into a single
+ * `result` output. Unconnected inputs contribute 0 (not the editable
+ * default — sum's identity is 0, and forcing the user to nullify an
+ * editable to "skip" an input would be a tax). Non-number tokens are
+ * silently coerced to 0 via the same Number(v) guard the binary math
+ * nodes use.
+ *
+ * Use for multi-signal mixing without the N-1 chained Add nodes that
+ * binary-only graphs require. Typical: three Oscillator outputs into
+ * one Sum, then one wire to the buffer:
+ *
+ *     Osc(f=50)  ──► in_0 ┐
+ *     Osc(f=120) ──► in_1 ├── Sum ──► Buffer ──► FFT ──► tile
+ *     Osc(f=200) ──► in_2 ┘
+ *
+ * The variadic UI reconciler auto-adds an `in_<N+1>` port when in_<N>
+ * gets wired, so the user never has to think about port count.
+ *
+ * Editable `gain` scales the final sum (default 1). Useful for
+ * normalising a mix to avoid clipping the downstream Buffer / FFT:
+ * three unit-amplitude oscillators sum to a peak of 3, set gain to
+ * 1/3 = 0.333 to keep it at 1.
+ */
+export class SumNode extends RuntimeNode implements IDeclaresPorts {
+    @cloneable private _gain: number = 1;
+
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
+        { slot: "in_0", optional: true, type: "float" },
+    ];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
+        { slot: "result", optional: false, type: "float" },
+    ];
+
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
+
+    @editable("number")
+    public get gain(): number { return this._gain; }
+    public set gain(v: number) {
+        this.setField("gain", this._gain, v, (n) => { this._gain = n; });
+    }
+
+    /** Read-only mirror of the last produced sum — handy in the
+     *  property panel to confirm wiring + see the live mix amplitude. */
+    @viewable("number") public get result(): number { return this._lastSum; }
+    private _lastSum: number = 0;
+
+    public override fire(session: ISession, _t: number): void {
+        const links = session.graph.links as ReadonlyArray<IChannel>;
+        let sum = 0;
+        // Iterate every incoming channel, accept the ones whose slot
+        // matches the `in_` prefix (the variadic reconciler ensures
+        // these are the only slots a user can wire). Slot index parsing
+        // is defensive: a malformed slot is skipped, not crashed.
+        for (const link of this.opsc<IChannel>()) {
+            if (!link.enabled) continue;
+            const slot = String(inSlotOf(link));
+            if (slot.indexOf("in_") !== 0) continue;
+            const slotIdx = Number(slot.slice(3));
+            if (!Number.isFinite(slotIdx)) continue;
+            const idx = links.indexOf(link);
+            if (idx < 0 || !session.linkStates[idx].ready) continue;
+            const v = session.consume(idx);
+            if (typeof v === "number" && Number.isFinite(v)) sum += v;
+        }
+        const out = sum * this._gain;
+        this._lastSum = out;
+        publishToFirstOutput(session, this, out);
     }
 }

@@ -9,6 +9,17 @@
     "editors":     [],
     "subPlugins": [
         {
+            "id":          "DSP.Generator",
+            "displayName": "Generator",
+            "description": "Signal sources. Oscillator emits amplitude·sin/cos(2π·f·t + φ) one sample per tick; f, A, φ available as editables AND as optional input ports (wire a slider to frequency for live sweeps). Compose multi-frequency signals with Add trees: Osc1+Osc2+Osc3 -> Buffer -> FFT.",
+            "category":    "DSP.Generator",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "DSP.Generator:oscillator", "factory": "createOscillatorNode", "label": "Oscillator" }
+            ]
+        },
+        {
             "id":          "DSP.Transform",
             "displayName": "Transforms",
             "description": "FFT (power/magnitude/complex modes), IFFT, Magnitude, Phase, DCT.",
@@ -83,6 +94,17 @@
                 { "type": "DSP.Stats:zcr",     "factory": "createZeroCrossingRateNode", "label": "Zero Crossing Rate" },
                 { "type": "DSP.Stats:movavg",  "factory": "createMovingAverageNode",    "label": "Moving Average" },
                 { "type": "DSP.Stats:detrend", "factory": "createDetrendNode",          "label": "Detrend" }
+            ]
+        },
+        {
+            "id":          "DSP.Stream",
+            "displayName": "Stream",
+            "description": "Scalar ↔ tensor adapters. Buffer collects N consecutive float samples and emits a 1D Float32Array tensor every hopLength samples — the missing piece to feed a streaming scalar source (Clock, Sin, sensor) into a tensor-consuming DSP pipeline (SpFrame, SpFFT, ...). Not ONNX-backed: pure runtime impedance matching.",
+            "category":    "DSP.Stream",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "DSP.Stream:buffer", "factory": "createScalarBufferNode", "label": "Scalar Buffer" }
             ]
         }
     ],

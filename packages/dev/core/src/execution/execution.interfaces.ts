@@ -283,6 +283,27 @@ export interface ISession {
     readonly nodeStates: ReadonlyArray<INodeState>;
 
     /**
+     * Simulation sample rate in Hz (0 = unknown / free-running). Set by
+     * the host runtime so nodes can read an authoritative value without
+     * being configured per-instance. See `Session.simRate` for full doc.
+     */
+    simRate: number;
+
+    /**
+     * True while the host runtime is actively driving `run(t)` calls.
+     * Set by the host (e.g. GraphRunner) on play()/pause()/stop() — the
+     * Session does not flip this on its own. Lets nodes that care about
+     * the host-level lifecycle (UI tiles wanting "view-only during play",
+     * recorders gated on play state, ...) read a single authoritative
+     * flag without subscribing to runner events.
+     *
+     * Idle (no session yet) ↔ field doesn't exist (session is null).
+     * Playing                ↔ true.
+     * Paused / stopped       ↔ false.
+     */
+    running: boolean;
+
+    /**
      * Inject a value into a channel from outside the graph. Equivalent
      * to publish() but named for clarity at the caller boundary
      * (feeding a model-input channel before a run).

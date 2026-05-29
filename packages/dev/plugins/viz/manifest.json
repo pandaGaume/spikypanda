@@ -1,0 +1,49 @@
+{
+    "id":          "spk.viz",
+    "version":     "0.1.0",
+    "displayName": "Visualization",
+    "description": "Dashboard tile node types: uPlot time-series, PixiJS spectrogram, ECharts charts. Each tile is a graph node implementing IRenderable; the editor's Dashboard panel mounts the node into a GridStack tile and refreshes from its internal buffer at 60fps.",
+    "category":    "Viz",
+    "entry":       "bundle/SpkPluginViz.js",
+    "nodes":       [],
+    "editors":     [],
+    "subPlugins": [
+        {
+            "id":          "Viz.Plot",
+            "displayName": "Plot",
+            "description": "Real-time time-series scrolling plot (uPlot). Inputs: value (float) appended each fire() into a ring buffer; the tile rendering reads the buffer at 60fps. Editable: maxSamples, yMin, yMax.",
+            "category":    "Viz.Plot",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Viz.Plot:line",      "factory": "createUplotLineNode",      "label": "Time-series Plot" },
+                { "type": "Viz.Plot:waterfall", "factory": "createPixiWaterfallNode",  "label": "Waterfall Spectrogram" },
+                { "type": "Viz.Plot:spectrum",  "factory": "createUplotSpectrumNode",  "label": "Frequency Spectrum" },
+                { "type": "Viz.Plot:stem",      "factory": "createUplotStemNode",      "label": "Stem (Oracle Spectrum)" }
+            ]
+        },
+        {
+            "id":          "Viz.Control",
+            "displayName": "Control",
+            "description": "Input control surfaces for the dashboard (source-side tiles). Knobs3 ships three NexusUI dials with three outputs; designed for 'one oscillator per tile' (f / A / phi) but generic for any 3-parameter object (PID gains, fault levels, mixer channels).",
+            "category":    "Viz.Control",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Viz.Control:knobs3", "factory": "createKnobs3Node", "label": "Knobs 3" }
+            ]
+        },
+        {
+            "id":          "Viz.Markdown",
+            "displayName": "Markdown",
+            "description": "Jupyter-style Markdown cells for self-documented dashboards. Double-click the tile body to edit, blur or Esc to commit. `content` round-trips with the saved graph. `locked` editable disables edit gestures for runtime/presentation graphs.",
+            "category":    "Viz.Markdown",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Viz.Markdown:cell", "factory": "createMarkdownCellNode", "label": "Markdown Cell" }
+            ]
+        }
+    ],
+    "manifestRefs": []
+}

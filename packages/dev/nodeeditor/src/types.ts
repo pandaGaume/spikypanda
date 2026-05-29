@@ -73,11 +73,13 @@ export interface NodeDef {
     /** When set, the editor grows / shrinks the matching set of
      *  input ports so exactly one trailing unconnected port stays
      *  available at all times. Indices are appended after the prefix
-     *  ("then_0", "then_1", ...). */
-    variadicInput?: VariadicPortDescriptor;
+     *  ("then_0", "then_1", ...). Pass an ARRAY of descriptors to
+     *  manage multiple independent variadic groups on the same side
+     *  (e.g. Stem's parallel `f_*` and `A_*` groups). */
+    variadicInput?: VariadicPortDescriptor | ReadonlyArray<VariadicPortDescriptor>;
     /** Same as `variadicInput` but for the output side (e.g.
      *  Sequence's `then_*`). */
-    variadicOutput?: VariadicPortDescriptor;
+    variadicOutput?: VariadicPortDescriptor | ReadonlyArray<VariadicPortDescriptor>;
     /** Interop standards the node complies with (e.g. ["onnx"]). The
      *  editor renders one badge per id in the node header. The values
      *  are resolved via the host's StandardsRegistry for display. */
@@ -134,6 +136,15 @@ export interface SerializedConnection {
 export interface SerializedGraph {
     nodes: SerializedNode[];
     connections: SerializedConnection[];
+    /**
+     * Dashboard layouts attached to this graph. Plural-keyed from V1 to
+     * keep the on-disk format stable when multi-dashboard (tabs) lands
+     * in V2 — V1 always emits a single `{ id: "main", … }` entry. The
+     * concrete shape (id, name, tiles[]) lives in `dashboard.ts` as
+     * `ISerializedDashboard` to avoid a circular dependency between
+     * types.ts and dashboard.ts.
+     */
+    dashboards?: unknown[];
 }
 
 export interface ExportProfile {

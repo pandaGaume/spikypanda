@@ -116,7 +116,8 @@
                 { "type": "Logic.Math:sin",      "factory": "SinNode",      "label": "Sin" },
                 { "type": "Logic.Math:cos",      "factory": "CosNode",      "label": "Cos" },
                 { "type": "Logic.Math:clamp",    "factory": "ClampNode",    "label": "Clamp" },
-                { "type": "Logic.Math:lerp",     "factory": "LerpNode",     "label": "Lerp" }
+                { "type": "Logic.Math:lerp",     "factory": "LerpNode",     "label": "Lerp" },
+                { "type": "Logic.Math:sum",      "factory": "SumNode",      "label": "Sum" }
             ]
         },
         {

@@ -13,6 +13,7 @@ import { transparentDarkSkin, transparentLightSkin } from "../styles/skins/trans
 import { arePortTypesCompatible, ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedGraph } from "../types";
 import { DebugBus } from "../debug-bus";
 import type { INodeRegistry } from "spikypanda-core";
+import type { Dashboard, ISerializedDashboard } from "../dashboard";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -27,6 +28,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
  *
  * Owns: nodes[], connections[], camera, selection, skins.
  * Emits: onSelectionChanged, onNodeActivated, onNodeChanged,
+ *        onNodeAdded, onNodeRemoved,
  *        onConnectionAdded, onConnectionRemoved.
  */
 export class GraphViewer {
@@ -41,6 +43,18 @@ export class GraphViewer {
 
     readonly nodes: NodeUI[] = [];
     readonly connections: Connection[] = [];
+
+    /**
+     * Optional dashboard instance attached to this viewer. When set,
+     * `save()` includes its layout under `dashboards[]` in the produced
+     * JSON, and `load()` restores it after the graph nodes are created.
+     * Hosts that don't want a dashboard simply leave this null.
+     *
+     * Typed loosely (just the methods we call) so this file doesn't have
+     * a hard runtime import on Dashboard — it stays free in single-bundle
+     * deployments that exclude it.
+     */
+    dashboard: Dashboard | null = null;
 
     private currentSkinName = "dark";
     private appliedSkinKeys: string[] = [];
@@ -84,6 +98,12 @@ export class GraphViewer {
     onConnectionAdded: ((conn: Connection) => void) | null = null;
     /** A connection was just removed from connections[]. */
     onConnectionRemoved: ((conn: Connection) => void) | null = null;
+    /** A new node was just added to nodes[] (via addNode or a load). */
+    onNodeAdded: ((node: NodeUI) => void) | null = null;
+    /** A node was just removed from nodes[]. Fires BEFORE the node's
+     *  dispose() so listeners can still read its label/ports/data — the
+     *  Dashboard relies on this to remove the matching tile cleanly. */
+    onNodeRemoved: ((node: NodeUI) => void) | null = null;
 
     constructor(host: HTMLElement, permissions: Permissions = Permissions.FULL, standards?: StandardsRegistry) {
         this.host = host;
@@ -130,12 +150,22 @@ export class GraphViewer {
         node.setPosition(x, y);
         this.nodes.push(node);
         this.applyProfileToNode(node);
+        if (this.onNodeAdded) this.onNodeAdded(node);
         return node;
     }
 
     removeNode(node: NodeUI): void {
         const connsToRemove = this.connections.filter((c) => node.getAllPorts().some((p) => c.containsPort(p)));
         for (const c of connsToRemove) this.removeConnection(c);
+
+        // Auto-clean the dashboard tile if one is attached to this node.
+        // Done BEFORE dispose so the tile teardown still sees a live
+        // renderable. The onNodeRemoved hook below lets external code
+        // (test harnesses, custom panels) react too.
+        if (this.dashboard?.hasTile(node.id)) {
+            this.dashboard.removeTile(node.id);
+        }
+        if (this.onNodeRemoved) this.onNodeRemoved(node);
 
         const idx = this.nodes.indexOf(node);
         if (idx >= 0) this.nodes.splice(idx, 1);
@@ -440,6 +470,11 @@ export class GraphViewer {
                     };
                 }),
             },
+            // Dashboards array is plural-shaped from V1 so the on-disk
+            // format stays stable when multi-dashboard (tabs) lands.
+            // V1 emits exactly one entry when a Dashboard is attached,
+            // or an empty array when this viewer has no dashboard host.
+            dashboards: this.dashboard ? [this.dashboard.serialize()] : [],
         };
         return JSON.stringify(data, null, 2);
     }
@@ -528,6 +563,17 @@ export class GraphViewer {
                 const toPort = toNode.inputs[sc.toPortIndex];
                 if (fromPort && toPort) this.connect(fromPort, toPort);
             }
+        }
+
+        // Restore dashboard tile layout, if a Dashboard is attached AND
+        // the save carries a dashboards[] entry. The resolver bridges
+        // saved nodeIds back to the freshly-created NodeUI instances by
+        // walking nodeMap (which is keyed by the SAVED id, not the new
+        // assigned id like "node_42").
+        const savedDashboards = (data as { dashboards?: unknown[] }).dashboards;
+        if (this.dashboard && Array.isArray(savedDashboards) && savedDashboards.length > 0) {
+            const saved = savedDashboards[0] as ISerializedDashboard;
+            this.dashboard.deserialize(saved, (savedNodeId) => nodeMap.get(savedNodeId) ?? undefined);
         }
     }
 

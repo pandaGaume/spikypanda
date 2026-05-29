@@ -18,6 +18,7 @@ import {
     CosNode,
     ClampNode,
     LerpNode,
+    SumNode,
 } from "../nodes/math.js";
 
 const UE5 = ["ue5"] as const;
@@ -75,6 +76,18 @@ export const logicMathSubPlugin: IPlugin = {
             inputPorts: [NUM_IN("a"), NUM_IN("b"), NUM_IN("t")],
             outputPorts: [NUM_OUT],
             standards: UE5,
+        });
+
+        // Sum: variadic adder, declared with `variadicInput` so the
+        // editor's reconciler auto-grows the port list (`in_0`, `in_1`,
+        // ... appearing as the user wires successive inputs). No UE5
+        // standard tag: Blueprint has no direct N-ary float Add.
+        ctx.nodes.register("Logic.Math:sum", () => new SumNode() as never, {
+            label: "Sum",
+            category: "Logic.Math",
+            inputPorts: [NUM_IN("in_0")],
+            outputPorts: [NUM_OUT],
+            variadicInput: { prefix: "in_", type: "float" },
         });
     },
 };

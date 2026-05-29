@@ -37,6 +37,29 @@ export class Session implements ISession {
      */
     public readonly queue: (ILinkRef | IRuntimeNode)[] = [];
 
+    /**
+     * Simulation sample rate (Hz) the session is being driven at.
+     * Set by the host runtime (e.g. GraphRunner in fixed-realtime mode)
+     * after constructing the session, so nodes that need a stable
+     * timebase (FFT analyzers, spectrum / waterfall viz tiles, control
+     * loops with sampleRate-dependent coefficients) can read a single
+     * authoritative value instead of being configured manually per node.
+     *
+     * 0 means "unknown / free-running" — consumers should fall back to
+     * their default (bin-index axis for viz tiles, etc.). Non-zero
+     * means every session.run(t) tick advances by exactly 1/simRate
+     * seconds (the runner's fixed-step guarantee).
+     */
+    public simRate: number = 0;
+
+    /**
+     * Host-driven play-state flag (see ISession.running). The Session
+     * never mutates this on its own — start()/stop() arm Start/Stop
+     * nodes but do not touch `running`. The host runtime (GraphRunner)
+     * owns the flag and flips it on play/pause/stop transitions.
+     */
+    public running: boolean = false;
+
     private _required: number[];
     private _linkStatesProxy: ILinkState[];
 
@@ -166,6 +189,15 @@ export class Session implements ISession {
         if (!link || !link.enabled) return;
         const dst = link.ofin as IRuntimeNode | null;
         if (!dst) return;
+        // Disabled nodes don't receive tokens — by definition they're
+        // not participating in this tick. Dropping the deliver also
+        // prevents the buffer-overflow throw when an upstream keeps
+        // publishing into a sink the user just toggled off (the classic
+        // case is a Viz tile disabled while its data source keeps
+        // ticking). On re-enable the node starts receiving fresh tokens
+        // from the next upstream publish; nothing in the saved state is
+        // stale.
+        if (!dst.enabled) return;
         const state = this.nodeStateOf(dst);
         if (!state || !state.inputBuffers || !state.inputCapacity) return;
         const slot = inSlotOf(link);
