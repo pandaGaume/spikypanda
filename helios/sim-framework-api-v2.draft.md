@@ -449,6 +449,133 @@ time as Helios needs them.
 
 ---
 
+## F6 — Process-unit meta-node hierarchy
+
+The chemistry plant has ~12 leaves (Sabatier reactor, PEM electrolyzer,
+amine scrubber, cryo scrubber, condenser, knockout drum, separator, PSA
+purifier, mixer, compressor, dryer, buffer). Implementing each from
+scratch is ~3 weeks of glue code — chemical-stream I/O, mass balance,
+energy balance, holdup state, fault hooks — duplicated N times.
+
+Mirror the existing `RuntimeNode → TransformNode → FaultableNode → Motors`
+inheritance the electric domain uses. For chemistry:
+
+```
+RuntimeNode
+  └─ ProcessUnitNode              IChemicalStream I/O + mass/energy balance
+                                  + holdup state + IIntegrable + auto-
+                                  registered conservation hooks + FaultableNode-
+                                  style variadic `fault_N` slots
+        │
+        ├─ ReactorNode             catalyst-activity state, Arrhenius helper,
+        │                          heat-of-reaction helper, conversion as state
+        │     ├─ SabatierReactor    CO₂ + 4 H₂ → CH₄ + 2 H₂O (R-601)
+        │     ├─ MethanationReactor CO + 3 H₂ → CH₄ + H₂O
+        │     └─ ElectrolyzerReactor H₂O → H₂ + ½ O₂ (E-201)
+        │
+        ├─ ScrubberNode            sorbent-loading state, breakthrough
+        │                          curve, regen-cycle scheduler
+        │     ├─ AmineScrubber       CO₂ amine capture (C-301)
+        │     ├─ CryoScrubber        CO₂ cryogenic capture (C-302)
+        │     └─ DesiccantDryer      H₂O on zeolite/silica (V-201)
+        │
+        ├─ HeatExchangerNode       UA × LMTD, two-fluid energy balance,
+        │                          fouling factor as state
+        │     ├─ Condenser           hot-gas → cool-gas + condensate (E-701)
+        │     └─ Cooler / Heater     single-fluid presets
+        │
+        ├─ CompressorNode          polytropic stage, power → ω coupling
+        │                          (composes a PMSM via internal sub-graph)
+        │     └─ StagedCompressor    K-401 multistage with intercooling
+        │
+        ├─ SeparatorNode           partition coefficients per species,
+        │                          two-phase flash
+        │     ├─ KnockoutDrum        liquid/gas (V-701)
+        │     ├─ GasSeparator        distillation-like (V-801)
+        │     └─ PSAPurifier         pressure-swing adsorption (V-901)
+        │
+        ├─ MixerNode               stoichiometric blend, ratio control
+        │     └─ StoichMixer          H₂ + CO₂ at 4:1 (M-501)
+        │
+        └─ BufferNode              pressurized holdup tank, autonomy
+                                   computation
+              └─ GasBuffer            V-202
+```
+
+### What each layer carries
+
+| Layer | Provides | Per-leaf override |
+|-------|----------|-------------------|
+| `ProcessUnitNode` | Chemical port declaration (in/out species sets), IIntegrable `rhs` skeleton calling `computeKinetics` + `computeEnergyBalance`, mass-conservation hook auto-emitted at solver setup, holdup volume state slot, FaultableNode-style `fault_N` slot family for kinetic-parameter faults | — (abstract) |
+| `ReactorNode` | Catalyst-activity state, Arrhenius `k(T) = A·exp(−Ea/(R·T))` helper, heat-of-reaction `ΔH(T)` helper, conversion-as-state | `kineticsRateLaw(T, p_species) → r` virtual |
+| `ScrubberNode` | Sorbent-loading state (kg sorbent loaded / kg capacity), breakthrough curve, regen scheduler hooks | Sorbent affinity per species, capacity, regen energy |
+| `HeatExchangerNode` | Two-fluid energy balance, UA × LMTD driver, fouling-factor state | Geometry preset (counterflow / crossflow / cocurrent) + tube area |
+| `CompressorNode` | Polytropic compression law, power-from-rotor input port, intercooler stage helper | Stage count + per-stage pressure ratio |
+| `SeparatorNode` | Per-species partition coefficient, two-phase flash | Partition specifics (membrane permeability, PSA cycle time, ...) |
+| `MixerNode` | N-stream mass + enthalpy combine, ratio-controlled outlet | Setpoint ratio + tolerance band |
+| `BufferNode` | Mass balance vs consumption rate, autonomy = inventory / draw rate viewable | Geometry (cylindrical/spherical for shell stress) |
+
+Result: each concrete leaf becomes ~30–80 lines (just its rate law + a
+few constants) instead of ~200–400 (port plumbing + state + I/O +
+conservation duplication).
+
+### How it interlocks with the V2 framework
+
+- **`IIntegrable` (F1)**: `ProcessUnitNode` implements IIntegrable so
+  every reactor / scrubber / buffer participates in the global state
+  vector. Mid-tier classes contribute their state slot (catalyst
+  activity for Reactor, sorbent loading for Scrubber, fouling factor
+  for HeatExchanger, inventory for Buffer); leaf classes contribute
+  reaction-conversion and any custom kinetics state. `rhs` recursion
+  is straight: base computes generic part, subclass adds its specifics
+  via `super.rhs(...)`.
+- **`IChemicalStream` (F4)**: ProcessUnitNode's port declarations
+  consume the species-typed port, so the connect-guard catches "wired
+  O₂ into a CO₂ inlet" at design time. Every leaf inherits this for
+  free.
+- **Conservation hooks (F7)**: `ProcessUnitNode` auto-registers one
+  per-species mass-balance hook with the containing solver, plus an
+  energy-balance hook. The user drops a single
+  `Logic.Sim:conservation-monitor` tile and sees per-species drift
+  across the whole plant aggregated. Catalyst-deactivation hooks layer
+  on top via `ReactorNode`.
+- **`FaultableNode` pattern**: `ProcessUnitNode` mirrors the variadic
+  `fault_N` slot mechanism. A "catalyst poisoning" or "scrubber
+  contamination" or "fouling onset" fault becomes the same kind of
+  injectable signature as a bearing fault on a motor — uniform UX
+  across plant + machinery.
+- **`OnnxGraphExporter` (F5)**: each mid-tier base class implements
+  `IOnnxExportable` once, emitting the canonical ONNX op pattern for
+  that unit family (Reactor → Loop-of-Arrhenius, HeatExchanger →
+  matrix UA pattern, ...). Leaves inherit. A full Sabatier reactor
+  sub-graph → ONNX bundle then comes essentially free.
+
+### Open questions for this section
+
+| # | Question | My proposal |
+|---|----------|-------------|
+| Q6.1 | **Catalyst activity** as integrated state (extra slot in IIntegrable `y`) or as separate slow-rate scalar updated outside the solver? | Integrated state. The activity decay is part of the same equation system; separating it would force a manual sync between two time bases and break the conservation-monitor's view of "the full reactor state". Cost: 1 extra row in the Jacobian per reactor — negligible. |
+| Q6.2 | **Heat as a separate `IHeatStream` port type** (parallel to `IChemicalStream`) or **carried inside the chemical stream** (T + cp)? | Separate `IHeatStream`. Industrial process simulators (Aspen, ProSim) split heat as its own utility stream so heat-integration networks (HEN) are first-class. Coolant loops, cryo regen energy, reaction heat → all wires that the user can re-route without touching the mass flow. |
+| Q6.3 | **CompressorNode reusing PMSM as an internal sub-graph**: does the K-401 compressor leaf BUILD a sub-graph at construction (composing PMSM + bearing + inverter as a `RuntimeGraph`), or does it just declare ports that the user wires externally? | Compose internally. The whole point of fractal composition is that K-401 "is" a process unit even though it's internally a motor sub-graph. User sees one node with chemical and electrical ports. Saves them wiring boilerplate every time. |
+| Q6.4 | **Where do meta-node base classes live**? `spikypanda-core` (next to RuntimeNode/IIntegrable) or `@spikypanda/plugin-helios` (closer to their consumers)? | Plugin-helios. They're domain primitives — depend on F4 IChemicalStream which is core but the mid-tier specialization (Reactor/Scrubber/...) is process-engineering knowledge that doesn't belong in core. |
+
+### Implementation order (insert into the global sequence)
+
+After the canary DcMotor migration validates IIntegrable + Solver
+end-to-end (step 6 in the existing sequence), insert:
+
+- 6a. `ProcessUnitNode` base + `IChemicalStream` consumption + auto-conservation hook registration.
+- 6b. `ReactorNode` mid-tier.
+- 6c. `SabatierReactor` leaf — the stiffness test that justifies Phase 2 solver.
+- 6d. `ScrubberNode` + `AmineScrubber` leaf — validates non-reactor sorbent state pattern.
+- 6e. `HeatExchangerNode` + `Condenser` — validates two-fluid + the IHeatStream decision (Q6.2).
+- 6f. Remaining mid-tier classes (Separator/Compressor/Mixer/Buffer) + leaves on demand.
+
+Steps 6a–6e: ~1 sprint. After that, each new chemistry node is a few
+hours of leaf-specific code.
+
+---
+
 ## F7 — Conservation hooks (small, standalone)
 
 A conservation hook is a function `(t, y) → number` whose value should
@@ -539,6 +666,10 @@ four orders of magnitude of time-scale separation Helios needs.
 | Q4.1 | Enthalpy on stream or computed? | Computed via helpers. |
 | Q4.2 | Two-phase support? | V1 single-phase only. |
 | Q4.3 | Stream as immutable per-tick object? | Yes. |
+| Q6.1 | Catalyst activity: integrated state or separate slow update? | Integrated state. |
+| Q6.2 | Heat as separate IHeatStream port or carried inside chemical stream? | Separate IHeatStream. |
+| Q6.3 | CompressorNode internal motor sub-graph or external wiring? | Compose internally (fractal). |
+| Q6.4 | Meta-node base classes in core or plugin-helios? | Plugin-helios. |
 
 ---
 
