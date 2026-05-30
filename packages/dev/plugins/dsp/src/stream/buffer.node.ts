@@ -1,8 +1,4 @@
-import {
-    cloneable, editable, viewable,
-    IChannel, IDeclaresPorts, IOlink, IPortDescriptor,
-    ISession, RuntimeNode, inSlotOf,
-} from "spikypanda-core";
+import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, RuntimeNode, inSlotOf } from "spikypanda-core";
 import type { ICartesian, ITensor, Nullable } from "spikypanda-core";
 
 /**
@@ -32,12 +28,8 @@ import type { ICartesian, ITensor, Nullable } from "spikypanda-core";
  * size their nfft to the same frameSize as here for a clean STFT.
  */
 export class ScalarBufferNode extends RuntimeNode implements IDeclaresPorts {
-    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "value", optional: true, type: "float" },
-    ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "frame", optional: false, type: "tensor" },
-    ];
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "value", optional: true, type: "float" }];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "frame", optional: false, type: "tensor" }];
 
     @cloneable private _frameSize: number = 256;
     @cloneable private _hopLength: number = 256;
@@ -49,14 +41,14 @@ export class ScalarBufferNode extends RuntimeNode implements IDeclaresPorts {
     private _buffer: Float32Array = new Float32Array(this._frameSize);
     private _count: number = 0;
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
     @editable("number", { unit: "samples" })
-    public get frameSize(): number { return this._frameSize; }
+    public get frameSize(): number {
+        return this._frameSize;
+    }
     public set frameSize(v: number) {
         const next = Math.max(2, Math.floor(v));
         this.setField("frameSize", this._frameSize, next, (n) => {
@@ -69,10 +61,14 @@ export class ScalarBufferNode extends RuntimeNode implements IDeclaresPorts {
     }
 
     @editable("number", { unit: "samples" })
-    public get hopLength(): number { return this._hopLength; }
+    public get hopLength(): number {
+        return this._hopLength;
+    }
     public set hopLength(v: number) {
         const next = Math.max(1, Math.floor(v));
-        this.setField("hopLength", this._hopLength, next, (n) => { this._hopLength = n; });
+        this.setField("hopLength", this._hopLength, next, (n) => {
+            this._hopLength = n;
+        });
     }
 
     /** Number of frames published since last reset(). Useful for the
@@ -84,7 +80,9 @@ export class ScalarBufferNode extends RuntimeNode implements IDeclaresPorts {
     public override reset(_session: ISession): void {
         this._count = 0;
         this._buffer.fill(0);
-        this.setField("frameCount", this._frameCount, 0, (n) => { this._frameCount = n; });
+        this.setField("frameCount", this._frameCount, 0, (n) => {
+            this._frameCount = n;
+        });
     }
 
     public override fire(session: ISession, _t: number): void {

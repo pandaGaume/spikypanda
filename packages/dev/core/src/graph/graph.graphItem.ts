@@ -122,9 +122,7 @@ export class GraphItem<B = unknown> implements IGraphItem<B> {
             if (!Object.prototype.hasOwnProperty.call(data, key)) continue;
             const stored = data[key];
             const current = (this as Record<string, unknown>)[key];
-            if (current && typeof current === "object" && stored && typeof stored === "object"
-                && !Array.isArray(current) && !Array.isArray(stored)
-            ) {
+            if (current && typeof current === "object" && stored && typeof stored === "object" && !Array.isArray(current) && !Array.isArray(stored)) {
                 // Class-instance field (Cartesian3, Quaternion, ...).
                 // Mutate the existing instance to keep its prototype
                 // intact for downstream editors / methods.

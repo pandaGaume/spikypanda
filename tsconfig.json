@@ -15,6 +15,7 @@
         { "path": "packages/dev/plugins/dsp/tsconfig.build.json" },
         { "path": "packages/dev/plugins/physics/tsconfig.build.json" },
         { "path": "packages/dev/plugins/viz/tsconfig.build.json" },
+        { "path": "packages/dev/plugins/helios/tsconfig.build.json" },
         { "path": "packages/tests/tsconfig.json" }
     ]
 }

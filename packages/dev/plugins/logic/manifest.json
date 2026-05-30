@@ -143,6 +143,33 @@
             "nodes": [
                 { "type": "Logic.Input:slider", "factory": "NumberSliderNode", "label": "Number Slider" }
             ]
+        },
+        {
+            "id":          "Logic.Sim",
+            "displayName": "Sim",
+            "description": "Simulation runtime primitives: deterministic Mulberry32 RNG (seedable), Snapshot/Restore via module-level slot registry, Rate Divider for multi-rate scheduling, generic Conservation Monitor for invariant drift detection.",
+            "category":    "Logic.Sim",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Logic.Sim:rng-seed",             "factory": "RngSeedNode",             "label": "RNG Seed" },
+                { "type": "Logic.Sim:snapshot",             "factory": "SnapshotNode",            "label": "Snapshot" },
+                { "type": "Logic.Sim:restore",              "factory": "RestoreNode",             "label": "Restore" },
+                { "type": "Logic.Sim:rate-divider",         "factory": "RateDividerNode",         "label": "Rate Divider" },
+                { "type": "Logic.Sim:conservation-monitor", "factory": "ConservationMonitorNode", "label": "Conservation Monitor" }
+            ]
+        },
+        {
+            "id":          "Logic.Event",
+            "displayName": "Event",
+            "description": "Typed event / messaging primitives. AlertBus = pub/sub of severity-tagged messages. Arbitrator = variadic action-request merger with policy (priority / blend / vote) for N controllers competing on one actuator.",
+            "category":    "Logic.Event",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Logic.Event:alert-bus",  "factory": "AlertBusNode",   "label": "Alert Bus" },
+                { "type": "Logic.Event:arbitrator", "factory": "ArbitratorNode", "label": "Arbitrator" }
+            ]
         }
     ],
     "manifestRefs": []

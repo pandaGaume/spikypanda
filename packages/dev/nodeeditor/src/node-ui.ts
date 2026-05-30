@@ -26,15 +26,21 @@ let nodeIdCounter = 0;
  */
 /** Normalise a NodeDef's variadic descriptor (single OR array form)
  *  into the same shape the field is declared as. Each descriptor is
- *  shallow-copied so the reconciler reads frozen values. */
-function _copyVariadic(
-    src: NodeDef["variadicInput"],
-): { prefix: string; type: string } | ReadonlyArray<{ prefix: string; type: string }> | undefined {
+ *  shallow-copied so the reconciler reads frozen values.
+ *
+ *  Type assertions inside are needed because Array.isArray doesn't
+ *  narrow the `ReadonlyArray<T>` branch of a union — it widens to
+ *  `unknown[]` rather than preserving the element type. The runtime
+ *  shape is unchanged.
+ */
+function _copyVariadic(src: NodeDef["variadicInput"]): { prefix: string; type: string } | ReadonlyArray<{ prefix: string; type: string }> | undefined {
     if (!src) return undefined;
     if (Array.isArray(src)) {
-        return src.map((d) => ({ prefix: d.prefix, type: d.type }));
+        const arr = src as ReadonlyArray<{ prefix: string; type: string }>;
+        return arr.map((d) => ({ prefix: d.prefix, type: d.type }));
     }
-    return { prefix: src.prefix, type: src.type };
+    const single = src as { prefix: string; type: string };
+    return { prefix: single.prefix, type: single.type };
 }
 
 function computeNodeHeaderBackground(def: NodeDef): string | null {
@@ -214,7 +220,7 @@ export class NodeUI {
         // to whichever shape the caller passed. Shallow-frozen copies
         // so the reconciler can read them without holding a reference
         // into caller-owned state.
-        this.variadicInput  = _copyVariadic(def.variadicInput);
+        this.variadicInput = _copyVariadic(def.variadicInput);
         this.variadicOutput = _copyVariadic(def.variadicOutput);
     }
 

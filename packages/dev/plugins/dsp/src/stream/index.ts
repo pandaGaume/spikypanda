@@ -22,9 +22,9 @@ export { ScalarBufferNode, createScalarBufferNode };
 export const dspStreamSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
         ctx.nodes.register("DSP.Stream:buffer", () => createScalarBufferNode() as never, {
-            label:       "Scalar Buffer",
-            category:    "DSP.Stream",
-            inputPorts:  [{ slot: "value", optional: true, type: "float" }],
+            label: "Scalar Buffer",
+            category: "DSP.Stream",
+            inputPorts: [{ slot: "value", optional: true, type: "float" }],
             outputPorts: [{ slot: "frame", optional: false, type: "tensor" }],
         });
     },

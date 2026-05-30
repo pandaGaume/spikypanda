@@ -1,8 +1,4 @@
-import {
-    cloneable, editable, viewable,
-    IChannel, IDeclaresPorts, IOlink, IPortDescriptor,
-    ISession, RuntimeNode, inSlotOf,
-} from "spikypanda-core";
+import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, RuntimeNode, inSlotOf } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
 
 /**
@@ -50,59 +46,73 @@ type Waveform = "sin" | "cos";
 
 export class OscillatorNode extends RuntimeNode implements IDeclaresPorts {
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "t",         optional: false, type: "float" },
-        { slot: "frequency", optional: true,  type: "float" },
-        { slot: "amplitude", optional: true,  type: "float" },
-        { slot: "phase",     optional: true,  type: "float" },
+        { slot: "t", optional: false, type: "float" },
+        { slot: "frequency", optional: true, type: "float" },
+        { slot: "amplitude", optional: true, type: "float" },
+        { slot: "phase", optional: true, type: "float" },
     ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "value", optional: false, type: "float" },
-    ];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "value", optional: false, type: "float" }];
 
     // ── Editables (used when the matching input is NOT wired) ──────────
-    @cloneable private _frequency: number   = 50;     // Hz
-    @cloneable private _amplitude: number   = 1;
-    @cloneable private _phase:     number   = 0;      // radians
-    @cloneable private _waveform:  Waveform = "sin";
+    @cloneable private _frequency: number = 50; // Hz
+    @cloneable private _amplitude: number = 1;
+    @cloneable private _phase: number = 0; // radians
+    @cloneable private _waveform: Waveform = "sin";
 
     // Internal: last computed sample, surfaced as a viewable for quick
     // sanity-check in the property panel while playing.
     private _lastValue: number = 0;
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
     @editable("number", { unit: "Hz" })
-    public get frequency(): number { return this._frequency; }
+    public get frequency(): number {
+        return this._frequency;
+    }
     public set frequency(v: number) {
-        this.setField("frequency", this._frequency, v, (n) => { this._frequency = n; });
+        this.setField("frequency", this._frequency, v, (n) => {
+            this._frequency = n;
+        });
     }
 
     @editable("number")
-    public get amplitude(): number { return this._amplitude; }
+    public get amplitude(): number {
+        return this._amplitude;
+    }
     public set amplitude(v: number) {
-        this.setField("amplitude", this._amplitude, v, (n) => { this._amplitude = n; });
+        this.setField("amplitude", this._amplitude, v, (n) => {
+            this._amplitude = n;
+        });
     }
 
     @editable("number", { unit: "rad" })
-    public get phase(): number { return this._phase; }
+    public get phase(): number {
+        return this._phase;
+    }
     public set phase(v: number) {
-        this.setField("phase", this._phase, v, (n) => { this._phase = n; });
+        this.setField("phase", this._phase, v, (n) => {
+            this._phase = n;
+        });
     }
 
     @editable("string", { unit: "sin | cos" })
-    public get waveform(): Waveform { return this._waveform; }
+    public get waveform(): Waveform {
+        return this._waveform;
+    }
     public set waveform(v: Waveform) {
         const next: Waveform = v === "cos" ? "cos" : "sin";
-        this.setField("waveform", this._waveform, next, (n) => { this._waveform = n; });
+        this.setField("waveform", this._waveform, next, (n) => {
+            this._waveform = n;
+        });
     }
 
     /** Last emitted sample. Useful in the property panel for a quick
      *  "is this oscillator alive" check while playing. */
-    @viewable("number") public get lastValue(): number { return this._lastValue; }
+    @viewable("number") public get lastValue(): number {
+        return this._lastValue;
+    }
 
     /** Angular frequency for the current `frequency` editable, in rad/s.
      *  Mostly a sanity-check viewable: should read 314.16 for f=50,
@@ -122,7 +132,7 @@ export class OscillatorNode extends RuntimeNode implements IDeclaresPorts {
         let t: number | null = null;
         let frequency = this._frequency;
         let amplitude = this._amplitude;
-        let phase     = this._phase;
+        let phase = this._phase;
 
         const links = session.graph.links as ReadonlyArray<IChannel>;
         for (const link of this.opsc<IChannel>()) {
@@ -133,10 +143,18 @@ export class OscillatorNode extends RuntimeNode implements IDeclaresPorts {
             const v = session.consume(idx);
             if (typeof v !== "number") continue;
             switch (slot) {
-                case "t":         t         = v; break;
-                case "frequency": frequency = v; break;
-                case "amplitude": amplitude = v; break;
-                case "phase":     phase     = v; break;
+                case "t":
+                    t = v;
+                    break;
+                case "frequency":
+                    frequency = v;
+                    break;
+                case "amplitude":
+                    amplitude = v;
+                    break;
+                case "phase":
+                    phase = v;
+                    break;
             }
         }
 

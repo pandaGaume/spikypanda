@@ -50,11 +50,13 @@ export interface IRenderable {
 export function isRenderable(obj: unknown): obj is IRenderable {
     if (!obj || typeof obj !== "object") return false;
     const o = obj as Partial<IRenderable>;
-    return typeof o.renderableType === "string"
-        && typeof o.mountInto === "function"
-        && typeof o.unmountFrom === "function"
-        && typeof o.repaint === "function"
-        && typeof o.onResize === "function";
+    return (
+        typeof o.renderableType === "string" &&
+        typeof o.mountInto === "function" &&
+        typeof o.unmountFrom === "function" &&
+        typeof o.repaint === "function" &&
+        typeof o.onResize === "function"
+    );
 }
 
 /**
@@ -118,13 +120,16 @@ export class Dashboard {
         // GridStack init: 12-column grid (industry-standard, lots of room
         // for asymmetric layouts), float = true so tiles don't auto-pack
         // to the top (better UX for free-form dashboards).
-        this._grid = GridStack.init({
-            column: 12,
-            cellHeight: 60,
-            float: true,
-            margin: 6,
-            animate: true,
-        }, this._host);
+        this._grid = GridStack.init(
+            {
+                column: 12,
+                cellHeight: 60,
+                float: true,
+                margin: 6,
+                animate: true,
+            },
+            this._host
+        );
 
         // GridStack's own resizestop event isn't used: we let a per-tile
         // ResizeObserver (set up in addTile) handle every size change
@@ -178,11 +183,11 @@ export class Dashboard {
         // here we already own the chrome (header + body) so makeWidget
         // is the right entry point.
         const gridItem: GridItemHTMLElement = this._grid.makeWidget(item, {
-            id:    node.id,
-            x:     opts?.x,
-            y:     opts?.y,
-            w:     opts?.w ?? 6,
-            h:     opts?.h ?? 4,
+            id: node.id,
+            x: opts?.x,
+            y: opts?.y,
+            w: opts?.w ?? 6,
+            h: opts?.h ?? 4,
             autoPosition: opts?.x === undefined || opts?.y === undefined,
         });
 
@@ -212,8 +217,8 @@ export class Dashboard {
         this._tiles.set(node.id, {
             node,
             renderable,
-            item:    gridItem,
-            bodyEl:  body,
+            item: gridItem,
+            bodyEl: body,
             observer,
         });
 
@@ -238,7 +243,9 @@ export class Dashboard {
     }
 
     /** True when the given graph node is currently tiled. */
-    public hasTile(nodeId: string): boolean { return this._tiles.has(nodeId); }
+    public hasTile(nodeId: string): boolean {
+        return this._tiles.has(nodeId);
+    }
 
     /** Unmount every tile and stop the rAF loop. Idempotent. */
     public clear(): void {
@@ -257,8 +264,10 @@ export class Dashboard {
             tiles.push({
                 nodeId,
                 renderableType: tile.renderable.renderableType,
-                x: gs.x ?? 0, y: gs.y ?? 0,
-                w: gs.w ?? 6, h: gs.h ?? 4,
+                x: gs.x ?? 0,
+                y: gs.y ?? 0,
+                w: gs.w ?? 6,
+                h: gs.h ?? 4,
             });
         }
         return { id: this.id, name: this.name, tiles };
@@ -271,10 +280,7 @@ export class Dashboard {
      * skipped (forward-compat: an older save might reference a node
      * type that's no longer available).
      */
-    public deserialize(
-        saved: ISerializedDashboard,
-        resolveNode: (nodeId: string) => (NodeUI & { item: { data: unknown } }) | undefined,
-    ): void {
+    public deserialize(saved: ISerializedDashboard, resolveNode: (nodeId: string) => (NodeUI & { item: { data: unknown } }) | undefined): void {
         this.clear();
         this.name = saved.name ?? this.name;
         for (const tile of saved.tiles ?? []) {
@@ -329,9 +335,9 @@ export class Dashboard {
 }
 
 interface MountedTile {
-    node:       NodeUI;
+    node: NodeUI;
     renderable: IRenderable;
-    item:       GridItemHTMLElement;
-    bodyEl:     HTMLElement;
-    observer:   ResizeObserver;
+    item: GridItemHTMLElement;
+    bodyEl: HTMLElement;
+    observer: ResizeObserver;
 }

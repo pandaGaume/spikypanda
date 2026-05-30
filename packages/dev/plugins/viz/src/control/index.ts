@@ -32,9 +32,13 @@ export const vizControlSubPlugin: IPlugin = {
             category:    "Viz.Control",
             inputPorts:  [],
             outputPorts: [
-                { slot: "out_0", optional: false, type: "float" },
-                { slot: "out_1", optional: false, type: "float" },
-                { slot: "out_2", optional: false, type: "float" },
+                // Slot names match the canonical default labels
+                // (oscillator control). If the user repurposes the
+                // tile by editing labels, the port names stay these
+                // three. See knobs3.node.ts docstring for rationale.
+                { slot: "frequency", optional: false, type: "float" },
+                { slot: "amplitude", optional: false, type: "float" },
+                { slot: "phase",     optional: false, type: "float" },
             ],
         });
     },

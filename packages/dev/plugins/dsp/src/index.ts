@@ -6,6 +6,7 @@ import { dspFilterSubPlugin } from "./filter/index.js";
 import { dspStatsSubPlugin } from "./stats/index.js";
 import { dspStreamSubPlugin } from "./stream/index.js";
 import { dspGeneratorSubPlugin } from "./generator/index.js";
+import { dspSensorSubPlugin } from "./sensor/index.js";
 
 export * from "./nodes/factories.js";
 export { dspTransformSubPlugin } from "./transform/index.js";
@@ -16,6 +17,7 @@ export { dspFilterSubPlugin } from "./filter/index.js";
 export { dspStatsSubPlugin } from "./stats/index.js";
 export { dspStreamSubPlugin, ScalarBufferNode, createScalarBufferNode } from "./stream/index.js";
 export { dspGeneratorSubPlugin, OscillatorNode, createOscillatorNode } from "./generator/index.js";
+export { dspSensorSubPlugin, TransducerNode, createTransducerNode } from "./sensor/index.js";
 
 /**
  * @spikypanda/plugin-dsp
@@ -32,6 +34,8 @@ export { dspGeneratorSubPlugin, OscillatorNode, createOscillatorNode } from "./g
  *   DSP.Stats       RMS, ZCR, MovingAverage, Detrend
  *   DSP.Stream      Scalar↔tensor adapters (e.g. Buffer: float stream
  *                   → 1D Float32Array tensor; bridges Sin → SpFFT)
+ *   DSP.Sensor      Generic transducer (LPF + Gaussian noise +
+ *                   quantization + drift) for sensor-conditioning models
  *
  * Most nodes are implemented as SpFx ONNX kernels (see
  * `@spiky-panda/onnx`'s `ops/dsp.ts`) and so carry the `onnx` standard.
@@ -55,5 +59,6 @@ export default {
         "DSP.Filter": dspFilterSubPlugin,
         "DSP.Stats": dspStatsSubPlugin,
         "DSP.Stream": dspStreamSubPlugin,
+        "DSP.Sensor": dspSensorSubPlugin,
     },
 };

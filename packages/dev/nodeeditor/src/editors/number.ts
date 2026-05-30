@@ -32,9 +32,7 @@ export const numberEditor: EditorFactory = (host, model, propertyName, options, 
     const unitInline = !opts.unit || opts.unit.length <= 8;
 
     const wrap = document.createElement("div");
-    wrap.style.cssText = unitInline
-        ? "display:flex;align-items:center;gap:6px;width:100%;"
-        : "display:flex;flex-direction:column;gap:2px;width:100%;";
+    wrap.style.cssText = unitInline ? "display:flex;align-items:center;gap:6px;width:100%;" : "display:flex;flex-direction:column;gap:2px;width:100%;";
 
     const row = document.createElement("div");
     row.style.cssText = "display:flex;align-items:center;gap:6px;width:100%;";
@@ -71,16 +69,12 @@ export const numberEditor: EditorFactory = (host, model, propertyName, options, 
             // Inline + truncatable: ellipsis when the panel is narrow,
             // hover for the full text. max-width caps at 60% of the
             // row so the input gets at least 40% real estate.
-            unit.style.cssText =
-                "flex:0 1 auto;max-width:60%;overflow:hidden;text-overflow:ellipsis;"
-                + "white-space:nowrap;font-size:0.7em;color:var(--ne-color-text-muted);";
+            unit.style.cssText = "flex:0 1 auto;max-width:60%;overflow:hidden;text-overflow:ellipsis;" + "white-space:nowrap;font-size:0.7em;color:var(--ne-color-text-muted);";
             row.appendChild(unit);
             wrap.appendChild(row);
         } else {
             // Caption row below the input. Full-width, can wrap.
-            unit.style.cssText =
-                "font-size:0.7em;color:var(--ne-color-text-muted);"
-                + "white-space:normal;word-break:break-word;line-height:1.3;";
+            unit.style.cssText = "font-size:0.7em;color:var(--ne-color-text-muted);" + "white-space:normal;word-break:break-word;line-height:1.3;";
             wrap.appendChild(row);
             wrap.appendChild(unit);
         }

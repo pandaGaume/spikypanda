@@ -18,6 +18,7 @@ const sources = [
     join(root, "packages/dev/plugins/dsp/bundle"),
     join(root, "packages/dev/plugins/physics/bundle"),
     join(root, "packages/dev/plugins/viz/bundle"),
+    join(root, "packages/dev/plugins/helios/bundle"),
 ];
 
 const dest = join(root, "packages/host/www/bundle");

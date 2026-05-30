@@ -23,11 +23,18 @@ export interface INodeMeta {
     /** Variadic input descriptor: when set, the editor maintains a
      *  growing/shrinking set of input ports `${prefix}0`, `${prefix}1`,
      *  ... so exactly one trailing unconnected port stays available
-     *  (the "+" slot). */
-    readonly variadicInput?: { readonly prefix: string; readonly type: string };
+     *  (the "+" slot).
+     *
+     *  Accepts an ARRAY of descriptors when a node needs multiple
+     *  parallel variadic groups on the same side (e.g. the Stem tile
+     *  declares `[{ prefix: "f_" }, { prefix: "A_" }]` for paired
+     *  frequency/amplitude inputs). Each group is reconciled
+     *  independently by the editor. */
+    readonly variadicInput?: { readonly prefix: string; readonly type: string } | ReadonlyArray<{ readonly prefix: string; readonly type: string }>;
     /** Same as `variadicInput` but for the output side (e.g. Sequence's
-     *  `then_0`, `then_1`, ...). */
-    readonly variadicOutput?: { readonly prefix: string; readonly type: string };
+     *  `then_0`, `then_1`, ...). Also accepts the multi-group array
+     *  form for symmetry, although no current node uses it. */
+    readonly variadicOutput?: { readonly prefix: string; readonly type: string } | ReadonlyArray<{ readonly prefix: string; readonly type: string }>;
 }
 
 export type NodeFactory = (config?: Record<string, unknown>) => IRuntimeNode;

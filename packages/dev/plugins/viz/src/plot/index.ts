@@ -40,19 +40,23 @@ export const vizPlotSubPlugin: IPlugin = {
         ctx.nodes.register("Viz.Plot:stem", () => createUplotStemNode() as never, {
             label:       "Stem (Oracle Spectrum)",
             category:    "Viz.Plot",
-            // Four (frequency, amplitude) pairs. Unused pairs (no wire
-            // on either f_i or A_i) are skipped silently.
+            // Seed with one pair (f_0, A_0). The variadic reconciler
+            // grows BOTH groups independently as the user connects:
+            // wire f_0 → f_1 appears; wire A_0 → A_1 appears. Each
+            // stem index gets its own color from the tile's palette
+            // (orange / cyan / green / yellow / red / purple / pink /
+            // slate, repeating after 8). Unbounded in principle —
+            // practical limit is whatever the dashboard can render
+            // without congestion.
             inputPorts: [
                 { slot: "f_0", optional: true, type: "float" },
                 { slot: "A_0", optional: true, type: "float" },
-                { slot: "f_1", optional: true, type: "float" },
-                { slot: "A_1", optional: true, type: "float" },
-                { slot: "f_2", optional: true, type: "float" },
-                { slot: "A_2", optional: true, type: "float" },
-                { slot: "f_3", optional: true, type: "float" },
-                { slot: "A_3", optional: true, type: "float" },
             ],
             outputPorts: [],
+            variadicInput: [
+                { prefix: "f_", type: "float" },
+                { prefix: "A_", type: "float" },
+            ],
         });
     },
 };

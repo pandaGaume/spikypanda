@@ -351,19 +351,27 @@ class SpFFTNode extends OnnxOpNode {
     }
 
     @editable("number", { min: 16, step: 16, unit: "bins" })
-    public get nfft(): number { return this._nfft; }
+    public get nfft(): number {
+        return this._nfft;
+    }
     public set nfft(v: number) {
         // FFT engine tables are sized to nfft; the shared module-level
         // cache (getFFTEngine) auto-builds a new one on first request,
         // so we only need to update the field — no per-instance cache
         // to invalidate.
-        this.setField("nfft", this._nfft, v, (x) => { this._nfft = x; });
+        this.setField("nfft", this._nfft, v, (x) => {
+            this._nfft = x;
+        });
     }
 
     @editable("number", { min: 0, max: 2, step: 1, unit: "0=power 1=mag 2=complex" })
-    public get outputType(): number { return this._outputType; }
+    public get outputType(): number {
+        return this._outputType;
+    }
     public set outputType(v: number) {
-        this.setField("outputType", this._outputType, v, (x) => { this._outputType = x; });
+        this.setField("outputType", this._outputType, v, (x) => {
+            this._outputType = x;
+        });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -411,9 +419,13 @@ class SpIFFTNode extends OnnxOpNode {
     }
 
     @editable("number", { min: 16, step: 16, unit: "bins" })
-    public get nfft(): number { return this._nfft; }
+    public get nfft(): number {
+        return this._nfft;
+    }
     public set nfft(v: number) {
-        this.setField("nfft", this._nfft, v, (x) => { this._nfft = x; });
+        this.setField("nfft", this._nfft, v, (x) => {
+            this._nfft = x;
+        });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -482,15 +494,23 @@ class SpWindowNode extends OnnxOpNode {
     }
 
     @editable("number", { min: 0, max: 5, step: 1, unit: "0=hann 1=hamm 2=black 3=bart 4=rect 5=tukey" })
-    public get windowType(): number { return this._windowType; }
+    public get windowType(): number {
+        return this._windowType;
+    }
     public set windowType(v: number) {
-        this.setField("windowType", this._windowType, v, (x) => { this._windowType = x; });
+        this.setField("windowType", this._windowType, v, (x) => {
+            this._windowType = x;
+        });
     }
 
     @editable("number", { min: 0, max: 1, step: 0.05 })
-    public get alpha(): number { return this._alpha; }
+    public get alpha(): number {
+        return this._alpha;
+    }
     public set alpha(v: number) {
-        this.setField("alpha", this._alpha, v, (x) => { this._alpha = x; });
+        this.setField("alpha", this._alpha, v, (x) => {
+            this._alpha = x;
+        });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -528,21 +548,33 @@ class SpFrameNode extends OnnxOpNode {
     }
 
     @editable("number", { min: 2, step: 2, unit: "samples" })
-    public get frameSize(): number { return this._frameSize; }
+    public get frameSize(): number {
+        return this._frameSize;
+    }
     public set frameSize(v: number) {
-        this.setField("frameSize", this._frameSize, v, (x) => { this._frameSize = x; });
+        this.setField("frameSize", this._frameSize, v, (x) => {
+            this._frameSize = x;
+        });
     }
 
     @editable("number", { min: 1, step: 1, unit: "samples" })
-    public get hopLength(): number { return this._hopLength; }
+    public get hopLength(): number {
+        return this._hopLength;
+    }
     public set hopLength(v: number) {
-        this.setField("hopLength", this._hopLength, v, (x) => { this._hopLength = x; });
+        this.setField("hopLength", this._hopLength, v, (x) => {
+            this._hopLength = x;
+        });
     }
 
     @editable("number", { min: 0, max: 1, step: 1, unit: "0=drop 1=zero-pad" })
-    public get padMode(): number { return this._padMode; }
+    public get padMode(): number {
+        return this._padMode;
+    }
     public set padMode(v: number) {
-        this.setField("padMode", this._padMode, v, (x) => { this._padMode = x; });
+        this.setField("padMode", this._padMode, v, (x) => {
+            this._padMode = x;
+        });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -667,27 +699,43 @@ class SpBiquadFilterNode extends OnnxOpNode {
     }
 
     @editable("number", { min: 0, max: 3, step: 1, unit: "0=LP 1=HP 2=BP 3=Notch" })
-    public get filterType(): number { return this._filterType; }
+    public get filterType(): number {
+        return this._filterType;
+    }
     public set filterType(v: number) {
-        this.setField("filterType", this._filterType, v, (x) => { this._filterType = x; });
+        this.setField("filterType", this._filterType, v, (x) => {
+            this._filterType = x;
+        });
     }
 
     @editable("number", { min: 1, step: 1, unit: "Hz" })
-    public get sampleRate(): number { return this._sampleRate; }
+    public get sampleRate(): number {
+        return this._sampleRate;
+    }
     public set sampleRate(v: number) {
-        this.setField("sampleRate", this._sampleRate, v, (x) => { this._sampleRate = x; });
+        this.setField("sampleRate", this._sampleRate, v, (x) => {
+            this._sampleRate = x;
+        });
     }
 
     @editable("number", { min: 0, step: 10, unit: "Hz" })
-    public get cutoffHz(): number { return this._cutoffHz; }
+    public get cutoffHz(): number {
+        return this._cutoffHz;
+    }
     public set cutoffHz(v: number) {
-        this.setField("cutoffHz", this._cutoffHz, v, (x) => { this._cutoffHz = x; });
+        this.setField("cutoffHz", this._cutoffHz, v, (x) => {
+            this._cutoffHz = x;
+        });
     }
 
     @editable("number", { min: 0.01, step: 0.1 })
-    public get q(): number { return this._q; }
+    public get q(): number {
+        return this._q;
+    }
     public set q(v: number) {
-        this.setField("q", this._q, v, (x) => { this._q = x; });
+        this.setField("q", this._q, v, (x) => {
+            this._q = x;
+        });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -740,20 +788,44 @@ class SpKalman1DNode extends OnnxOpNode {
     }
 
     @editable("number", { min: 0, step: 1e-5 })
-    public get q(): number { return this._q; }
-    public set q(v: number) { this.setField("q", this._q, v, (x) => { this._q = x; }); }
+    public get q(): number {
+        return this._q;
+    }
+    public set q(v: number) {
+        this.setField("q", this._q, v, (x) => {
+            this._q = x;
+        });
+    }
 
     @editable("number", { min: 0, step: 1e-3 })
-    public get r(): number { return this._r; }
-    public set r(v: number) { this.setField("r", this._r, v, (x) => { this._r = x; }); }
+    public get r(): number {
+        return this._r;
+    }
+    public set r(v: number) {
+        this.setField("r", this._r, v, (x) => {
+            this._r = x;
+        });
+    }
 
     @editable("number")
-    public get x0(): number { return this._x0; }
-    public set x0(v: number) { this.setField("x0", this._x0, v, (x) => { this._x0 = x; }); }
+    public get x0(): number {
+        return this._x0;
+    }
+    public set x0(v: number) {
+        this.setField("x0", this._x0, v, (x) => {
+            this._x0 = x;
+        });
+    }
 
     @editable("number", { min: 0 })
-    public get p0(): number { return this._p0; }
-    public set p0(v: number) { this.setField("p0", this._p0, v, (x) => { this._p0 = x; }); }
+    public get p0(): number {
+        return this._p0;
+    }
+    public set p0(v: number) {
+        this.setField("p0", this._p0, v, (x) => {
+            this._p0 = x;
+        });
+    }
 
     execute(inputs: ITensor[]): ITensor[] {
         const z = inputs[0].data;
@@ -831,10 +903,14 @@ class SpMovingAverageNode extends OnnxOpNode {
     }
 
     @editable("number", { min: 1, step: 1, unit: "samples" })
-    public get windowSize(): number { return this._windowSize; }
+    public get windowSize(): number {
+        return this._windowSize;
+    }
     public set windowSize(v: number) {
         const next = Math.max(1, Math.floor(v));
-        this.setField("windowSize", this._windowSize, next, (x) => { this._windowSize = x; });
+        this.setField("windowSize", this._windowSize, next, (x) => {
+            this._windowSize = x;
+        });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -869,9 +945,13 @@ class SpDetrendNode extends OnnxOpNode {
     }
 
     @editable("number", { min: 0, max: 1, step: 1, unit: "0=constant 1=linear" })
-    public get mode(): number { return this._mode; }
+    public get mode(): number {
+        return this._mode;
+    }
     public set mode(v: number) {
-        this.setField("mode", this._mode, v, (x) => { this._mode = x; });
+        this.setField("mode", this._mode, v, (x) => {
+            this._mode = x;
+        });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -927,21 +1007,36 @@ class SpMelFilterbankNode extends OnnxOpNode {
     }
 
     @editable("number", { min: 1, step: 1, unit: "bands" })
-    public get nMels(): number { return this._nMels; }
+    public get nMels(): number {
+        return this._nMels;
+    }
     public set nMels(v: number) {
-        this.setField("nMels", this._nMels, v, (x) => { this._nMels = x; this.fb = null; });
+        this.setField("nMels", this._nMels, v, (x) => {
+            this._nMels = x;
+            this.fb = null;
+        });
     }
 
     @editable("number", { min: 16, step: 16, unit: "bins" })
-    public get nfft(): number { return this._nfft; }
+    public get nfft(): number {
+        return this._nfft;
+    }
     public set nfft(v: number) {
-        this.setField("nfft", this._nfft, v, (x) => { this._nfft = x; this.fb = null; });
+        this.setField("nfft", this._nfft, v, (x) => {
+            this._nfft = x;
+            this.fb = null;
+        });
     }
 
     @editable("number", { min: 1, step: 1, unit: "Hz" })
-    public get sampleRate(): number { return this._sampleRate; }
+    public get sampleRate(): number {
+        return this._sampleRate;
+    }
     public set sampleRate(v: number) {
-        this.setField("sampleRate", this._sampleRate, v, (x) => { this._sampleRate = x; this.fb = null; });
+        this.setField("sampleRate", this._sampleRate, v, (x) => {
+            this._sampleRate = x;
+            this.fb = null;
+        });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -979,9 +1074,13 @@ class SpLogScaleNode extends OnnxOpNode {
     }
 
     @editable("number", { min: 0, step: 1e-12 })
-    public get floor(): number { return this._floor; }
+    public get floor(): number {
+        return this._floor;
+    }
     public set floor(v: number) {
-        this.setField("floor", this._floor, v, (x) => { this._floor = x; });
+        this.setField("floor", this._floor, v, (x) => {
+            this._floor = x;
+        });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -1010,9 +1109,13 @@ class SpDCTNode extends OnnxOpNode {
     }
 
     @editable("number", { min: 1, step: 1, unit: "coeffs" })
-    public get nOutput(): number { return this._nOutput; }
+    public get nOutput(): number {
+        return this._nOutput;
+    }
     public set nOutput(v: number) {
-        this.setField("nOutput", this._nOutput, v, (x) => { this._nOutput = x; });
+        this.setField("nOutput", this._nOutput, v, (x) => {
+            this._nOutput = x;
+        });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -1065,39 +1168,66 @@ class SpMFCCNode extends OnnxOpNode {
     }
 
     @editable("number", { min: 1, step: 1, unit: "Hz" })
-    public get sampleRate(): number { return this._sampleRate; }
+    public get sampleRate(): number {
+        return this._sampleRate;
+    }
     public set sampleRate(v: number) {
-        this.setField("sampleRate", this._sampleRate, v, (x) => { this._sampleRate = x; this._invalidateCaches(); });
+        this.setField("sampleRate", this._sampleRate, v, (x) => {
+            this._sampleRate = x;
+            this._invalidateCaches();
+        });
     }
 
     @editable("number", { min: 1, step: 1, unit: "coeffs" })
-    public get nMfcc(): number { return this._nMfcc; }
+    public get nMfcc(): number {
+        return this._nMfcc;
+    }
     public set nMfcc(v: number) {
-        this.setField("nMfcc", this._nMfcc, v, (x) => { this._nMfcc = x; });
+        this.setField("nMfcc", this._nMfcc, v, (x) => {
+            this._nMfcc = x;
+        });
     }
 
     @editable("number", { min: 16, step: 16, unit: "bins" })
-    public get nFft(): number { return this._nFft; }
+    public get nFft(): number {
+        return this._nFft;
+    }
     public set nFft(v: number) {
-        this.setField("nFft", this._nFft, v, (x) => { this._nFft = x; this._invalidateCaches(); });
+        this.setField("nFft", this._nFft, v, (x) => {
+            this._nFft = x;
+            this._invalidateCaches();
+        });
     }
 
     @editable("number", { min: 1, step: 1, unit: "samples" })
-    public get hopLength(): number { return this._hopLength; }
+    public get hopLength(): number {
+        return this._hopLength;
+    }
     public set hopLength(v: number) {
-        this.setField("hopLength", this._hopLength, v, (x) => { this._hopLength = x; });
+        this.setField("hopLength", this._hopLength, v, (x) => {
+            this._hopLength = x;
+        });
     }
 
     @editable("number", { min: 1, step: 1, unit: "bands" })
-    public get nMels(): number { return this._nMels; }
+    public get nMels(): number {
+        return this._nMels;
+    }
     public set nMels(v: number) {
-        this.setField("nMels", this._nMels, v, (x) => { this._nMels = x; this._invalidateCaches(); });
+        this.setField("nMels", this._nMels, v, (x) => {
+            this._nMels = x;
+            this._invalidateCaches();
+        });
     }
 
     @editable("number", { min: 0, max: 1, step: 1, unit: "0=hann 1=hamm" })
-    public get windowType(): number { return this._windowType; }
+    public get windowType(): number {
+        return this._windowType;
+    }
     public set windowType(v: number) {
-        this.setField("windowType", this._windowType, v, (x) => { this._windowType = x; });
+        this.setField("windowType", this._windowType, v, (x) => {
+            this._windowType = x;
+        });
     }
 
     execute(inputs: ITensor[]): ITensor[] {
@@ -1234,15 +1364,23 @@ class SpDTWNode extends OnnxOpNode {
     }
 
     @editable("boolean")
-    public get normalize(): boolean { return this._normalize; }
+    public get normalize(): boolean {
+        return this._normalize;
+    }
     public set normalize(v: boolean) {
-        this.setField("normalize", this._normalize, v, (x) => { this._normalize = x; });
+        this.setField("normalize", this._normalize, v, (x) => {
+            this._normalize = x;
+        });
     }
 
     @editable("number", { min: -1, step: 1, unit: "frames (-1=no constraint)" })
-    public get band(): number { return this._band; }
+    public get band(): number {
+        return this._band;
+    }
     public set band(v: number) {
-        this.setField("band", this._band, v, (x) => { this._band = x; });
+        this.setField("band", this._band, v, (x) => {
+            this._band = x;
+        });
     }
 
     execute(inputs: ITensor[]): ITensor[] {

@@ -106,6 +106,17 @@
             "nodes": [
                 { "type": "DSP.Stream:buffer", "factory": "createScalarBufferNode", "label": "Scalar Buffer" }
             ]
+        },
+        {
+            "id":          "DSP.Sensor",
+            "displayName": "Sensor",
+            "description": "Generic signal-conditioning model. Transducer wraps a clean input with a realistic 1st-order LPF + Gaussian noise + quantization + linear drift; compose with sensor-specific defaults (thermocouple, pressure, flow, ...) as thin wrappers.",
+            "category":    "DSP.Sensor",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "DSP.Sensor:transducer", "factory": "createTransducerNode", "label": "Transducer" }
+            ]
         }
     ],
     "manifestRefs": []

@@ -75,11 +75,7 @@ export class VariadicReconciler implements IDisposable {
         for (const desc of descs) this._reconcileGroup(node, direction, desc);
     }
 
-    private _reconcileGroup(
-        node: NodeUI,
-        direction: "input" | "output",
-        desc: { prefix: string; type: string },
-    ): void {
+    private _reconcileGroup(node: NodeUI, direction: "input" | "output", desc: { prefix: string; type: string }): void {
         const all = direction === "input" ? node.inputs : node.outputs;
         // Each variadic group is keyed on its own prefix; ports from
         // other groups (different prefix) are not picked up here.

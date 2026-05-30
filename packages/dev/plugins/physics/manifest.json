@@ -127,6 +127,18 @@
             "nodes": [
                 { "type": "Physics.Mechanical.Fault:modulator", "factory": "createFaultModulatorNode", "label": "Fault Modulator" }
             ]
+        },
+        {
+            "id":          "Physics.Control",
+            "displayName": "Control",
+            "description": "Generic control-system primitives. Setpoint = continuous-value request with rate-limit + saturation (physical actuator limits). EmergencyShutdown = single latched safety bit (monopoly of safety agents): once tripped, stays true until explicit reset.",
+            "category":    "Physics.Control",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Physics.Control:setpoint",            "factory": "createSetpointNode",           "label": "Setpoint" },
+                { "type": "Physics.Control:emergency-shutdown",  "factory": "createEmergencyShutdownNode",  "label": "Emergency Shutdown" }
+            ]
         }
     ],
     "manifestRefs": []

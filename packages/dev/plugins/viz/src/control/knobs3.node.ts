@@ -29,7 +29,12 @@ import type { IRenderable } from "spikypanda-nodeeditor";
  *     widgets later without adding another dep.
  *
  * Outputs (3 fixed slots):
- *   out_0 / out_1 / out_2   the three knob values, broadcast per tick.
+ *   frequency / amplitude / phase
+ *     Slot names match the DEFAULT labels (matches the canonical
+ *     oscillator-control use case). Note: if the user repurposes the
+ *     tile (e.g. PID gains Kp/Ki/Kd), the LABELS change but the SLOT
+ *     names stay these three. Acceptable trade-off — port renaming
+ *     would invalidate every wire on every label edit.
  *
  * Editables (per-knob: label, min, max, default value):
  *   label_0..2     display label under the knob.
@@ -50,9 +55,9 @@ export class Knobs3Node extends RuntimeNode implements IDeclaresPorts, IRenderab
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "out_0", optional: false, type: "float" },
-        { slot: "out_1", optional: false, type: "float" },
-        { slot: "out_2", optional: false, type: "float" },
+        { slot: "frequency", optional: false, type: "float" },
+        { slot: "amplitude", optional: false, type: "float" },
+        { slot: "phase",     optional: false, type: "float" },
     ];
 
     // ── Per-knob editables ─────────────────────────────────────────────
@@ -127,7 +132,7 @@ export class Knobs3Node extends RuntimeNode implements IDeclaresPorts, IRenderab
         // so downstream nodes that consume immediately see the latest
         // user input without dropouts.
         const values = [this._value_0, this._value_1, this._value_2];
-        const slots = ["out_0", "out_1", "out_2"];
+        const slots = ["frequency", "amplitude", "phase"];
         const links = session.graph.links as ReadonlyArray<IChannel>;
         for (let i = 0; i < KNOB_COUNT; i++) {
             for (const link of this.onsc<IChannel>()) {

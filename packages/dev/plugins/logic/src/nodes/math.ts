@@ -1,4 +1,17 @@
-import { editable, viewable, cloneable, IChannel, IOlink, IDeclaresPorts, IPortDescriptor, ISession, RuntimeNode, inSlotOf, publishToFirstOutput, resolveSlotInputs } from "spikypanda-core";
+import {
+    editable,
+    viewable,
+    cloneable,
+    IChannel,
+    IOlink,
+    IDeclaresPorts,
+    IPortDescriptor,
+    ISession,
+    RuntimeNode,
+    inSlotOf,
+    publishToFirstOutput,
+    resolveSlotInputs,
+} from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
 
 /**
@@ -368,26 +381,28 @@ export class LerpNode extends RuntimeNode implements IDeclaresPorts {
 export class SumNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _gain: number = 1;
 
-    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "in_0", optional: true, type: "float" },
-    ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "result", optional: false, type: "float" },
-    ];
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "in_0", optional: true, type: "float" }];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "result", optional: false, type: "float" }];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
     }
 
     @editable("number")
-    public get gain(): number { return this._gain; }
+    public get gain(): number {
+        return this._gain;
+    }
     public set gain(v: number) {
-        this.setField("gain", this._gain, v, (n) => { this._gain = n; });
+        this.setField("gain", this._gain, v, (n) => {
+            this._gain = n;
+        });
     }
 
     /** Read-only mirror of the last produced sum — handy in the
      *  property panel to confirm wiring + see the live mix amplitude. */
-    @viewable("number") public get result(): number { return this._lastSum; }
+    @viewable("number") public get result(): number {
+        return this._lastSum;
+    }
     private _lastSum: number = 0;
 
     public override fire(session: ISession, _t: number): void {
