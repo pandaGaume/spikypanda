@@ -2,7 +2,7 @@ import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortD
 import type { ICartesian, Nullable } from "spikypanda-core";
 
 /**
- * `Helios.Actuator:setpoint` — continuous-value actuator that wraps a
+ * `Control.Actuator:setpoint` — continuous-value actuator that wraps a
  * requested setpoint with two physical limits every real actuator has:
  *
  *   1. Rate limit (slew). The output cannot change faster than
@@ -52,7 +52,6 @@ export class SetpointNode extends RuntimeNode implements IDeclaresPorts {
         { slot: "rateLimited", optional: false, type: "boolean" },
     ];
 
-    // ── Editables ──────────────────────────────────────────────────────
     @cloneable private _min: number = 0;
     @cloneable private _max: number = 1;
     @cloneable private _maxRatePerSec: number = Infinity;
@@ -60,7 +59,6 @@ export class SetpointNode extends RuntimeNode implements IDeclaresPorts {
 
     private static readonly _FALLBACK_DT_S = 0.01;
 
-    // ── Runtime state ─────────────────────────────────────────────────
     private _lastValue: number = 0;
     private _lastT: number | null = null;
     private _lastDt: number = SetpointNode._FALLBACK_DT_S;
@@ -160,7 +158,6 @@ export class SetpointNode extends RuntimeNode implements IDeclaresPorts {
 
         if (request === null) return;
 
-        // ── dt resolution ─────────────────────────────────────────────
         let dt = SetpointNode._FALLBACK_DT_S;
         if (tIn !== null) {
             if (this._lastT !== null) {
@@ -171,12 +168,11 @@ export class SetpointNode extends RuntimeNode implements IDeclaresPorts {
         }
         this._lastDt = dt;
 
-        // ── 1. Rate limit (slew toward request) ───────────────────────
-        // maxDelta is the largest change allowed this tick. With
-        // maxRatePerSec = Infinity the cap is Infinity and we step
-        // directly to request — the clamp below handles the math
-        // (Math.max/min with Infinity is well-defined and returns the
-        // finite operand).
+        // Rate limit (slew toward request). maxDelta is the largest
+        // change allowed this tick. With maxRatePerSec = Infinity the
+        // cap is Infinity and we step directly to request — the clamp
+        // below handles the math (Math.max/min with Infinity is
+        // well-defined and returns the finite operand).
         const desired = request - this._lastValue;
         const maxDelta = this._maxRatePerSec * dt;
         const step = Math.max(-maxDelta, Math.min(maxDelta, desired));
@@ -188,7 +184,6 @@ export class SetpointNode extends RuntimeNode implements IDeclaresPorts {
         // not the saturation limit (which has its own boolean).
         const rateLimited = Math.abs(desired) > maxDelta;
 
-        // ── 2. Saturation ─────────────────────────────────────────────
         let clamped = false;
         if (current < this._min) {
             current = this._min;
@@ -201,7 +196,6 @@ export class SetpointNode extends RuntimeNode implements IDeclaresPorts {
         this._lastValue = current;
         this._lastApplied = current;
 
-        // ── Publish on each output slot ───────────────────────────────
         // Three separate publish loops to keep each slot's fan-out
         // independent. The hot path is short, so the redundant link
         // iteration is fine vs. the readability cost of a multi-slot
@@ -225,7 +219,6 @@ export class SetpointNode extends RuntimeNode implements IDeclaresPorts {
     }
 }
 
-/** Free-standing factory invoked by the sub-plugin's `activate`. */
 export function createSetpointNode(): SetpointNode {
     return new SetpointNode();
 }

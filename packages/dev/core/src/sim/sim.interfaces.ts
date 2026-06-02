@@ -72,3 +72,196 @@ export function isSimSession(s: ISession): s is ISimSession {
     const candidate = s as ISession & Partial<ISimSession>;
     return typeof candidate.currentPhase === "number" && Array.isArray(candidate.phases);
 }
+
+// =====================================================================
+// Continuous-time integration (F1 — IIntegrable opt-in trait)
+// =====================================================================
+
+/**
+ * Inputs the solver hands to a leaf's `rhs(t, y, inputs, dydt)` call.
+ * The solver assembles this snapshot once per macro-tick by reading the
+ * leaf's incoming linkStates; rhs evaluations within one macro-tick all
+ * see the SAME inputs (per Q1.2 resolution in the v2 plan). This avoids
+ * mid-step input drift while remaining cheap to evaluate because
+ * upstream publish rates are bounded by the parent scheduler tick rate.
+ *
+ * Read-only. Keys are input port names (the leaf's incoming slots).
+ */
+export interface IIntegrationInputs {
+    get(portName: string): number | undefined;
+    has(portName: string): boolean;
+}
+
+/**
+ * Optional trait a RuntimeNode can implement to participate in
+ * continuous-time integration. ORTHOGONAL to the existing fire(t)
+ * contract — implementing this trait DOES NOT change anything until a
+ * solver attached to the session adopts the leaf at reset().
+ *
+ *   - Nodes that DON'T implement IIntegrable keep their current
+ *     fire(session, t) behaviour. Existing motors, oscillators, DSP
+ *     ops are unaffected.
+ *   - Nodes that DO implement IIntegrable opt out of doing integration
+ *     in fire() and instead expose their state vector + rhs to whatever
+ *     solver lives in the containing graph. fire() becomes pure I/O:
+ *     it reads the just-updated state and publishes observation outputs.
+ *     The solver owns the dt loop, including adaptive micro-stepping
+ *     for accuracy.
+ *
+ * Migration is localised (one node at a time) and reversible (drop the
+ * trait, fire() goes back to whatever it did before).
+ *
+ * All slice indexing uses (y, offset) — leaves co-exist in one shared
+ * state vector owned by the solver, each leaf writing to its slice
+ * `[offset .. offset+stateSize)`.
+ */
+export interface IIntegrable {
+    /**
+     * Size of this leaf's local state vector. 0 is illegal — stateless
+     * nodes don't implement IIntegrable. Frozen at compile time (per
+     * Q1.1 resolution): the solver caches offsets and a topology edit
+     * forces a session reset, which rebuilds the solver state.
+     */
+    readonly stateSize: number;
+
+    /**
+     * Names of state entries, length === stateSize. Surfaced in the
+     * property panel + diagnostic tiles (DMD, conservation auditors).
+     * Strongly recommended even when stateSize === 1 so dashboards can
+     * label series meaningfully.
+     */
+    readonly stateNames?: ReadonlyArray<string>;
+
+    /**
+     * Copy this leaf's current state INTO `y[offset .. offset+stateSize)`.
+     * Called by the solver at the start of each accepted macro-step and
+     * by Snapshot Restore. Must NOT mutate the leaf's own state.
+     */
+    gatherState(y: Float64Array, offset: number): void;
+
+    /**
+     * Copy `y[offset .. offset+stateSize)` back INTO this leaf's local
+     * state. Called by the solver at the end of each accepted macro-step
+     * and by Snapshot Restore. Implementations should use the existing
+     * `setField` pattern when present so viewables + LiveBinder still
+     * propagate the change to the UI.
+     */
+    writeState(y: Float64Array, offset: number): void;
+
+    /**
+     * Compute dy/dt at sim-time `t` given state `y`. PURE: must not
+     * read or write any state outside the (y, dydt) slice. Upstream
+     * input values arrive in `inputs`; the solver assembles that
+     * snapshot once per macro-tick.
+     *
+     *   y     full state vector (shared with other leaves)
+     *   offset start of this leaf's slice
+     *   inputs upstream port values, indexed by input port name
+     *   dydt   output slice to fill; same indexing convention as y
+     */
+    rhs(t: number, y: Float64Array, offset: number, inputs: IIntegrationInputs, dydt: Float64Array): void;
+
+    /**
+     * Optional analytic Jacobian d(rhs)/dy for this leaf. Returns a
+     * (stateSize × stateSize) matrix as a flat row-major Float64Array.
+     * When absent the solver finite-differences it — fine for explicit
+     * methods (RK4) but important when implicit solvers arrive
+     * (Rosenbrock, IDA / CVODES) where Jacobian accuracy dominates cost.
+     */
+    jacobian?(t: number, y: Float64Array, offset: number, inputs: IIntegrationInputs, J: Float64Array): void;
+}
+
+/**
+ * Structural duck-type guard for IIntegrable. Used by the solver
+ * marker node at session reset() to filter leaves before claiming them.
+ * Intentionally strict: we want a positive answer ONLY when the node
+ * declares all four mandatory members (stateSize, gatherState,
+ * writeState, rhs). `stateNames` and `jacobian` are optional and not
+ * checked.
+ */
+export function isIntegrable(node: unknown): node is IIntegrable {
+    if (!node || typeof node !== "object") return false;
+    const n = node as Partial<IIntegrable>;
+    return typeof n.stateSize === "number" && n.stateSize > 0 && typeof n.gatherState === "function" && typeof n.writeState === "function" && typeof n.rhs === "function";
+}
+
+// =====================================================================
+// Solver attachment (F3 — marker-node pattern)
+// =====================================================================
+
+/**
+ * Diagnostic report returned by `ISolver.step(dt, session)`. Surfaced
+ * by the marker node as viewables so the user can see solver behaviour
+ * live (acceptance rate, rhs cost, error envelope) without instrumenting
+ * the solver code paths.
+ */
+export interface ISolverStep {
+    /** Absolute sim-time at the END of this macro-step. */
+    readonly t: number;
+    /** Number of internal adaptive micro-steps used to cover this macro
+     *  step. 1 means no subdivision; higher means the solver detected
+     *  stiffness or fast transients and refined. */
+    readonly microSteps: number;
+    /** L∞ (max) error estimate over the accepted state vector. Useful
+     *  to compare against the configured tolerance. */
+    readonly maxError: number;
+    /** Total rhs evaluations performed across all micro-steps. For
+     *  RK4 Cash-Karp ≈ 6 per accepted step + 6 per rejected attempt. */
+    readonly rhsEvals: number;
+}
+
+/**
+ * A continuous-time integrator attached to a Session. Owns its own
+ * state vector, walks IIntegrable leaves, and advances them between
+ * dispatch-phase fire-loops. The solver is a SESSION concern, not a
+ * graph node — its lifecycle is initialize / step / dispose, never
+ * fire().
+ *
+ * Multiple solvers can coexist on the same Session (split by leaf
+ * typeId glob): an RK4 for fast non-stiff motors + a Rosenbrock for
+ * stiff Sabatier chemistry, with disjoint leaf subsets. The integration
+ * phase runs them in attachment order.
+ */
+export interface ISolver {
+    /** Human-readable solver name (e.g. "RK4 Cash-Karp adaptive"). */
+    readonly name: string;
+
+    /** True if this solver consumes IIntegrable.jacobian when present.
+     *  Explicit solvers (RK4) ignore it; implicit / stiff solvers use it
+     *  for the Newton iteration. The marker node may surface this so a
+     *  user picking between solvers sees which leaves benefit. */
+    readonly supportsJacobian: boolean;
+
+    /**
+     * Hook the solver to a session-aware leaf set. Caches each leaf's
+     * offset in the solver's private state vector and seeds y from each
+     * leaf's `gatherState`. Called once per session lifecycle, from the
+     * marker node's `reset()`.
+     */
+    initialize(leaves: ReadonlyArray<IIntegrable>, t0: number): void;
+
+    /**
+     * Advance the owned state vector from the previous accepted-step's
+     * sim-time by exactly `dt`. May internally subdivide (adaptive
+     * micro-stepping). At the END of step: every leaf's local state is
+     * up-to-date via `writeState`. Reads upstream port values via the
+     * session's link state (snapshot once per macro-step per Q1.2).
+     *
+     * Returns the diagnostic report for this macro-step.
+     */
+    step(dt: number, session: ISession): ISolverStep;
+
+    /**
+     * Last completed step's diagnostic report. The marker node exposes
+     * this via `@viewable` so the property panel mirrors solver
+     * behaviour in real time. `null` before the first `step()`.
+     */
+    readonly lastStep: ISolverStep | null;
+
+    /**
+     * Release any resources allocated during initialize (typed-array
+     * buffers, Jacobian workspaces, etc.). Called by `Session.detachSolver`
+     * AND by the marker node's `dispose`.
+     */
+    dispose?(): void;
+}

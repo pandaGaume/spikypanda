@@ -49,10 +49,13 @@ export const sliderEditor: EditorFactory = (host, model, propertyName, options, 
     const fmtStep = (step: number): number => {
         // Choose readout precision based on the step magnitude so the
         // user sees `25.00` for a 0.01 slider and `25` for an int slider.
+        // Generic formula via -log10(step) so sub-millisecond sliders
+        // (e.g. dt sources in [1e-5, 1e-3] for MCSA closed-loop sims)
+        // get enough decimals to distinguish positions; capped at 9 to
+        // stay readable. Falls back to 0 for step ≤ 0 / NaN / Infinity.
+        if (!(step > 0) || !Number.isFinite(step)) return 0;
         if (step >= 1) return 0;
-        if (step >= 0.1) return 1;
-        if (step >= 0.01) return 2;
-        return 3;
+        return Math.min(9, Math.max(0, Math.ceil(-Math.log10(step))));
     };
 
     const refreshBounds = (): void => {

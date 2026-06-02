@@ -41,6 +41,18 @@ export interface PortDef {
     name: string;
     type: PortType;
     direction: PortDirection;
+    /**
+     * Anchor index for split-view nodes. Routes this port's DOM
+     * rendering to `NodeUI.anchors[anchor]` instead of the single
+     * default widget. Used by Feedback Channel and similar "logical
+     * one node, visually multiple widgets" affordances: input goes on
+     * the half near its source, output goes on the half near its
+     * consumer, with the two halves positioned independently. Default
+     * undefined → routes to anchor 0 (the only widget for ordinary
+     * nodes). Out-of-range values silently clamp to 0 — the renderer
+     * never errors over a stale descriptor.
+     */
+    anchor?: number;
 }
 
 export interface VariadicPortDescriptor {
@@ -98,6 +110,18 @@ export interface NodeDef {
      * kind without per-op overrides.
      */
     category?: string;
+    /**
+     * Number of independent anchor widgets the node should render.
+     * Default 1 (the ordinary single-widget node). Values >= 2 create
+     * a split-view node: one logical entity drawn as N draggable
+     * widgets, each with its own position, sharing model + selection +
+     * properties. Ports route to widgets via PortDef.anchor; selection
+     * and hover styles apply to every widget; deletion removes them all
+     * together. Used by Feedback Channel (anchorCount=2: input-half
+     * near source, output-half near consumer) and any future "Ref" /
+     * "Reroute" affordance.
+     */
+    anchorCount?: number;
     data?: unknown;
 }
 

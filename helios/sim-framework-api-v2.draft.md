@@ -245,119 +245,209 @@ the trait, fire() goes back to inline Euler). No big-bang refactor.
 
 ---
 
-## F3 — `ISolver` as a host node
+## F3 — Solver attached to Session (marker-node pattern)
 
-### Architecture: solver is a Helios node, not an invisible runtime
+### Architecture: solver is a Session concern, surfaced via a marker node
 
-The simplest fit with the existing fractal model: the solver is a
-`RuntimeNode` you drop into a graph. At session start it discovers every
-`IIntegrable` leaf in **its containing graph** (i.e. `parentSession.graph.nodes`,
-filtered by `isIntegrable`), allocates the global state vector y, and
-each `fire(t)` advances y by exactly the macro-tick dt (composed of N
-internal adaptive micro-steps).
+Earlier drafts placed the solver as a host node in the graph that did
+its integration work in `fire()`. That created an ordering problem
+("must fire before sibling IIntegrable leaves") solved by ugly
+`_started` wiring or invasive scheduler-priority flags.
 
-### Proposed interface
+The solver is fundamentally NOT a data-flow node:
+- It consumes no input tokens (in the standard scheduler sense)
+- It publishes no output tokens
+- Its job is to drive the **integration phase** *between* dispatches of
+  the fire-loop
+
+So it belongs on the **Session**, alongside `simRate` and `running`.
+`Session.run(t)` becomes a two-phase orchestration:
+
+1. **Integration phase**: every attached solver advances its owned
+   IIntegrable leaves by `dt`, taking N internal adaptive micro-steps.
+2. **Dispatch phase**: the normal `Scheduler.RunDynamic` fire-loop. By
+   the time IIntegrable leaves' `fire()` runs, their state has already
+   been updated by the solver; `fire()` becomes pure I/O (read updated
+   state, publish observation outputs, latch action-port writes).
+
+The solver still has a **graph representation** — a marker node —
+*purely for editability + serialization*. The marker doesn't perform
+integration in its `fire()`; it only registers/unregisters the solver
+with the session and publishes diagnostic viewables (rhsEvals,
+microSteps, maxError).
+
+### Session API additions
 
 ```ts
-// same file
+// packages/dev/core/src/execution/execution.interfaces.ts
+
+export interface ISession {
+    // existing
+    readonly graph: IRuntimeGraph;
+    readonly nodeStates: ReadonlyArray<INodeState>;
+    simRate: number;
+    running: boolean;
+    // ... rest unchanged ...
+
+    // NEW: solver attachment
+    readonly solvers: ReadonlyArray<ISolver>;
+    attachSolver(solver: ISolver, leaves?: ReadonlyArray<IIntegrable>): void;
+    detachSolver(solver: ISolver): void;
+}
+
+// Concrete Session.run becomes two-phase:
+public run(t: number): void {
+    const dt = t - this._lastT;
+    this._lastT = t;
+
+    // Phase 1 — integration. Each attached solver advances its owned
+    // leaves by dt. Solvers are independent: a Session can carry one
+    // RK4 for fast/non-stiff plus one Rosenbrock for stiff Sabatier
+    // chemistry, partitioned by leaf typeId filter.
+    for (const solver of this._solvers) {
+        solver.step(dt, this);
+    }
+
+    // Phase 2 — dispatch. Standard data-flow fire-loop. IIntegrable
+    // leaves' fire() now sees already-updated state and just publishes
+    // their observation outputs.
+    if (this.graph.mode === "dynamic") {
+        Scheduler.RunDynamic(this, t);
+    } else if (this.graph.mode === "static") {
+        Scheduler.RunStatic(this, t);
+    }
+}
+```
+
+### Solver interface (simpler than before)
+
+```ts
+// packages/dev/core/src/sim/sim.interfaces.ts
 
 export interface ISolverStep {
-    /** Accepted step time at end of macro-tick. */
     readonly t: number;
-    /** Number of internal micro-steps the solver took. */
     readonly microSteps: number;
-    /** Largest local error estimate observed. */
     readonly maxError: number;
-    /** Number of RHS evaluations spent on this macro-tick. */
     readonly rhsEvals: number;
 }
 
 export interface ISolver {
     readonly name: string;
-
-    /** True when the solver can use analytic Jacobians (implicit
-     *  solvers benefit; explicit ones ignore). */
     readonly supportsJacobian: boolean;
 
-    /** Hook the solver to a specific graph + leaf set. Called once on
-     *  session start; the solver caches the offset table from each
-     *  IIntegrable to a slice of the global y vector. */
-    initialize(
-        graph: IRuntimeGraph,
-        integrableLeaves: ReadonlyArray<IIntegrable>,
-        t0: number,
-    ): void;
+    /** Hook the solver to a session-aware leaf set. Called by
+     *  session.attachSolver(). The solver caches each leaf's offset
+     *  into its private state vector. */
+    initialize(leaves: ReadonlyArray<IIntegrable>, t0: number): void;
 
-    /** Advance the simulation by `dt` seconds. Returns step diagnostics.
-     *  Mutates the global state in place (each leaf's writeState is
-     *  called once at the end of the accepted macro-step). */
-    step(dt: number, inputs: SolverInputResolver): ISolverStep;
+    /** Advance the owned state vector by `dt`. Reads inputs by walking
+     *  the parent session's linkStates for each leaf. */
+    step(dt: number, session: ISession): ISolverStep;
 
-    /** Drop the cached offset table + buffers. Called on session reset. */
+    /** Optional diagnostic accessor: last step's stats, for the marker
+     *  node to surface as viewables. */
+    readonly lastStep: ISolverStep | null;
+
     dispose?(): void;
 }
-
-/** The solver calls this once per macro-tick to get a snapshot of each
- *  integrable leaf's current input port values. Concrete implementation
- *  walks `parentSession.linkStates` and resolves names → values. */
-export type SolverInputResolver = (leaf: IIntegrable) => IIntegrationInputs;
 ```
 
-### The host node
+### The marker node (choice B)
 
 ```ts
 // packages/dev/plugins/helios/src/sim/rk4-solver.node.ts
 
-@cloneable private _tolerance: number = 1e-6;
-@cloneable private _maxStep:   number = 1e-2;   // 10 ms cap
+@cloneable private _tolerance:  number = 1e-6;
+@cloneable private _maxStep:    number = 1e-2;   // 10 ms cap
+@cloneable private _leafFilter: string = "*";    // glob on leaf typeId
 
 private _solver: RK4AdaptiveSolver | null = null;
-private _y:      Float64Array | null = null;
-private _leaves: IIntegrable[] = [];
 
-public override reset(parentSession: ISession): void {
-    // Discover integrable siblings in the containing graph.
-    const nodes = parentSession.graph.nodes as ReadonlyArray<IRuntimeNode>;
-    this._leaves = nodes.filter(isIntegrable);
-    if (this._leaves.length === 0) {
-        // No integrables in this graph — solver is a no-op.
-        this._solver = null;
-        return;
-    }
-    const totalSize = this._leaves.reduce((s, l) => s + l.stateSize, 0);
-    this._y = new Float64Array(totalSize);
-    // Gather initial state from each leaf.
-    let off = 0;
-    for (const leaf of this._leaves) { leaf.gatherState(this._y, off); off += leaf.stateSize; }
-    this._solver = new RK4AdaptiveSolver({ tolerance: this._tolerance, maxStep: this._maxStep });
-    this._solver.initialize(parentSession.graph, this._leaves, 0);
+@viewable("number") public get lastMicroSteps(): number { return this._solver?.lastStep?.microSteps ?? 0; }
+@viewable("number") public get lastMaxError():  number { return this._solver?.lastStep?.maxError  ?? 0; }
+@viewable("number") public get rhsEvalsTotal(): number { return this._rhsEvalsTotal; }
+
+public override reset(session: ISession): void {
+    // Discover owned IIntegrable leaves (filtered by _leafFilter glob).
+    const owned = (session.graph.nodes as ReadonlyArray<IRuntimeNode>)
+        .filter(isIntegrable)
+        .filter((n) => matchesGlob(typeIdOf(n), this._leafFilter));
+
+    // Detach previous instance if any (handles reset-mid-session).
+    if (this._solver) session.detachSolver(this._solver);
+
+    this._solver = new RK4AdaptiveSolver({
+        tolerance: this._tolerance,
+        maxStep:   this._maxStep,
+    });
+    session.attachSolver(this._solver, owned);
 }
 
-public override fire(parentSession: ISession, t: number): void {
-    if (!this._solver || !this._y) return;
-    const dt = t - this._lastT;
-    this._lastT = t;
-    const inputResolver: SolverInputResolver = (leaf) =>
-        this._snapshotInputs(parentSession, leaf);
-    this._solver.step(dt, inputResolver);
-    // Write y back into each leaf for the viewables + downstream fire().
-    let off = 0;
-    for (const leaf of this._leaves) { leaf.writeState(this._y, off); off += leaf.stateSize; }
+public override fire(session: ISession, _t: number): void {
+    // NO integration here. The Session ran solver.step() in Phase 1,
+    // before any node's fire() got dispatched in Phase 2. We're only
+    // here to publish live diagnostics to downstream observers.
+    if (!this._solver?.lastStep) return;
+    const s = this._solver.lastStep;
+    this._rhsEvalsTotal += s.rhsEvals;
+    // Optional broadcast on a "stats" output port for dashboard tiles.
+}
+
+public override dispose(): void {
+    // Detach from any still-active sessions.
+    if (this._solver) {
+        for (const session of this._activeSessions()) session.detachSolver(this._solver);
+        this._solver = null;
+    }
 }
 ```
 
-The solver node **must fire before** the IIntegrable leaves in the parent
-graph's scheduler order, so the leaves see the updated state when their
-own fire() runs to publish outputs. Concretely: the user wires the solver's
-synthetic `tick` output to the leaves' `_enable` or some lightweight
-dependency port, or the scheduler is taught to order solver-host nodes
-first (option B is cleaner but invasive — propose A for V1).
+**What the marker gives us:**
+- **Editability**: `tolerance`, `maxStep`, `leafFilter` in the property panel.
+- **Serialization**: solver config round-trips with the graph save.
+- **Diagnostics**: `lastMicroSteps`, `lastMaxError`, `rhsEvalsTotal` as
+  viewables; the user drops a Time-series Plot tile bound to one of
+  these to see the solver's behaviour live.
+- **Visual presence**: the user SEES which graph regions have solvers
+  attached, and which leaf subset each one owns (via `leafFilter`).
+- **No scheduling pollution**: the integration phase is Session-level,
+  not a node-fire that needs ordering coordination.
+
+### Multi-solver and hierarchical solvers fall out for free
+
+**Multi-solver split by time scale**:
+
+```
+Graph
+ ├─ RK4Solver        (leafFilter: "Physics.Electric.*")    fast / non-stiff
+ ├─ RosenbrockSolver (leafFilter: "Helios.Process.*")      stiff Sabatier kinetics
+ └─ EulerSolver      (leafFilter: "Helios.Catalyst:*")     slow aging (days)
+```
+
+Three marker nodes in the same graph, each attaches its own solver to
+the session with a disjoint leaf subset. The integration phase runs
+them in order; non-overlapping leaf sets means they don't fight.
+
+**Hierarchical solvers via fractal sub-graph**:
+
+```
+Parent Session
+ ├─ attached: RK4Solver  (1 ms macro-step on parent leaves)
+ └─ SubGraph (RuntimeGraph)
+      └─ Internal Session  (owned by IGraphNodeState, existing infra)
+           └─ attached: RosenbrockSolver  (10 µs micro-step on sub-graph leaves)
+```
+
+Each child `RuntimeGraph` already has its own `internalSession` via
+`IGraphNodeState` (existing infra). Drop a marker in the sub-graph and
+it attaches to THAT internal session — no special hierarchical-solver
+code path needed.
 
 ### Phased implementation (unchanged from v1)
 
 | Phase | Solver | When |
 |-------|--------|------|
-| 1 | RK4 Cash-Karp / Dormand-Prince (own impl, ~150 LoC) | First Helios sprint. Validates the IIntegrable contract end-to-end. |
+| 1 | RK4 Cash-Karp / Dormand-Prince (own impl, ~150 LoC) | First Helios sprint. Validates the IIntegrable + Session-attach contract end-to-end. |
 | 2 | Rosenbrock4 (own impl ~600 LoC, or pure-TS port of Boost.odeint) | When Sabatier kinetics force stiffness > 10⁴ |
 | 3 | SUNDIALS IDA/CVODES (WASM build) | When DAE or sensitivity analysis needed |
 
@@ -365,62 +455,207 @@ first (option B is cleaner but invasive — propose A for V1).
 
 | # | Question | Proposal |
 |---|----------|----------|
-| Q3.1 | How does the solver guarantee it fires before its IIntegrable siblings each macro-tick? | V1: rely on graph node order + user wiring solver's `_started` to leaves' control ports. V2: dedicated solver-priority flag in scheduler. |
-| Q3.2 | One solver per graph, or can multiple solvers coexist? | One per RuntimeGraph. A child SimGraph (embedded sub-graph that is itself a RuntimeGraph) can carry its own solver, giving you hierarchical solvers naturally — top-level slow solver wraps a sub-graph with a faster solver. |
-| Q3.3 | Snapshot of solver state? | Only `y` and `lastT`. Adaptive solvers' internal `dt` recommendation reseeds from scratch on restore. |
+| ~~Q3.1~~ | ~~How does the solver fire before its IIntegrable siblings each macro-tick?~~ | **RESOLVED by Session-level attachment**: the integration phase precedes the dispatch phase; no node-order coordination needed. |
+| Q3.2 | How are leaves partitioned across multiple solvers in the same session? | Glob filter on leaf typeId (matches the existing palette `Theme.Sub:node` taxonomy). Marker editable. Default = catch-all `"*"`. Overlapping filters: first-attached wins (deterministic), warn on conflict. |
+| Q3.3 | Snapshot of solver internal state? | Only `y` and `lastT`. Adaptive `dt` recommendation reseeds from scratch on restore. |
+| Q3.4 | What does the marker node's `fire()` do? | Refresh diagnostic viewables (cheap, idempotent). Optionally broadcast on a `stats` output port for dashboard tiles. NEVER does integration work. |
+| Q3.5 | Where does `attachSolver` get persisted in serialize/save? | NOT persisted directly. The marker node IS persisted (via existing GraphItem.serialize), and on session start its `reset()` re-attaches. State is fully derived. |
 
 ---
 
-## F4 — `IChemicalStream` port type
+## F4 — `IChemicalStream` port type (industrial-grade)
 
-Unchanged from v1 in spirit. Restated tighter:
+The v2 draft proposed a thin closed-union (`"H2O" | "H2" | ... | "He"`)
+with a single-phase `{ mdot, T, P, composition }` shape. **Superseded.**
+A canonical design lands closer to industrial process simulators
+(Aspen Plus / ProSim / DWSIM) and removes three structural ceilings:
+
+1. **Open species registry** instead of closed union — research
+   extensibility (ISRU adds species, biology adds metabolites,
+   electrochemistry adds ions) without core enum churn.
+2. **Multi-phase first-class** — `phases: IPhaseState[]`. Knockout
+   drum / condenser / cryo trap decompose into N IPhaseState entries
+   instead of needing a discriminator flag.
+3. **Composition basis** (`molar` / `mass` / `volume`) per phase —
+   gas-chromatography sensors emit molar, gravimetric ones emit mass,
+   volumetric flow meters emit volume; supporting all three kills the
+   bug-prone conversion layer.
+
+### Canonical interface
+
+Lives at `packages/dev/core/src/sim/sim.chemical.ts`. Type-only summary:
 
 ```ts
-// packages/dev/core/src/sim/sim.chemical.ts (new file)
+export type ChemicalSpeciesId = string;
+export type PhaseKind = "gas" | "liquid" | "solid" | "aqueous"
+                      | "plasma" | "supercritical" | "mixed" | "unknown";
+export type CompositionBasis = "molar" | "mass" | "volume";
+export type PressureBasis = "absolute" | "gauge";
+
+export interface IChemicalSpecies {
+    readonly id: ChemicalSpeciesId;
+    readonly name: string;
+    readonly formula: string;
+    readonly molarMass: number;          // kg/mol
+    readonly casNumber?: string;
+    readonly aliases?: readonly string[];
+}
+
+export interface IComposition {
+    readonly basis: CompositionBasis;
+    readonly fractions: ReadonlyMap<ChemicalSpeciesId, number>;
+}
+
+export interface ISpeciesState {
+    readonly speciesId: ChemicalSpeciesId;
+    // any-subset of the following may be present
+    readonly moleFraction?: number;
+    readonly massFraction?: number;
+    readonly volumeFraction?: number;
+    readonly partialPressure?: number;    // Pa
+    readonly activity?: number;
+    readonly fugacity?: number;            // Pa
+    readonly concentration?: number;       // mol/m³
+    readonly molality?: number;            // mol/kg
+    readonly massFlow?: number;            // kg/s
+    readonly molarFlow?: number;           // mol/s
+}
+
+export interface IThermodynamicState {
+    readonly temperature?: number;         // K
+    readonly pressure?: number;            // Pa
+    readonly pressureBasis?: PressureBasis;
+    readonly density?: number;             // kg/m³
+    readonly viscosity?: number;           // Pa·s
+    readonly enthalpy?: number;
+    readonly entropy?: number;
+    readonly internalEnergy?: number;
+    readonly energyBasis?: "mass" | "molar";
+    readonly vaporFraction?: number;
+    readonly liquidFraction?: number;
+    readonly solidFraction?: number;
+    readonly pH?: number;
+    readonly ionicStrength?: number;
+    readonly conductivity?: number;
+}
+
+export interface IPhaseState {
+    readonly id?: string;
+    readonly kind: PhaseKind;
+    readonly state: IThermodynamicState;
+    readonly composition: IComposition;
+    readonly species?: ReadonlyMap<ChemicalSpeciesId, ISpeciesState>;
+    readonly massFlow?: number;            // kg/s (this phase)
+    readonly molarFlow?: number;           // mol/s
+    readonly volumetricFlow?: number;      // m³/s
+    readonly metadata?: Readonly<Record<string, unknown>>;
+}
 
 export interface IChemicalStream {
-    readonly mdot: number;       // kg/s
-    readonly T:    number;       // K
-    readonly P:    number;       // Pa
-    readonly composition: ReadonlyMap<ChemicalSpecies, number>;  // mole fractions, sums to 1
+    readonly id?: string;
+    readonly name?: string;
+    readonly phases: readonly IPhaseState[];
+    readonly totalMassFlow?: number;
+    readonly totalMolarFlow?: number;
+    readonly totalVolumetricFlow?: number;
+    readonly state?: IThermodynamicState;     // mixed-phase aggregate (optional)
+    readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
-export type ChemicalSpecies =
-    | "H2O" | "H2" | "O2" | "CO2" | "CH4" | "N2" | "Ar" | "He";
-
-export function validateComposition(c: ReadonlyMap<ChemicalSpecies, number>): boolean {
-    let s = 0; for (const v of c.values()) { if (v < 0) return false; s += v; }
-    return Math.abs(s - 1) < 1e-9;
-}
-export function speciesFlow(stream: IChemicalStream, sp: ChemicalSpecies): number {
-    return (stream.composition.get(sp) ?? 0) * stream.mdot;
+export interface IAtmospherePreset {
+    readonly id: string;
+    readonly name: string;
+    readonly description?: string;
+    readonly stream: IChemicalStream;
 }
 ```
 
-**Port-type integration**: add `"chemical"` to the existing `PortType`
-union (`packages/dev/core/src/execution/execution.interfaces.ts`). The
-`GraphViewer.connect()` guard already enforces type compatibility — add a
-species-set sub-check for chemical↔chemical connections:
+**Module-level data**:
+
+- `Species` — `{ H2O, H2, O2, ..., Cellulose }` enum-style id table.
+  Open: anyone can extend with their own ids.
+- `SpeciesRegistry` — `Readonly<Record<string, IChemicalSpecies>>`
+  with formula, name, molarMass for ~60 baseline species (atmospheric
+  gases, hydrocarbons, NOx/SOx, acids, bases, salts, common ions,
+  bio-feedstocks).
+- `AtmospherePresets` — `Readonly<Record<string, IAtmospherePreset>>`
+  with Earth (dry/humid sea-level), Mars, Venus, Titan, Jupiter.
+  Directly composable with `Physics.Scene` presets (see Q4.6 below).
+
+**Helpers** (all in the same file):
 
 ```ts
-// rough shape — actual location: packages/dev/nodeeditor/src/connection.ts
+validateComposition(c, tolerance?)         → boolean
+getSpeciesFraction(c, speciesId)            → number
+getSpeciesMolarMass(speciesId, registry?)   → number | undefined
+averageMolarMass(c, registry?)              → number | undefined  // molar basis only
+speciesPartialPressure(phase, speciesId)    → number | undefined
+speciesMolarFlow(phase, speciesId)          → number | undefined
+speciesMassFlow(phase, speciesId, registry?) → number | undefined
+makeGasPhaseFromMolarFractions(params)      → IPhaseState  // builder for the common case
+```
+
+### Port-type integration
+
+Add `"chemical"` to the `PortType` union. The connect-guard becomes a
+**capabilities check**, not a closed-set comparison:
+
+```ts
 if (fromPort.type === "chemical" && toPort.type === "chemical") {
-    if (!speciesSetsCompatible(fromPort.species, toPort.species)) {
-        rejectConnection("incompatible species set");
+    // Receiver must accept every species the producer can emit.
+    if (!coversSpecies(toPort.species, fromPort.species)) {
+        rejectConnection("receiver missing producer species");
     }
+    // Composition basis may differ — auto-converter inserted at runtime.
+    // See Q4.5.
 }
 ```
 
-`PortDescriptor` needs an optional `species?: ReadonlyArray<ChemicalSpecies>`
-field for chemical ports to declare their schema.
+`PortDescriptor` gains:
+```ts
+readonly species?: ReadonlyArray<ChemicalSpeciesId>;  // declared schema (open)
+readonly phases?:  ReadonlyArray<PhaseKind>;          // accepted phase kinds
+readonly basis?:   CompositionBasis;                  // preferred composition basis
+```
 
-### Open questions
+### How it interlocks with the rest of v2
+
+- **F1 IIntegrable**: `ProcessUnitNode.rhs` receives upstream
+  `IChemicalStream` snapshots via `IIntegrationInputs.get(portName)`.
+  Helpers (`speciesMolarFlow`, `speciesPartialPressure`) read those
+  directly — no per-leaf de-structuring boilerplate.
+- **F6 meta-node**: `ProcessUnitNode` declares chemical-stream ports
+  with `species` + `phases` arrays; mid-tier classes (Reactor /
+  Scrubber / HeatExchanger / Separator) operate on `IPhaseState[]`
+  natively. Two-phase nodes (KnockoutDrum, Condenser) stop being a
+  special case — they just write 2 entries to `phases[]`.
+- **F7 conservation hooks**: per-species mass-balance becomes
+  per-species across phases (sum `speciesMassFlow` over inputs vs
+  outputs across `IPhaseState[]`). Energy-balance reads
+  `IThermodynamicState.enthalpy` directly when present, computes
+  via species cp tables when absent.
+- **Q6.2 (`IHeatStream` separate port?)**: with `IThermodynamicState`
+  carrying enthalpy + entropy + internalEnergy + energyBasis, heat
+  can be transported INSIDE the chemical stream natively. The
+  separate-port question becomes less urgent — defer to Helios Sprint 2
+  unless heat-integration network (HEN) optimisation specifically
+  requires it.
+- **AtmospherePresets ↔ Physics.Scene**: the existing 4 scene presets
+  (Earth/Moon/Mars/Orbital) carry `gravity` + `temperature` + `pressure`
+  scalars. They should LINK to the matching atmosphere preset for
+  composition data when a chemical pipeline needs it. See Q4.6.
+
+### Open questions (revised)
 
 | # | Question | Proposal |
 |---|----------|----------|
-| Q4.1 | Track enthalpy on the stream or compute from (T, composition)? | Compute via helper `enthalpy(stream)` backed by a species property table. No denormalization. |
-| Q4.2 | Two-phase support? | V1 single-phase gas. Add a `phase` flag only when the knockout drum (V-701) lands. |
-| Q4.3 | Stream as immutable per-tick object? | Yes. Cheap; one allocation per process unit per tick. |
+| ~~Q4.1~~ | ~~Track enthalpy on stream or compute?~~ | **RESOLVED** — `IThermodynamicState.enthalpy` is optional; carry when known, compute when absent. |
+| ~~Q4.2~~ | ~~Two-phase support?~~ | **RESOLVED** — `phases: IPhaseState[]` is first-class. No phase flag needed. |
+| ~~Q4.3~~ | ~~Stream as immutable per-tick object?~~ | **RESOLVED** — `readonly` everywhere in the interface. |
+| Q4.4 | **Species registry extensibility at runtime** — can the user add custom species (Ni, zeolite framework, biology metabolites) without recompiling core? | Yes. `SpeciesRegistry` is `Readonly<Record<string, IChemicalSpecies>>` but a `registerSpecies(spec)` helper plus a user-extensible mirror map gives runtime registration. Helpers take an optional `registry` arg already — user passes their own. |
+| Q4.5 | **Composition basis mismatch on connect** — should `molar` ↔ `mass` connections auto-convert via molar mass, or require matching basis? | Auto-convert when both endpoints declare a single basis preference AND molar masses are known for every species. Falls back to "incompatible" otherwise (with diagnostic message naming the missing molarMass entry). |
+| Q4.6 | **AtmospherePresets ↔ `Physics.Scene` presets** — should `Physics.Scene:earth` source its atmosphere from `AtmospherePresets.earthHumidAirSeaLevel`, or stay independent? | Source. Add an `atmosphere?: IChemicalStream` field to `IScene` interface; scene preset constants build it from `AtmospherePresets.<id>`. A chemistry pipeline can then read its inlet composition directly off the active scene without manual configuration. |
+| Q4.7 | **`IChemicalStream.state` (mixed-phase aggregate)** — when phases is length >1, is `state` mandatory, computed from per-phase states, or left to leaf nodes? | Optional. When present, used by viz tiles as a "bulk" readout. When absent, viz computes mass-weighted avg from `phases[*].state`. Producers fill it when meaningful (single-phase, or stable equilibrium); leave undefined when not (transient two-phase flash). |
 
 ---
 
@@ -549,6 +784,17 @@ conservation duplication).
   that unit family (Reactor → Loop-of-Arrhenius, HeatExchanger →
   matrix UA pattern, ...). Leaves inherit. A full Sabatier reactor
   sub-graph → ONNX bundle then comes essentially free.
+- **Scenes & atmospheres (F10)**: a process unit that interacts with
+  the surrounding room atmosphere (scrubber, leak source, CO2-emitting
+  reactor venting trace amounts) does NOT use a special port type. It
+  reads atmosphere observables (composition, pressure, T) from the
+  `AtmosphereStateNode`'s standard outputs, and writes mass-flow
+  contributions back by publishing on its `delta_<species>` input
+  ports. The variadic capacity of the input buffers lets N units
+  publish concurrently on the same species; the atmosphere's `rhs`
+  sums them. See §F10 for full details. This means `ProcessUnitNode`
+  does NOT need any scene-aware machinery: room interaction is just
+  standard producer/consumer wiring.
 
 ### Open questions for this section
 
@@ -653,6 +899,285 @@ four orders of magnitude of time-scale separation Helios needs.
 
 ---
 
+## F10 — Scenes, atmospheres, and the publish-delta accumulator
+
+The Helios use-case is a closed station with multiple isolatable rooms
+(habitat, labs, ECLSS bay, airlock), each with its own atmospheric
+composition that evolves over time (crew respiration adds CO2,
+scrubbers remove it, leaks couple rooms together, safety agents seal
+rooms on contamination). This section pins the architecture for that
+class of problem, which generalises beyond Helios to any sim that
+models bounded volumes of stuff (chemical streams, fluid loops, even
+electrical buses with reservoir capacitors).
+
+Three structural decisions drive the design:
+
+1. **Scenes form a graph, not a tree.** A tree was a projection
+   appearance, not a constraint. Real buildings have airlocks
+   adjacent to multiple rooms; HVAC ducts cross-cut the hierarchy.
+   Trees forced duplicate gates and parent-traversal fictions.
+2. **`AtmosphereStateNode` is a separate node from `SceneNode`.**
+   The scene carries fixed params (volume, geometry, label); the
+   atmosphere carries dynamic state (species inventory). One scene
+   may have no atmosphere (pure visual marker); an atmosphere may
+   exist without 3D geometry (early-prototype headless sim).
+3. **Equipment ↔ atmosphere coupling is plain producer/consumer.**
+   No new port type. Equipment publishes `delta_<species>` mass-flow
+   contributions on the atmosphere's variadic input ports; the
+   atmosphere accumulates via the existing scheduler input-buffer
+   mechanism and integrates them as its `rhs`.
+
+### Topology: scenes-as-graph via AtmosphereStateNode wiring
+
+There is no `IScene.parent` pointer or `IScene.children[]` array. The
+graph topology of scenes emerges from the wiring between
+`AtmosphereStateNode` instances via `SceneGateNode` instances. The
+runtime graph IS the scene graph; no parallel data structure.
+
+```
+SpaceEnvironment scene (Mars preset, no atmosphere-state, just constants)
+   │
+   ├── SmallLeakGate (mode: "open passive", area: 1e-6 m²)
+   │      └── StationAtmosphere
+   │
+   ├── StationAtmosphere ── DoorGate (mode: "open passive") ── HabitatAtmosphere
+   ├── HabitatAtmosphere  ── HvacGate  (mode: "hvac_forced") ── ECLSS_Atmosphere
+   ├── HabitatAtmosphere  ── Lab1Gate  (mode: "open passive") ── Lab1Atmosphere
+   ├── Lab1Atmosphere     ── FumeGate  (mode: "hvac_forced") ── ECLSS_Atmosphere
+   └── ...
+```
+
+A safety agent toggles `Lab1Gate.mode = "closed"` on contamination
+detection. The graph topology is unchanged; only the coupling on one
+edge is gated.
+
+### `AtmosphereStateNode` interface
+
+```ts
+// packages/dev/plugins/physics/src/scene/atmosphere-state.node.ts
+
+class AtmosphereStateNode extends RuntimeNode implements IDeclaresPorts, IIntegrable {
+    // ── Editables ─────────────────────────────────────────────────────
+    @cloneable private _volume: number = 100;               // m³
+    @cloneable private _temperature: number = 293.15;       // K (V1: imposed)
+    @cloneable private _activeSpecies: ReadonlyArray<ChemicalSpeciesId>
+        = ["N2", "O2", "CO2", "H2O", "Ar"];                // schema
+    @cloneable private _initialAtmosphere: string
+        = "earthHumidAirSeaLevel";                          // AtmospherePresets key
+    @cloneable private _mass: ReadonlyArray<number> = [];   // initial inventory, kg
+                                                            // (auto-derived from preset
+                                                            //  if unset)
+
+    // ── Ports (declared dynamically from _activeSpecies) ──────────────
+    // Inputs: one variadic group per species — N equipment can each
+    // publish a delta_<species> contribution per tick; the input
+    // buffer's variadic capacity collects them all for the rhs.
+    inputPorts: ReadonlyArray<IPortDescriptor> = this._buildInputPorts();
+    variadicInput = this._activeSpecies.map((sp) => ({
+        prefix: `delta_${sp}_`, type: "float",
+    }));
+
+    // Outputs: per-species observables + aggregates + full
+    // IChemicalStream snapshot. Wired to sensors, gates, dashboard,
+    // and other equipment that needs to READ the atmosphere.
+    outputPorts: ReadonlyArray<IPortDescriptor> = [
+        ...this._activeSpecies.flatMap((sp) => [
+            { slot: `mass_${sp}`,        type: "float" },  // kg in volume
+            { slot: `mole_fraction_${sp}`, type: "float" },
+            { slot: `partial_pressure_${sp}`, type: "float" }, // Pa
+            { slot: `ppm_${sp}`,         type: "float" },
+        ]),
+        { slot: "pressure",    type: "float" },             // Pa total
+        { slot: "temperature", type: "float" },             // K
+        { slot: "density",     type: "float" },             // kg/m³
+        { slot: "stream",      type: "chemical" },          // full IChemicalStream
+    ];
+
+    // ── IIntegrable ───────────────────────────────────────────────────
+    get stateSize(): number { return this._activeSpecies.length; }
+    get stateNames(): ReadonlyArray<string> {
+        return this._activeSpecies.map((sp) => `m_${sp}`);
+    }
+
+    gatherState(y: Float64Array, off: number): void {
+        for (let i = 0; i < this.stateSize; i++) y[off + i] = this._mass[i];
+    }
+    writeState(y: Float64Array, off: number): void {
+        for (let i = 0; i < this.stateSize; i++) {
+            this.setField(`mass_${this._activeSpecies[i]}`, this._mass[i],
+                          y[off + i], (v) => { this._mass[i] = v; });
+        }
+    }
+
+    rhs(t, y, off, inputs, dydt): void {
+        // For each species, sum every delta_<species>_<k> contribution
+        // queued in the input buffer this tick. The solver guarantees
+        // inputs are populated from the upstream publish phase before
+        // rhs is called (Session two-phase orchestration, §F3).
+        for (let i = 0; i < this.stateSize; i++) {
+            const sp = this._activeSpecies[i];
+            dydt[off + i] = inputs.sumPrefix(`delta_${sp}_`);
+        }
+    }
+
+    fire(session, t): void {
+        // Pure I/O: publish observables. Equipment downstream sees
+        // the state freshly updated by the solver (Phase 1 ran already).
+        const totalMass = this._mass.reduce((s, m) => s + m, 0);
+        const totalMoles = this._totalMoles();
+        const P = this._computePressure(totalMoles);
+        for (let i = 0; i < this.stateSize; i++) {
+            const sp = this._activeSpecies[i];
+            this.publish(`mass_${sp}`,             this._mass[i]);
+            this.publish(`mole_fraction_${sp}`,    this._moleFraction(i, totalMoles));
+            this.publish(`partial_pressure_${sp}`, this._partialPressure(i, totalMoles, P));
+            this.publish(`ppm_${sp}`,              this._ppm(i, totalMoles));
+        }
+        this.publish("pressure",    P);
+        this.publish("temperature", this._temperature);
+        this.publish("density",     totalMass / this._volume);
+        this.publish("stream",      this._snapshotStream(P));
+    }
+}
+```
+
+**`inputs.sumPrefix` helper extension** to `IIntegrationInputs`:
+collects every input on slots matching a prefix, returns the sum. Used
+exactly here for the per-species mass-flow accumulator. Trivial
+implementation (a few lines on the inputs resolver), but a first-class
+helper because the pattern reappears every time multiple producers
+share a destination.
+
+### `SceneGateNode` interface (3 modes)
+
+```ts
+class SceneGateNode extends RuntimeNode implements IIntegrable {
+    @cloneable mode: "closed" | "open_passive" | "hvac_forced" = "open_passive";
+    @cloneable area:        number = 1.0;                 // m² for open_passive
+    @cloneable leakCoeff:   number = 1e-3;                // open_passive
+    @cloneable forcedFlow:  number = 0;                   // m³/s for hvac_forced
+    @cloneable bidirectional: boolean = true;
+
+    // Inputs: subscribe to both atmospheres' species observables (the
+    // upstream concentrations needed to compute the species partition).
+    inputPorts = [
+        { slot: "A_pressure", type: "float" },
+        { slot: "A_temperature", type: "float" },
+        { slot: "B_pressure", type: "float" },
+        { slot: "B_temperature", type: "float" },
+        // plus variadic for A_mole_fraction_<species>, B_mole_fraction_<species>
+    ];
+    variadicInput = [
+        { prefix: "A_mole_fraction_", type: "float" },
+        { prefix: "B_mole_fraction_", type: "float" },
+    ];
+
+    // Outputs: publish delta_<species> on BOTH atmospheres. Source side
+    // gets negative deltas; destination side gets positive deltas.
+    // Each output port is named to match the atmosphere's input slot
+    // convention exactly (e.g. "delta_CO2_gateX").
+    outputPorts = [
+        // variadic: A_delta_<species>, B_delta_<species> wired by user
+        // to atmospheres' delta_<species>_<gateId> input
+    ];
+    variadicOutput = [
+        { prefix: "A_delta_", type: "float" },
+        { prefix: "B_delta_", type: "float" },
+    ];
+
+    // IIntegrable when mode = "hvac_forced" with aging:
+    get stateSize(): number {
+        return this.mode === "hvac_forced" ? 1 : 0;  // fan cumulative throughput
+    }
+
+    rhs(t, y, off, inputs, dydt): void {
+        if (this.mode === "closed") return;  // no flux
+        // open_passive : flux_i = leakCoeff × area × (P_A - P_B) × x_upwind_i
+        // hvac_forced  : flux_i = forcedFlow × density_A × x_A_i (downstream A→B)
+        // Publishes negative on A_delta_<sp>, positive on B_delta_<sp>.
+        // ...
+    }
+
+    fire(session, t): void { /* publish A_delta_<sp>, B_delta_<sp> per species */ }
+}
+```
+
+### Why the publish-delta pattern is the right primitive
+
+It piggybacks on infrastructure that already exists, fully tested:
+
+| Need | Existing mechanism that fits |
+|------|------------------------------|
+| N producers contributing to one accumulator | Variadic input ports + per-slot input buffers (the same infra that Sum and Stem use) |
+| Order independence (which equipment publishes first doesn't matter) | Session two-phase orchestration: all publishes land before any rhs runs |
+| Bidirectional read+write | Same node both publishes outputs (atmosphere → world) and accepts inputs (world → atmosphere). Standard duck-typed nodes. |
+| Per-tick fresh state without retained references | Each publish carries a fresh value; no caching, no staleness |
+| Conservation hook integration (F7) | Solver post-step sums all published deltas and checks against inventory change. Native. |
+
+Cost of inventing a new `IScenePort` mechanism instead: a new port
+type (with its connect-guard semantics), a new sampling model
+(extract/inject), per-equipment scene reference plumbing,
+serialization of scene-references across save/load. The publish-delta
+pattern needs ZERO of that.
+
+### Multi-rate partitioning for the Helios use-case
+
+The Helios scrubber + MCSA scenario has four orders of magnitude of
+time scales coexisting in one graph. The Session-attached multi-solver
+(§F3) handles them via leaf typeId filtering:
+
+| Solver marker | Glob filter | Macro rate | Solver | Justification |
+|---------------|-------------|------------|--------|---------------|
+| `MCSA / electrical` | `Physics.Electric.*` | ~100 kHz | RK4 fixed | Current harmonics for fault detection (BPFO, BPFI) need Nyquist > 10 kHz. Power switching at 10-20 kHz needs explicit resolution. |
+| `Process / flow` | `Helios.Process.*` &#124; `Physics.Mechanical.*` &#124; `Physics.Scene:atmosphere-state` &#124; `Physics.Scene:gate` | ~100 Hz | RK4 adaptive (Phase 2 Rosenbrock for Sabatier stiff zone) | Pump dynamics, compositions, flow control. |
+| `Aging / slow` | `Helios.Catalyst:*` &#124; cartridge state | ~1/min | Explicit Euler | Sorbent capacity decay, filter clog accumulation, catalyst sintering. Days-scale aging in minutes-scale wall clock. |
+
+Three marker nodes, three disjoint leaf sets. No coupling glitches
+between them because the slow-rate state evolves quasi-statically
+from the fast-rate point of view, and the fast electrical signals
+average out at the slow time scale.
+
+### Open questions for this section
+
+| # | Question | My proposal |
+|---|----------|-------------|
+| Q-S1 | `SceneNode` vs `AtmosphereStateNode` separation | Separate. `Physics.Scene:scene` stays light (params + geometry); `Physics.Scene:atmosphere-state` is the IIntegrable carrier. A scene without atmosphere is just a visual marker. |
+| Q-S2 | New `IScenePort` type with sample/inject? | **No.** Use publish-delta via standard input/output ports. The variadic input-buffer mechanism already handles the N-to-1 accumulation. |
+| Q-S3 | Scene hierarchy as tree or graph? | **Graph.** No `parent` pointer on `IScene`. Topology emerges from gate-node wiring. |
+| Q-S4 | Multi-rate solver partitioning for Helios | Three solvers (MCSA / process / aging) split by typeId glob. |
+| Q-S5 | How are scenes initialised on Play? | Priority order: (1) restored snapshot, (2) explicit `_initialAtmosphere` editable, (3) `AtmospherePresets[<id>]` from parent gate. |
+| Q-S6 | Stratification (heavy gas pools at floor, light at ceiling)? | **Deferred V2.** Bulk model in V1. Refine when "concentration vs altitude" becomes a paper figure. |
+| Q-S7 | Thermal coupling between scenes? | **Deferred V2.** V1 leaves `temperature` as imposed editable on `AtmosphereStateNode`. Will require a thermal resistance/capacitance analogue at scene-pair level. |
+| Q-S8 | Variadic per-species: `variadicInput[]` with one descriptor per species, OR a single prefix `delta_` with suffix-parsing? | Array form (one per species). Each species gets its own variadic group; the editor reconciler keeps them independent (just like Stem's `f_/A_` groups). Auto-grow on connect per species. |
+| Q-S9 | Buffer capacity for `delta_<species>_N` slots | Declared dynamically by `AtmosphereStateNode` based on the number of currently-connected producers, with a floor of 4. Avoids overflow on busy rooms while keeping the default cheap. |
+| Q-S10 | Is `SceneGateNode` always IIntegrable? | Conditional. `closed` and `open_passive` are pure algebraic transformations (publish-only, no state). `hvac_forced` becomes IIntegrable when the user wants to track fan cumulative throughput for aging. Toggle drives `stateSize` between 0 and 1. |
+| Q-S11 | Species set persistence in snapshots | The `_activeSpecies` editable is `@cloneable` so it round-trips via the existing GraphItem.serialize path. The state vector layout depends on it; restoring a snapshot with a different species set is rejected with a clear diagnostic at load time. |
+
+### Items deliberately deferred to a later doc (flagged for V3)
+
+- **Thermal coupling between scenes (HEN at the building level)**: 
+  scene-pair thermal resistance, wall conduction, radiator coupling.
+- **Vertical stratification of gases in tall rooms**: heavy CO2 sinks, light H2 rises. Bulk model in V1.
+- **Microgravity phase interfaces**: in 0g, no gravitational separation gas/liquid. Knockout drum, condenser, amine scrubber ALL rely on gravity. Surface tension and wicking models required.
+- **Biological kinetics**: greenhouse module with biological CO2/O2 cycle parallel to physico-chemical. New species (biomass), new rate laws.
+
+These are V3 territory. Listed here so they aren't forgotten when relevant.
+
+### Implementation order
+
+Land these after the chemistry meta-node hierarchy (steps 6a-6f in §F6):
+
+- **10a.** Extend `IScene` with `atmosphere?: IChemicalStream` field (Q4.6 fulfilment). Additive change, no regression.
+- **10b.** `Physics.Scene:atmosphere-state` (the new IIntegrable node).
+- **10c.** `IIntegrationInputs.sumPrefix(prefix)` helper (~10 lines on the inputs resolver).
+- **10d.** `Physics.Scene:gate` (3 modes, IIntegrable when hvac_forced).
+- **10e.** Migrate one Helios.Process leaf (AmineScrubber) to publish-delta wiring against an AtmosphereStateNode. Validates end-to-end accumulation + conservation.
+- **10f.** Full scrubber scenario (station + 3 rooms + 2 scrubbers + crew source). Smoke-test the multi-rate partitioning.
+
+Steps 10a-10e: ~3 days. Step 10f: 1-2 days of wiring + dashboard work.
+
+---
+
 ## Open questions summary (just the live ones)
 
 | ID | Question | My proposal |
@@ -660,16 +1185,33 @@ four orders of magnitude of time-scale separation Helios needs.
 | Q1.1 | `stateSize` reactive or frozen? | Frozen at compile. |
 | Q1.2 | rhs inputs: per-call resolve or per-macro-tick snapshot? | Snapshot per macro-tick. |
 | Q1.3 | All stateful nodes migrate to IIntegrable, or coexist? | Coexist permanently. |
-| Q3.1 | How does solver fire before its sibling integrables? | Wire `_started` → leaf control input in V1; scheduler-priority flag in V2. |
-| Q3.2 | One solver per RuntimeGraph? | Yes — hierarchical solvers fall out naturally via sub-graph embedding. |
+| ~~Q3.1~~ | ~~How does solver fire before sibling integrables?~~ | **RESOLVED** by Session-level attachment (integration phase precedes dispatch phase). |
+| Q3.2 | How are leaves partitioned across multiple solvers in the same session? | Glob filter on leaf typeId. Marker editable. |
 | Q3.3 | Snapshot of solver internal state? | Only `y` and `lastT`. |
-| Q4.1 | Enthalpy on stream or computed? | Computed via helpers. |
-| Q4.2 | Two-phase support? | V1 single-phase only. |
-| Q4.3 | Stream as immutable per-tick object? | Yes. |
+| Q3.4 | What does the marker node's `fire()` do? | Refresh diagnostic viewables only; never integration. |
+| Q3.5 | How is solver attachment serialized? | Not directly. Marker node persists; its `reset()` re-attaches. |
+| ~~Q4.1~~ | ~~Enthalpy on stream or computed?~~ | **RESOLVED** — `IThermodynamicState.enthalpy` optional. |
+| ~~Q4.2~~ | ~~Two-phase support?~~ | **RESOLVED** — `phases: IPhaseState[]` first-class. |
+| ~~Q4.3~~ | ~~Stream as immutable per-tick object?~~ | **RESOLVED** — `readonly` everywhere. |
+| Q4.4 | Species registry runtime extensibility? | Yes — `registerSpecies` helper + user-extensible mirror map. |
+| Q4.5 | Composition basis mismatch on connect — auto-convert or reject? | Auto-convert when molar masses known; reject with diagnostic otherwise. |
+| Q4.6 | `AtmospherePresets` ↔ `Physics.Scene` integration? | Source: add `atmosphere?: IChemicalStream` to `IScene`. |
+| Q4.7 | `IChemicalStream.state` (mixed-phase aggregate) mandatory? | Optional; viz computes mass-weighted avg when absent. |
 | Q6.1 | Catalyst activity: integrated state or separate slow update? | Integrated state. |
 | Q6.2 | Heat as separate IHeatStream port or carried inside chemical stream? | Separate IHeatStream. |
 | Q6.3 | CompressorNode internal motor sub-graph or external wiring? | Compose internally (fractal). |
 | Q6.4 | Meta-node base classes in core or plugin-helios? | Plugin-helios. |
+| Q-S1 | `SceneNode` vs `AtmosphereStateNode` separation? | Separate. |
+| Q-S2 | New `IScenePort` type or publish-delta? | **Publish-delta** (no new port type). |
+| Q-S3 | Scene hierarchy tree or graph? | **Graph.** Topology via gate-node wiring. |
+| Q-S4 | Multi-rate partitioning for Helios scrubber+MCSA scenario | Three solvers (MCSA / process / aging) by typeId glob. |
+| Q-S5 | Scene initialisation priority order? | Snapshot > explicit editable > preset hérité. |
+| Q-S6 | Vertical stratification of gases? | Deferred V2 (bulk model V1). |
+| Q-S7 | Thermal coupling between scenes? | Deferred V2 (imposed `temperature` V1). |
+| Q-S8 | Variadic per-species: one descriptor per species or single prefix? | Array form (one variadic group per species). |
+| Q-S9 | Buffer capacity for `delta_<species>_N`? | Dynamic, floor 4. |
+| Q-S10 | `SceneGateNode` always IIntegrable? | Conditional (only when `hvac_forced` with aging). |
+| Q-S11 | Species set persistence in snapshots? | Via `@cloneable _activeSpecies`; rejected at load if mismatched. |
 
 ---
 
@@ -701,12 +1243,12 @@ Steps 1–6: ~3 days. Step 7+8: 1 day. Steps 9+: chemistry sprint scope.
 | Component | Change | Risk |
 |-----------|--------|------|
 | `RuntimeGraph` | None (already fractal-capable) | — |
-| `Session` | F8: add serialize/deserialize for input buffers + linksReady | Low — additive on existing GraphItem serialize |
+| `Session` | F3: add `attachSolver` / `detachSolver` / `solvers` + two-phase `run(t)`. F8: add serialize/deserialize for input buffers + linksReady. | Low to medium — additive API; `run()` change is the only behavioural shift but the dispatch phase is the same code path. |
 | `IRuntimeNode` | None (trait is OPTIONAL via duck typing) | — |
 | Existing motors | None unless migrated. Migration is per-motor and reversible. | Low |
 | `PortType` union | Add `"chemical"` entry + species sub-check on connect | Low — additive |
 | `OnnxGraphExporter` | Generalize from ComputeGraph to RuntimeGraph (separate work) | Medium — touches export pipeline |
-| `GraphRunner` | None (solver is a node it dispatches like any other) | — |
+| `GraphRunner` | None — the marker node and the Session-attach happen automatically via `reset(session)`. | — |
 
 The framework changes are surgical. Most work is **per-leaf**:
 implementing `IIntegrable` on chemistry nodes as they're written.

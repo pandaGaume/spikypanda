@@ -1,20 +1,25 @@
 import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, inSlotOf } from "spikypanda-core";
-import type { ICartesian, Nullable } from "spikypanda-core";
+import type { ICartesian, Nullable, IIntegrable, IIntegrationInputs } from "spikypanda-core";
 import { FaultableNode } from "../../transform/fault.node.js";
 
 /**
- * Separately-excited DC motor — dynamic model integrating the coupled
- * electrical + mechanical equations with an explicit Euler step:
+ * Separately-excited DC motor — dynamic model expressed as an
+ * IIntegrable. The coupled electrical + mechanical equations
  *
- *     V       = R·i + L·di/dt + Ke·ω
- *     τ_em    = Kt·i
- *     J·dω/dt = τ_em - b·ω - (τ_load + τ_fault)
+ *     di/dt = (V - R·i - Ke·ω) / L
+ *     dω/dt = (Kt·i - b·ω - (τ_load + τ_fault)) / J
+ *
+ * are exposed via `rhs(t, y, inputs, dydt)`; the integration loop
+ * (adaptive RK4 by default) is owned by the Session's attached solver.
+ * Because the solver runs in the Session's integration phase BEFORE
+ * the dispatch phase fires this node, `fire()` is now pure I/O: it
+ * publishes the just-updated `i / omega / tau_em` on the outgoing
+ * channels and runs the inherited FaultableNode + TransformNode
+ * pipelines.
  *
  * Inputs (all optional, default 0):
  *   V         armature voltage [V]
  *   tau_load  external load torque [Nm]
- *   dt        integration step [s] — when unwired, falls back to
- *             `t - lastT` like Timer
  *   fault_N   variadic IFaultDescriptor bank (inherited from
  *             FaultableNode). Faults with target "tau" are summed into
  *             tau_load, so any bearing/shaft/gear/modulator output wires
@@ -27,14 +32,22 @@ import { FaultableNode } from "../../transform/fault.node.js";
  *   tau_em    electromagnetic torque (= Kt·i) [Nm]
  *   world     inherited from TransformNode (matrix44)
  *
- * Defaults (R=1Ω, L=1mH, Kt=Ke=0.01, J=10µkg·m², b=0.1mNm·s/rad) are
- * tuned for MCSA pipelines: τ_e = L/R = 1 ms electrical, so Euler is
- * numerically stable for dt ≤ 100 µs (the typical scope sampling rate).
- *
- * State (i, omega) is restored to (i0, omega0) on session reset.
+ * Notes:
+ *   - The legacy `dt` input port is GONE. Session.dt is the single
+ *     source of truth for the timebase, consumed by the attached
+ *     RK4 solver (or whatever solver the user drops in the graph).
+ *   - Without a solver in the graph, the motor doesn't integrate —
+ *     state stays at (i0, omega0). Drop a `Control.Sim:rk4-solver`
+ *     marker node in the graph to enable integration.
+ *   - State (i, omega) is restored to (i0, omega0) on session reset.
+ *     The solver gathers from these fields at attach time.
  */
-export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts {
-    private static readonly OWN_INPUT_SLOTS: ReadonlySet<string> = new Set(["V", "tau_load", "dt"]);
+export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts, IIntegrable {
+    private static readonly OWN_INPUT_SLOTS: ReadonlySet<string> = new Set(["V", "tau_load"]);
+
+    // ── IIntegrable trait ──────────────────────────────────────────────
+    public readonly stateSize = 2;
+    public readonly stateNames: ReadonlyArray<string> = ["i", "omega"];
 
     // ── Physical parameters ─────────────────────────────────────────────
     @cloneable private _R: number = 1.0; // armature resistance  [Ω]
@@ -47,16 +60,25 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts 
     @cloneable private _omega0: number = 0;
 
     // ── Internal state (cloneable so editor save/restore captures it) ──
+    // _lastT removed — Session.dt is the single source of truth now;
+    // the solver in the integration phase reads it directly.
     @cloneable private _i: number = 0;
     @cloneable private _omega: number = 0;
     @cloneable private _tauEm: number = 0;
-    private _lastT: number = -1;
 
     public override readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
         ...FaultableNode.BASE_INPUT_PORTS,
-        { slot: "V", optional: true, type: "float" },
-        { slot: "tau_load", optional: true, type: "float" },
-        { slot: "dt", optional: true, type: "float" },
+        // V and tau_load are SOLVER-MANAGED inputs: the integration phase
+        // peeks them via `linkStates[idx].payload` at every macro-step,
+        // and the dispatch-phase `fire()` consumes them at the end of
+        // the tick. They are NOT gating: marking gating=false tells the
+        // scheduler to exclude them from `required`, so this node fires
+        // every tick regardless of whether V has been published yet.
+        // Without this flag, the scheduler skips fire() when V's buffer
+        // is empty, no omega gets published, and downstream PI/Tach/FB
+        // starve — leading to the closed-loop deadlock you just saw.
+        { slot: "V", optional: true, type: "float", gating: false },
+        { slot: "tau_load", optional: true, type: "float", gating: false },
     ];
     public override readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
         ...FaultableNode.BASE_OUTPUT_PORTS,
@@ -153,6 +175,52 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts 
         return this._tauEm;
     }
 
+    // ── IIntegrable implementation ─────────────────────────────────────
+    // The solver attached to the session calls these. Indices in the
+    // state slice: 0 = i (armature current), 1 = omega (angular speed).
+    // tau_em is a DERIVED output (Kt·i), not a state — recomputed in
+    // fire() from the already-integrated current.
+
+    public gatherState(y: Float64Array, offset: number): void {
+        y[offset + 0] = this._i;
+        y[offset + 1] = this._omega;
+    }
+
+    public writeState(y: Float64Array, offset: number): void {
+        // setField preserves the viewable + LiveBinder propagation.
+        // The solver writes here at the END of each accepted macro step,
+        // BEFORE the dispatch phase fires this node — so any downstream
+        // node consuming `i / omega / tau_em` from this node's fire()
+        // sees the fully integrated values.
+        this.setField("i", this._i, y[offset + 0], (n) => {
+            this._i = n;
+        });
+        this.setField("omega", this._omega, y[offset + 1], (n) => {
+            this._omega = n;
+        });
+        this.setField("tau_em", this._tauEm, this._Kt * y[offset + 0], (n) => {
+            this._tauEm = n;
+        });
+    }
+
+    public rhs(_t: number, y: Float64Array, offset: number, inputs: IIntegrationInputs, dydt: Float64Array): void {
+        // PURE function of (y, inputs). Must not read or write any
+        // state outside the (y, dydt) slice — the solver may call this
+        // multiple times per macro-step at different y values for its
+        // embedded-error estimate (Cash-Karp evaluates 6 stages).
+        const i = y[offset + 0];
+        const omega = y[offset + 1];
+        const V = inputs.get("V") ?? 0;
+        const tauLoad = inputs.get("tau_load") ?? 0;
+        // Faults can't be re-evaluated mid-step (their source data isn't
+        // snapshot here), so we sample the current accumulated fault
+        // torque once per rhs call. This is the same per-macro-step
+        // snapshot the v2 plan calls for (Q1.2).
+        const tauEff = tauLoad + this.getFault("tau");
+        dydt[offset + 0] = (V - this._R * i - this._Ke * omega) / Math.max(this._L, 1e-12);
+        dydt[offset + 1] = (this._Kt * i - this._b * omega - tauEff) / Math.max(this._J, 1e-12);
+    }
+
     // ── Lifecycle ──────────────────────────────────────────────────────
     public override reset(session: ISession): void {
         super.reset(session);
@@ -165,64 +233,33 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts 
         this.setField("tau_em", this._tauEm, this._Kt * this._i0, (n) => {
             this._tauEm = n;
         });
-        this._lastT = -1;
     }
 
     public override fire(session: ISession, t: number): void {
-        // Compose world transform + scan variadic fault inputs first
-        // (super → FaultableNode → TransformNode). Both layers only
-        // consume their own slot families, so motor tokens are untouched.
+        // Pure I/O. The solver in the Session's integration phase has
+        // already advanced (this._i, this._omega) via writeState(). We
+        // do two things here: consume the V/tau_load tokens (the solver
+        // peeked them, not consumed — see RK4AdaptiveSolver), and
+        // publish the freshly-integrated observation outputs.
+        //
+        // Consuming here is what keeps the buffer balanced across
+        // ticks: source publishes V every tick → solver peeks → motor
+        // consumes → buffer empty → next tick's source publish lands
+        // in a fresh buffer slot. Required=0 thanks to the gating:false
+        // flag on V/tau_load, so motor fires every tick regardless of
+        // whether the upstream is in lockstep.
         super.fire(session, t);
 
         const links = session.graph.links as ReadonlyArray<IChannel>;
-
-        // Read wired inputs (consume only the motor's own slots).
-        let V = 0,
-            tauLoad = 0,
-            dt = -1;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const slot = String(inSlotOf(link));
             if (!DcMotorDynamicNode.OWN_INPUT_SLOTS.has(slot)) continue;
             const idx = links.indexOf(link);
             if (idx < 0 || !session.linkStates[idx].ready) continue;
-            const value = session.consume(idx);
-            if (typeof value !== "number") continue;
-            if (slot === "V") V = value;
-            else if (slot === "tau_load") tauLoad = value;
-            else if (slot === "dt") dt = value;
+            session.consume(idx);
         }
-        if (dt < 0) {
-            dt = this._lastT < 0 ? 0 : Math.max(0, t - this._lastT);
-        }
-        this._lastT = t;
 
-        // Fold the accumulated tau-target faults into the effective load.
-        const tauEff = tauLoad + this.getFault("tau");
-
-        // Euler step. Compute new values into locals first so setField
-        // sees old vs new and fires LiveBinder propagation correctly.
-        let newI = this._i;
-        let newOmega = this._omega;
-        if (dt > 0) {
-            const dIdt = (V - this._R * this._i - this._Ke * this._omega) / Math.max(this._L, 1e-12);
-            const dWdt = (this._Kt * this._i - this._b * this._omega - tauEff) / Math.max(this._J, 1e-12);
-            newI = this._i + dt * dIdt;
-            newOmega = this._omega + dt * dWdt;
-        }
-        const newTauEm = this._Kt * newI;
-
-        this.setField("i", this._i, newI, (n) => {
-            this._i = n;
-        });
-        this.setField("omega", this._omega, newOmega, (n) => {
-            this._omega = n;
-        });
-        this.setField("tau_em", this._tauEm, newTauEm, (n) => {
-            this._tauEm = n;
-        });
-
-        // Fan-out per source slot, same pattern as TimerNode.
         const broadcast = (slot: string, val: unknown): void => {
             for (const link of this.onsc<IChannel>()) {
                 if (link.slot !== slot || !link.enabled) continue;
@@ -231,9 +268,9 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts 
                 session.publish(idx, val);
             }
         };
-        broadcast("i", newI);
-        broadcast("omega", newOmega);
-        broadcast("tau_em", newTauEm);
+        broadcast("i", this._i);
+        broadcast("omega", this._omega);
+        broadcast("tau_em", this._tauEm);
     }
 }
 

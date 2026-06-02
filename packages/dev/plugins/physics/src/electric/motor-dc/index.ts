@@ -49,7 +49,12 @@ export const motorDcSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Electric.Motor.DC:dynamic", () => createDcMotorDynamicNode() as never, {
             label: "DC Motor (Dynamic)",
             category: "Physics.Electric.Motor.DC",
-            inputPorts: [...BASE_IN_PORTS, { slot: "V", ...FLOAT_IN }, { slot: "tau_load", ...FLOAT_IN }, { slot: "dt", ...FLOAT_IN }],
+            // dt port dropped — DcMotorDynamicNode is now IIntegrable.
+            // The Session's attached solver owns the timebase via
+            // session.dt, the motor exposes its state via gatherState
+            // / writeState / rhs. Drop a Control.Sim:rk4-solver marker
+            // node in the graph to enable integration.
+            inputPorts: [...BASE_IN_PORTS, { slot: "V", ...FLOAT_IN }, { slot: "tau_load", ...FLOAT_IN }],
             outputPorts: [TRANSFORM_OUT_PORT, { slot: "i", ...FLOAT_OUT }, { slot: "omega", ...FLOAT_OUT }, { slot: "tau_em", ...FLOAT_OUT }],
         });
 
@@ -63,10 +68,13 @@ export const motorDcSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Electric.Motor.DC:speedPI", () => createDcMotorSpeedPiNode() as never, {
             label: "DC Motor Speed PI",
             category: "Physics.Electric.Motor.DC",
+            // dt port dropped — the controller now reads `session.dt`,
+            // which is the same value the integration phase used for
+            // any IIntegrable leaves earlier in the same tick. Single
+            // source of truth across the entire closed loop.
             inputPorts: [
                 { slot: "omega_ref", ...FLOAT_IN },
                 { slot: "omega_measured", ...FLOAT_IN },
-                { slot: "dt", ...FLOAT_IN },
             ],
             outputPorts: [{ slot: "V_cmd", ...FLOAT_OUT }],
         });
@@ -74,10 +82,8 @@ export const motorDcSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Electric.Motor.DC:tachymeter", () => createDcMotorTachymeterNode() as never, {
             label: "Tachymeter",
             category: "Physics.Electric.Motor.DC",
-            inputPorts: [
-                { slot: "omega", ...FLOAT_IN },
-                { slot: "dt", ...FLOAT_IN },
-            ],
+            // dt port dropped — see Speed PI above for the rationale.
+            inputPorts: [{ slot: "omega", ...FLOAT_IN }],
             outputPorts: [{ slot: "omega_measured", ...FLOAT_OUT }],
         });
     },

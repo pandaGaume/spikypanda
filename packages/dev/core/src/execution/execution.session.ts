@@ -1,6 +1,6 @@
 import { IOlink } from "../graph/graph.interfaces";
 import { isControlSlot } from "./control-ports";
-import { IChannel, ILinkRef, ILinkState, INodeState, IRuntimeGraph, IRuntimeNode, ISession, inSlotOf } from "./execution.interfaces";
+import { IChannel, ILinkRef, ILinkState, INodeState, IRuntimeGraph, IRuntimeNode, ISession, ISolverHandle, inSlotOf } from "./execution.interfaces";
 import { Scheduler } from "./execution.scheduler";
 import { StartNode } from "./start.node";
 import { StopNode } from "./stop.node";
@@ -36,6 +36,57 @@ export class Session implements ISession {
      * by the Session so `publish()` can append while a node is firing.
      */
     public readonly queue: (ILinkRef | IRuntimeNode)[] = [];
+
+    /**
+     * Deferred publish events: LinkRefs stamped with `validAtTick` in
+     * the future. Held here between ticks; promoted back into `queue`
+     * at the start of each `run(t)` for events with `validAtTick <= t`.
+     * Enables Z⁻ᴺ delay semantics (FeedbackChannel) and scheduled-
+     * message patterns (timers, watchdogs) without per-node ring buffers.
+     *
+     * Kept unsorted — the promote scan is linear in deferred count, which
+     * is bounded by the deepest delay any node has stamped. For a typical
+     * closed-loop sim that's a handful of events per node × number of FB
+     * channels, so linear is fine.
+     */
+    public readonly deferred: ILinkRef[] = [];
+
+    /**
+     * Most recent tick passed to `run(t)`. Used by the scheduler to
+     * compare against each LinkRef's `validAtTick`. Initialised to
+     * -Infinity so the very first publish with `validAtTick = 0` (or
+     * any finite value) defers correctly until the first `run(0)`.
+     */
+    public currentTick: number = -Infinity;
+
+    /**
+     * Integer scheduler-call counter. Starts at 0, increments by 1 each
+     * `run(t)` BEFORE the integration phase. Used by the deferred
+     * queue's tick-based scheduling (FB Channel, Z⁻ᴺ delays) so the
+     * comparison is integer arithmetic against `ILinkRef.validAtTick`
+     * — independent of how fast or irregularly the host advances the
+     * continuous `currentTick` (sim-time t).
+     */
+    public tickIndex: number = 0;
+
+    /**
+     * Previous value of `currentTick`. Together with `currentTick` lets
+     * any node (or solver) read the elapsed sim-time via the `dt`
+     * getter without maintaining its own `_lastT` mirror. Updated at
+     * the start of each `run(t)`.
+     */
+    public lastT: number = -Infinity;
+
+    /**
+     * Solvers registered via `attachSolver`. Iterated at the start of
+     * each `run(t)` to drive the integration phase BEFORE the dispatch
+     * phase fires its first node. Order = attachment order = order in
+     * which the marker nodes called `attachSolver` during reset().
+     *
+     * Held privately so external code can't reorder the array; the
+     * read-only view is exposed via the `solvers` getter on ISession.
+     */
+    private readonly _solvers: ISolverHandle[] = [];
 
     /**
      * Simulation sample rate (Hz) the session is being driven at.
@@ -101,9 +152,26 @@ export class Session implements ISession {
      * buffer append happens when the LinkRef is dequeued, so the order
      * of effects within one outer drain stays FIFO across publishes
      * and downstream dispatches.
+     *
+     * When `opts.validAtTick` is set AND the target tick is strictly in
+     * the future, the event is placed in the deferred queue instead. It
+     * sits there across ticks until the runner calls `run(t)` with
+     * `t >= validAtTick`; the next run promotes it to the main queue.
+     * If `validAtTick <= currentTick` (or is omitted), behaviour matches
+     * legacy immediate publish.
      */
-    public publish(channelIndex: number, value: unknown): void {
-        this.queue.push({ kind: "linkRef", linkIndex: channelIndex, value });
+    public publish(channelIndex: number, value: unknown, opts?: { validAtTick?: number }): void {
+        const validAt = opts?.validAtTick;
+        const ref: ILinkRef =
+            validAt !== undefined ? { kind: "linkRef", linkIndex: channelIndex, value, validAtTick: validAt } : { kind: "linkRef", linkIndex: channelIndex, value };
+        // Defer when validAtTick is a future TICK INDEX (integer),
+        // not a future sim-time. The unit must match the comparison
+        // we do in run() against `this.tickIndex`.
+        if (validAt !== undefined && validAt > this.tickIndex) {
+            this.deferred.push(ref);
+            return;
+        }
+        this.queue.push(ref);
     }
 
     /**
@@ -162,7 +230,119 @@ export class Session implements ISession {
         }
     }
 
+    /**
+     * Elapsed sim-time since the previous `run(t)`. Equal to
+     * `currentTick - lastT`. Returns `+Infinity` before the first run
+     * AND on the first run (because `lastT` is still -Infinity at that
+     * point, so the subtraction yields NaN which we coerce). Stateful
+     * non-IIntegrable nodes branch on `Number.isFinite(dt)` for the
+     * first-tick case.
+     *
+     * Single source of truth — replaces per-node `_lastT` mirrors and
+     * the `dt` input port pattern. IIntegrable solvers consume the
+     * same value when they advance their state.
+     */
+    public get dt(): number {
+        const d = this.currentTick - this.lastT;
+        return Number.isFinite(d) ? d : Infinity;
+    }
+
+    /** Read-only view of attached solvers (see ISession.solvers). */
+    public get solvers(): ReadonlyArray<ISolverHandle> {
+        return this._solvers;
+    }
+
+    public attachSolver(solver: ISolverHandle): void {
+        // Idempotent: re-attaching the same instance is a no-op so the
+        // marker node's reset() can be called multiple times safely
+        // (e.g. on a config-driven solver rebuild it detaches the old
+        // instance and attaches a new one; if the user wired the same
+        // marker twice somehow, we don't double-step).
+        if (this._solvers.indexOf(solver) >= 0) return;
+        this._solvers.push(solver);
+    }
+
+    public detachSolver(solver: ISolverHandle): void {
+        const idx = this._solvers.indexOf(solver);
+        if (idx < 0) return;
+        this._solvers.splice(idx, 1);
+        try {
+            solver.dispose?.();
+        } catch {
+            // Disposal errors must not break a detach — the worst
+            // outcome is a leaked Float64Array, which the GC eventually
+            // collects.
+        }
+    }
+
     public run(t: number): void {
+        // Advance the session clock BEFORE the scheduler drains, so any
+        // deferred LinkRef whose `validAtTick` has come due is moved
+        // back to the main queue and treated as a fresh publish for
+        // this tick. Re-publish via the public API to preserve overflow
+        // accounting (deliveries still go through deliverLinkRef).
+        // Push the previous currentTick into lastT BEFORE overwriting,
+        // so `dt = currentTick - lastT` reads the correct delta any time
+        // during this run (solvers in the integration phase, nodes in
+        // the dispatch phase, viz tiles reading session state).
+        this.lastT = this.currentTick;
+        this.currentTick = t;
+        // Bump the integer scheduler tick AFTER the sim-time fields so
+        // every `validAtTick` comparison below sees the new value.
+        // Started at 0, the first run advances to 1 → events stamped
+        // with validAtTick=1 at session construction (via FB.reset)
+        // promote on this very first run, matching the design intent
+        // of "publish initial values on tick 1".
+        this.tickIndex++;
+
+        // ── Phase 1: integration ──────────────────────────────────
+        // Drive every attached solver across one macro-step of size
+        // `dt`. Each solver advances its owned IIntegrable leaves in
+        // place (writeState at the end of step()), so by the time the
+        // dispatch phase fires those leaves' `fire()`, they read the
+        // already-updated state and publish observation outputs.
+        //
+        // Skip on the very first run (dt === Infinity): solvers can't
+        // step from t=-Infinity, and the leaf state is whatever
+        // `gatherState` was seeded with at session construction.
+        // Subsequent runs get a finite dt and integrate normally.
+        const stepDt = this.dt;
+        if (Number.isFinite(stepDt) && stepDt > 0 && this._solvers.length > 0) {
+            for (const solver of this._solvers) {
+                try {
+                    solver.step(stepDt, this);
+                } catch (err) {
+                    // Solver failures are surfaced to the host via the
+                    // standard error path (re-throw); without this the
+                    // dispatch phase would fire leaves with stale state
+                    // and produce silently wrong results.
+                    throw err;
+                }
+            }
+        }
+
+        // ── Phase 2: dispatch (deferred promotion + scheduler) ────
+        if (this.deferred.length > 0) {
+            // Partition deferred in-place: keep future events, push due
+            // events onto the main queue. Walking the array once with a
+            // write head avoids two passes / array allocations.
+            // Compare against `tickIndex` (integer scheduler counter),
+            // NOT `currentTick` (continuous sim-time) — see ILinkRef
+            // docs and ISession.tickIndex.
+            let writeIdx = 0;
+            for (let i = 0; i < this.deferred.length; i++) {
+                const ref = this.deferred[i];
+                if (ref.validAtTick !== undefined && ref.validAtTick > this.tickIndex) {
+                    this.deferred[writeIdx++] = ref;
+                } else {
+                    // Strip validAtTick so deliverLinkRef doesn't try to
+                    // defer it again; it's due now.
+                    this.queue.push({ kind: "linkRef", linkIndex: ref.linkIndex, value: ref.value });
+                }
+            }
+            this.deferred.length = writeIdx;
+        }
+
         if (this.graph.mode === "dynamic") {
             Scheduler.RunDynamic(this, t);
             return;
@@ -218,8 +398,14 @@ export class Session implements ISession {
     }
 
     public reset(): void {
-        // Drop scheduler queue + every per-slot buffer.
+        // Drop scheduler queue + deferred queue + every per-slot buffer,
+        // and rewind the session clock so any node that re-seeds future
+        // events at reset (FeedbackChannel) starts from a fresh epoch.
         this.queue.length = 0;
+        this.deferred.length = 0;
+        this.currentTick = -Infinity;
+        this.lastT = -Infinity;
+        this.tickIndex = 0;
         for (const ns of this.nodeStates) {
             if (ns.inputBuffers) {
                 for (const buf of ns.inputBuffers.values()) buf.length = 0;
@@ -268,6 +454,27 @@ export class Session implements ISession {
     private _computeRequiredInputs(): number[] {
         const links = this.graph.links as ReadonlyArray<IChannel>;
         return (this.graph.nodes as ReadonlyArray<IRuntimeNode>).map((n) => {
+            // Build a quick lookup of slot → gating flag from the node's
+            // declared inputPorts. Default = gating (matches legacy
+            // behaviour for nodes that don't declare the field).
+            //
+            // Slots marked `gating: false` (e.g. IIntegrable leaf's
+            // numeric inputs that the solver peeks each macro-step) do
+            // NOT count toward `required`: the leaf fires every tick
+            // regardless of whether the buffer happens to be empty at
+            // the moment the scheduler checks it. Without this, a
+            // closed-loop sim driving an IIntegrable via PI/Slider
+            // deadlocks: motor.fire is gated on V's buffer, but the
+            // dispatch order alternately fills + drains the buffer
+            // around motor's slot in the queue, leaving it empty when
+            // the check fires.
+            const declared = (n as unknown as { inputPorts?: ReadonlyArray<{ slot: string | number; gating?: boolean }> }).inputPorts;
+            const nonGatingSlots = new Set<string | number>();
+            if (declared) {
+                for (const p of declared) {
+                    if (p.gating === false) nonGatingSlots.add(p.slot);
+                }
+            }
             // Use a Set of slot names to handle the case where multiple
             // links target the same slot (variadic ports): each slot
             // counts at most once toward the readiness requirement.
@@ -277,6 +484,7 @@ export class Session implements ISession {
                 if (links.indexOf(link) < 0) continue;
                 const slot = inSlotOf(link);
                 if (isControlSlot(slot)) continue;
+                if (nonGatingSlots.has(slot)) continue;
                 slots.add(slot);
             }
             return slots.size;

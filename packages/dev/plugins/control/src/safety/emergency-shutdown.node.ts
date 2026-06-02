@@ -2,7 +2,7 @@ import { viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, 
 import type { ICartesian, Nullable } from "spikypanda-core";
 
 /**
- * `Helios.Actuator:emergency-shutdown` — a single latched safety bit.
+ * `Control.Safety:emergency-shutdown` — a single latched safety bit.
  *
  * Once any `trigger` input arrives as `true`, the internal `_latched`
  * flag is set and `shutdown` will broadcast `true` on every subsequent
@@ -41,7 +41,6 @@ export class EmergencyShutdownNode extends RuntimeNode implements IDeclaresPorts
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "shutdown", optional: false, type: "boolean" }];
 
-    // ── Runtime state (no editables — the latch is the whole node) ────
     private _latched: boolean = false;
     private _triggerCount: number = 0;
     private _lastTriggerTick: number = NaN;
@@ -128,7 +127,6 @@ export class EmergencyShutdownNode extends RuntimeNode implements IDeclaresPorts
     }
 }
 
-/** Free-standing factory invoked by the sub-plugin's `activate`. */
 export function createEmergencyShutdownNode(): EmergencyShutdownNode {
     return new EmergencyShutdownNode();
 }

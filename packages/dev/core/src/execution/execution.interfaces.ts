@@ -247,11 +247,23 @@ export interface INodeState {
  * Scheduler queue items. A LinkRef is the publish-event carrier (link
  * index + the value being delivered); IRuntimeNode entries represent
  * a node ready-check. The drain loop alternates between them.
+ *
+ * `validAtTick` (optional): the integer scheduler tick INDEX at which
+ * this event becomes deliverable. Compared against `ISession.tickIndex`
+ * (NOT `currentTick`, which holds continuous sim-time t). Events with
+ * `validAtTick > session.tickIndex` are deferred — they sit in a side
+ * queue and re-enter the main queue at the run where `tickIndex`
+ * reaches them. Generalises the legacy "delayed channel pre-seed"
+ * mechanism: any node can stamp any publish with a future tick index,
+ * enabling Z⁻ᴺ delays (FeedbackChannel), scheduled-message agents,
+ * watchdog timeouts, etc. Without this field events are delivered
+ * immediately (legacy behaviour).
  */
 export interface ILinkRef {
     readonly kind: "linkRef";
     readonly linkIndex: number;
     readonly value: unknown;
+    readonly validAtTick?: number;
 }
 
 export function isLinkRef(item: ILinkRef | IRuntimeNode): item is ILinkRef {
@@ -304,6 +316,90 @@ export interface ISession {
     running: boolean;
 
     /**
+     * Most recent sim-time `t` the session was driven with via
+     * `run(t)`. CONTINUOUS, in seconds (or whatever unit the host
+     * driver uses). Initialised to -Infinity before the first run.
+     * NOT the same thing as `tickIndex` — `currentTick` is the
+     * sim-time clock, `tickIndex` is the scheduler-call counter.
+     * `dt = currentTick - lastT` gives the continuous time elapsed
+     * since the previous run, used by IIntegrable solvers.
+     *
+     * Misnamed historically (`tick` suggesting integer count, but the
+     * field holds the continuous t); kept as-is for API stability.
+     * For integer-counted scheduling delays (Z⁻ᴺ FeedbackChannel),
+     * use `tickIndex` instead — see `ILinkRef.validAtTick`.
+     */
+    readonly currentTick: number;
+
+    /**
+     * Integer scheduler-call counter. Starts at 0, increments by 1
+     * each time `run(t)` is invoked. Stays integer regardless of how
+     * the host advances sim-time (fixed-step, free-running, irregular
+     * batches). The right index for tick-relative scheduling: a
+     * Z⁻ᴺ delay node stamps `validAtTick = tickIndex + N` so the
+     * event resurfaces exactly N runs later, regardless of how big
+     * each macro-step's `dt` happens to be.
+     */
+    readonly tickIndex: number;
+
+    /**
+     * Previous tick — the value of `currentTick` from the most recent
+     * `run(t)` call BEFORE the current one started. Together with
+     * `currentTick` this gives `dt = currentTick - lastT`. Initialised
+     * to -Infinity so the first `run(0)` sees `dt === Infinity` (the
+     * caller treats that as "first tick, no meaningful dt available").
+     *
+     * Stateful non-IIntegrable nodes (PI controllers, low-pass
+     * filters, tachymeters) read `dt` from the session instead of
+     * pulling a `dt` input port — the dt is a property of the
+     * scheduling, not of the data graph.
+     */
+    readonly lastT: number;
+
+    /**
+     * Sim-time elapsed since the previous `run(t)`. Computed as
+     * `currentTick - lastT` at the start of each `run`. Returns
+     * `+Infinity` before the first run AND on the very first run
+     * (because `lastT` is still -Infinity at that point); nodes that
+     * care about this case must clamp / treat first-tick specially.
+     *
+     * The Session owns this value so IIntegrable solvers AND non-
+     * IIntegrable stateful nodes all read from a single source of
+     * truth — no more per-node `_lastT` mirroring, no more `dt`
+     * input ports threading the same scalar through the data graph.
+     */
+    readonly dt: number;
+
+    /**
+     * Solvers attached to this session via `attachSolver`. Their
+     * `step(dt, session)` is called in attachment order at the start
+     * of every `run(t)` (the "integration phase"), BEFORE the
+     * scheduler's dispatch phase. By the time a leaf's `fire()` runs,
+     * any solver that owns it has already updated its state, so the
+     * leaf's `fire()` becomes pure I/O (read state, publish outputs).
+     */
+    readonly solvers: ReadonlyArray<ISolverHandle>;
+
+    /**
+     * Register a solver with this session. The solver's `step(dt,
+     * session)` will be invoked at the start of each `run(t)` call.
+     * Multiple solvers may coexist (typically split by leaf subset via
+     * the marker node's `leafFilter`); execution order matches
+     * attachment order. Idempotent: re-attaching an already-attached
+     * solver instance is a no-op.
+     */
+    attachSolver(solver: ISolverHandle): void;
+
+    /**
+     * Unregister a previously-attached solver. Calls the solver's
+     * `dispose?()` if defined. No-op when the solver isn't currently
+     * attached. The marker node typically calls this from its own
+     * `dispose()` or when it rebuilds the solver instance on a config
+     * change mid-session.
+     */
+    detachSolver(solver: ISolverHandle): void;
+
+    /**
      * Inject a value into a channel from outside the graph. Equivalent
      * to publish() but named for clarity at the caller boundary
      * (feeding a model-input channel before a run).
@@ -325,8 +421,14 @@ export interface ISession {
      * counter to dispatch downstream nodes without rescanning the
      * graph; nodes that mutate linkStates directly bypass that
      * accounting and must update counters themselves (not recommended).
+     *
+     * `opts.validAtTick` schedules the value for a future sim tick.
+     * Until that tick is reached the event sits in a deferred queue
+     * (no buffer push, no linksReady bump) and is promoted to the
+     * main queue when `session.run(t)` is called with `t >= validAtTick`.
+     * Default = undefined → deliver immediately as before.
      */
-    publish(channelIndex: number, value: unknown): void;
+    publish(channelIndex: number, value: unknown, opts?: { validAtTick?: number }): void;
 
     /**
      * Node-side read+clear API: returns the payload and clears the
@@ -412,6 +514,41 @@ export interface IDeclaresPorts {
     readonly outputPorts: ReadonlyArray<IPortDescriptor>;
 }
 
+/**
+ * Minimal interface a Session needs to drive an integrator: just a
+ * `step(dt, session)` entry point and an optional cleanup hook. Kept
+ * deliberately spartan at the execution layer so we don't drag the
+ * sim package's IIntegrable / Float64Array machinery up into the
+ * topology / scheduler core (which would create a circular import:
+ * sim depends on execution.interfaces).
+ *
+ * The full `ISolver` interface in `packages/dev/core/src/sim/` extends
+ * this handle with `name`, `supportsJacobian`, `initialize(leaves,
+ * t0)`, and `lastStep` diagnostics — the marker node and concrete
+ * solver impls type against the richer ISolver; the Session only
+ * needs ISolverHandle to schedule the integration phase.
+ */
+export interface ISolverHandle {
+    /**
+     * Advance whatever state this handle owns by `dt`. The session is
+     * passed so the implementation can read upstream linkStates (the
+     * solver's per-leaf rhs needs them). Returns diagnostic counters
+     * the marker node surfaces as viewables.
+     */
+    step(
+        dt: number,
+        session: ISession
+    ): {
+        readonly t: number;
+        readonly microSteps: number;
+        readonly maxError: number;
+        readonly rhsEvals: number;
+    };
+
+    /** Release private buffers / workspaces. Optional. */
+    dispose?(): void;
+}
+
 export interface IPortDescriptor {
     readonly slot: string | number;
     readonly optional: boolean;
@@ -426,6 +563,34 @@ export interface IPortDescriptor {
      * consumes them.
      */
     readonly capacity?: number;
+    /**
+     * Editor-only routing hint for split-view nodes: which visual
+     * anchor (widget) the port should render on. Default undefined →
+     * routes to anchor 0 (the single widget of an ordinary node). The
+     * runtime ignores this field — it never affects scheduling, only
+     * the per-port DOM placement when the host's NodeUI honours
+     * `anchorCount` on the NodeMeta. See `NodeUI` and `PortDef` in
+     * @spikypanda/nodeeditor for the rendering side.
+     */
+    readonly anchor?: number;
+
+    /**
+     * Scheduler gating flag. Default true (legacy behaviour). When set
+     * to `false`, this input port does NOT count toward the node's
+     * `requiredInputs` total: the scheduler will fire this node every
+     * tick regardless of whether the port's buffer happens to hold a
+     * token at the moment of the readiness check.
+     *
+     * Use for solver-managed inputs of IIntegrable leaves: the
+     * integration phase peeks the value from the buffer each macro-
+     * step, and the dispatch-phase `fire()` consumes it at the end of
+     * the tick (publishing observation outputs along the way). Marking
+     * the port non-gating avoids a deadlock where the scheduler
+     * checks the buffer state at the wrong moment of the tick and
+     * skips `fire()`, leaving downstream consumers starved of the
+     * leaf's freshly-integrated state.
+     */
+    readonly gating?: boolean;
 }
 
 export function declaresPorts(n: IRuntimeNode): n is IRuntimeNode & IDeclaresPorts {

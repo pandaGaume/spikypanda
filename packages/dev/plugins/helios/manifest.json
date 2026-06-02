@@ -2,7 +2,7 @@
     "id":          "spk.helios",
     "version":     "0.1.1",
     "displayName": "Helios",
-    "description": "Helios ECLSS simulator + agent runtime. V0.1.1 is deliberately empty: the V0.1 sub-plugins shipped generic primitives that were relocated to Logic.Sim, Logic.Event, DSP.Sensor, and Physics.Control. V0.2 will refill with chemistry plant nodes (Helios.Process), ECLSS-specific agent wrappers (Helios.Agent), comm (Helios.Comm) and sim infrastructure (Helios.Sim) once the ISimNode framework lands.",
+    "description": "Helios ECLSS simulator + agent runtime. V0.1.1 is deliberately empty: the V0.1 sub-plugins shipped generic primitives that were relocated to Logic.Sim, Logic.Event, DSP.Sensor, Control.Actuator, and Control.Safety. V0.2 will refill with chemistry plant nodes (Helios.Process), ECLSS-specific agent wrappers (Helios.Agent), comm (Helios.Comm) and sim infrastructure (Helios.Sim) once the ISimNode framework lands.",
     "category":    "Helios",
     "entry":       "bundle/SpkPluginHelios.js",
     "nodes":       [],

@@ -17,6 +17,7 @@ const sources = [
     join(root, "packages/dev/plugins/onnx/bundle"),
     join(root, "packages/dev/plugins/dsp/bundle"),
     join(root, "packages/dev/plugins/physics/bundle"),
+    join(root, "packages/dev/plugins/control/bundle"),
     join(root, "packages/dev/plugins/viz/bundle"),
     join(root, "packages/dev/plugins/helios/bundle"),
 ];

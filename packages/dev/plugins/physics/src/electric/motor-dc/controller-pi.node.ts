@@ -29,12 +29,10 @@ export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
 
     @cloneable private _integral: number = 0;
     @cloneable private _Vcmd: number = 0;
-    private _lastT: number = -1;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
         { slot: "omega_ref", optional: true, type: "float" },
         { slot: "omega_measured", optional: true, type: "float" },
-        { slot: "dt", optional: true, type: "float" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "V_cmd", optional: false, type: "float" }];
 
@@ -83,15 +81,13 @@ export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
         this.setField("V_cmd", this._Vcmd, 0, (n) => {
             this._Vcmd = n;
         });
-        this._lastT = -1;
     }
 
-    public override fire(session: ISession, t: number): void {
+    public override fire(session: ISession, _t: number): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
 
         let omegaRef = 0,
-            omegaMeasured = 0,
-            dt = -1;
+            omegaMeasured = 0;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const slot = inSlotOf(link);
@@ -101,12 +97,13 @@ export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
             if (typeof value !== "number") continue;
             if (slot === "omega_ref") omegaRef = value;
             else if (slot === "omega_measured") omegaMeasured = value;
-            else if (slot === "dt") dt = value;
         }
-        if (dt < 0) {
-            dt = this._lastT < 0 ? 0 : Math.max(0, t - this._lastT);
-        }
-        this._lastT = t;
+        // dt now comes from the Session, not a wired port. First-tick
+        // case (currentTick still pristine) returns Infinity → we clamp
+        // to 0 so the integral term contributes nothing until a real
+        // macro-step has happened.
+        const sessionDt = session.dt;
+        const dt = Number.isFinite(sessionDt) ? Math.max(0, sessionDt) : 0;
 
         const error = omegaRef - omegaMeasured;
         const proposedIntegral = this._integral + this._Ki * error * dt;

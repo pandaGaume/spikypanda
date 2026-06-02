@@ -136,12 +136,13 @@
         {
             "id":          "Logic.Input",
             "displayName": "Input",
-            "description": "Number Slider — UI-driven editable scalar source.",
+            "description": "Editable scalar sources. Slider for bounded knobs, Constant for direct numeric entry (right tool for fixed dt sources and other exact-value constants where slider resolution would fight tiny magnitudes).",
             "category":    "Logic.Input",
-            "version":     "0.1.0",
+            "version":     "0.2.0",
             "standards":   ["ue5"],
             "nodes": [
-                { "type": "Logic.Input:slider", "factory": "NumberSliderNode", "label": "Number Slider" }
+                { "type": "Logic.Input:slider",   "factory": "NumberSliderNode",   "label": "Number Slider" },
+                { "type": "Logic.Input:constant", "factory": "NumberConstantNode", "label": "Number Constant" }
             ]
         },
         {

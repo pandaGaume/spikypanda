@@ -1,0 +1,47 @@
+{
+    "$schema":     "https://spikypanda.dev/schemas/plugin.v1.json",
+    "id":          "spk.control",
+    "version":     "0.2.0",
+    "displayName": "Control",
+    "description": "Control-systems primitives: actuator wrappers (rate-limit, saturation), feedback / delay (Z^-N) for breaking cyclic graphs into DAGs, fail-safe latches. Hosts nodes previously published under Physics.Control:*.",
+    "category":    "Control",
+    "entry":       "bundle/SpkPluginControl.js",
+    "nodes":       [],
+    "editors":     [],
+    "subPlugins": [
+        {
+            "id":          "Control.Actuator",
+            "displayName": "Actuator",
+            "description": "Actuator-side primitives. Setpoint wraps a controller output with rate-limit (slew) and saturation so the rest of the plant model never sees a non-physical command.",
+            "category":    "Control.Actuator",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Control.Actuator:setpoint", "factory": "SetpointNode", "label": "Setpoint" }
+            ]
+        },
+        {
+            "id":          "Control.Feedback",
+            "displayName": "Feedback",
+            "description": "Cycle-breaking primitives. Feedback channel = unit-delay (Z^-N) that lets closed-loop control graphs (motor + PI + tachymeter) stay topologically DAG-valid.",
+            "category":    "Control.Feedback",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Control.Feedback:channel", "factory": "FeedbackChannelNode", "label": "Feedback Channel" }
+            ]
+        },
+        {
+            "id":          "Control.Safety",
+            "displayName": "Safety",
+            "description": "Fail-safe / interlock primitives. Emergency Shutdown is a latched safety bit: trips on any trigger=true, stays latched until an operator-initiated reset.",
+            "category":    "Control.Safety",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Control.Safety:emergency-shutdown", "factory": "EmergencyShutdownNode", "label": "Emergency Shutdown" }
+            ]
+        }
+    ],
+    "manifestRefs": []
+}

@@ -19,6 +19,7 @@
             "./packages/dev/plugins/logic/tsconfig.build.json",
             "./packages/dev/plugins/dsp/tsconfig.build.json",
             "./packages/dev/plugins/physics/tsconfig.build.json",
+            "./packages/dev/plugins/control/tsconfig.build.json",
             "./packages/tests/tsconfig.json"
         ]
     },

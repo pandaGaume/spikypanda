@@ -14,8 +14,8 @@
  *   Logic.Event:alert-bus               was Helios.Agent:alert-bus
  *   Logic.Event:arbitrator              was Helios.Agent:arbitrator
  *   DSP.Sensor:transducer               was Helios.Sensor:transducer
- *   Physics.Control:setpoint            was Helios.Actuator:setpoint
- *   Physics.Control:emergency-shutdown  was Helios.Actuator:emergency-shutdown
+ *   Control.Actuator:setpoint           was Helios.Actuator:setpoint
+ *   Control.Safety:emergency-shutdown   was Helios.Actuator:emergency-shutdown
  *
  * V0.2 refills this plugin with the genuinely Helios-specific bits:
  *

@@ -92,16 +92,22 @@ describe("DcMotorDynamicNode", () => {
         expect(node.tau_em).toBeCloseTo(0, 8);
     });
 
-    it("Euler step does not blow up with default parameters and dt = 100 µs", () => {
-        // Even without driving inputs, the integration must stay bounded
-        // for an integration step that's 10× shorter than τ_e = L/R = 1 ms.
+    it("RK4 step does not blow up with default parameters and dt = 100 µs", () => {
+        // F3 migration: motor is now IIntegrable. Verify the RK4 Cash-
+        // Karp adaptive solver stays bounded at a macro-step 10× shorter
+        // than τ_e = L/R = 1 ms (well within the explicit-method
+        // stability envelope) — same numerical envelope the old inline
+        // Euler had to satisfy.
+        const { RK4AdaptiveSolver } = require("spikypanda-core");
         const node = new DcMotorDynamicNode();
         node.i0 = 100;
         node.omega0 = 1000;
         node.reset(emptySession());
+        const solver = new RK4AdaptiveSolver({ tolerance: 1e-6, maxStep: 1e-4 });
+        solver.initialize([node], 0);
         const session = emptySession();
         for (let k = 0; k < 1000; k++) {
-            node.fire(session, k * 1e-4);
+            solver.step(1e-4, session);
         }
         expect(Number.isFinite(node.i)).toBe(true);
         expect(Number.isFinite(node.omega)).toBe(true);

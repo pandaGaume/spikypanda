@@ -8,7 +8,6 @@ import { gearSubPlugin } from "./mechanical/gear/index.js";
 import { frictionSubPlugin } from "./mechanical/friction/index.js";
 import { vibrationSubPlugin } from "./mechanical/vibration/index.js";
 import { faultSubPlugin } from "./mechanical/fault/index.js";
-import { physicsControlSubPlugin } from "./control/index.js";
 
 export * from "./transform/index.js";
 export * from "./scene/index.js";
@@ -20,7 +19,6 @@ export * from "./mechanical/gear/index.js";
 export * from "./mechanical/friction/index.js";
 export * from "./mechanical/vibration/index.js";
 export * from "./mechanical/fault/index.js";
-export { physicsControlSubPlugin, SetpointNode, createSetpointNode, EmergencyShutdownNode, createEmergencyShutdownNode } from "./control/index.js";
 
 /**
  * @spikypanda/plugin-physics
@@ -49,9 +47,10 @@ export { physicsControlSubPlugin, SetpointNode, createSetpointNode, EmergencyShu
  *     Vibration — accelerometer transducer (LPF + noise + quantization)
  *     Fault     — generic sinusoidal modulator (composable building block)
  *
- *   Control     — generic control-system primitives:
- *     Setpoint           — continuous-value request with rate-limit + saturation
- *     EmergencyShutdown  — single latched safety bit, monopoly of safety agents
+ * Generic control-system primitives (Setpoint, EmergencyShutdown) used
+ * to live here as `Physics.Control:*` but were moved to plugin-control
+ * (`Control.Actuator:*` / `Control.Safety:*`) once the catalog grew
+ * past a single node — they were never physics-specific.
  *
  * None of these nodes are ONNX-backed — they are pure runtime sim
  * primitives, so they declare no standards. ONNX export of a sim graph
@@ -69,6 +68,5 @@ export default {
         "Physics.Mechanical.Friction": frictionSubPlugin,
         "Physics.Mechanical.Vibration": vibrationSubPlugin,
         "Physics.Mechanical.Fault": faultSubPlugin,
-        "Physics.Control": physicsControlSubPlugin,
     },
 };

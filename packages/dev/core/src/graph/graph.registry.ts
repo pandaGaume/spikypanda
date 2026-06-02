@@ -35,6 +35,15 @@ export interface INodeMeta {
      *  `then_0`, `then_1`, ...). Also accepts the multi-group array
      *  form for symmetry, although no current node uses it. */
     readonly variadicOutput?: { readonly prefix: string; readonly type: string } | ReadonlyArray<{ readonly prefix: string; readonly type: string }>;
+    /**
+     * Number of independent anchor widgets the editor should render
+     * for this node. Default undefined / 1 → ordinary single-widget
+     * node. Values >= 2 turn it into a split-view node: one logical
+     * entity drawn as N independently-draggable widgets, with ports
+     * routed to widgets via their `IPortDescriptor.anchor` field.
+     * The runtime is unaffected — `anchorCount` is editor-only metadata.
+     */
+    readonly anchorCount?: number;
 }
 
 export type NodeFactory = (config?: Record<string, unknown>) => IRuntimeNode;

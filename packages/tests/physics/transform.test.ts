@@ -140,8 +140,10 @@ describe("Motor TransformNode inheritance", () => {
         const inSlots  = node.inputPorts.map((p) => p.slot);
         const outSlots = node.outputPorts.map((p) => p.slot);
         // Base-class ports first (transform, scene, fault), then own.
+        // `dt` port was dropped in F3 — the motor is now IIntegrable
+        // and the Session's attached solver owns the timebase.
         expect(inSlots.slice(0, 4)).toEqual(["local", "parent_world", "scene", "fault_0"]);
-        expect(inSlots).toEqual(["local", "parent_world", "scene", "fault_0", "V", "tau_load", "dt"]);
+        expect(inSlots).toEqual(["local", "parent_world", "scene", "fault_0", "V", "tau_load"]);
         expect(outSlots).toEqual(["world", "i", "omega", "tau_em"]);
     });
 
@@ -163,15 +165,23 @@ describe("Motor TransformNode inheritance", () => {
         expect(Array.from(node.world)).toEqual(Array.from(IDENTITY44));
     });
 
-    it("Motor physics still converges to rest when no driver and no transform inputs", () => {
+    it("Motor physics still converges to rest when driven by an attached solver", () => {
+        // F3 migration: motor.fire() no longer integrates. The Session's
+        // attached RK4 solver owns state advancement, so we set one up
+        // here and call solver.step directly to exercise the IIntegrable
+        // contract end-to-end (gatherState → rhs → writeState).
+        const { RK4AdaptiveSolver } = require("spikypanda-core");
         const node = new DcMotorDynamicNode();
         node.i0 = 5;
         node.omega0 = 200;
         node.reset(makeSession());
+        const solver = new RK4AdaptiveSolver({ tolerance: 1e-6, maxStep: 1e-4 });
+        solver.initialize([node], 0);
         const session = makeSession();
-        for (let k = 0; k < 1000; k++) node.fire(session, k * 1e-4);
-        // Same decay assertion as motor-dc.test.ts — passes when the
-        // super.fire() chaining did not interfere with motor state.
+        for (let k = 0; k < 1000; k++) solver.step(1e-4, session);
+        // Decay assertion: with V=0 and tau_load=0, the motor must
+        // damp toward rest (b > 0). The RK4 solver should track this
+        // strictly better than the previous inline Euler did.
         expect(Math.abs(node.i)).toBeLessThan(5);
         expect(Math.abs(node.omega)).toBeLessThan(200);
         expect(Number.isFinite(node.i)).toBe(true);

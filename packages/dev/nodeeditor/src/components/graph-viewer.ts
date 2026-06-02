@@ -72,6 +72,12 @@ export class GraphViewer {
 
     private readonly selectedNodes = new Set<NodeUI>();
     private dragNode: NodeUI | null = null;
+    /**
+     * Which anchor of the dragged node the user grabbed. 0 for ordinary
+     * nodes; 0..N-1 for split-view nodes. Used to drag a specific half
+     * of a Feedback Channel (or similar) without moving the other half.
+     */
+    private dragAnchor: number = 0;
     private dragOffset = { x: 0, y: 0 };
     private isDraggingSelection = false;
     private isPanning = false;
@@ -147,7 +153,15 @@ export class GraphViewer {
 
     addNode(def: NodeDef, x = 100, y = 100): NodeUI {
         const node = new NodeUI(def, this.nodesLayer, this.standards);
-        node.setPosition(x, y);
+        // Initial layout: place anchor 0 at the requested point, then
+        // translate every secondary anchor so it keeps its constructor-
+        // assigned offset relative to anchor 0. Without this, split-view
+        // nodes' secondary widgets stay at world (0, 0) instead of
+        // landing near where the user dropped the primary widget.
+        const baseOffsets = node.anchors.map((a) => ({ dx: a.x, dy: a.y }));
+        for (let i = 0; i < node.anchors.length; i++) {
+            node.setAnchorPosition(i, x + baseOffsets[i].dx, y + baseOffsets[i].dy);
+        }
         this.nodes.push(node);
         this.applyProfileToNode(node);
         if (this.onNodeAdded) this.onNodeAdded(node);
@@ -437,6 +451,15 @@ export class GraphViewer {
                     typeId: n.typeId,
                     x: n.x,
                     y: n.y,
+                    // For split-view nodes (N >= 2 anchors), persist
+                    // every anchor's position. Ordinary nodes (N == 1)
+                    // skip this field entirely so v2/v3 saves are
+                    // byte-identical to before. `anchors[0]` duplicates
+                    // {x, y} for forward-compatibility — a loader that
+                    // recognises `anchors` can ignore the legacy fields,
+                    // and an older loader that only knows {x, y} still
+                    // sees the primary position correctly.
+                    anchors: n.anchors.length > 1 ? n.anchors.map((a) => ({ x: a.x, y: a.y })) : undefined,
                     color: n.color,
                     inputs: n.inputs.map((p) => ({ name: p.name, type: p.type, direction: p.direction })),
                     outputs: n.outputs.map((p) => ({ name: p.name, type: p.type, direction: p.direction })),
@@ -543,6 +566,22 @@ export class GraphViewer {
                 data: runtimeData,
             };
             const node = this.addNode(def, sn.x, sn.y);
+            // Restore split-view anchor positions when they were saved.
+            // Anchor 0 was already placed by addNode(sn.x, sn.y) above;
+            // we replay anchors[1..] so each secondary widget lands where
+            // the user dragged it last. Falls back to the default
+            // gap-layout when `anchors` is absent (legacy single-anchor
+            // saves OR newer saves whose split-view widget was never
+            // moved away from the default offset).
+            const savedAnchors = (sn as { anchors?: Array<{ x: number; y: number }> }).anchors;
+            if (savedAnchors && Array.isArray(savedAnchors)) {
+                for (let i = 0; i < savedAnchors.length; i++) {
+                    const a = savedAnchors[i];
+                    if (typeof a?.x === "number" && typeof a?.y === "number") {
+                        node.setAnchorPosition(i, a.x, a.y);
+                    }
+                }
+            }
             // Restore state only when we built a real runtime instance
             // (the deserialize contract is on IRuntimeNode, not on a
             // raw JSON payload that the legacy path leaves in def.data).
@@ -805,7 +844,26 @@ export class GraphViewer {
     private findNodeByEl(el: HTMLElement): NodeUI | undefined {
         const nodeEl = el.closest(".ne-node") as HTMLElement | null;
         if (!nodeEl) return undefined;
-        return this.nodes.find((n) => n.el === nodeEl);
+        // Walk every node's anchor list — split-view nodes own multiple
+        // .ne-node elements that all map back to the same logical NodeUI.
+        return this.nodes.find((n) => n.anchors.some((a) => a.el === nodeEl));
+    }
+
+    /**
+     * Locate the node AND the anchor index that contains the given DOM
+     * element. Returns `{ node, anchor }` or undefined when the element
+     * is not inside any node. Used by the drag handler so we move the
+     * specific anchor of a split-view node, not the entire group.
+     */
+    private findNodeAndAnchorByEl(el: HTMLElement): { node: NodeUI; anchor: number } | undefined {
+        const nodeEl = el.closest(".ne-node") as HTMLElement | null;
+        if (!nodeEl) return undefined;
+        for (const node of this.nodes) {
+            for (let i = 0; i < node.anchors.length; i++) {
+                if (node.anchors[i].el === nodeEl) return { node, anchor: i };
+            }
+        }
+        return undefined;
     }
 
     private findPortByDot(el: HTMLElement): Port | undefined {
@@ -891,9 +949,12 @@ export class GraphViewer {
             return;
         }
 
-        // Node click: selection is read; drag setup is write.
-        const node = this.findNodeByEl(target);
-        if (node) {
+        // Node click: selection is read; drag setup is write. Use the
+        // anchor-aware lookup so a click on the secondary half of a
+        // split-view node grabs that specific half, not the primary.
+        const hit = this.findNodeAndAnchorByEl(target);
+        if (hit) {
+            const node = hit.node;
             e.stopPropagation();
             const ctrlOrMeta = e.ctrlKey || e.metaKey;
             if (ctrlOrMeta) this.selectNode(node, true);
@@ -901,11 +962,13 @@ export class GraphViewer {
 
             if (canWrite && this.selectedNodes.has(node)) {
                 this.dragNode = node;
+                this.dragAnchor = hit.anchor;
                 this.isDraggingSelection = this.selectedNodes.size > 1;
                 const worldMouse = this.camera.screenToWorld(e.clientX, e.clientY);
-                this.dragOffset.x = worldMouse.x - node.x;
-                this.dragOffset.y = worldMouse.y - node.y;
-                node.el.style.cursor = "grabbing";
+                const a = node.anchors[hit.anchor];
+                this.dragOffset.x = worldMouse.x - a.x;
+                this.dragOffset.y = worldMouse.y - a.y;
+                a.el.style.cursor = "grabbing";
             }
             return;
         }
@@ -978,12 +1041,18 @@ export class GraphViewer {
             const worldMouse = this.camera.screenToWorld(e.clientX, e.clientY);
             const newX = worldMouse.x - this.dragOffset.x;
             const newY = worldMouse.y - this.dragOffset.y;
+            const a = this.dragNode.anchors[this.dragAnchor];
             if (this.isDraggingSelection && this.selectedNodes.size > 1) {
-                const dx = newX - this.dragNode.x,
-                    dy = newY - this.dragNode.y;
+                // Multi-select drag uses the grabbed anchor as the
+                // reference point; every other selected node moves by
+                // the same delta on its OWN primary anchor (anchor 0).
+                // Secondary anchors of split nodes keep their own
+                // positions — visually they "snap" with their primary.
+                const dx = newX - a.x,
+                    dy = newY - a.y;
                 for (const n of this.selectedNodes) n.setPosition(n.x + dx, n.y + dy);
             } else {
-                this.dragNode.setPosition(newX, newY);
+                this.dragNode.setAnchorPosition(this.dragAnchor, newX, newY);
             }
             this.updateConnections();
             return;
@@ -1026,8 +1095,10 @@ export class GraphViewer {
             return;
         }
         if (this.dragNode) {
-            this.dragNode.el.style.cursor = "grab";
+            const a = this.dragNode.anchors[this.dragAnchor] ?? this.dragNode.anchors[0];
+            if (a) a.el.style.cursor = "grab";
             this.dragNode = null;
+            this.dragAnchor = 0;
             this.isDraggingSelection = false;
             return;
         }

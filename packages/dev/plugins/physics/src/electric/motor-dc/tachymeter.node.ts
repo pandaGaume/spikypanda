@@ -36,11 +36,9 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
     @cloneable private _filtered: number = 0;
     @cloneable private _measured: number = 0;
     private _rng: number = 1;
-    private _lastT: number = -1;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
         { slot: "omega", optional: true, type: "float" },
-        { slot: "dt", optional: true, type: "float" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "omega_measured", optional: false, type: "float" }];
 
@@ -99,14 +97,12 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
             this._measured = n;
         });
         this._rng = Math.max(1, Math.floor(this._seed));
-        this._lastT = -1;
     }
 
-    public override fire(session: ISession, t: number): void {
+    public override fire(session: ISession, _t: number): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
 
-        let omega = 0,
-            dt = -1;
+        let omega = 0;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const slot = inSlotOf(link);
@@ -115,12 +111,12 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
             const value = session.consume(idx);
             if (typeof value !== "number") continue;
             if (slot === "omega") omega = value;
-            else if (slot === "dt") dt = value;
         }
-        if (dt < 0) {
-            dt = this._lastT < 0 ? 0 : Math.max(0, t - this._lastT);
-        }
-        this._lastT = t;
+        // dt sourced from the Session — no more `dt` input port. First
+        // tick (Session.dt === Infinity) clamps to 0 so the LPF doesn't
+        // overshoot before a real macro-step has happened.
+        const sessionDt = session.dt;
+        const dt = Number.isFinite(sessionDt) ? Math.max(0, sessionDt) : 0;
 
         // 1st-order LPF. alpha = dt/(τ+dt), clamped so a large dt collapses
         // to passthrough rather than overshooting (alpha would exceed 1).

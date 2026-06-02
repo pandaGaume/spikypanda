@@ -13,8 +13,36 @@ const DISABLED_SVG =
     '<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>';
 
 const GRID = 20;
+const SPLIT_ANCHOR_GAP = 200;
 
 let nodeIdCounter = 0;
+
+/**
+ * One visual anchor (widget) of a node. Ordinary nodes have exactly one
+ * anchor; "split-view" nodes (e.g. Feedback Channel) have N anchors,
+ * each independently draggable but sharing one logical NodeUI (selection,
+ * model, properties, deletion all apply across the whole group).
+ *
+ * Each anchor owns its own DOM subtree (header, body with port columns,
+ * footer with status). Ports route to a specific anchor's containers via
+ * `PortDef.anchor`; out-of-range or omitted anchor indices fall back to 0.
+ */
+export interface NodeAnchor {
+    el: HTMLDivElement;
+    headerEl: HTMLDivElement;
+    titleEl: HTMLSpanElement;
+    toolbarEl: HTMLDivElement;
+    inputsContainer: HTMLDivElement;
+    outputsContainer: HTMLDivElement;
+    controlInputsContainer: HTMLDivElement;
+    controlOutputsContainer: HTMLDivElement;
+    footerEl: HTMLDivElement;
+    statusEl: HTMLSpanElement;
+    statusDotEl: HTMLSpanElement;
+    statusTextEl: HTMLSpanElement;
+    x: number;
+    y: number;
+}
 
 /**
  * Build the CSS background for a node header. Resolution chain:
@@ -54,12 +82,7 @@ function computeNodeHeaderBackground(def: NodeDef): string | null {
 
 export class NodeUI {
     readonly id: string;
-    readonly el: HTMLDivElement;
     readonly label: string;
-    /** Registry type id this node was instantiated from (when known).
-     *  Plumbed straight from `def.typeId`. Consumed by GraphViewer.save()
-     *  to emit a self-contained record that GraphViewer.load() can use
-     *  to recreate the runtime IRuntimeNode via NodeRegistry.create(). */
     readonly typeId?: string;
     readonly color?: string;
     readonly inputs: Port[] = [];
@@ -82,21 +105,17 @@ export class NodeUI {
      *  can render shields without going back to the node registry. */
     readonly standards?: NodeDef["standards"];
 
-    x = 0;
-    y = 0;
+    /**
+     * One entry per visual widget. Ordinary nodes have a single anchor;
+     * split-view nodes (anchorCount >= 2 on the NodeDef) have multiple
+     * anchors, each draggable independently. Backward-compat getters
+     * (`el`, `x`, `y`) forward to `anchors[0]` so existing call sites
+     * keep working transparently.
+     */
+    readonly anchors: NodeAnchor[] = [];
+
     selected = false;
 
-    private readonly inputsContainer: HTMLDivElement;
-    private readonly outputsContainer: HTMLDivElement;
-    private readonly controlInputsContainer: HTMLDivElement;
-    private readonly controlOutputsContainer: HTMLDivElement;
-    private readonly headerEl: HTMLDivElement;
-    private readonly titleEl: HTMLSpanElement;
-    private readonly toolbarEl: HTMLDivElement;
-    private readonly footerEl: HTMLDivElement;
-    private readonly statusEl: HTMLSpanElement;
-    private readonly statusDotEl: HTMLSpanElement;
-    private readonly statusTextEl: HTMLSpanElement;
     private runBtn: HTMLButtonElement | null = null; // start button (lifecycle)
     private stopBtn: HTMLButtonElement | null = null; // stop button (lifecycle)
     private toggleBtn: HTMLButtonElement | null = null; // enable / disable
@@ -108,100 +127,28 @@ export class NodeUI {
         this.label = def.label;
         this.typeId = def.typeId;
         this.color = def.color;
-        // Carry the standards declaration so the property panel can
-        // render its version-aware shields without re-walking the
-        // node registry. Untouched when def declares none.
         this.standards = def.standards;
         this.item = new UIItemBase(def.data ?? def);
 
-        this.el = document.createElement("div");
-        this.el.className = "ne-node";
-        this.el.dataset["nodeId"] = this.id;
-
-        this.headerEl = document.createElement("div");
-        this.headerEl.className = "ne-node-header";
-        // Resolution order for the header background:
-        //   1. skin token --ne-color-category-<def.category> if set
-        //   2. def.color literal if provided
-        //   3. --ne-color-node-header default (active skin's fallback)
-        // The chain is encoded as a CSS var() fallback so it stays live
-        // when the user switches skin at runtime.
-        const headerBg = computeNodeHeaderBackground(def);
-        if (headerBg) {
-            this.headerEl.style.background = headerBg;
+        // Build N anchor widgets. Default = 1 (the ordinary single-widget
+        // node, full backward-compat). Each anchor has the same DOM shape
+        // (header + body with input/output port columns + footer) so the
+        // existing CSS keeps working uniformly across anchors. Position
+        // anchors at horizontal offsets so the user sees them as
+        // initially-distinct widgets — they reposition individually
+        // afterwards.
+        const anchorCount = Math.max(1, def.anchorCount ?? 1);
+        for (let i = 0; i < anchorCount; i++) {
+            const anchor = this._buildAnchor(def, parent, i, anchorCount);
+            anchor.x = i * SPLIT_ANCHOR_GAP;
+            anchor.el.style.transform = `translate(${anchor.x}px, ${anchor.y}px)`;
+            this.anchors.push(anchor);
         }
-        // Title + runtime-button slot. Title gets its own span so external
-        // code can locate and update it (e.g. an auto-rename routine that
-        // tracks a node's inbound wiring). Toolbar is a separate container
-        // so runtime buttons stay visually grouped to the right of the
-        // title and out of the title's text-overflow path.
-        this.titleEl = document.createElement("span");
-        this.titleEl.className = "ne-node-title";
-        this.titleEl.textContent = def.label;
-        this.headerEl.appendChild(this.titleEl);
 
-        this.toolbarEl = document.createElement("div");
-        this.toolbarEl.className = "ne-node-toolbar";
-        this.headerEl.appendChild(this.toolbarEl);
-
-        // Standards declarations on def.standards are no longer rendered
-        // in the node header (they were judged noisy). The data still
-        // travels with the node so the property panel can show richer
-        // version-aware shields via renderStandardShields().
-        void standards;
-
-        this.el.appendChild(this.headerEl);
-
-        // Control-plane row sits ABOVE the data body: control inputs on
-        // the left, control outputs on the right. Hidden via CSS
-        // (:empty) when neither row has content, so plain data nodes
-        // look identical to before.
-        const controlRow = document.createElement("div");
-        controlRow.className = "ne-node-control-row";
-        this.controlInputsContainer = document.createElement("div");
-        this.controlInputsContainer.className = "ne-node-control-inputs";
-        controlRow.appendChild(this.controlInputsContainer);
-        this.controlOutputsContainer = document.createElement("div");
-        this.controlOutputsContainer.className = "ne-node-control-outputs";
-        controlRow.appendChild(this.controlOutputsContainer);
-        this.el.appendChild(controlRow);
-
-        const body = document.createElement("div");
-        body.className = "ne-node-body";
-
-        this.inputsContainer = document.createElement("div");
-        this.inputsContainer.className = "ne-node-inputs";
-        body.appendChild(this.inputsContainer);
-
-        this.outputsContainer = document.createElement("div");
-        this.outputsContainer.className = "ne-node-outputs";
-        body.appendChild(this.outputsContainer);
-
-        this.el.appendChild(body);
-
-        // Footer + status bar. Always present in the DOM so the layout
-        // stays predictable; refreshStatusBar() hides the footer entirely
-        // (display:none) for nodes that expose neither IRunnable nor
-        // IEnabled, preserving the compact look of pure data nodes.
-        this.footerEl = document.createElement("div");
-        this.footerEl.className = "ne-node-footer";
-        this.statusEl = document.createElement("span");
-        this.statusEl.className = "ne-node-status";
-        this.statusDotEl = document.createElement("span");
-        this.statusDotEl.className = "ne-node-status-dot";
-        this.statusTextEl = document.createElement("span");
-        this.statusTextEl.className = "ne-node-status-text";
-        this.statusEl.appendChild(this.statusDotEl);
-        this.statusEl.appendChild(this.statusTextEl);
-        this.footerEl.appendChild(this.statusEl);
-        this.el.appendChild(this.footerEl);
-
-        // Buttons + subscription + initial refresh. Footer must already
-        // exist because refreshRuntimeButtons cascades into the status
-        // bar refresh.
+        // Runtime buttons attach to the primary anchor only; the
+        // secondary halves of split nodes inherit lifecycle state via
+        // the shared model and don't need their own toolbar copies.
         this._installRuntimeButtons();
-
-        parent.appendChild(this.el);
 
         for (const inp of def.controlInputs ?? []) {
             this.addControlInput(inp.name, inp.type);
@@ -210,46 +157,60 @@ export class NodeUI {
             this.addControlOutput(out.name, out.type);
         }
         for (const inp of def.inputs) {
-            this.addInput(inp.name, inp.type);
+            this.addInput(inp.name, inp.type, inp.anchor);
         }
         for (const out of def.outputs) {
-            this.addOutput(out.name, out.type);
+            this.addOutput(out.name, out.type, out.anchor);
         }
-        // Stash the variadic descriptors from the NodeDef. Single-form
-        // and array-form (multi-group) are both supported; we normalise
-        // to whichever shape the caller passed. Shallow-frozen copies
-        // so the reconciler can read them without holding a reference
-        // into caller-owned state.
+
         this.variadicInput = _copyVariadic(def.variadicInput);
         this.variadicOutput = _copyVariadic(def.variadicOutput);
     }
 
-    addControlInput(name: string, type: PortType): Port {
+    // ── Backward-compat surface ─────────────────────────────────────────
+    /** Primary anchor's root DOM element. */
+    get el(): HTMLDivElement {
+        return this.anchors[0].el;
+    }
+    /** Primary anchor's x position (grid-snapped). */
+    get x(): number {
+        return this.anchors[0].x;
+    }
+    /** Primary anchor's y position (grid-snapped). */
+    get y(): number {
+        return this.anchors[0].y;
+    }
+
+    addControlInput(name: string, type: PortType, anchor: number = 0): Port {
+        const a = this._anchorAt(anchor);
         const port = new Port(name, type, "input");
-        port.attachTo(this.el, this.controlInputsContainer);
+        port.attachTo(a.el, a.controlInputsContainer);
         port.el.classList.add("ne-port-control");
         this.controlInputs.push(port);
         return port;
     }
 
-    addControlOutput(name: string, type: PortType): Port {
+    addControlOutput(name: string, type: PortType, anchor: number = 0): Port {
+        const a = this._anchorAt(anchor);
         const port = new Port(name, type, "output");
-        port.attachTo(this.el, this.controlOutputsContainer);
+        port.attachTo(a.el, a.controlOutputsContainer);
         port.el.classList.add("ne-port-control");
         this.controlOutputs.push(port);
         return port;
     }
 
-    addInput(name: string, type: PortType): Port {
+    addInput(name: string, type: PortType, anchor: number = 0): Port {
+        const a = this._anchorAt(anchor);
         const port = new Port(name, type, "input");
-        port.attachTo(this.el, this.inputsContainer);
+        port.attachTo(a.el, a.inputsContainer);
         this.inputs.push(port);
         return port;
     }
 
-    addOutput(name: string, type: PortType): Port {
+    addOutput(name: string, type: PortType, anchor: number = 0): Port {
+        const a = this._anchorAt(anchor);
         const port = new Port(name, type, "output");
-        port.attachTo(this.el, this.outputsContainer);
+        port.attachTo(a.el, a.outputsContainer);
         this.outputs.push(port);
         return port;
     }
@@ -278,46 +239,78 @@ export class NodeUI {
         return true;
     }
 
+    /**
+     * Move the primary anchor (index 0). Other anchors keep their
+     * positions. Use `setAnchorPosition(i, x, y)` to move a specific
+     * non-primary anchor of a split-view node.
+     */
     setPosition(x: number, y: number): void {
-        this.x = Math.round(x / GRID) * GRID;
-        this.y = Math.round(y / GRID) * GRID;
-        this.el.style.transform = `translate(${this.x}px, ${this.y}px)`;
+        this.setAnchorPosition(0, x, y);
+    }
+
+    /**
+     * Move a specific anchor of a split-view node. Out-of-range indices
+     * are ignored silently (split nodes that grew a new anchor don't
+     * need a try/catch around old serialized positions).
+     */
+    setAnchorPosition(index: number, x: number, y: number): void {
+        const a = this.anchors[index];
+        if (!a) return;
+        a.x = Math.round(x / GRID) * GRID;
+        a.y = Math.round(y / GRID) * GRID;
+        a.el.style.transform = `translate(${a.x}px, ${a.y}px)`;
+    }
+
+    /**
+     * Locate which anchor (if any) contains the given DOM element.
+     * Returns -1 when `el` is outside every anchor's subtree. Used by
+     * the hit-test pass in graph-viewer's mouse handler so drag/grab
+     * targets the correct anchor of a split-view node.
+     */
+    findAnchorIndex(el: HTMLElement | null): number {
+        if (!el) return -1;
+        for (let i = 0; i < this.anchors.length; i++) {
+            if (this.anchors[i].el === el || this.anchors[i].el.contains(el)) return i;
+        }
+        return -1;
     }
 
     setSelected(selected: boolean): void {
         this.selected = selected;
-        this.el.classList.toggle("ne-node-selected", selected);
-        if (selected) {
-            this.el.style.setProperty("border-color", "#00d4ff", "important");
-            this.el.style.setProperty("box-shadow", "0 0 0 2px #00d4ff, 0 4px 16px rgba(0,0,0,0.6)", "important");
-        } else {
-            this.el.style.removeProperty("border-color");
-            this.el.style.removeProperty("box-shadow");
+        for (const a of this.anchors) {
+            a.el.classList.toggle("ne-node-selected", selected);
+            if (selected) {
+                a.el.style.setProperty("border-color", "#00d4ff", "important");
+                a.el.style.setProperty("box-shadow", "0 0 0 2px #00d4ff, 0 4px 16px rgba(0,0,0,0.6)", "important");
+            } else {
+                a.el.style.removeProperty("border-color");
+                a.el.style.removeProperty("box-shadow");
+            }
         }
     }
 
     reorderInputs(order: number[] | string[]): void {
-        this.reorderPorts(this.inputs, this.inputsContainer, order);
+        this.reorderPorts(this.inputs, order);
     }
 
     reorderOutputs(order: number[] | string[]): void {
-        this.reorderPorts(this.outputs, this.outputsContainer, order);
+        this.reorderPorts(this.outputs, order);
     }
 
     moveInputPort(from: number, to: number): void {
-        this.movePort(this.inputs, this.inputsContainer, from, to);
+        this.movePort(this.inputs, from, to);
     }
 
     moveOutputPort(from: number, to: number): void {
-        this.movePort(this.outputs, this.outputsContainer, from, to);
+        this.movePort(this.outputs, from, to);
     }
 
     moveControlInputPort(from: number, to: number): void {
-        this.movePort(this.controlInputs, this.controlInputsContainer, from, to);
+        this.movePort(this.controlInputs, from, to);
     }
 
     moveControlOutputPort(from: number, to: number): void {
-        this.movePort(this.controlOutputs, this.controlOutputsContainer, from, to);
+        this.movePort(this.controlOutputs, from, to);
     }
 
     getAllPorts(): Port[] {
@@ -328,65 +321,52 @@ export class NodeUI {
         return this.getAllPorts().find((p) => p.dot === dot);
     }
 
-    private reorderPorts(ports: Port[], container: HTMLDivElement, order: number[] | string[]): void {
+    /**
+     * Re-append ports in `order` into their host container so the visual
+     * order matches the runtime array order. Routing respects the port's
+     * current `nodeEl` (which was set at attachTo() to the right anchor's
+     * el) so split-view ports stay anchored to their original half.
+     */
+    private reorderPorts(ports: Port[], order: number[] | string[]): void {
         const resolved: Port[] = [];
         for (const ref of order) {
             const port = typeof ref === "number" ? ports[ref] : ports.find((p) => p.name === ref);
             if (port) resolved.push(port);
         }
-        // Append any ports not mentioned in order (keep them at the end)
         for (const p of ports) {
             if (!resolved.includes(p)) resolved.push(p);
         }
-        // Update the array in-place
         ports.length = 0;
         for (const p of resolved) ports.push(p);
-        // Re-append DOM in new order
         for (const p of ports) {
-            container.appendChild(p.el);
+            // Re-append into the port's existing parent (anchor-aware).
+            const parent = p.el.parentElement;
+            if (parent) parent.appendChild(p.el);
         }
     }
 
-    private movePort(ports: Port[], container: HTMLDivElement, from: number, to: number): void {
+    private movePort(ports: Port[], from: number, to: number): void {
         if (from < 0 || from >= ports.length || to < 0 || to >= ports.length) return;
         const [port] = ports.splice(from, 1);
         ports.splice(to, 0, port);
         for (const p of ports) {
-            container.appendChild(p.el);
+            const parent = p.el.parentElement;
+            if (parent) parent.appendChild(p.el);
         }
     }
 
-    /**
-     * Update the visible header title without rebuilding the node.
-     */
     setTitle(title: string): void {
-        this.titleEl.textContent = title;
+        // Mirror the title across every anchor — the secondary halves
+        // of a split-view node carry the same label so the user can tell
+        // they belong together at a glance.
+        for (const a of this.anchors) a.titleEl.textContent = title;
     }
 
-    /**
-     * Switch between Design mode (all runtime buttons disabled/grey) and
-     * Play mode (buttons reflect live running state). Must be called by the
-     * host whenever the editor transitions between modes.
-     */
     setPlayMode(inPlay: boolean): void {
         this._inPlayMode = inPlay;
         this.refreshRuntimeButtons();
     }
 
-    /**
-     * Refresh the visual state of the runtime header buttons from the
-     * model's IRunnable.status and IEnabled.enabled, gated by play mode.
-     *
-     * Lifecycle (IRunnable):
-     *   Design mode    : both buttons disabled (grey)
-     *   started        : start disabled, stop enabled (red)
-     *   starting/stopping : both disabled (transition in progress)
-     *   idle/stopped/failed : start enabled (green), stop disabled
-     *
-     * Enable toggle (IEnabled):
-     *   Design mode : disabled (grey)
-     *   Play mode   : reflects enabled state (green when on)
-     */
     refreshRuntimeButtons(): void {
         const data = this.item.data;
         const inPlay = this._inPlayMode;
@@ -408,10 +388,6 @@ export class NodeUI {
         }
         if (this.toggleBtn && isEnabled(data)) {
             const e = data.enabled;
-            // Enable is a design-time + runtime concept (the user may
-            // pre-disable a node before pressing Play). Keep the toggle
-            // interactive even outside play mode; only the visual
-            // "active" state is gated on play.
             this.toggleBtn.disabled = false;
             this.toggleBtn.classList.toggle("ne-rtbtn-play-active", e);
             this.toggleBtn.innerHTML = e ? ENABLED_SVG : DISABLED_SVG;
@@ -421,24 +397,20 @@ export class NodeUI {
         this.refreshStatusBar();
     }
 
-    /**
-     * Update the footer status bar from the data's lifecycle and enabled
-     * state. For nodes that expose neither IRunnable nor IEnabled the
-     * status element is emptied; a `:empty` CSS rule hides the footer
-     * so non-runnable nodes keep their original compact look.
-     */
     refreshStatusBar(): void {
         const data = this.item.data;
         const runnable = isRunnable(data) ? data : null;
-        // Skip IEnabled status entirely when the node opts out of
-        // enable semantics (StartNode / StopNode etc.).
         const enableable = isEnabled(data) && supportsEnabling(data) ? data : null;
 
+        // Status bar lives on the primary anchor only — the secondary
+        // halves of a split node hide their footer (their status would
+        // be duplicate noise).
+        const primary = this.anchors[0];
         if (!runnable && !enableable) {
-            this.footerEl.style.display = "none";
+            primary.footerEl.style.display = "none";
             return;
         }
-        this.footerEl.style.display = "";
+        primary.footerEl.style.display = "";
 
         const parts: string[] = [];
         let dotState = "idle";
@@ -448,46 +420,124 @@ export class NodeUI {
         }
         if (enableable) {
             if (!enableable.enabled) {
-                // Disabled wins visually: an enabled=false node is
-                // inert regardless of its lifecycle status, so the dot
-                // turns grey and "disabled" appears in the text.
                 parts.push("disabled");
                 dotState = "disabled";
             } else if (!runnable) {
-                // Pure IEnabled nodes (no lifecycle) get an explicit
-                // "enabled" marker so the footer is never just a dot.
                 parts.push("enabled");
             }
         }
 
-        this.statusTextEl.textContent = parts.join(" · ");
-        this.statusDotEl.className = `ne-node-status-dot ne-status-${dotState}`;
-        this.statusEl.title = parts.join(" · ");
+        primary.statusTextEl.textContent = parts.join(" · ");
+        primary.statusDotEl.className = `ne-node-status-dot ne-status-${dotState}`;
+        primary.statusEl.title = parts.join(" · ");
+    }
+
+    /**
+     * Build a single anchor's DOM. Each anchor is a self-contained
+     * `.ne-node` element with the same structural skeleton as the
+     * legacy single-element node so existing CSS keeps working. The
+     * `data-anchor-role` attribute lets skins style split halves
+     * distinctly (chevron decoration on the out / in sides) without
+     * needing to know the node's typeId.
+     */
+    private _buildAnchor(def: NodeDef, parent: HTMLElement, index: number, count: number): NodeAnchor {
+        const el = document.createElement("div");
+        el.className = "ne-node";
+        el.dataset["nodeId"] = this.id;
+        el.dataset["anchorIndex"] = String(index);
+        // Anchor role hints: "single" for ordinary nodes, "out" for the
+        // first anchor of a split (near the source), "in" for the last
+        // anchor (near the consumer), "mid" for any in-between (rare).
+        const role = count === 1 ? "single" : index === 0 ? "out" : index === count - 1 ? "in" : "mid";
+        el.dataset["anchorRole"] = role;
+
+        const headerEl = document.createElement("div");
+        headerEl.className = "ne-node-header";
+        const headerBg = computeNodeHeaderBackground(def);
+        if (headerBg) headerEl.style.background = headerBg;
+
+        const titleEl = document.createElement("span");
+        titleEl.className = "ne-node-title";
+        titleEl.textContent = def.label;
+        headerEl.appendChild(titleEl);
+
+        const toolbarEl = document.createElement("div");
+        toolbarEl.className = "ne-node-toolbar";
+        headerEl.appendChild(toolbarEl);
+
+        el.appendChild(headerEl);
+
+        const controlRow = document.createElement("div");
+        controlRow.className = "ne-node-control-row";
+        const controlInputsContainer = document.createElement("div");
+        controlInputsContainer.className = "ne-node-control-inputs";
+        controlRow.appendChild(controlInputsContainer);
+        const controlOutputsContainer = document.createElement("div");
+        controlOutputsContainer.className = "ne-node-control-outputs";
+        controlRow.appendChild(controlOutputsContainer);
+        el.appendChild(controlRow);
+
+        const body = document.createElement("div");
+        body.className = "ne-node-body";
+
+        const inputsContainer = document.createElement("div");
+        inputsContainer.className = "ne-node-inputs";
+        body.appendChild(inputsContainer);
+
+        const outputsContainer = document.createElement("div");
+        outputsContainer.className = "ne-node-outputs";
+        body.appendChild(outputsContainer);
+
+        el.appendChild(body);
+
+        const footerEl = document.createElement("div");
+        footerEl.className = "ne-node-footer";
+        const statusEl = document.createElement("span");
+        statusEl.className = "ne-node-status";
+        const statusDotEl = document.createElement("span");
+        statusDotEl.className = "ne-node-status-dot";
+        const statusTextEl = document.createElement("span");
+        statusTextEl.className = "ne-node-status-text";
+        statusEl.appendChild(statusDotEl);
+        statusEl.appendChild(statusTextEl);
+        footerEl.appendChild(statusEl);
+        el.appendChild(footerEl);
+
+        parent.appendChild(el);
+
+        return {
+            el,
+            headerEl,
+            titleEl,
+            toolbarEl,
+            inputsContainer,
+            outputsContainer,
+            controlInputsContainer,
+            controlOutputsContainer,
+            footerEl,
+            statusEl,
+            statusDotEl,
+            statusTextEl,
+            x: 0,
+            y: 0,
+        };
+    }
+
+    private _anchorAt(index: number): NodeAnchor {
+        return this.anchors[index] ?? this.anchors[0];
     }
 
     /**
      * Build header buttons for whichever model contracts the data
      * implements (IRunnable for lifecycle, IEnabled for on/off toggle).
-     *
-     * IRunnable gets a start button (▶) and a stop button (⬛). Each
-     * targets one direction only so their disabled state can
-     * independently reflect the current lifecycle status.
-     *
-     * IEnabled gets a single enable/disable toggle (checkmark / cross).
-     *
-     * All buttons are disabled in Design mode; setPlayMode(true) unlocks
-     * them. If the data exposes an onPropertyChanged Observable, the UI
-     * subscribes to it so that asynchronous transitions (starting →
-     * started, stopping → stopped) refresh the buttons without an
-     * explicit caller-side refresh.
+     * Buttons are installed on the primary anchor's toolbar only — the
+     * secondary halves of a split-view node share the same model state
+     * and don't need duplicate controls.
      */
     private _installRuntimeButtons(): void {
         const data = this.item.data;
+        const primary = this.anchors[0];
 
-        // Block the node drag/select handler from consuming pointer events on
-        // runtime buttons regardless of whether the drag handler uses capture
-        // or bubbling phase. stopImmediatePropagation covers same-element
-        // capture listeners registered after ours.
         const blockDrag = (ev: Event): void => {
             ev.stopPropagation();
             ev.stopImmediatePropagation();
@@ -512,7 +562,7 @@ export class NodeUI {
                 }
                 this.refreshRuntimeButtons();
             });
-            this.toolbarEl.appendChild(playBtn);
+            primary.toolbarEl.appendChild(playBtn);
             this.runBtn = playBtn;
 
             const stopBtn = document.createElement("button");
@@ -531,7 +581,7 @@ export class NodeUI {
                 }
                 this.refreshRuntimeButtons();
             });
-            this.toolbarEl.appendChild(stopBtn);
+            primary.toolbarEl.appendChild(stopBtn);
             this.stopBtn = stopBtn;
         }
 
@@ -547,23 +597,15 @@ export class NodeUI {
                 (data as IEnabled).enabled = !(data as IEnabled).enabled;
                 this.refreshRuntimeButtons();
             });
-            this.toolbarEl.appendChild(btn);
+            primary.toolbarEl.appendChild(btn);
             this.toggleBtn = btn;
         }
 
         this._subscribeToModel();
 
-        // Initial visual state: Design mode, all buttons disabled.
         this.refreshRuntimeButtons();
     }
 
-    /**
-     * Duck-checks the data object for an onPropertyChanged Observable
-     * (exposed by GraphItem-derived models). When present, refresh the
-     * runtime buttons on every "status" or "enabled" property change so
-     * the UI stays in sync with asynchronous lifecycle transitions
-     * without callers having to invoke refreshRuntimeButtons themselves.
-     */
     private _subscribeToModel(): void {
         const candidate = this.item.data as { onPropertyChanged?: Observable<PropertyChangedEventArgs<unknown, unknown>> };
         const obs = candidate?.onPropertyChanged;
@@ -577,12 +619,13 @@ export class NodeUI {
     }
 
     /**
-     * Release model subscriptions and detach DOM. Called by the editor
-     * when this node is removed from the graph.
+     * Release model subscriptions and detach every anchor's DOM. Called
+     * by the editor when this node is removed from the graph.
      */
     dispose(): void {
         this._modelSubscription?.dispose();
         this._modelSubscription = null;
-        this.el.remove();
+        for (const a of this.anchors) a.el.remove();
+        this.anchors.length = 0;
     }
 }
