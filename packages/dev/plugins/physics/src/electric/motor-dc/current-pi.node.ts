@@ -2,44 +2,46 @@ import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortD
 import type { ICartesian, Nullable } from "spikypanda-core";
 
 /**
- * PI speed controller for a DC motor (or any single-loop SISO system
- * with a velocity-like output). Implements the standard PI law with
- * a hard saturation on the output and a back-calculation anti-windup
- * (integral term frozen while the controller is saturated):
+ * Current PI controller for a DC motor — the inner loop of a
+ * cascade current-then-speed control architecture (standard
+ * industrial drive topology). Sits between an upstream `i_ref`
+ * source (slider, outer speed loop output, ...) and the PWM
+ * inverter that drives the motor.
  *
- *     error = omega_ref - omega_measured
+ *     error = i_ref - i_measured
  *     V_unsat = Kp · error + integral
- *     V_cmd   = clamp(V_unsat, -V_max, +V_max)
- *     integral += Ki · error · dt   (only if V_unsat == V_cmd)
+ *     V_cmd   = clamp(V_unsat, -Vmax, +Vmax)
+ *     integral += Ki · error · dt   (frozen when V_cmd is saturated)
  *
- * Inputs (optional, default 0):
- *   omega_ref      setpoint speed [rad/s]
- *   omega_measured measured speed [rad/s] (typically from a Tachymeter)
- *   dt             control step [s] — falls back to `t - lastT` when unwired
+ * Same anti-windup pattern as the Speed PI. The CURRENT loop is
+ * typically tuned MUCH faster than the speed loop:
  *
- * Output:
- *   V_cmd          voltage command [V] (clamped to [-V_max, +V_max])
+ *   - Speed loop:    bandwidth ~10-100 Hz (limited by J·R/(Kt·Ke))
+ *   - Current loop:  bandwidth ~500-5000 Hz (limited by R/L)
  *
- * State (integral) resets to 0 on session reset.
+ * Defaults below target ~1 kHz current loop on the RS-385 (τ_e =
+ * L/R = 0.5 ms, achievable bandwidth ~300 Hz with a safety margin).
+ *
+ * All ports are signals: i_ref / i_measured / V_cmd are continuous
+ * physical quantities (ZOH). No buffer overflow, no gating issue
+ * with the upstream sampling rate.
+ *
+ * Vmax should typically equal the inverter's `Vdc` — saturating the
+ * controller at the bus voltage matches what the PWM can actually
+ * deliver. Mismatch → controller asks for V the inverter can't
+ * produce, integral winds up uselessly.
  */
-export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
-    @cloneable private _Kp: number = 0.5;
-    @cloneable private _Ki: number = 2.0;
-    @cloneable private _Vmax: number = 24;
+export class DcMotorCurrentPiNode extends RuntimeNode implements IDeclaresPorts {
+    @cloneable private _Kp: number = 5;
+    @cloneable private _Ki: number = 200;
+    @cloneable private _Vmax: number = 12;
 
     @cloneable private _integral: number = 0;
     @cloneable private _Vcmd: number = 0;
 
-    // Inputs and outputs are continuous signals (control setpoint,
-    // measurement, command). No buffer, no overflow, no gating: the PI
-    // fires every tick, reads the current omega_ref / omega_measured
-    // via session.readSignal, computes V_cmd, overwrites the V_cmd
-    // signal. ZOH semantic matches the discrete-time control
-    // literature: at each sample instant the controller sees the
-    // latest available values.
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "omega_ref", optional: true, type: "float", kind: "signal" },
-        { slot: "omega_measured", optional: true, type: "float", kind: "signal" },
+        { slot: "i_ref", optional: true, type: "float", kind: "signal" },
+        { slot: "i_measured", optional: true, type: "float", kind: "signal" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "V_cmd", optional: false, type: "float", kind: "signal" }];
 
@@ -47,7 +49,8 @@ export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
         super(onsc, opsc, position);
     }
 
-    @editable("number") public get Kp(): number {
+    @editable("number")
+    public get Kp(): number {
         return this._Kp;
     }
     public set Kp(v: number) {
@@ -56,7 +59,8 @@ export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @editable("number") public get Ki(): number {
+    @editable("number")
+    public get Ki(): number {
         return this._Ki;
     }
     public set Ki(v: number) {
@@ -65,11 +69,13 @@ export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @editable("number") public get Vmax(): number {
+    @editable("number", { unit: "V" })
+    public get Vmax(): number {
         return this._Vmax;
     }
     public set Vmax(v: number) {
-        this.setField("Vmax", this._Vmax, v, (n) => {
+        const next = v > 0 ? v : 1;
+        this.setField("Vmax", this._Vmax, next, (n) => {
             this._Vmax = n;
         });
     }
@@ -93,11 +99,8 @@ export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
     public override fire(session: ISession, _t: number): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
 
-        let omegaRef = 0,
-            omegaMeasured = 0;
-        // Read signal inputs via session.readSignal — no drain, no
-        // gating issue. Unpublished signals (e.g. before the first
-        // tick) return undefined; we fall back to 0 for both.
+        let iRef = 0,
+            iMeasured = 0;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const slot = inSlotOf(link);
@@ -105,17 +108,14 @@ export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
             if (idx < 0) continue;
             const value = session.readSignal(idx);
             if (typeof value !== "number") continue;
-            if (slot === "omega_ref") omegaRef = value;
-            else if (slot === "omega_measured") omegaMeasured = value;
+            if (slot === "i_ref") iRef = value;
+            else if (slot === "i_measured") iMeasured = value;
         }
-        // dt now comes from the Session, not a wired port. First-tick
-        // case (currentTick still pristine) returns Infinity → we clamp
-        // to 0 so the integral term contributes nothing until a real
-        // macro-step has happened.
+
         const sessionDt = session.dt;
         const dt = Number.isFinite(sessionDt) ? Math.max(0, sessionDt) : 0;
 
-        const error = omegaRef - omegaMeasured;
+        const error = iRef - iMeasured;
         const proposedIntegral = this._integral + this._Ki * error * dt;
         const Vunsat = this._Kp * error + proposedIntegral;
 
@@ -123,10 +123,10 @@ export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
         let newIntegral = this._integral;
         if (Vunsat > this._Vmax) {
             Vcmd = this._Vmax;
-            // Saturated high: freeze integral (back-calc anti-windup).
+            // Anti-windup: freeze integral while saturated high.
         } else if (Vunsat < -this._Vmax) {
             Vcmd = -this._Vmax;
-            // Saturated low: freeze.
+            // Freeze low.
         } else {
             newIntegral = proposedIntegral;
         }
@@ -147,6 +147,6 @@ export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
     }
 }
 
-export function createDcMotorSpeedPiNode(): DcMotorSpeedPiNode {
-    return new DcMotorSpeedPiNode();
+export function createDcMotorCurrentPiNode(): DcMotorCurrentPiNode {
+    return new DcMotorCurrentPiNode();
 }

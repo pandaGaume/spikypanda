@@ -182,15 +182,53 @@ export class RK4AdaptiveSolver implements ISolver {
         // assumption that rhs(t, y) is a deterministic function of y.
         this._snapshotInputs(session);
 
-        let tEnd = this._t + dt;
+        const tEnd = this._t + dt;
         let microSteps = 0;
         let rhsEvals = 0;
         let maxErr = 0;
         let h = Math.min(this._suggestedStep, dt);
+        // `goodH` is the LAST h that survived an accept WITHOUT being
+        // shrunk by an overshoot clip. It's what we save back into
+        // `_suggestedStep` at the end so the next macro-step starts
+        // with a reasonable estimate. Without this distinction we'd
+        // sometimes save the FP-epsilon-sized remainder of the previous
+        // macro-step (when the while-loop tried one extra iteration due
+        // to floating-point drift on `_t < tEnd`), which then makes
+        // the NEXT macro-step's safety break trigger immediately and
+        // the integrator effectively halts.
+        let goodH = h;
+        // Safety cap on micro-steps: when the input signal has
+        // discontinuities (PWM switching), the adaptive controller
+        // shrinks the step indefinitely trying to resolve the jump.
+        // Without this cap, a single macro-step can spin forever. The
+        // cap is generous (10k micro-steps = 60k rhs evals per macro)
+        // so normal smooth dynamics aren't affected. When we hit the
+        // cap we accept whatever state we have and move on — the
+        // user is warned via maxError in the diagnostic report.
+        const microStepCap = 10000;
 
         while (this._t < tEnd) {
-            // Don't overshoot the macro-step boundary.
+            // Don't overshoot the macro-step boundary. Save the un-
+            // clipped h first: if we shrink it just to land exactly on
+            // tEnd, that shrunken value is NOT a sensible next-macro
+            // starting point (it's an FP remainder, not a step the
+            // dynamics dictated). `goodH` tracks the last "real" step.
+            const hBeforeClip = h;
             if (this._t + h > tEnd) h = tEnd - this._t;
+            // Floating-point safety: if h has shrunk below machine
+            // epsilon relative to tEnd, force-finish the macro-step.
+            // Without this, _t += h becomes a no-op (h gets lost in
+            // floating-point precision) and we loop forever.
+            if (h <= Math.abs(tEnd) * Number.EPSILON * 8 || h < this._minStep) {
+                this._t = tEnd;
+                break;
+            }
+            // Hard cap to defend against runaway shrinkage on
+            // discontinuous inputs (PWM, switched loads).
+            if (microSteps >= microStepCap) {
+                this._t = tEnd;
+                break;
+            }
 
             const err = this._tryStep(h);
             rhsEvals += 6;
@@ -204,6 +242,10 @@ export class RK4AdaptiveSolver implements ISolver {
                 // Growth: factor = 0.9 * err^(-0.2), capped at 5×.
                 const growth = err === 0 ? 5 : Math.min(5, 0.9 * Math.pow(err, -0.2));
                 h = Math.min(this._maxStep, h * growth);
+                // Update `goodH` from the PRE-clip value if this step
+                // wasn't shrunk only to land on tEnd. The clipped h is
+                // useless as a forecast for the next macro-step.
+                if (hBeforeClip === h || hBeforeClip <= this._maxStep) goodH = h;
             } else {
                 // Reject: shrink and retry, capped at 10× shrink.
                 const shrink = Math.max(0.1, 0.9 * Math.pow(err, -0.25));
@@ -224,7 +266,7 @@ export class RK4AdaptiveSolver implements ISolver {
             this._leaves[i].writeState(this._y, this._offsets[i]);
         }
 
-        this._suggestedStep = h;
+        this._suggestedStep = goodH;
         this._lastStep = { t: this._t, microSteps, maxError: maxErr, rhsEvals };
         return this._lastStep;
     }
@@ -313,27 +355,21 @@ export class RK4AdaptiveSolver implements ISolver {
 
     /**
      * Build the per-leaf `IIntegrationInputs` snapshot from the
-     * session's link state. PEEKS (does not consume) — the consumption
-     * pattern that goes with this peek is documented on the leaf
-     * side: numeric inputs that feed `rhs` are marked `gating: false`
-     * on the port descriptor, so the scheduler does NOT count them
-     * toward the leaf's `required` input count, the leaf's `fire()`
-     * fires every tick regardless of buffer state, and the leaf's
-     * `fire()` is the one that consumes the tokens at the end of the
-     * dispatch phase.
+     * session's SIGNAL store. Signals are continuous values held by
+     * the destination's `inputSignals` map; reading them is
+     * non-destructive (ZOH semantic). The snapshot is held constant
+     * across all micro-steps of one macro-step (per Q1.2 resolution
+     * in the v2 plan) so the embedded error estimator sees a
+     * deterministic `rhs(t, y, inputs)`.
      *
-     * With that contract:
-     *   - Tick N: source publishes V into the buffer (during dispatch).
-     *   - Tick N+1 integration: solver peeks V from buffer → rhs sees it.
-     *   - Tick N+1 dispatch: leaf.fire() consumes V (drains buffer);
-     *     publishes the now-integrated observation outputs.
-     *   - Tick N+2 integration: solver peeks V from the FRESHLY
-     *     published token (source ran again in tick N+1 dispatch).
+     * Stream-kind channels are silently ignored here — they would
+     * require consume() which is the leaf's responsibility in its
+     * fire(). A well-designed IIntegrable node declares its rhs
+     * inputs as `kind: "signal"`; mixing rhs inputs with stream-kind
+     * ports is unsupported and yields undefined at the snapshot level.
      *
-     * The snapshot is keyed by the DEST slot name (i.e. the leaf's
-     * input port name), which is what `inputs.get("V")`-style calls
-     * in the leaf's `rhs` expect. Channels that don't carry a number
-     * (transform matrix44, fault descriptors, scene refs) are skipped.
+     * The snapshot is keyed by the DEST slot name so `inputs.get("V")`
+     * in the leaf's `rhs` works as written.
      */
     private _snapshotInputs(session: ISession): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
@@ -345,9 +381,11 @@ export class RK4AdaptiveSolver implements ISolver {
                 if (!link.enabled) continue;
                 const idx = links.indexOf(link);
                 if (idx < 0) continue;
-                const state = session.linkStates[idx];
-                if (!state.ready) continue;
-                const value = state.payload;
+                // Read via signal API. Returns undefined for stream
+                // channels OR for signal channels that have not been
+                // published yet — `rhs` falls back to its own default
+                // (typically 0) when inputs.get(slot) returns undefined.
+                const value = session.readSignal(idx);
                 if (typeof value !== "number") continue;
                 const slot = String(link.toSlot ?? link.slot);
                 snapshot.set(slot, value);

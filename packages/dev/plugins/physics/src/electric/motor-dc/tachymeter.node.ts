@@ -37,10 +37,16 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
     @cloneable private _measured: number = 0;
     private _rng: number = 1;
 
+    // Continuous-signal input (motor angular speed) and output
+    // (filtered/noisy/quantized observation). Reads the upstream
+    // signal via session.readSignal at each fire; the LPF state is
+    // internal and updates per tick using session.dt for the
+    // discretisation. No buffer / no consume needed — ZOH applies
+    // naturally at the sample instants of this node's fire.
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "omega", optional: true, type: "float" },
+        { slot: "omega", optional: true, type: "float", kind: "signal" },
     ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "omega_measured", optional: false, type: "float" }];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "omega_measured", optional: false, type: "float", kind: "signal" }];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
@@ -102,13 +108,16 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
     public override fire(session: ISession, _t: number): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
 
+        // Read omega via signal API (ZOH). No drain, no gating: the
+        // upstream motor publishes the latest value each tick; we
+        // sample whatever is current when we fire.
         let omega = 0;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const slot = inSlotOf(link);
             const idx = links.indexOf(link);
-            if (idx < 0 || !session.linkStates[idx].ready) continue;
-            const value = session.consume(idx);
+            if (idx < 0) continue;
+            const value = session.readSignal(idx);
             if (typeof value !== "number") continue;
             if (slot === "omega") omega = value;
         }

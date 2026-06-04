@@ -57,8 +57,14 @@ export class FeedbackChannelNode extends RuntimeNode implements IDeclaresPorts {
     // fire so the panel reflects the live ring-equivalent.
     @cloneable private _output: unknown = 0;
 
-    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "input", optional: true, type: "any" }];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "output", optional: false, type: "any" }];
+    // Signal-kind ports: input/output carry continuous values (the
+    // closed-loop quantity being delayed, e.g. tachymeter omega
+    // feeding back into a PI). No buffer at the channel level; the
+    // Z⁻ᴺ delay is implemented inside this node via the validAtTick
+    // mechanism (each fire publishes the current input stamped at
+    // tickIndex + delay, so the receiver sees it N ticks later).
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "input", optional: true, type: "any", kind: "signal" }];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "output", optional: false, type: "any", kind: "signal" }];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
@@ -170,17 +176,17 @@ export class FeedbackChannelNode extends RuntimeNode implements IDeclaresPorts {
 
     public override fire(session: ISession, _t: number): void {
         // Read whatever is on the (single) input edge for this tick.
-        // Same rationale as reset(): only one input port, so iterating
-        // incoming edges without slot-filtering is correct and lets
-        // tests label channels permissively.
+        // Signal-kind input → readSignal returns the current value
+        // (the upstream's last publish, ZOH). Returns undefined if
+        // nothing has been published yet; we fall back to `initial`.
         let input: unknown = undefined;
         const links = session.graph.links as ReadonlyArray<IChannel>;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const idx = links.indexOf(link);
-            if (idx < 0 || !session.linkStates[idx].ready) continue;
-            input = session.consume(idx);
-            break;
+            if (idx < 0) continue;
+            input = session.readSignal(idx);
+            if (input !== undefined) break;
         }
 
         // Resolve the payload to publish: prefer the freshly-read input;

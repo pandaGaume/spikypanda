@@ -87,14 +87,43 @@ export class Scheduler {
         const sess = session as Session;
         const queue = sess.queue;
         const nodes = session.graph.nodes as ReadonlyArray<IRuntimeNode>;
+        // Per-tick fire deduplication for signal-only nodes: a node
+        // that's been re-queued by a signal-channel publish and has no
+        // stream inputs to drain MUST NOT fire more than once per
+        // tick. Without this, a signal-only cycle (e.g. PI → PWM →
+        // Motor → PI through signal channels) loops forever because
+        // each re-queue from a signal write triggers another fire,
+        // which publishes another signal, which re-queues again, etc.
+        //
+        // Stream-input nodes are excluded from the dedup — they may
+        // legitimately fire N times per tick if their buffer holds N
+        // tokens (the existing loop-burst semantic from RunDynamic's
+        // post-fire `linksReady > 0` re-queue path).
+        const firedSignalOnly = new Set<IRuntimeNode>();
 
-        // Seed: enqueue every node that is already ready (sources with
-        // requiredInputs = 0, or nodes whose delayed inputs were pre-
-        // seeded into their buffers by Session.reset()).
+        // Seed: enqueue only TRUE SOURCES (no wired inputs at all)
+        // and nodes whose buffers were pre-seeded by Session.reset
+        // (delayed channels with initialValue). Nodes whose required=0
+        // is due to signal-kind inputs (Speed PI, FB Channel after the
+        // U.* migration) do NOT seed — they wait for the first signal
+        // write to enqueue them. This preserves topological dataflow
+        // order even for signal-only-input nodes; without it, such
+        // nodes would fire at the start of the tick with stale signal
+        // values, then never re-fire to see the freshly published
+        // current-tick data.
         for (let i = 0; i < nodes.length; i++) {
             const node = nodes[i];
             if (!node.enabled) continue;
-            if (session.nodeStates[i].linksReady >= session.requiredInputsOf(node)) {
+            const state = session.nodeStates[i];
+            const required = session.requiredInputsOf(node);
+            const sess = session as unknown as { isTrueSource(n: IRuntimeNode): boolean };
+            const isSource = typeof sess.isTrueSource === "function" ? sess.isTrueSource(node) : required === 0;
+            if (isSource) {
+                queue.push(node);
+                continue;
+            }
+            // Buffer-ready (pre-seeded delayed channel) → also seed.
+            if (state.linksReady >= required && required > 0) {
                 queue.push(node);
             }
         }
@@ -127,6 +156,16 @@ export class Scheduler {
             if (!state) continue;
             if (state.linksReady < required) continue;
             if (!node.isReady(session)) continue;
+            // Signal-only dedup: a node with required=0 (which
+            // includes all signal-only consumers) fires at most once
+            // per tick. Stream-input nodes (required>0) sidestep this
+            // check naturally because they only end up here via the
+            // linksReady>=required gate, which their fire() decrements
+            // by consuming tokens.
+            if (required === 0 && !sess.isTrueSource(node)) {
+                if (firedSignalOnly.has(node)) continue;
+                firedSignalOnly.add(node);
+            }
 
             node.fire(session, t);
 

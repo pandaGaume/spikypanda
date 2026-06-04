@@ -241,6 +241,15 @@ export interface INodeState {
     linksReady: number;
     inputBuffers?: Map<string | number, unknown[]>;
     inputCapacity?: Map<string | number, number>;
+    /**
+     * Signal-kind input storage: current value per slot, overwrite-on-
+     * publish, no drain, no overflow. Populated by `Session.publish`
+     * when the destination port descriptor declares `kind: "signal"`.
+     * Read back via `Session.readSignal(channelIndex)`. Independent
+     * of the stream-kind path (`inputBuffers`); a single node may mix
+     * both kinds across its slots.
+     */
+    inputSignals?: Map<string | number, unknown>;
 }
 
 /**
@@ -439,6 +448,17 @@ export interface ISession {
     consume(channelIndex: number): unknown;
 
     /**
+     * Node-side read API for SIGNAL-kind channels: returns the current
+     * value (last published) without modifying anything. Returns
+     * `undefined` if nothing has been published yet OR if the channel
+     * is a stream-kind (in which case the value lives in the buffer,
+     * not the signal store). Use this from a leaf's `fire()` or a
+     * solver's rhs when reading continuous-value inputs (V, omega,
+     * setpoints, observations) — the right pattern for ZOH semantics.
+     */
+    readSignal(channelIndex: number): unknown;
+
+    /**
      * Node-side read API: returns the payload without clearing the
      * channel. Use for SNN-style integration where a node reads its
      * input but does not consume it (so the next tick still sees the
@@ -581,16 +601,39 @@ export interface IPortDescriptor {
      * tick regardless of whether the port's buffer happens to hold a
      * token at the moment of the readiness check.
      *
-     * Use for solver-managed inputs of IIntegrable leaves: the
-     * integration phase peeks the value from the buffer each macro-
-     * step, and the dispatch-phase `fire()` consumes it at the end of
-     * the tick (publishing observation outputs along the way). Marking
-     * the port non-gating avoids a deadlock where the scheduler
-     * checks the buffer state at the wrong moment of the tick and
-     * skips `fire()`, leaving downstream consumers starved of the
-     * leaf's freshly-integrated state.
+     * SUPERSEDED by the `kind: "signal"` semantic — keep for backward
+     * compatibility and for nodes that want stream semantics with the
+     * gating-off hack. New code should use `kind: "signal"` instead.
      */
     readonly gating?: boolean;
+
+    /**
+     * Port semantic kind: how the framework treats values flowing on
+     * channels attached to this port.
+     *
+     *   "stream" (default) — DISCRETE EVENTS. Each publish appends a
+     *     token onto a per-slot FIFO buffer at the destination. Each
+     *     consume drains one token. Buffers count toward the
+     *     destination's `requiredInputs` gating. Overflow throws.
+     *     Required for burst semantics (Logic.Loop body, Sequence
+     *     then_N, edge triggers, control plane events).
+     *
+     *   "signal" — CONTINUOUS VALUES (zero-order hold). Each publish
+     *     OVERWRITES a single "current value" slot at the destination.
+     *     Each read returns that current value (no drain). No buffer,
+     *     no overflow, no gating: a destination node with only signal
+     *     inputs fires every tick. Default value before any publish is
+     *     `undefined` (reader's job to handle).
+     *
+     * Most data-flow edges in a control-system sim are SIGNALS:
+     * voltage, current, omega, setpoints, observations, fault levels.
+     * Discrete events like triggers / loop iterations stay STREAMS.
+     *
+     * The dest-port kind drives the publish path. Source-port kind
+     * is descriptive; the dest decides storage. When two compatible
+     * ports of different kinds connect, the dest kind wins.
+     */
+    readonly kind?: "stream" | "signal";
 }
 
 export function declaresPorts(n: IRuntimeNode): n is IRuntimeNode & IDeclaresPorts {

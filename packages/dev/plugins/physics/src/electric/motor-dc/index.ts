@@ -3,6 +3,9 @@ import { createDcMotorDynamicNode, DcMotorDynamicNode } from "./dynamic.node.js"
 import { createDcMotorSteadyNode, DcMotorSteadyNode } from "./steady.node.js";
 import { createDcMotorSpeedPiNode, DcMotorSpeedPiNode } from "./controller-pi.node.js";
 import { createDcMotorTachymeterNode, DcMotorTachymeterNode } from "./tachymeter.node.js";
+import { createDcInverterNode, DcInverterNode } from "./inverter.node.js";
+import { createDcMotorCurrentPiNode, DcMotorCurrentPiNode } from "./current-pi.node.js";
+import { createDcMotorCurrentSensorNode, DcMotorCurrentSensorNode } from "./current-sensor.node.js";
 
 export {
     DcMotorDynamicNode,
@@ -13,6 +16,12 @@ export {
     createDcMotorSpeedPiNode,
     DcMotorTachymeterNode,
     createDcMotorTachymeterNode,
+    DcInverterNode,
+    createDcInverterNode,
+    DcMotorCurrentPiNode,
+    createDcMotorCurrentPiNode,
+    DcMotorCurrentSensorNode,
+    createDcMotorCurrentSensorNode,
 };
 
 const FLOAT_OUT = { optional: false, type: "float" } as const;
@@ -85,6 +94,40 @@ export const motorDcSubPlugin: IPlugin = {
             // dt port dropped — see Speed PI above for the rationale.
             inputPorts: [{ slot: "omega", ...FLOAT_IN }],
             outputPorts: [{ slot: "omega_measured", ...FLOAT_OUT }],
+        });
+
+        // ── MCSA chain: PWM Inverter + Current PI + Current Sensor ──
+        // These three nodes complete the realistic VFD drive chain
+        // that produces full-spectrum current signatures for MCSA
+        // analysis (PWM carrier + sidebands + fault intermodulation).
+        // See helios/sim-framework-api-v2.draft.md (MCSA section).
+
+        ctx.nodes.register("Physics.Electric.Motor.DC:inverter", () => createDcInverterNode() as never, {
+            label: "DC PWM Inverter",
+            category: "Physics.Electric.Motor.DC",
+            inputPorts: [{ slot: "V_cmd", ...FLOAT_IN }],
+            outputPorts: [
+                { slot: "V", ...FLOAT_OUT },
+                { slot: "duty", ...FLOAT_OUT },
+                { slot: "switching", optional: false, type: "boolean" },
+            ],
+        });
+
+        ctx.nodes.register("Physics.Electric.Motor.DC:currentPI", () => createDcMotorCurrentPiNode() as never, {
+            label: "DC Motor Current PI",
+            category: "Physics.Electric.Motor.DC",
+            inputPorts: [
+                { slot: "i_ref", ...FLOAT_IN },
+                { slot: "i_measured", ...FLOAT_IN },
+            ],
+            outputPorts: [{ slot: "V_cmd", ...FLOAT_OUT }],
+        });
+
+        ctx.nodes.register("Physics.Electric.Motor.DC:currentSensor", () => createDcMotorCurrentSensorNode() as never, {
+            label: "Current Sensor (LEM)",
+            category: "Physics.Electric.Motor.DC",
+            inputPorts: [{ slot: "i", ...FLOAT_IN }],
+            outputPorts: [{ slot: "i_measured", ...FLOAT_OUT }],
         });
     },
 };

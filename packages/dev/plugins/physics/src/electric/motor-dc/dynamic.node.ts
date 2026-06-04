@@ -1,4 +1,4 @@
-import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, inSlotOf } from "spikypanda-core";
+import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession } from "spikypanda-core";
 import type { ICartesian, Nullable, IIntegrable, IIntegrationInputs } from "spikypanda-core";
 import { FaultableNode } from "../../transform/fault.node.js";
 
@@ -43,8 +43,6 @@ import { FaultableNode } from "../../transform/fault.node.js";
  *     The solver gathers from these fields at attach time.
  */
 export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts, IIntegrable {
-    private static readonly OWN_INPUT_SLOTS: ReadonlySet<string> = new Set(["V", "tau_load"]);
-
     // ── IIntegrable trait ──────────────────────────────────────────────
     public readonly stateSize = 2;
     public readonly stateNames: ReadonlyArray<string> = ["i", "omega"];
@@ -68,23 +66,24 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
 
     public override readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
         ...FaultableNode.BASE_INPUT_PORTS,
-        // V and tau_load are SOLVER-MANAGED inputs: the integration phase
-        // peeks them via `linkStates[idx].payload` at every macro-step,
-        // and the dispatch-phase `fire()` consumes them at the end of
-        // the tick. They are NOT gating: marking gating=false tells the
-        // scheduler to exclude them from `required`, so this node fires
-        // every tick regardless of whether V has been published yet.
-        // Without this flag, the scheduler skips fire() when V's buffer
-        // is empty, no omega gets published, and downstream PI/Tach/FB
-        // starve — leading to the closed-loop deadlock you just saw.
-        { slot: "V", optional: true, type: "float", gating: false },
-        { slot: "tau_load", optional: true, type: "float", gating: false },
+        // V and tau_load are CONTINUOUS SIGNALS (Zero-Order Hold). The
+        // solver reads their current value via `session.readSignal` at
+        // every rhs evaluation; the upstream publishers (PI, Slider,
+        // ...) overwrite the value on each tick. No buffer, no drain,
+        // no overflow. Reading a signal that has never been published
+        // returns undefined → falls back to 0 in `rhs`.
+        { slot: "V", optional: true, type: "float", kind: "signal" },
+        { slot: "tau_load", optional: true, type: "float", kind: "signal" },
     ];
     public override readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
         ...FaultableNode.BASE_OUTPUT_PORTS,
-        { slot: "i", optional: false, type: "float" },
-        { slot: "omega", optional: false, type: "float" },
-        { slot: "tau_em", optional: false, type: "float" },
+        // Observation outputs as signals — downstream consumers
+        // (Tachymeter, FB Channel, plots) read the current value via
+        // ZOH semantics. Matches the physical reality: omega(t) and
+        // i(t) are continuous quantities.
+        { slot: "i", optional: false, type: "float", kind: "signal" },
+        { slot: "omega", optional: false, type: "float", kind: "signal" },
+        { slot: "tau_em", optional: false, type: "float", kind: "signal" },
     ];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
@@ -237,29 +236,18 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
 
     public override fire(session: ISession, t: number): void {
         // Pure I/O. The solver in the Session's integration phase has
-        // already advanced (this._i, this._omega) via writeState(). We
-        // do two things here: consume the V/tau_load tokens (the solver
-        // peeked them, not consumed — see RK4AdaptiveSolver), and
-        // publish the freshly-integrated observation outputs.
+        // already advanced (this._i, this._omega) via writeState() —
+        // reading V and tau_load from session.readSignal at each
+        // micro-step's rhs() call.
         //
-        // Consuming here is what keeps the buffer balanced across
-        // ticks: source publishes V every tick → solver peeks → motor
-        // consumes → buffer empty → next tick's source publish lands
-        // in a fresh buffer slot. Required=0 thanks to the gating:false
-        // flag on V/tau_load, so motor fires every tick regardless of
-        // whether the upstream is in lockstep.
+        // V and tau_load are SIGNALS now: no buffer, no drain, no
+        // consumption logic. The upstream publishers overwrite the
+        // signal on each tick; the motor reads the latest at any time.
+        // Required = 0 (signals don't gate), so motor fires every tick
+        // and publishes the freshly-integrated state.
         super.fire(session, t);
 
         const links = session.graph.links as ReadonlyArray<IChannel>;
-        for (const link of this.opsc<IChannel>()) {
-            if (!link.enabled) continue;
-            const slot = String(inSlotOf(link));
-            if (!DcMotorDynamicNode.OWN_INPUT_SLOTS.has(slot)) continue;
-            const idx = links.indexOf(link);
-            if (idx < 0 || !session.linkStates[idx].ready) continue;
-            session.consume(idx);
-        }
-
         const broadcast = (slot: string, val: unknown): void => {
             for (const link of this.onsc<IChannel>()) {
                 if (link.slot !== slot || !link.enabled) continue;

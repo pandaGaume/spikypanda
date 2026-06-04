@@ -113,6 +113,28 @@ export class Session implements ISession {
 
     private _required: number[];
     private _linkStatesProxy: ILinkState[];
+    /**
+     * Per-channel cache: true when the destination port declares
+     * `kind: "signal"`. Computed once at construction; drives the
+     * publish path (signal → direct write into `nodeState.inputSignals`,
+     * stream → enqueue a LinkRef as before) and the readSignal helper
+     * (signal → read map, stream → undefined). Indexed by linkIndex.
+     */
+    private _isSignalChannel: boolean[] = [];
+    /**
+     * Per-node flag: true when the node has NO wired inputs of any
+     * kind (truly source-like, e.g. Slider / NumberConstant / Clock).
+     * Such nodes are seeded at the start of every RunDynamic. Nodes
+     * with wired signal inputs are NOT seeded — they wait for the
+     * first signal write (which re-queues them via the standard
+     * post-deliver re-queue path) so they fire AFTER their data has
+     * arrived this tick, preserving topological order.
+     *
+     * Without this distinction, a node with required=0 (because all
+     * its inputs are signals) would seed immediately and fire with
+     * stale data, then never see the actual signal updates arrive.
+     */
+    private _isTrueSource: boolean[] = [];
 
     public constructor(graph: IRuntimeGraph) {
         this.graph = graph;
@@ -127,7 +149,15 @@ export class Session implements ISession {
         this._required = this._computeRequiredInputs();
         this._linkStatesProxy = this._buildLinkStatesProxy();
         this._populateCapacities();
+        this._populateSignalKinds();
+        this._populateTrueSourceFlags();
         this.reset();
+    }
+
+    /** Read-only accessor used by the scheduler to decide seeding. */
+    public isTrueSource(node: IRuntimeNode): boolean {
+        const idx = (this.graph.nodes as ReadonlyArray<IRuntimeNode>).indexOf(node);
+        return idx >= 0 ? this._isTrueSource[idx] : false;
     }
 
     /**
@@ -165,13 +195,35 @@ export class Session implements ISession {
         const ref: ILinkRef =
             validAt !== undefined ? { kind: "linkRef", linkIndex: channelIndex, value, validAtTick: validAt } : { kind: "linkRef", linkIndex: channelIndex, value };
         // Defer when validAtTick is a future TICK INDEX (integer),
-        // not a future sim-time. The unit must match the comparison
-        // we do in run() against `this.tickIndex`.
+        // not a future sim-time. Holds for BOTH stream and signal
+        // channels — a signal scheduled for tick N+2 is just a future
+        // write to the signal store. The deferred queue promotes it
+        // at the right tick and deliverLinkRef routes by kind.
         if (validAt !== undefined && validAt > this.tickIndex) {
             this.deferred.push(ref);
             return;
         }
         this.queue.push(ref);
+    }
+
+    /**
+     * Read the current value of a signal-kind channel without modifying
+     * anything. Returns `undefined` if nothing has been published yet,
+     * the channel is disabled, OR the channel is a stream-kind (in
+     * which case the data is in the buffer, not the signal store —
+     * use `peek` / `consume` for streams).
+     */
+    public readSignal(channelIndex: number): unknown {
+        if (!this._isSignalChannel[channelIndex]) return undefined;
+        const link = this._linkAt(channelIndex);
+        if (!link || !link.enabled) return undefined;
+        const dst = link.ofin as IRuntimeNode | null;
+        if (!dst) return undefined;
+        const state = this.nodeStateOf(dst);
+        const store = state?.inputSignals;
+        if (!store) return undefined;
+        const slot = inSlotOf(link);
+        return store.get(slot);
     }
 
     /**
@@ -379,8 +431,23 @@ export class Session implements ISession {
         // stale.
         if (!dst.enabled) return;
         const state = this.nodeStateOf(dst);
-        if (!state || !state.inputBuffers || !state.inputCapacity) return;
+        if (!state) return;
         const slot = inSlotOf(link);
+
+        // Signal-kind channels: OVERWRITE the current value, no buffer,
+        // no overflow, no linksReady bookkeeping. The destination's
+        // `fire()` reads via `readSignal(channelIndex)` whenever it
+        // wants; ZOH semantic — between publishes the last value
+        // persists.
+        if (this._isSignalChannel[ref.linkIndex]) {
+            if (!state.inputSignals) state.inputSignals = new Map();
+            state.inputSignals.set(slot, ref.value);
+            return;
+        }
+
+        // Stream-kind channels: legacy FIFO buffer path with overflow
+        // detection and linksReady accounting.
+        if (!state.inputBuffers || !state.inputCapacity) return;
         let buf = state.inputBuffers.get(slot);
         if (!buf) {
             buf = [];
@@ -410,6 +477,10 @@ export class Session implements ISession {
             if (ns.inputBuffers) {
                 for (const buf of ns.inputBuffers.values()) buf.length = 0;
             }
+            // Wipe the signal store too — fresh session starts with
+            // every signal at "undefined" (reader's responsibility to
+            // fall back to a sensible default).
+            if (ns.inputSignals) ns.inputSignals.clear();
             ns.linksReady = 0;
         }
 
@@ -454,41 +525,84 @@ export class Session implements ISession {
     private _computeRequiredInputs(): number[] {
         const links = this.graph.links as ReadonlyArray<IChannel>;
         return (this.graph.nodes as ReadonlyArray<IRuntimeNode>).map((n) => {
-            // Build a quick lookup of slot → gating flag from the node's
-            // declared inputPorts. Default = gating (matches legacy
-            // behaviour for nodes that don't declare the field).
-            //
-            // Slots marked `gating: false` (e.g. IIntegrable leaf's
-            // numeric inputs that the solver peeks each macro-step) do
-            // NOT count toward `required`: the leaf fires every tick
-            // regardless of whether the buffer happens to be empty at
-            // the moment the scheduler checks it. Without this, a
-            // closed-loop sim driving an IIntegrable via PI/Slider
-            // deadlocks: motor.fire is gated on V's buffer, but the
-            // dispatch order alternately fills + drains the buffer
-            // around motor's slot in the queue, leaving it empty when
-            // the check fires.
-            const declared = (n as unknown as { inputPorts?: ReadonlyArray<{ slot: string | number; gating?: boolean }> }).inputPorts;
-            const nonGatingSlots = new Set<string | number>();
+            // Build a slot exclusion set from the node's declared
+            // inputPorts: slots marked `kind: "signal"` (preferred,
+            // forward-going) or `gating: false` (legacy escape hatch)
+            // do NOT count toward `required`. Signals don't sit in a
+            // FIFO buffer — they hold a current value persistently —
+            // so the scheduler's "buffer non-empty?" gate doesn't apply
+            // to them. The node fires every tick and reads the latest
+            // signal value via `readSignal`.
+            const declared = (n as unknown as { inputPorts?: ReadonlyArray<{ slot: string | number; gating?: boolean; kind?: "stream" | "signal" }> }).inputPorts;
+            const skipSlots = new Set<string | number>();
             if (declared) {
                 for (const p of declared) {
-                    if (p.gating === false) nonGatingSlots.add(p.slot);
+                    if (p.kind === "signal" || p.gating === false) skipSlots.add(p.slot);
                 }
             }
-            // Use a Set of slot names to handle the case where multiple
-            // links target the same slot (variadic ports): each slot
-            // counts at most once toward the readiness requirement.
             const slots = new Set<string | number>();
             for (const link of n.opsc<IChannel>()) {
                 if (!link.enabled) continue;
                 if (links.indexOf(link) < 0) continue;
                 const slot = inSlotOf(link);
                 if (isControlSlot(slot)) continue;
-                if (nonGatingSlots.has(slot)) continue;
+                if (skipSlots.has(slot)) continue;
                 slots.add(slot);
             }
             return slots.size;
         });
+    }
+
+    /**
+     * Mark nodes that have NO incoming channels at all (true sources:
+     * Slider, NumberConstant, Clock, StartNode, ...). These are the
+     * only nodes the scheduler seeds at the start of each RunDynamic.
+     * Nodes with wired signal-kind inputs intentionally don't seed —
+     * they wait for the first signal write to enqueue them, ensuring
+     * data dependency order even when their `requiredInputs` is 0.
+     */
+    private _populateTrueSourceFlags(): void {
+        const links = this.graph.links as ReadonlyArray<IChannel>;
+        const nodes = this.graph.nodes as ReadonlyArray<IRuntimeNode>;
+        this._isTrueSource = nodes.map((n) => {
+            for (const link of n.opsc<IChannel>()) {
+                if (!link.enabled) continue;
+                if (links.indexOf(link) < 0) continue;
+                // Any wired non-control input disqualifies. Control-
+                // slot wires are part of the lifecycle plane and don't
+                // count as data dependencies (StartNode/StopNode can
+                // still be true sources even with _start wired).
+                if (isControlSlot(inSlotOf(link))) continue;
+                return false;
+            }
+            return true;
+        });
+    }
+
+    /**
+     * Compute the per-channel signal-kind cache. A channel is signal
+     * when its DESTINATION port (resolved by slot name on the dest
+     * node's declared inputPorts) advertises `kind: "signal"`. Walk
+     * once at construction; signal kind is a structural property of
+     * the node declaration, not a per-tick value.
+     */
+    private _populateSignalKinds(): void {
+        const links = this.graph.links as ReadonlyArray<IChannel>;
+        this._isSignalChannel = new Array(links.length).fill(false);
+        for (let i = 0; i < links.length; i++) {
+            const link = links[i];
+            const dst = link.ofin as IRuntimeNode | null;
+            if (!dst) continue;
+            const declared = (dst as unknown as { inputPorts?: ReadonlyArray<{ slot: string | number; kind?: "stream" | "signal" }> }).inputPorts;
+            if (!declared) continue;
+            const slot = inSlotOf(link);
+            for (const p of declared) {
+                if (p.slot === slot && p.kind === "signal") {
+                    this._isSignalChannel[i] = true;
+                    break;
+                }
+            }
+        }
     }
 
     private _buildLinkStatesProxy(): ILinkState[] {
@@ -499,18 +613,48 @@ export class Session implements ISession {
         // surface and no `const session = this` line.
         const linksFor = (): ReadonlyArray<IChannel> => this.graph.links as ReadonlyArray<IChannel>;
         const bufferFor = (link: IChannel): unknown[] | undefined => this._bufferFor(link);
+        const isSignalChan = (i: number): boolean => this._isSignalChannel[i] === true;
+        const signalValueFor = (link: IChannel): { has: boolean; value: unknown } => {
+            const dst = link.ofin as IRuntimeNode | null;
+            if (!dst) return { has: false, value: undefined };
+            const state = this.nodeStateOf(dst);
+            const store = state?.inputSignals;
+            if (!store) return { has: false, value: undefined };
+            const slot = inSlotOf(link);
+            return { has: store.has(slot), value: store.get(slot) };
+        };
         return this.graph.links.map(
             (_link, idx) =>
                 ({
                     get ready(): boolean {
                         const link = linksFor()[idx] as IChannel | undefined;
                         if (!link) return false;
+                        // Signal channels: always report "ready" so the
+                        // default RuntimeNode.isReady() (which gates on
+                        // every wired non-control input having ready=true)
+                        // doesn't block signal-only consumers. They DON'T
+                        // sit in a buffer; their value lives in the
+                        // node's inputSignals map. A read via readSignal
+                        // returns the current value OR undefined if
+                        // nothing has been published yet — the consumer's
+                        // `fire()` must handle the undefined case with
+                        // a sensible default (typically 0).
+                        if (isSignalChan(idx)) return true;
                         const buf = bufferFor(link);
                         return !!buf && buf.length > 0;
                     },
                     get payload(): unknown {
                         const link = linksFor()[idx] as IChannel | undefined;
                         if (!link) return undefined;
+                        // Signal channels: return the current value from
+                        // the signal store. Mirror of the stream path's
+                        // buffer-head peek — same backward-compat
+                        // surface (linkStates[idx].payload), kind-aware
+                        // routing underneath.
+                        if (isSignalChan(idx)) {
+                            const sig = signalValueFor(link);
+                            return sig.has ? sig.value : undefined;
+                        }
                         const buf = bufferFor(link);
                         return buf && buf.length > 0 ? buf[0] : undefined;
                     },
