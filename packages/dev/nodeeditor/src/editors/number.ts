@@ -84,18 +84,48 @@ export const numberEditor: EditorFactory = (host, model, propertyName, options, 
 
     host.appendChild(wrap);
 
+    // rAF-coalesced refresh: at high sim rates (audio / RF, ≥ 100 kHz)
+    // a single @viewable can fire onPropertyChanged 1 M+ times per wall
+    // second. Setting input.value that often plus the unavoidable
+    // String() coercion saturates the main thread and triggers
+    // multi-second forced reflows. We buffer the latest value into
+    // `pendingValue`, schedule one rAF if none is in flight, and write
+    // to the input exactly once per animation frame — capping the UI
+    // refresh at ~60 Hz no matter how fast the underlying field
+    // changes. Cheap, deterministic, no editable knob to mistune.
+    let pendingValue: number | null = null;
+    let rafId: number | null = null;
+    const flush = (): void => {
+        rafId = null;
+        if (pendingValue === null) return;
+        // Re-check focus AT FLUSH time so a click on the input that
+        // landed between notification and rAF doesn't clobber the
+        // user's keystrokes with a stale value.
+        if (document.activeElement !== input) {
+            input.value = String(pendingValue);
+        }
+        pendingValue = null;
+    };
     let sub: { dispose(): void } | null = null;
     const candidate = model as { onPropertyChanged?: { add(cb: (args: { propertyName?: string }) => void): { dispose(): void } | null } };
     if (candidate.onPropertyChanged && typeof candidate.onPropertyChanged.add === "function") {
         sub = candidate.onPropertyChanged.add((args) => {
-            if (args && args.propertyName === propertyName && document.activeElement !== input) {
-                input.value = String(getter());
-            }
+            if (!args || args.propertyName !== propertyName) return;
+            if (document.activeElement === input) return;
+            // Capture the value LAZILY: only call getter() when we
+            // actually intend to refresh. notifyPropertyChanged carries
+            // the new value in args but its type is `unknown` here, so
+            // we keep the canonical getter path for type safety. The
+            // getter cost itself is negligible vs. the avoided
+            // String + DOM write.
+            pendingValue = getter();
+            if (rafId === null) rafId = requestAnimationFrame(flush);
         });
     }
 
     return {
         dispose: (): void => {
+            if (rafId !== null) cancelAnimationFrame(rafId);
             if (sub) sub.dispose();
             if (wrap.parentNode === host) host.removeChild(wrap);
         },

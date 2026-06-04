@@ -91,23 +91,48 @@ export const sliderEditor: EditorFactory = (host, model, propertyName, options, 
 
     // Subscribe so external mutations (LiveBinder, drag from a different
     // panel, programmatic set) keep the widget in sync, and so changing
-    // min/max/step from sibling fields adjusts the bounds.
+    // min/max/step from sibling fields adjusts the bounds. rAF-coalesced
+    // for the same reason as numberEditor: at audio / RF sim rates the
+    // bound field can fire onPropertyChanged 1 M+ times per wall second
+    // and a synchronous setter + readout update each notification
+    // saturates the main thread.
+    let valuePending = false;
+    let boundsPending = false;
+    let rafId: number | null = null;
+    const flush = (): void => {
+        rafId = null;
+        if (boundsPending) {
+            refreshBounds();
+            boundsPending = false;
+        }
+        if (valuePending) {
+            refreshValue();
+            valuePending = false;
+        }
+    };
+    const schedule = (): void => {
+        if (rafId === null) rafId = requestAnimationFrame(flush);
+    };
     let sub: { dispose(): void } | null = null;
     const candidate = model as { onPropertyChanged?: { add(cb: (args: { propertyName?: string }) => void): { dispose(): void } | null } };
     if (candidate.onPropertyChanged && typeof candidate.onPropertyChanged.add === "function") {
         sub = candidate.onPropertyChanged.add((args) => {
             if (!args) return;
             const p = args.propertyName;
-            if (p === propertyName) refreshValue();
-            else if (p === "min" || p === "max" || p === "step") {
-                refreshBounds();
-                refreshValue();
+            if (p === propertyName) {
+                valuePending = true;
+                schedule();
+            } else if (p === "min" || p === "max" || p === "step") {
+                boundsPending = true;
+                valuePending = true;
+                schedule();
             }
         });
     }
 
     return {
         dispose: (): void => {
+            if (rafId !== null) cancelAnimationFrame(rafId);
             if (sub) sub.dispose();
             if (wrap.parentNode === host) host.removeChild(wrap);
         },

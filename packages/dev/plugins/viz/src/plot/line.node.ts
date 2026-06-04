@@ -65,6 +65,18 @@ export class UplotLineNode extends RuntimeNode implements IDeclaresPorts, IRende
     @cloneable private _yAuto:      boolean = true;
     @cloneable private _yMin:       number = -1;
     @cloneable private _yMax:       number = 1;
+    // Maximum push rate into the ring buffer (Hz, in SIM time). At
+    // audio / RF sim rates a 1:1 push hits the array-shift cost
+    // (O(maxSamples) per fire) ~200 k times per wall second, freezing
+    // the main thread. The default 1 kHz captures up to ~500 Hz of
+    // visible content via Nyquist — enough for closed-loop control
+    // diagnostics. Set to 0 to disable (full sim rate), e.g. when
+    // visualising the PWM ripple directly at simRate=200 kHz.
+    @cloneable private _maxPushHz: number = 1000;
+    // Sim time of last accepted push. Compared against current `t` so
+    // the throttle is reproducible across pause/resume and play-speed
+    // changes (matches WatchNode's throttle semantics).
+    private _lastPushT: number = -Infinity;
 
     public constructor(
         onsc: Nullable<IOlink[]> = null,
@@ -114,6 +126,17 @@ export class UplotLineNode extends RuntimeNode implements IDeclaresPorts, IRende
         if (this._yAuto) this.yAuto = false;
     }
 
+    @editable("number", { unit: "Hz", min: 0 })
+    public get maxPushHz(): number { return this._maxPushHz; }
+    public set maxPushHz(v: number) {
+        // 0 disables the throttle. Negative is clamped to 0 (same as
+        // disabled) so the field is forgiving on typo.
+        const next = Number.isFinite(v) && v > 0 ? v : 0;
+        this.setField("maxPushHz", this._maxPushHz, next, (n) => {
+            this._maxPushHz = n;
+        });
+    }
+
     /** Mirror of the last received value for the property panel. */
     @viewable("number") public get lastValue(): number {
         return this._ys.length > 0 ? this._ys[this._ys.length - 1] : 0;
@@ -129,6 +152,7 @@ export class UplotLineNode extends RuntimeNode implements IDeclaresPorts, IRende
     public override reset(_session: ISession): void {
         this._xs = [];
         this._ys = [];
+        this._lastPushT = -Infinity;
     }
 
     public override fire(session: ISession, t: number): void {
@@ -144,6 +168,18 @@ export class UplotLineNode extends RuntimeNode implements IDeclaresPorts, IRende
             if (typeof v === "number") value = v;
         }
         if (value === null) return; // nothing to plot this tick
+
+        // Sim-time throttle. At simRate ≥ 100 kHz the per-tick array
+        // shift below (O(maxSamples)) saturates the main thread when
+        // run at full speed. 1 kHz default = 1 ms min between pushes,
+        // so 500 samples cover 0.5 s of sim history. Set _maxPushHz=0
+        // to disable (matches the pre-throttle behaviour).
+        const rate = this._maxPushHz;
+        if (rate > 0) {
+            const minDt = 1 / rate;
+            if (t - this._lastPushT < minDt) return;
+        }
+        this._lastPushT = t;
 
         this._xs.push(t);
         this._ys.push(value);

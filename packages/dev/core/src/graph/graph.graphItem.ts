@@ -130,6 +130,30 @@ export class GraphItem<B = unknown> implements IGraphItem<B> {
             } else {
                 (this as Record<string, unknown>)[key] = stored;
             }
+            // Fire a notification AFTER the write so any subscribed
+            // editor (number / string / slider field rows in the
+            // property panel) refreshes itself. Without this, a panel
+            // that was mounted BEFORE the deserialize ran (e.g. the
+            // node was already selected when the user loaded the file,
+            // or an autosave restored on page reload) keeps showing
+            // the constructor-default value forever — the panel reads
+            // the field once at mount and only reacts to subsequent
+            // setField() calls, never to direct field writes.
+            //
+            // We fire under TWO names: the raw metadata key (e.g.
+            // `"_outputType"`) AND, when it starts with an underscore,
+            // the stripped public name (`"outputType"`). The convention
+            // across the codebase is `@cloneable private _X` paired
+            // with a public getter/setter `X`; editors subscribe by
+            // the public name, so the stripped notification is what
+            // actually reaches them. The raw-name notification is
+            // kept for any subscriber that happens to watch the
+            // private storage directly (none today, but cheap).
+            const publicName = key.startsWith("_") ? key.substring(1) : key;
+            this.notifyPropertyChanged(key, current, stored);
+            if (publicName !== key) {
+                this.notifyPropertyChanged(publicName, current, stored);
+            }
         }
     }
 

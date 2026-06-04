@@ -19,20 +19,30 @@ import type { IRenderable } from "spikypanda-nodeeditor";
  *
  * Display contract (matches every reference instrument: sound level
  * meters, MATLAB FFT plots, RF/audio spectrum analysers):
- *   - Y axis ALWAYS starts at zero (magnitudes are physical and ≥ 0).
- *   - Peak rises ABOVE the baseline. No negative-valued mountain of
- *     numerical noise dominating the plot.
+ *   - Linear mode: Y starts at zero, peak drives the top
+ *     (framePeak × 1.15 with 15 % headroom).
+ *   - dB mode: Y spans [peak_dB - dBRange, peak_dB + 5 dB]. The floor
+ *     follows the peak so a fully quiet signal still shows tick marks
+ *     instead of collapsing to a single line at −∞.
  *   - X axis is 0 to Nyquist in Hz when the session publishes a sample
  *     rate, otherwise plain bin index 0..N-1.
  *
- * Earlier iterations exposed dbScale + yAuto + yMin + yMax + cie. They
- * interacted in surprising ways and produced unreadable plots (raw
- * 20·log10 spans 300 dB, peak-normalised dB inverted the axis). This
- * V3 ships ZERO Y-axis knobs — a spectrum's whole job is to show a
- * peak, so the peak drives the scale. The Y top is always
- * `framePeak × 1.15` (15% headroom), bottom always 0. If you need
- * dB later it goes in front of the magnitudes pipeline as a SpLogScale
- * op, not in the tile.
+ * dB conversion depends on what the upstream pipeline produces. Two
+ * editables control this:
+ *   - scaleType  "linear" | "dB"           — display mode
+ *   - inputType  "magnitude" | "power"     — what the upstream sends
+ *                                             (magnitude → 20·log10,
+ *                                              power     → 10·log10)
+ * Both default sensible: scaleType=linear, inputType=magnitude. With a
+ * SpFFT in power mode upstream, flip inputType=power so the dB numbers
+ * read as actual dB (not dB doubled).
+ *
+ * Linear is still the default because a fresh user wiring a Buffer →
+ * FFT chain wants to see a peak rise above zero on the first frame, not
+ * a flat band at −20 dB they have to interpret. Flip to dB when the DC
+ * bin or initial transient drowns out the harmonic content (e.g. MCSA:
+ * the carrier sidebands are 40+ dB below the carrier, invisible on a
+ * linear scale).
  *
  * Complementary to:
  *   - Viz.Plot:line       — scrolling time-series of a scalar
@@ -58,6 +68,13 @@ import type { IRenderable } from "spikypanda-nodeeditor";
  */
 
 type FillStyle = "line" | "area" | "bars";
+type ScaleType = "linear" | "dB";
+type InputType = "magnitude" | "power";
+
+// Hard floor for log10 to avoid −Infinity on a zero bin. Picked low
+// enough that any real spectrum bin stays above it; everything below
+// reads as the dB floor on the display.
+const LOG_EPS = 1e-12;
 
 export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IRenderable {
     public readonly renderableType = "Viz.Plot:spectrum";
@@ -71,17 +88,37 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
     // don't need a maxBins editable; the chart auto-sizes to whatever
     // the FFT produces (typically nfft/2+1).
     private _xs: number[] = [];
+    // Raw values fed by the upstream FFT (linear magnitude OR power,
+    // user picks via inputType). _displayYs is what uPlot actually
+    // renders — identical to _ys in linear mode, dB-converted in dB
+    // mode. We keep both so a scale flip costs only a recompute, not
+    // a re-fetch from upstream.
     private _ys: number[] = [];
+    private _displayYs: number[] = [];
     private _bins = 0;
-    // Running peak of the most recent frame (linear magnitude). Used to
-    // pick the Y axis top in auto mode and surfaced as a viewable so
-    // the user can dial in a manual yMax that matches the expected
-    // signal level.
+    // Running peak/floor of the most recent frame in DISPLAY units
+    // (linear or dB depending on scaleType). Drives the Y axis range.
     private _framePeak = 0;
+    private _frameFloor = 0;
 
     // ── Editables ──────────────────────────────────────────────────────
-    // No Y-axis knob: the peak drives the scale, period. See repaint().
     @cloneable private _fillStyle:  FillStyle = "area";
+    // Linear by default — a user wiring up a fresh Buffer → FFT chain
+    // wants to see a peak above zero, not interpret negative dB on the
+    // first frame. Flip to dB once the DC/transient dominates and you
+    // need to see sidebands 40+ dB below the peak (MCSA, audio
+    // analysis, RF).
+    @cloneable private _scaleType: ScaleType = "linear";
+    // Magnitude is the most common upstream (SpMagnitude after SpFFT).
+    // Set to "power" when SpFFT is configured in power mode and feeds
+    // straight into this tile — the dB conversion uses 10·log10 instead
+    // of 20·log10 so the displayed numbers are real dB.
+    @cloneable private _inputType: InputType = "magnitude";
+    // Span of the dB Y axis below the peak (default 100 dB ≈ 5 decades
+    // of magnitude). 80–120 dB is the conventional range for audio /
+    // RF spectrum analysers; MCSA fault sidebands sit at −40 to −60 dB
+    // below the fundamental so 100 dB shows them with headroom.
+    @cloneable private _dBRange: number = 100;
 
     // Auto-sourced from session.simRate on every fire(). NOT an
     // editable: forcing the user to keep two numbers in sync invites
@@ -94,6 +131,57 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
     public get fillStyle(): FillStyle { return this._fillStyle; }
     public set fillStyle(v: FillStyle) {
         this.setField("fillStyle", this._fillStyle, v, (n) => { this._fillStyle = n; this._rebuildOnNextFrame = true; });
+    }
+
+    @editable("string", { unit: "linear | dB" })
+    public get scaleType(): ScaleType { return this._scaleType; }
+    public set scaleType(v: ScaleType) {
+        const next: ScaleType = v === "dB" ? "dB" : "linear";
+        this.setField("scaleType", this._scaleType, next, (n) => {
+            this._scaleType = n;
+            // Re-derive _displayYs from the latest _ys immediately so
+            // the next repaint() reflects the new scale even if no new
+            // FFT frame arrives between now and then (paused runner,
+            // slow upstream, etc.).
+            this._recomputeDisplay();
+            // Hard-reset _yTop because the old value was in the OTHER
+            // scale's units. e.g. flipping linear→dB carries a stale
+            // _yTop=6000 (linear) into the dB Y axis, which would clamp
+            // the range to [5900, 6005] dB — empty band. Seeding with
+            // framePeak puts the axis right where it belongs on the
+            // very next paint, no decay needed.
+            this._yTop = this._framePeak;
+            // Force a uPlot rebuild: axis label changes (Hz vs Hz/dB)
+            // and the Y scale bounds switch from [0, peak·1.15] to
+            // [peak_dB - dBRange, peak_dB + 5], which the declarative
+            // scales config doesn't update on a setData() alone.
+            this._rebuildOnNextFrame = true;
+        });
+    }
+
+    @editable("string", { unit: "magnitude | power" })
+    public get inputType(): InputType { return this._inputType; }
+    public set inputType(v: InputType) {
+        const next: InputType = v === "power" ? "power" : "magnitude";
+        this.setField("inputType", this._inputType, next, (n) => {
+            this._inputType = n;
+            this._recomputeDisplay();
+            // Y range numbers shift by a factor of 2 in dB mode
+            // (10·log10 vs 20·log10); rebuild so the axis ticks are
+            // recomputed from the new bounds rather than carrying the
+            // old scale internally.
+            if (this._scaleType === "dB") this._rebuildOnNextFrame = true;
+        });
+    }
+
+    @editable("number", { unit: "dB" })
+    public get dBRange(): number { return this._dBRange; }
+    public set dBRange(v: number) {
+        const next = Math.max(20, Math.min(200, Math.floor(v)));
+        this.setField("dBRange", this._dBRange, next, (n) => {
+            this._dBRange = n;
+            if (this._scaleType === "dB") this._rebuildOnNextFrame = true;
+        });
     }
 
     /**
@@ -158,8 +246,10 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
     public override reset(_session: ISession): void {
         this._xs = [];
         this._ys = [];
+        this._displayYs = [];
         this._bins = 0;
         this._framePeak = 0;
+        this._frameFloor = 0;
         this._yTop = 1;
     }
 
@@ -196,20 +286,59 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
             this._xs = new Array(n);
             this._populateXs();
             this._ys = new Array(n);
+            this._displayYs = new Array(n);
             this._rebuildOnNextFrame = true;
         }
 
-        // Linear magnitudes, taken as |X[k]| defensively in case the
+        // Linear values, taken as |X[k]| defensively in case the
         // upstream produces a signed Re(X) rather than a true magnitude.
-        // For a SpMagnitude output this is a no-op. Track the frame's
-        // peak in one pass so we can auto-fit the Y axis.
-        let peak = 0;
-        for (let i = 0; i < n; ++i) {
-            const m = Math.abs(frame[i]);
-            this._ys[i] = m;
-            if (m > peak) peak = m;
+        // For a SpMagnitude / SpFFT power output this is a no-op. The
+        // raw linear values are cached on _ys so a scaleType / inputType
+        // flip can recompute the display without waiting for the next
+        // upstream frame.
+        for (let i = 0; i < n; ++i) this._ys[i] = Math.abs(frame[i]);
+        this._recomputeDisplay();
+    }
+
+    /**
+     * Repopulate `_displayYs` from `_ys` using the current scaleType
+     * and inputType. Tracks the frame's peak/floor in display units so
+     * the Y axis range in `repaint()` can pin to those bounds without
+     * scanning the array twice. Cheap — single pass, used both on
+     * fresh data (fire) and on a scale toggle (no new data needed).
+     */
+    private _recomputeDisplay(): void {
+        const n = this._ys.length;
+        if (this._displayYs.length !== n) this._displayYs = new Array(n);
+        let peak = -Infinity;
+        let floor = +Infinity;
+        if (this._scaleType === "linear") {
+            for (let i = 0; i < n; ++i) {
+                const v = this._ys[i];
+                this._displayYs[i] = v;
+                if (v > peak) peak = v;
+                if (v < floor) floor = v;
+            }
+        } else {
+            // dB. Magnitude → 20·log10, power → 10·log10. Floored at
+            // LOG_EPS to avoid −Infinity on a zero bin (clean Y axis,
+            // uPlot doesn't choke on a degenerate point).
+            const k = this._inputType === "power" ? 10 : 20;
+            for (let i = 0; i < n; ++i) {
+                const v = Math.max(this._ys[i], LOG_EPS);
+                const dB = k * Math.log10(v);
+                this._displayYs[i] = dB;
+                if (dB > peak) peak = dB;
+                if (dB < floor) floor = dB;
+            }
         }
-        this._framePeak = peak;
+        // Empty input → keep last-known values rather than poisoning
+        // the axis with ±Infinity sentinels (would surface as NaN in
+        // uPlot's scale and freeze the canvas).
+        if (n > 0) {
+            this._framePeak = peak;
+            this._frameFloor = floor;
+        }
     }
 
     /**
@@ -269,20 +398,33 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
         // scale.min/max directly, deduped internally.
         //
         // Asymmetric smoothing on the top so the axis is stable:
-        //   - target = framePeak * 1.15   (15% headroom above peak)
+        //   - target = framePeak ·1.15 (linear) or framePeak + 5 (dB)
         //   - if target > _yTop : snap up INSTANTLY. A new larger peak
         //     must never be clipped on the frame it appears.
         //   - else              : decay slowly toward target (0.5% per
         //     frame, ~1 s time constant at 60 fps). A stationary tone
         //     has tiny frame-to-frame ripple from FFT windowing leakage
         //     — without smoothing, the axis would jitter visibly.
-        const target = this._framePeak > 0 ? this._framePeak * 1.15 : 1;
-        if (target > this._yTop) {
-            this._yTop = target;
+        let yMin: number, yMax: number;
+        if (this._scaleType === "dB") {
+            // dB mode: top trails framePeak + 5 dB headroom, bottom
+            // sits dBRange below the top. This means a quiet signal
+            // (peak = −20 dB) still shows a populated Y axis without
+            // collapsing to a single line at the floor.
+            const target = this._framePeak + 5;
+            if (target > this._yTop) this._yTop = target;
+            else this._yTop = this._yTop * 0.995 + target * 0.005;
+            yMin = this._yTop - this._dBRange;
+            yMax = this._yTop;
         } else {
-            this._yTop = this._yTop * 0.995 + target * 0.005;
+            // Linear mode: bottom always 0, top trails framePeak ·1.15.
+            const target = this._framePeak > 0 ? this._framePeak * 1.15 : 1;
+            if (target > this._yTop) this._yTop = target;
+            else this._yTop = this._yTop * 0.995 + target * 0.005;
+            yMin = 0;
+            yMax = this._yTop;
         }
-        this._uplot.setScale("y", { min: 0, max: this._yTop });
+        this._uplot.setScale("y", { min: yMin, max: yMax });
     }
 
     public onResize(width: number, height: number): void {
@@ -294,7 +436,7 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
     // ── Internals ──────────────────────────────────────────────────────
 
     private _data(): uPlot.AlignedData {
-        return [this._xs, this._ys];
+        return [this._xs, this._displayYs];
     }
 
     private _buildOptions(): UplotOptions {
@@ -334,17 +476,28 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
             return v >= 100 ? String(Math.round(v)) : v.toFixed(1);
         };
 
+        // Seed the initial Y range so the first paint after a rebuild
+        // doesn't briefly flash a stale or zero band before repaint()
+        // pins the scale. Numbers match the per-frame pinning logic.
+        const isDb = this._scaleType === "dB";
+        const yInit: [number, number] = isDb
+            ? [this._yTop - this._dBRange, this._yTop]
+            : [0, this._yTop];
+        const yLabel = isDb
+            ? this._inputType === "power" ? "dB (power)" : "dB"
+            : "magnitude";
+
         const opts: UplotOptions = {
             width: Math.max(this._lastWidth, 100),
             height: Math.max(this._lastHeight, 60),
-            // Y axis: always [0, top] with min pinned to 0 via setScale
-            // every frame (see repaint). Initial config seeds the
-            // already-smoothed _yTop so the very first paint after a
-            // rebuild (e.g. on simRate change or fillStyle toggle)
-            // doesn't briefly flash to [0, 1] before settling.
+            // Y axis: linear → [0, top]; dB → [top - dBRange, top]. The
+            // imperative setScale() in repaint() drives the actual per-
+            // frame range; this initial config just avoids a one-frame
+            // flash of the default uPlot scale after a rebuild (scale
+            // toggle, fillStyle change, simRate change, …).
             scales: {
                 x: { time: false },
-                y: { auto: false, range: [0, this._yTop] },
+                y: { auto: false, range: yInit },
             },
             series: [
                 {
@@ -366,7 +519,13 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
                     labelSize: 14,
                     labelFont: "10px sans-serif",
                 },
-                { stroke: "#8A8A9A", grid: { stroke: "#3A3A48", width: 0.5 } },
+                {
+                    stroke: "#8A8A9A",
+                    grid: { stroke: "#3A3A48", width: 0.5 },
+                    label: yLabel,
+                    labelSize: 14,
+                    labelFont: "10px sans-serif",
+                },
             ],
         };
         return opts;

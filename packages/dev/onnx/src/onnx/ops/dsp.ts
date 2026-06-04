@@ -364,7 +364,16 @@ class SpFFTNode extends OnnxOpNode {
         });
     }
 
-    @editable("number", { min: 0, max: 2, step: 1, unit: "0=power 1=mag 2=complex" })
+    /**
+     * Numeric output-type accessor, kept for backwards compatibility
+     * with any external code that pokes the integer directly. NOT
+     * decorated `@editable` anymore — the property panel exposes
+     * `outputMode` (string dropdown) below instead, which is the
+     * human-facing knob and maps to the same backing `_outputType`
+     * field. Persistence still rides on the `@cloneable _outputType`
+     * declaration above, so the value round-trips through save/load
+     * even when the user only ever touched the `outputMode` editor.
+     */
     public get outputType(): number {
         return this._outputType;
     }
@@ -372,6 +381,60 @@ class SpFFTNode extends OnnxOpNode {
         this.setField("outputType", this._outputType, v, (x) => {
             this._outputType = x;
         });
+        // Mirror so any `outputMode` observers (property panel string
+        // editor) see the change too. Same underlying field, two views.
+        this.notifyOutputModeChanged();
+    }
+
+    /**
+     * String-enum editable for the FFT output type. Three values:
+     *   "power"     — |X[k]|² (default, what most analysis pipelines want)
+     *   "magnitude" — |X[k]|   (for direct amplitude readouts)
+     *   "complex"   — interleaved Re/Im pairs (for downstream IFFT etc.)
+     * Mapped onto the same `_outputType` integer field that `execute()`
+     * switches on; no extra storage. Decorated `@editable("string", ...)`
+     * with a pipe-separated unit, so the built-in string editor renders
+     * a dropdown with these three options.
+     */
+    @editable("string", { unit: "power | magnitude | complex" })
+    public get outputMode(): "power" | "magnitude" | "complex" {
+        switch (this._outputType) {
+            case FFT_OUTPUT_MAGNITUDE: return "magnitude";
+            case FFT_OUTPUT_COMPLEX: return "complex";
+            default: return "power";
+        }
+    }
+    public set outputMode(v: "power" | "magnitude" | "complex") {
+        const next =
+            v === "magnitude" ? FFT_OUTPUT_MAGNITUDE :
+            v === "complex" ? FFT_OUTPUT_COMPLEX :
+            FFT_OUTPUT_POWER;
+        // setField guards on equality so a no-op assign doesn't fire a
+        // spurious notification. The propertyName is `outputMode` so
+        // the editor's onPropertyChanged subscription matches the field
+        // it actually rendered.
+        this.setField("outputMode", this._outputType, next, (x) => {
+            this._outputType = x;
+        });
+    }
+
+    /**
+     * Fire a synthetic `outputMode` notification whenever someone
+     * touches the legacy numeric `outputType` setter. Keeps the
+     * property-panel dropdown in sync with programmatic mutations
+     * (e.g. a load path that writes `outputType = 1` directly, or a
+     * graph deserialize that runs `_outputType = 1` and then calls
+     * the setter). Cheap — short-circuits when nobody's listening.
+     */
+    private notifyOutputModeChanged(): void {
+        const obs = this.onPropertyChanged;
+        if (!obs.hasObservers()) return;
+        obs.notifyObservers({
+            object: this,
+            previousValue: undefined,
+            newValue: this.outputMode,
+            propertyName: "outputMode",
+        } as never);
     }
 
     execute(inputs: ITensor[]): ITensor[] {
