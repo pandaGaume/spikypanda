@@ -45,6 +45,8 @@ export { DebugBus } from "./debug-bus";
 export type { DebugLevel, IDebugEntry, DebugHandler } from "./debug-bus";
 export { DebugConsole } from "./components/debug-console";
 export type { DebugConsoleOptions } from "./components/debug-console";
+export { PropertyEditor } from "./components/property-editor";
+export type { PropertyEditorOptions } from "./components/property-editor";
 export { SkinRegistry } from "./skin-registry";
 export type { Skin } from "./skin-registry";
 export { darkSkin } from "./styles/skins/dark";

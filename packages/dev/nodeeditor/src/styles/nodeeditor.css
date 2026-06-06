@@ -1791,3 +1791,134 @@
     overflow:   hidden;
     position:   relative;
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   PropertyEditor component. Renders into a host element supplied by
+   the page; the host is in charge of width / scrolling. The component
+   owns its visual chrome (title row, drop overlay, icon buttons).
+   ════════════════════════════════════════════════════════════════════ */
+.ne-property-editor {
+    position:   relative;
+    box-sizing: border-box;
+    height:     100%;
+    background: var(--ne-color-bg);
+}
+.ne-property-editor-body {
+    height:    100%;
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding:   16px 18px;
+}
+.ne-property-editor-title {
+    display:         flex;
+    align-items:     center;
+    justify-content: space-between;
+    gap:             8px;
+    font-family:     var(--ne-font-mono);
+    font-size:       10px;
+    font-weight:     500;
+    letter-spacing:  .16em;
+    text-transform:  uppercase;
+    color:           var(--ne-color-text-muted);
+    margin:          4px 0 12px;
+    padding-bottom:  8px;
+    border-bottom:   1px solid var(--ne-color-border-strong);
+}
+.ne-property-editor-actions {
+    display:     inline-flex;
+    align-items: center;
+    gap:         4px;
+}
+.ne-property-editor-icon-btn {
+    display:         inline-flex;
+    align-items:     center;
+    justify-content: center;
+    width:           22px;
+    height:          22px;
+    border:          1px solid var(--ne-color-border);
+    background:      transparent;
+    color:           var(--ne-color-text-muted);
+    border-radius:   2px;
+    padding:         0;
+    cursor:          pointer;
+    transition:      color .14s, border-color .14s, background .14s;
+}
+.ne-property-editor-icon-btn:hover {
+    color:        var(--ne-color-text);
+    border-color: var(--ne-color-border-strong);
+}
+.ne-property-editor-icon-btn.is-ok {
+    color:        var(--ne-color-bg);
+    background:   var(--ne-color-primary);
+    border-color: var(--ne-color-primary);
+}
+.ne-property-editor-icon-btn.is-err {
+    color:        var(--ne-color-bg);
+    background:   var(--ne-color-danger);
+    border-color: var(--ne-color-danger);
+}
+.ne-property-editor-empty {
+    font-family:    var(--ne-font-mono);
+    font-size:      11px;
+    letter-spacing: .08em;
+    color:          var(--ne-color-text-faint);
+    padding:        6px 0;
+}
+.ne-property-editor-grid {
+    display:        flex;
+    flex-direction: column;
+    gap:            8px;
+}
+.ne-property-editor-subhead {
+    font-family:    var(--ne-font-mono);
+    font-size:      9px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color:          var(--ne-color-text-faint);
+    margin:         14px 0 6px;
+    padding-bottom: 4px;
+    border-bottom:  1px solid var(--ne-color-border);
+}
+.ne-property-editor-grid-readonly { opacity: 0.78; }
+.ne-property-editor-grid-readonly input,
+.ne-property-editor-grid-readonly select,
+.ne-property-editor-grid-readonly textarea { cursor: default; }
+.ne-property-editor-row {
+    display:        flex;
+    flex-direction: column;
+    gap:            3px;
+}
+.ne-property-editor-row-label {
+    font-family:    var(--ne-font-mono);
+    font-size:      0.7em;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color:          var(--ne-color-text-muted);
+}
+.ne-property-editor-class-host {
+    flex:           1;
+    display:        flex;
+    flex-direction: column;
+    min-height:     280px;
+}
+
+/* Drop-zone overlay: visible only while a file is being dragged over
+ * the host. Sits above the body, ignores pointer events so the user
+ * stays in dragover/drop semantics. */
+.ne-property-editor.is-drop-active::after {
+    content:         "Drop preset JSON";
+    position:        absolute;
+    inset:           6px;
+    border:          1.5px dashed var(--ne-color-primary);
+    background:      var(--ne-color-primary-bg, rgba(232, 118, 45, 0.08));
+    font-family:     var(--ne-font-mono);
+    font-size:       11px;
+    letter-spacing:  .14em;
+    text-transform:  uppercase;
+    color:           var(--ne-color-primary);
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    pointer-events:  none;
+    z-index:         5;
+}
