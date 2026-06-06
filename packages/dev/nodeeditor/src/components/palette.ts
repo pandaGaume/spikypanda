@@ -50,6 +50,18 @@ interface TreeNode {
     leaves: { type: string; meta: INodeMeta }[];
 }
 
+/**
+ * MIME type used in the drag payload when an entry is dragged out of
+ * the palette toward the graph. Hosts wire a matching `drop` listener
+ * on the viewer host to materialise the node at the drop position.
+ *
+ * Plain text fallback ("text/plain") is also written so a node id can
+ * be dropped on external editors / consoles for debugging, but the
+ * host must reject those payloads to avoid drops from unrelated
+ * sources slipping through.
+ */
+export const PALETTE_DRAG_MIME = "application/x-spk-node-type";
+
 export class Palette {
     readonly host: HTMLElement;
     readonly registry: INodeRegistry;
@@ -63,7 +75,24 @@ export class Palette {
     private readonly _defaultExpanded: Set<string>;
     private readonly _collapsedPaths = new Set<string>();
 
+    /**
+     * Fired when the user commits to creating a node from this entry:
+     *   - double-click on the entry
+     *   - drop of the entry on a host drop-target (the host wires the
+     *     drop and calls this back itself; the Palette only owns the
+     *     dragstart handshake).
+     *
+     * Single-click no longer fires onSelect — it fires onPreview.
+     */
     onSelect: ((type: string, meta: INodeMeta) => void) | null = null;
+
+    /**
+     * Fired on a single click on an entry. Browsing gesture — the host
+     * typically opens the entry's docs (when meta.docPath is set) so
+     * the user can read about a node before adding it to the graph.
+     * Cheap, no side-effect on the graph.
+     */
+    onPreview: ((type: string, meta: INodeMeta) => void) | null = null;
 
     public constructor(host: HTMLElement, registry: INodeRegistry, options: PaletteOptions = {}) {
         this.host = host;
@@ -231,6 +260,11 @@ export class Palette {
         el.type = "button";
         el.title = entry.type;
         el.style.paddingLeft = `${10 + depth * 12}px`;
+        // Draggable: the host listens on its viewer for drop events
+        // carrying PALETTE_DRAG_MIME and creates the node at the drop
+        // coordinates. The default native drag image is a low-fidelity
+        // screenshot of the button — fine; we don't override it.
+        el.draggable = this.permissions.write;
 
         const dot = document.createElement("span");
         dot.className = "ne-palette-entry-dot";
@@ -247,8 +281,37 @@ export class Palette {
         // without bloating every palette row. The data remains on
         // entry.meta for the panel to read.
 
+        // Single-click vs double-click disambiguation: a dblclick fires
+        // TWO click events plus one dblclick. To avoid firing onPreview
+        // mid-dblclick, defer the click action and cancel it if a
+        // dblclick lands within the system threshold (~250 ms).
+        let clickTimer: ReturnType<typeof setTimeout> | null = null;
         el.addEventListener("click", () => {
+            if (clickTimer) return;
+            clickTimer = setTimeout(() => {
+                clickTimer = null;
+                if (this.onPreview) this.onPreview(entry.type, entry.meta);
+            }, 230);
+        });
+        el.addEventListener("dblclick", () => {
+            if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+            if (!this.permissions.write) return;
             if (this.onSelect) this.onSelect(entry.type, entry.meta);
+        });
+
+        // Drag handshake: the host wires drop; we just publish the
+        // type id on the DataTransfer in our custom mime + a plain-text
+        // fallback for diagnostics.
+        el.addEventListener("dragstart", (e) => {
+            if (!this.permissions.write) { e.preventDefault(); return; }
+            if (!e.dataTransfer) return;
+            e.dataTransfer.setData(PALETTE_DRAG_MIME, entry.type);
+            e.dataTransfer.setData("text/plain", entry.type);
+            e.dataTransfer.effectAllowed = "copy";
+            el.classList.add("is-dragging");
+        });
+        el.addEventListener("dragend", () => {
+            el.classList.remove("is-dragging");
         });
         return el;
     }

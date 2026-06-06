@@ -1578,6 +1578,9 @@
 .ne-palette-entry:hover  { background: var(--ne-color-surface-hover, var(--ne-color-border)); color: var(--ne-color-text); }
 .ne-palette-entry:active { background: var(--ne-color-accent); color: var(--ne-color-bg); }
 .ne-palette-entry:hover .ne-palette-entry-dot { opacity: 1; }
+.ne-palette-entry.is-dragging { opacity: 0.45; }
+.ne-palette-entry[draggable="true"] { cursor: grab; }
+.ne-palette-entry[draggable="true"]:active { cursor: grabbing; }
 
 /* ============================================================
    Standards shields (GitHub-style two-tone pills)
@@ -1901,6 +1904,157 @@
     flex-direction: column;
     min-height:     280px;
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   DocsViewer component. Mirrors the same layout chrome as the property
+   editor so the two read as siblings. The article body uses skin-aware
+   colors so the rendered markdown follows the active theme.
+   ════════════════════════════════════════════════════════════════════ */
+.ne-docs-viewer {
+    position:   relative;
+    box-sizing: border-box;
+    height:     100%;
+    background: var(--ne-color-bg);
+}
+.ne-docs-viewer-body {
+    height:     100%;
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding:    18px 22px;
+}
+.ne-docs-viewer-title {
+    display:        flex;
+    align-items:    baseline;
+    justify-content: space-between;
+    gap:            12px;
+    font-family:    var(--ne-font-mono);
+    font-size:      11px;
+    font-weight:    500;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color:          var(--ne-color-text-muted);
+    margin:         4px 0 12px;
+    padding-bottom: 8px;
+    border-bottom:  1px solid var(--ne-color-border-strong);
+}
+.ne-docs-viewer-title-right {
+    display:     inline-flex;
+    align-items: center;
+    gap:         10px;
+}
+.ne-docs-viewer-typeid {
+    font-family:    var(--ne-font-mono);
+    font-size:      9px;
+    letter-spacing: .08em;
+    text-transform: none;
+    color:          var(--ne-color-text-faint);
+}
+.ne-docs-viewer-lang {
+    font-family:    var(--ne-font-mono);
+    font-size:      10px;
+    letter-spacing: .04em;
+    text-transform: none;
+    color:          var(--ne-color-text-muted);
+    background:     var(--ne-color-surface, transparent);
+    border:         1px solid var(--ne-color-border);
+    padding:        2px 4px;
+    border-radius:  2px;
+    color-scheme:   dark;
+    cursor:         pointer;
+}
+.ne-docs-viewer-lang:hover { color: var(--ne-color-text); border-color: var(--ne-color-border-strong); }
+.ne-docs-viewer-empty {
+    font-family:    var(--ne-font-mono);
+    font-size:      11px;
+    letter-spacing: .04em;
+    color:          var(--ne-color-text-faint);
+    padding:        12px 0;
+}
+.ne-docs-viewer-empty-error { color: var(--ne-color-danger); }
+
+.ne-docs-viewer-article {
+    color:       var(--ne-color-text);
+    font-family: var(--ne-font-sans);
+    font-size:   13px;
+    line-height: 1.65;
+    max-width:   780px;
+}
+.ne-docs-viewer-article h1,
+.ne-docs-viewer-article h2,
+.ne-docs-viewer-article h3,
+.ne-docs-viewer-article h4 {
+    color:          var(--ne-color-text-strong);
+    font-family:    var(--ne-font-mono);
+    letter-spacing: .04em;
+    margin:         24px 0 10px;
+}
+.ne-docs-viewer-article h1 { font-size: 18px; margin-top: 6px; }
+.ne-docs-viewer-article h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--ne-color-text-muted); border-bottom: 1px solid var(--ne-color-border); padding-bottom: 4px; }
+.ne-docs-viewer-article h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .14em; color: var(--ne-color-text-muted); }
+.ne-docs-viewer-article h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--ne-color-text-muted); }
+.ne-docs-viewer-article p  { margin: 0 0 12px; }
+.ne-docs-viewer-article ul,
+.ne-docs-viewer-article ol { padding-left: 22px; margin: 0 0 12px; }
+.ne-docs-viewer-article li { margin: 3px 0; }
+.ne-docs-viewer-article code {
+    font-family: var(--ne-font-mono);
+    font-size:   12px;
+    background:  var(--ne-color-recessed-2);
+    color:       var(--ne-color-text-strong);
+    padding:     1px 4px;
+    border-radius: 2px;
+}
+.ne-docs-viewer-article pre {
+    background:    var(--ne-color-recessed-3, rgba(0,0,0,0.55));
+    border:        1px solid var(--ne-color-border);
+    border-radius: 3px;
+    padding:       10px 12px;
+    overflow-x:    auto;
+}
+.ne-docs-viewer-article pre code {
+    background: transparent;
+    padding:    0;
+    font-size:  12px;
+    line-height: 1.55;
+}
+.ne-docs-viewer-article blockquote {
+    margin:        12px 0;
+    padding:       6px 12px;
+    border-left:   3px solid var(--ne-color-primary);
+    background:    var(--ne-color-recessed-1);
+    color:         var(--ne-color-text-muted);
+}
+.ne-docs-viewer-article table {
+    border-collapse: collapse;
+    width:           100%;
+    margin:          12px 0;
+    font-size:       12px;
+}
+.ne-docs-viewer-article th,
+.ne-docs-viewer-article td {
+    border:     1px solid var(--ne-color-border);
+    padding:    6px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+.ne-docs-viewer-article th {
+    background: var(--ne-color-recessed-1);
+    color:      var(--ne-color-text-muted);
+    font-family: var(--ne-font-mono);
+    font-weight: 500;
+    letter-spacing: .04em;
+}
+.ne-docs-viewer-article a {
+    color:           var(--ne-color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.ne-docs-viewer-article hr {
+    border:     0;
+    border-top: 1px solid var(--ne-color-border);
+    margin:     20px 0;
+}
+.ne-docs-viewer-article img { max-width: 100%; }
 
 /* Drop-zone overlay: visible only while a file is being dragged over
  * the host. Sits above the body, ignores pointer events so the user

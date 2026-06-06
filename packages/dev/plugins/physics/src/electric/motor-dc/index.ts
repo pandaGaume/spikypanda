@@ -58,6 +58,10 @@ export const motorDcSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Electric.Motor.DC:dynamic", () => createDcMotorDynamicNode() as never, {
             label: "DC Motor (Dynamic)",
             category: "Physics.Electric.Motor.DC",
+            docPath: {
+                "en-US": ctx.assetUrl("docs/physics/motor-dc/dynamic.en-US.md"),
+                "fr-FR": ctx.assetUrl("docs/physics/motor-dc/dynamic.fr-FR.md"),
+            },
             // dt port dropped — DcMotorDynamicNode is now IIntegrable.
             // The Session's attached solver owns the timebase via
             // session.dt, the motor exposes its state via gatherState
@@ -105,6 +109,7 @@ export const motorDcSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Electric.Motor.DC:inverter", () => createDcInverterNode() as never, {
             label: "DC PWM Inverter",
             category: "Physics.Electric.Motor.DC",
+            docPath: ctx.assetUrl("docs/physics/motor-dc/inverter.md"),
             inputPorts: [{ slot: "V_cmd", ...FLOAT_IN }],
             outputPorts: [
                 { slot: "V", ...FLOAT_OUT },

@@ -17,6 +17,7 @@ export const dspTransformSubPlugin: IPlugin = {
         ctx.nodes.register("DSP.Transform:fft", () => createFftNode() as never, {
             label: "FFT",
             category: "DSP.Transform",
+            docPath: ctx.assetUrl("docs/dsp/transform/fft.md"),
             inputPorts: [tensorIn("signal")],
             outputPorts: [tensorOut("spectrum")],
             standards: [

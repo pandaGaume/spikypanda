@@ -34,8 +34,26 @@
                 <div class="nev2-empty">No nodes registered</div>
             </aside>
 
-            <section class="nev2-viewer" id="viewer">
-                <!-- GraphViewer mounts here -->
+            <section class="nev2-center">
+                <!-- Tab bar swapping the central column between the
+                     graph editor and the per-node documentation. The
+                     docs tab content is driven by the current single
+                     selection. -->
+                <div class="nev2-center-tabs" id="nev2-center-tabs">
+                    <button type="button" class="nev2-center-tab is-active" data-tab="graph">Graph</button>
+                    <button type="button" class="nev2-center-tab" data-tab="docs">
+                        <span>Docs</span>
+                        <span class="nev2-center-tab-dot" aria-hidden="true"></span>
+                    </button>
+                </div>
+                <div class="nev2-center-bodies">
+                    <div class="nev2-viewer is-active" id="viewer">
+                        <!-- GraphViewer mounts here -->
+                    </div>
+                    <div class="nev2-docs" id="docs">
+                        <!-- DocsViewer mounts here -->
+                    </div>
+                </div>
             </section>
 
             <aside class="nev2-property" id="property">
@@ -62,16 +80,16 @@
          want Live Server / dev cache to fetch fresh. The browser keys
          on the full URL, so any change to the query string forces a
          re-fetch even when the path / file is unchanged. -->
-    <script src="../bundle/spikypanda-core.js?v=p9"></script>
-    <script src="../bundle/spikypanda-onnx.js?v=p9"></script>
-    <script src="../bundle/nodeeditor.js?v=p9"></script>
-    <script src="../bundle/SpkPluginGeometry.js?v=p9"></script>
-    <script src="../bundle/SpkPluginLogic.js?v=p9"></script>
-    <script src="../bundle/SpkPluginDsp.js?v=p9"></script>
-    <script src="../bundle/SpkPluginPhysics.js?v=p9"></script>
-    <script src="../bundle/SpkPluginControl.js?v=p9"></script>
-    <script src="../bundle/SpkPluginViz.js?v=p9"></script>
-    <script src="../bundle/SpkPluginHelios.js?v=p9"></script>
-    <script type="module" src="node-editor-v2.js?v=p9"></script>
+    <script src="../bundle/spikypanda-core.js?v=p10"></script>
+    <script src="../bundle/spikypanda-onnx.js?v=p10"></script>
+    <script src="../bundle/nodeeditor.js?v=p10"></script>
+    <script src="../bundle/SpkPluginGeometry.js?v=p10"></script>
+    <script src="../bundle/SpkPluginLogic.js?v=p10"></script>
+    <script src="../bundle/SpkPluginDsp.js?v=p10"></script>
+    <script src="../bundle/SpkPluginPhysics.js?v=p10"></script>
+    <script src="../bundle/SpkPluginControl.js?v=p10"></script>
+    <script src="../bundle/SpkPluginViz.js?v=p10"></script>
+    <script src="../bundle/SpkPluginHelios.js?v=p10"></script>
+    <script type="module" src="node-editor-v2.js?v=p10"></script>
 </body>
 </html>

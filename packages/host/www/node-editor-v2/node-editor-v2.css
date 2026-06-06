@@ -313,12 +313,75 @@ a {
     padding:        6px 0;
 }
 
-.nev2-viewer {
+.nev2-center {
+    flex:           1;
+    min-width:      0;
+    display:        flex;
+    flex-direction: column;
+    background:     var(--ne-color-bg);
+}
+.nev2-center-tabs {
+    display:        flex;
+    align-items:    stretch;
+    height:         32px;
+    flex-shrink:    0;
+    background:     var(--ne-color-bg);
+    border-bottom:  1px solid var(--ne-color-border);
+    padding:        0 6px;
+    gap:            2px;
+}
+.nev2-center-tab {
+    display:        inline-flex;
+    align-items:    center;
+    gap:            6px;
+    padding:        0 14px;
+    font-family:    var(--ne-font-mono);
+    font-size:      10px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color:          var(--ne-color-text-muted);
+    background:     transparent;
+    border:         0;
+    border-bottom:  2px solid transparent;
+    cursor:         pointer;
+    transition:     color .14s, border-color .14s;
+}
+.nev2-center-tab:hover         { color: var(--ne-color-text); }
+.nev2-center-tab.is-active     { color: var(--ne-color-text); border-bottom-color: var(--ne-color-primary); }
+.nev2-center-tab-dot {
+    width:        6px;
+    height:       6px;
+    border-radius: 50%;
+    background:   var(--ne-color-primary);
+    opacity:      0;
+    transition:   opacity .14s;
+}
+.nev2-center-tab.has-content .nev2-center-tab-dot { opacity: 1; }
+
+.nev2-center-bodies {
     flex:       1;
-    min-width:  0;
+    min-height: 0;
     position:   relative;
     overflow:   hidden;
+}
+.nev2-viewer,
+.nev2-docs {
+    position:   absolute;
+    inset:      0;
+    overflow:   hidden;
     background: var(--ne-color-bg);
+    display:    none;
+}
+.nev2-viewer.is-active,
+.nev2-docs.is-active   { display: block; }
+.nev2-docs.is-active   { display: flex; flex-direction: column; }
+
+/* Drop-target affordance: the viewer host paints an inner border in
+ * the accent color while a palette entry is being dragged over it.
+ * Pointer events are kept through the overlay so the user can still
+ * complete the drop (no ::after layer absorbing the cursor). */
+.nev2-viewer.is-drop-active {
+    box-shadow: inset 0 0 0 2px var(--ne-color-primary);
 }
 
 /* ── 8. Debug console (footer slot) ──────────────────────────────────── */
