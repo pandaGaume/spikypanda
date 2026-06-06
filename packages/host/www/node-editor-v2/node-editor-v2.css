@@ -167,6 +167,9 @@ a {
     background:     transparent;
     cursor:         pointer;
     transition:     color .14s, border-color .14s, background .14s;
+    white-space:    nowrap;
+    flex-shrink:    0;
+    line-height:    1;
 }
 .nev2-tb-btn:hover           { color: var(--ne-color-text); border-color: var(--ne-color-border-strong); }
 .nev2-tb-btn:active          { color: var(--ne-color-bg);   background: var(--ne-color-primary); border-color: var(--ne-color-primary); }
@@ -184,6 +187,7 @@ a {
     border:         1px solid var(--ne-color-border);
     background:     var(--ne-color-surface);
     color-scheme:   dark;  /* hints the browser to use a dark native popup */
+    flex-shrink:    0;
 }
 .nev2-tb-select:hover { color: var(--ne-color-text); border-color: var(--ne-color-border-strong); }
 .nev2-tb-select option,
@@ -207,6 +211,8 @@ a {
     text-transform: uppercase;
     color:          var(--ne-color-text-faint);
     margin-right:   4px;
+    white-space:    nowrap;
+    flex-shrink:    0;
 }
 
 /* ── 6. Player segment ──────────────────────────────────────────────── */
