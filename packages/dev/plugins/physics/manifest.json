@@ -22,16 +22,20 @@
         {
             "id":          "Physics.Scene",
             "displayName": "Scene",
-            "description": "Descriptive scene carrier: gravity [m/s²], temperature [K], pressure [Pa], time_scale [-], local transform (position / rotation / scale), and references to wired solvers / atmosphere / shared nodes. SceneItem is a descriptor (GraphItem, not RuntimeNode); the enclosing Sim.Graph reads it at session bind to build a SceneStateView consumers read live each tick. Ships with 4 planetary presets (Earth, Moon, Mars, Orbital) as one-click palette entries.",
+            "description": "Environment + atmospheric chemistry primitives. The Scene descriptor carries gravity / temperature / pressure / time_scale / local transform + references to wired solvers / atmosphere / shared nodes; consumed by Sim.Graph at session bind. Ships with 5 environmental presets (Earth, Moon, Mars, Orbital, ISS Cabin), an IIntegrable AtmosphereStateNode that tracks per-species mass inventory, and a 3-mode AtmosphereGate (closed / open_passive / hvac_forced) for coupling two atmospheres with native A↔B mass conservation.",
             "category":    "Physics.Scene",
-            "version":     "0.1.0",
+            "version":     "0.2.0",
             "standards":   [],
             "nodes": [
-                { "type": "Physics.Scene:scene",   "factory": "createSceneItem",        "label": "Scene" },
-                { "type": "Physics.Scene:earth",   "factory": "createEarthSceneItem",   "label": "Earth" },
-                { "type": "Physics.Scene:moon",    "factory": "createMoonSceneItem",    "label": "Moon" },
-                { "type": "Physics.Scene:mars",    "factory": "createMarsSceneItem",    "label": "Mars" },
-                { "type": "Physics.Scene:orbital", "factory": "createOrbitalSceneItem", "label": "Orbital" }
+                { "type": "Physics.Scene:scene",             "factory": "createSceneItem",            "label": "Scene" },
+                { "type": "Physics.Scene:earth",             "factory": "createEarthSceneItem",       "label": "Earth" },
+                { "type": "Physics.Scene:moon",              "factory": "createMoonSceneItem",        "label": "Moon" },
+                { "type": "Physics.Scene:mars",              "factory": "createMarsSceneItem",        "label": "Mars" },
+                { "type": "Physics.Scene:orbital",           "factory": "createOrbitalSceneItem",     "label": "Orbital" },
+                { "type": "Physics.Scene:iss-cabin",         "factory": "createIssCabinSceneItem",    "label": "ISS Cabin" },
+                { "type": "Physics.Scene:atmosphere-layer", "factory": "createAtmosphereLayerNode", "label": "Atmosphere Layer" },
+                { "type": "Physics.Scene:atmosphere",       "factory": "createAtmosphereNode",      "label": "Atmosphere" },
+                { "type": "Physics.Scene:atmosphere-gate",  "factory": "createAtmosphereGateNode",  "label": "Atmosphere Gate" }
             ]
         },
         {
@@ -126,6 +130,20 @@
             "standards":   [],
             "nodes": [
                 { "type": "Physics.Mechanical.Fault:modulator", "factory": "createFaultModulatorNode", "label": "Fault Modulator" }
+            ]
+        },
+        {
+            "id":          "Physics.Particulate",
+            "displayName": "Particulates",
+            "description": "Solid-phase particulate-matter descriptors (PM2.5, PM10, dust, lunar regolith). Wired to Physics.Scene:atmosphere-state through its variadic particulate_in_<k> config-link slot pool. V1 records the descriptor (id, characteristic diameter, material density, PM class) as binding metadata only; V2 will add a mass-loading state segment plus gravity-driven settling, drag, re-suspension, and filtration dynamics. Lives under Physics (not Chemistry) because particulates are solid matter governed by physics, not chemical species.",
+            "category":    "Physics.Particulate",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Physics.Particulate:particulate",   "factory": "createParticulateNode",          "label": "Particulate" },
+                { "type": "Physics.Particulate:pm2_5",         "factory": "createPM2_5ParticulateNode",     "label": "PM2.5" },
+                { "type": "Physics.Particulate:pm10",          "factory": "createPM10ParticulateNode",      "label": "PM10" },
+                { "type": "Physics.Particulate:lunar_dust",    "factory": "createLunarDustParticulateNode", "label": "Lunar dust" }
             ]
         }
     ],

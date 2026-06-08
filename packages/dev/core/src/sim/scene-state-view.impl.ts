@@ -34,6 +34,7 @@ import { Frequency, Pressure, Temperature } from "../math/math.units";
 import type { IIntegrable } from "./sim.interfaces";
 import {
     composeTransform,
+    DEFAULT_DENSITY,
     DEFAULT_GRAVITY,
     DEFAULT_PRESSURE,
     DEFAULT_TEMPERATURE,
@@ -68,6 +69,7 @@ export interface SceneStateViewSources {
     readonly readGravity: () => ICartesian3;
     readonly readTemperatureK: () => number;
     readonly readPressurePa: () => number;
+    readonly readDensity: () => number;
     readonly readTimeScale: () => number;
     readonly readLocalTransform: () => ITransform;
     readonly readEffectiveHz: () => number;
@@ -130,6 +132,10 @@ export class SceneStateViewImpl implements SceneStateView {
 
     public get pressure(): Pressure {
         return new Pressure(this._src.readPressurePa(), Pressure.Units.Pa);
+    }
+
+    public get density(): number {
+        return this._src.readDensity();
     }
 
     public get timeScale(): number {
@@ -195,6 +201,7 @@ export function buildDefaultStateView(id: string): SceneStateView {
         // than per-access, keeps the hot path branch-free.
         readTemperatureK: () => DEFAULT_TEMPERATURE.getValue(Temperature.Units.k),
         readPressurePa: () => DEFAULT_PRESSURE.getValue(Pressure.Units.Pa),
+        readDensity: () => DEFAULT_DENSITY,
         readTimeScale: () => DEFAULT_TIME_SCALE,
         readLocalTransform: () => IDENTITY_TRANSFORM,
         readEffectiveHz: () => MIN_EFFECTIVE_HZ.getValue(Frequency.Units.Hz),

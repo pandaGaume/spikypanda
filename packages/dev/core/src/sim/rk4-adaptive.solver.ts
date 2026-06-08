@@ -87,6 +87,13 @@ class InputsSnapshot implements IIntegrationInputs {
     public has(port: string): boolean {
         return this._data.has(port);
     }
+    public sumPrefix(prefix: string): number {
+        let total = 0;
+        for (const [port, value] of this._data) {
+            if (port.startsWith(prefix)) total += value;
+        }
+        return total;
+    }
     public set(port: string, value: number): void {
         this._data.set(port, value);
     }

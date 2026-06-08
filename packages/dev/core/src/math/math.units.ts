@@ -437,6 +437,69 @@ export class Volume extends Quantity {
     }
 }
 
+/**
+ * Area: base = square metre.
+ *
+ * Used by `AtmosphereGateNode` (P7) to type the open-passive throat
+ * area. Conversion factors are derived from the corresponding Length
+ * factors (a²) — kept inline here rather than computed lazily so the
+ * `Quantity.Convert` linear path stays branch-free.
+ */
+export class Area extends Quantity {
+    public static ForParameter(value: Area | number, defaultValue: number, defaultUnit: Unit): Area {
+        return value ? new Area(value, defaultUnit) : new Area(defaultValue, defaultUnit);
+    }
+
+    public static Units: { [key: string]: Unit } = {
+        m2: new Unit("square meter", "m²", 1),
+        cm2: new Unit("square centimeter", "cm²", 1e-4),
+        mm2: new Unit("square millimeter", "mm²", 1e-6),
+        km2: new Unit("square kilometer", "km²", 1e6),
+        in2: new Unit("square inch", "in²", 0.00064516),
+        ft2: new Unit("square foot", "ft²", 0.09290304),
+        ha: new Unit("hectare", "ha", 1e4),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return Area.Units[str] || undefined;
+    }
+}
+
+/**
+ * Volumetric flow rate: base = cubic metre per second.
+ *
+ * Used by `AtmosphereGateNode` (P7) to type the hvac-forced flow.
+ * The catalog covers SI (m³/s, L/s, L/min, m³/h) plus the two
+ * industrial-HVAC standards (cfm, US gpm) so the property panel can
+ * render whatever the user thinks in.
+ *
+ *   1 L/s    = 1e-3 m³/s
+ *   1 L/min  = 1e-3 / 60 m³/s
+ *   1 m³/h   = 1/3600 m³/s
+ *   1 cfm    = 0.3048³ × 0.02831685 / 60 ≈ 4.7194745e-4 m³/s
+ *              (1 ft³ = 0.02831684659 m³, divided by 60 s/min)
+ *   1 US gpm = 3.785411784 L / 60 s ≈ 6.30901964e-5 m³/s
+ */
+export class VolumetricFlow extends Quantity {
+    public static ForParameter(value: VolumetricFlow | number, defaultValue: number, defaultUnit: Unit): VolumetricFlow {
+        return value ? new VolumetricFlow(value, defaultUnit) : new VolumetricFlow(defaultValue, defaultUnit);
+    }
+
+    public static Units: { [key: string]: Unit } = {
+        m3ps: new Unit("cubic meter per second", "m³/s", 1),
+        Lps: new Unit("litre per second", "L/s", 1e-3),
+        Lpmin: new Unit("litre per minute", "L/min", 1e-3 / 60),
+        mLpmin: new Unit("millilitre per minute", "mL/min", 1e-6 / 60),
+        m3ph: new Unit("cubic meter per hour", "m³/h", 1 / 3600),
+        cfm: new Unit("cubic feet per minute", "cfm", 0.02831684659 / 60),
+        gpm: new Unit("US gallon per minute", "gpm", 3.785411784e-3 / 60),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return VolumetricFlow.Units[str] || undefined;
+    }
+}
+
 export class Angle extends Quantity {
     public static ForParameter(value: Angle | number, defaultValue: number, defaultUnit: Unit): Angle {
         return value ? new Angle(value, defaultUnit) : new Angle(defaultValue, defaultUnit);
@@ -595,9 +658,154 @@ export class Dimensionless extends Quantity {
         ratio: new Unit("ratio", "ratio", 1),
         percent: new Unit("percent", "%", 0.01),
         ppm: new Unit("parts per million", "ppm", 1e-6),
+        ppb: new Unit("parts per billion", "ppb", 1e-9),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
         return Dimensionless.Units[str] || undefined;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Chemistry quantities (P9.0)
+//
+// Used by `GasNode`, `PollutantNode` and `CompositionNode` in the
+// chemistry plugin. Canonical SI bases throughout (kg/mol, kg/m³,
+// J/(kg·K), W/(m·K), Pa·s); secondary units cover the conventions
+// engineers actually write in: g/mol for molar mass, g/cm³ for
+// density at STP, mg/m³ and μg/m³ for environmental concentrations,
+// kJ/(kg·K) for specific heats, cP (centipoise = mPa·s) for fluid
+// viscosity, μPa·s for low-pressure gas viscosity.
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Molar mass: base = kilogram per mole. The g/mol unit is the
+ * conventional one in chemistry tables, so the storage layer
+ * (canonical SI) and the user-facing layer (g/mol) round-trip via
+ * the Quantity API as usual.
+ */
+export class MolarMass extends Quantity {
+    public static ForParameter(value: MolarMass | number, defaultValue: number, defaultUnit: Unit): MolarMass {
+        return value ? new MolarMass(value, defaultUnit) : new MolarMass(defaultValue, defaultUnit);
+    }
+
+    public static Units: { [key: string]: Unit } = {
+        kgpmol: new Unit("kilogram per mole", "kg/mol", 1),
+        gpmol: new Unit("gram per mole", "g/mol", 1e-3),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return MolarMass.Units[str] || undefined;
+    }
+}
+
+/**
+ * Mass density: base = kilogram per cubic metre. Used for gases at
+ * STP / NTP, liquids, and particulate material densities. Distinct
+ * from `MassConcentration` semantically (intrinsic property of a
+ * substance vs. trace-species level) even though the dimensions
+ * coincide — keeping the two type-distinct guards against accidental
+ * mixing in formulas where context matters.
+ */
+export class Density extends Quantity {
+    public static ForParameter(value: Density | number, defaultValue: number, defaultUnit: Unit): Density {
+        return value ? new Density(value, defaultUnit) : new Density(defaultValue, defaultUnit);
+    }
+
+    public static Units: { [key: string]: Unit } = {
+        kgpm3: new Unit("kilogram per cubic meter", "kg/m³", 1),
+        gpcm3: new Unit("gram per cubic centimeter", "g/cm³", 1000),
+        gpL: new Unit("gram per litre", "g/L", 1),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return Density.Units[str] || undefined;
+    }
+}
+
+/**
+ * Mass concentration of a trace species: base = kilogram per cubic
+ * metre. Environmental measurement units (mg/m³, μg/m³) dominate at
+ * call sites — TWA / STEL / IDLH limits, indoor-air-quality reports.
+ * Dimensionally identical to `Density` but kept separate so the
+ * Quantity type carries the semantic context.
+ */
+export class MassConcentration extends Quantity {
+    public static ForParameter(value: MassConcentration | number, defaultValue: number, defaultUnit: Unit): MassConcentration {
+        return value ? new MassConcentration(value, defaultUnit) : new MassConcentration(defaultValue, defaultUnit);
+    }
+
+    public static Units: { [key: string]: Unit } = {
+        kgpm3: new Unit("kilogram per cubic meter", "kg/m³", 1),
+        mgpm3: new Unit("milligram per cubic meter", "mg/m³", 1e-6),
+        ugpm3: new Unit("microgram per cubic meter", "µg/m³", 1e-9),
+        mgpL: new Unit("milligram per litre", "mg/L", 1e-3),
+        ugpL: new Unit("microgram per litre", "µg/L", 1e-6),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return MassConcentration.Units[str] || undefined;
+    }
+}
+
+/**
+ * Specific heat capacity at constant pressure (per unit mass): base
+ * = joule per kilogram per kelvin. Engineering tables often quote
+ * kJ/(kg·K) — water is ~4.184 kJ/(kg·K), air ~1.005 kJ/(kg·K).
+ */
+export class MassSpecificHeat extends Quantity {
+    public static ForParameter(value: MassSpecificHeat | number, defaultValue: number, defaultUnit: Unit): MassSpecificHeat {
+        return value ? new MassSpecificHeat(value, defaultUnit) : new MassSpecificHeat(defaultValue, defaultUnit);
+    }
+
+    public static Units: { [key: string]: Unit } = {
+        JpkgK: new Unit("joule per kilogram per kelvin", "J/(kg·K)", 1),
+        kJpkgK: new Unit("kilojoule per kilogram per kelvin", "kJ/(kg·K)", 1e3),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return MassSpecificHeat.Units[str] || undefined;
+    }
+}
+
+/**
+ * Thermal conductivity: base = watt per metre per kelvin. Air sits
+ * around 0.026 W/(m·K) at room temperature; copper ~400 W/(m·K).
+ * The mW/(m·K) form is the conventional one for gas tables.
+ */
+export class ThermalConductivity extends Quantity {
+    public static ForParameter(value: ThermalConductivity | number, defaultValue: number, defaultUnit: Unit): ThermalConductivity {
+        return value ? new ThermalConductivity(value, defaultUnit) : new ThermalConductivity(defaultValue, defaultUnit);
+    }
+
+    public static Units: { [key: string]: Unit } = {
+        WpmK: new Unit("watt per meter per kelvin", "W/(m·K)", 1),
+        mWpmK: new Unit("milliwatt per meter per kelvin", "mW/(m·K)", 1e-3),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return ThermalConductivity.Units[str] || undefined;
+    }
+}
+
+/**
+ * Dynamic (shear) viscosity: base = pascal-second. The conventional
+ * units are the centipoise (cP ≡ mPa·s, water at 20 °C ≈ 1 cP) and
+ * the micropascal-second (μPa·s, air at 20 °C ≈ 18 μPa·s).
+ */
+export class DynamicViscosity extends Quantity {
+    public static ForParameter(value: DynamicViscosity | number, defaultValue: number, defaultUnit: Unit): DynamicViscosity {
+        return value ? new DynamicViscosity(value, defaultUnit) : new DynamicViscosity(defaultValue, defaultUnit);
+    }
+
+    public static Units: { [key: string]: Unit } = {
+        Pas: new Unit("pascal-second", "Pa·s", 1),
+        cP: new Unit("centipoise", "cP", 1e-3),
+        mPas: new Unit("millipascal-second", "mPa·s", 1e-3),
+        uPas: new Unit("micropascal-second", "µPa·s", 1e-6),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return DynamicViscosity.Units[str] || undefined;
     }
 }

@@ -1,6 +1,7 @@
 import { defaultLayout, LayoutStrategy } from "../auto-layout";
 import { Camera } from "../camera";
 import { Connection, ConnectionPreview } from "../connection";
+import { NavigationStack, SIM_GRAPH_TYPE_ID, SUB_GRAPH_JSON_KEY } from "../navigation-stack";
 import { NodeUI } from "../node-ui";
 import { Permissions } from "../permissions";
 import { Port } from "../port";
@@ -110,6 +111,31 @@ export class GraphViewer {
      *  dispose() so listeners can still read its label/ports/data — the
      *  Dashboard relies on this to remove the matching tile cleanly. */
     onNodeRemoved: ((node: NodeUI) => void) | null = null;
+
+    /**
+     * Drill-down navigation state.
+     *
+     * Always carries at least one entry (the implicit root). The
+     * viewer's `enterSubGraph()` pushes a new level after capturing
+     * the current canvas's JSON; `leaveSubGraph()` pops the top
+     * level and restores the captured JSON. Subscribers (typically
+     * the Breadcrumb component) listen via `navigationStack.onChanged`.
+     *
+     * Mounted as a public field rather than tucked behind getters so
+     * the Breadcrumb can construct itself from the same instance
+     * without going through a viewer method.
+     */
+    readonly navigationStack: NavigationStack = new NavigationStack();
+
+    /**
+     * Last node-registry handed to `load()`. Cached so
+     * `enterSubGraph` / `leaveSubGraph` can re-load the inner / parent
+     * graphs without re-asking the caller for it on every level switch.
+     * Set on every successful `load(json, registry)` call AND can be
+     * primed externally via `setNodeRegistry()` when the host bootstraps
+     * an empty viewer.
+     */
+    private _registry: INodeRegistry | null = null;
 
     constructor(host: HTMLElement, permissions: Permissions = Permissions.FULL, standards?: StandardsRegistry) {
         this.host = host;
@@ -522,6 +548,9 @@ export class GraphViewer {
      * to layout-only).
      */
     load(json: string, registry?: INodeRegistry): void {
+        // Cache the registry so drill-down / leave can re-load
+        // without the caller re-supplying it on every navigation.
+        if (registry) this._registry = registry;
         const data = JSON.parse(json);
         this.clear();
 
@@ -631,6 +660,124 @@ export class GraphViewer {
             }),
         };
         return JSON.stringify(data, null, 2);
+    }
+
+    // ── Drill-down navigation (P5b) ─────────────────────────────────────
+
+    /**
+     * Prime the registry without performing a load. Useful when the
+     * host bootstraps an empty viewer that the user later fills via
+     * the palette and saves — `enterSubGraph()` still has the
+     * registry it needs to re-instantiate runtime nodes inside a
+     * sub-graph view.
+     */
+    public setNodeRegistry(registry: INodeRegistry | null): void {
+        this._registry = registry;
+    }
+
+    public getNodeRegistry(): INodeRegistry | null {
+        return this._registry;
+    }
+
+    /**
+     * Push the current canvas onto the navigation stack and load the
+     * sub-graph stored on the given Sim.Graph node's `item.data`
+     * under `SUB_GRAPH_JSON_KEY`. If no sub-graph has been authored
+     * yet, an empty canvas is shown — the user can build it in place
+     * and the changes flow back on `leaveSubGraph()`.
+     *
+     * Idempotent guard: the call no-ops when `node.typeId` is not a
+     * Sim.Graph type, so a stray double-click on a regular node
+     * never accidentally drills.
+     */
+    public enterSubGraph(node: NodeUI): void {
+        if (node.typeId !== SIM_GRAPH_TYPE_ID) return;
+        const currentJson = this.save();
+        const innerJson = this._readSubGraphJson(node) ?? this._emptySubGraphJson();
+        this.navigationStack.push({
+            parentNodeId: node.id,
+            label: node.label || "Sub-graph",
+            parentSnapshot: currentJson,
+        });
+        this.clear();
+        this.load(innerJson, this._registry ?? undefined);
+    }
+
+    /**
+     * Pop the top navigation level: save the current (sub-graph)
+     * canvas onto the parent node's data, then restore the parent
+     * canvas from the stack's snapshot. No-op when already at root
+     * (`depth === 1`).
+     */
+    public leaveSubGraph(): void {
+        if (this.navigationStack.depth <= 1) return;
+        const currentInnerJson = this.save();
+        const popped = this.navigationStack.pop();
+        if (!popped || !popped.parentSnapshot) return;
+        this.clear();
+        this.load(popped.parentSnapshot, this._registry ?? undefined);
+        // Write the sub-graph back to its parent node (now visible
+        // again on the restored canvas) so a subsequent
+        // `enterSubGraph()` sees the user's latest edits.
+        if (popped.parentNodeId) {
+            const parent = this.nodes.find((n) => n.id === popped.parentNodeId);
+            if (parent) this._writeSubGraphJson(parent, currentInnerJson);
+        }
+    }
+
+    /**
+     * Pop the navigation stack down to (and not including) the given
+     * level index. `0` returns to the root, `1` goes one level deep,
+     * etc. The breadcrumb wires its click handler to this method.
+     * Intermediate sub-graphs along the path are NOT serialized back
+     * — only the top-most one is saved. V1 limitation; revisit if
+     * users actually edit intermediate levels often.
+     */
+    public popNavigationTo(index: number): void {
+        // Single hop = canonical leave path (saves the current
+        // sub-graph back). Multi-hop discards intermediate edits.
+        if (index >= this.navigationStack.depth - 1) return;
+        if (index === this.navigationStack.depth - 2) {
+            this.leaveSubGraph();
+            return;
+        }
+        // Multi-level pop: save the current canvas onto its parent,
+        // then trash intermediate stack entries and restore the
+        // selected level's snapshot directly.
+        const currentInnerJson = this.save();
+        const currentParentId = this.navigationStack.current.parentNodeId;
+        const popped = this.navigationStack.popTo(index);
+        const target = popped[0]; // oldest popped = the level we're restoring
+        if (!target || !target.parentSnapshot) return;
+        this.clear();
+        this.load(target.parentSnapshot, this._registry ?? undefined);
+        if (currentParentId) {
+            const parent = this.nodes.find((n) => n.id === currentParentId);
+            if (parent) this._writeSubGraphJson(parent, currentInnerJson);
+        }
+    }
+
+    private _readSubGraphJson(node: NodeUI): string | null {
+        const data = node.item.data as Record<string, unknown> | null | undefined;
+        if (!data) return null;
+        const stored = data[SUB_GRAPH_JSON_KEY];
+        return typeof stored === "string" && stored.length > 0 ? stored : null;
+    }
+
+    private _writeSubGraphJson(node: NodeUI, json: string): void {
+        const item = node.item as { data: Record<string, unknown> | null };
+        const current = item.data ?? {};
+        const next = { ...current, [SUB_GRAPH_JSON_KEY]: json };
+        item.data = next;
+    }
+
+    private _emptySubGraphJson(): string {
+        return JSON.stringify({
+            version: 3,
+            layout: { nodes: [], connections: [] },
+            model: { nodes: [], connections: [] },
+            dashboards: [],
+        });
     }
 
     // ── SVG export ─────────────────────────────────────────────────────
@@ -916,6 +1063,16 @@ export class GraphViewer {
         const node = this.findNodeByEl(target);
         if (!node) return;
         if (!this.selectedNodes.has(node)) this.selectNode(node, false);
+        // Intercept double-click on a Sim.Graph node: drill into its
+        // sub-graph rather than firing the generic "activated"
+        // callback (which usually opens the property editor). The
+        // user can still inspect properties via single-click; double-
+        // click is the canonical "enter this container" gesture
+        // across editors (UE Blueprint, Houdini, Substance).
+        if (node.typeId === SIM_GRAPH_TYPE_ID) {
+            this.enterSubGraph(node);
+            return;
+        }
         if (this.onNodeActivated) this.onNodeActivated(node);
     }
 
@@ -1128,6 +1285,17 @@ export class GraphViewer {
                 const toRemove = [...this.selectedNodes];
                 for (const node of toRemove) this.removeNode(node);
                 this.emitSelectionChanged();
+            }
+        }
+        // Drill-up shortcuts: Esc or Ctrl+ArrowUp leave the current
+        // sub-graph back to its parent canvas. Same focus guard as
+        // Delete — we only react when no input element is focused,
+        // so the user can still press Esc inside a text field to
+        // dismiss it without surprise navigation.
+        if ((e.key === "Escape" || (e.key === "ArrowUp" && (e.ctrlKey || e.metaKey))) && document.activeElement === document.body) {
+            if (this.navigationStack.depth > 1) {
+                e.preventDefault();
+                this.leaveSubGraph();
             }
         }
     }

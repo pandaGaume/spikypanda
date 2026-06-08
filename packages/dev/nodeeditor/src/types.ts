@@ -23,6 +23,23 @@ export type PortDirection = "input" | "output";
  *   shared      Generic shared-node ↔ SceneItem (the variadic
  *               `shared_in_<k>` pool that generates proxy nodes
  *               inside every Sim.Graph that references the Scene).
+ *   gas         GasNode ↔ CompositionNode (P9.1). One gas-species
+ *               descriptor feeds a composition's variadic `gas_in_<k>`
+ *               slot pool.
+ *   composition CompositionNode ↔ AtmosphereStateNode (P9.3). The bulk
+ *               mixture spec: drives the atmosphere's species schema
+ *               and seeds the initial mass vector at reset.
+ *   layer       AtmosphereLayerNode ↔ AtmosphereNode (container).
+ *               Variadic `layer_in_<k>` pool on the container; each
+ *               layer is its own IIntegrable state-carrier with a
+ *               composition + particulates. The container is a
+ *               composite IIntegrable that delegates to its bound
+ *               layers (or a hidden internal default when none are
+ *               wired) and publishes volume-weighted aggregates.
+ *   particulate ParticulateNode ↔ AtmosphereLayerNode (P9.5, stub).
+ *               Variadic `particulate_in_<k>` pool. V1 only declares
+ *               the slot so the topology survives V2: no integration
+ *               logic is wired up yet.
  *
  * Compatibility rule below routes config-link pairs only against
  * matching config types; you cannot wire a `scene` source into a
@@ -44,7 +61,11 @@ export type PortType =
     | "scene"
     | "solver"
     | "atmosphere"
-    | "shared";
+    | "shared"
+    | "gas"
+    | "composition"
+    | "particulate"
+    | "layer";
 
 /**
  * The four config-link types — referenced from `Connection` to decide
@@ -52,7 +73,16 @@ export type PortType =
  * runtime layer (core/sim anchors) and the rendering layer share a
  * single source of truth.
  */
-export const CONFIG_LINK_TYPES: ReadonlySet<PortType> = new Set<PortType>(["scene", "solver", "atmosphere", "shared"]);
+export const CONFIG_LINK_TYPES: ReadonlySet<PortType> = new Set<PortType>([
+    "scene",
+    "solver",
+    "atmosphere",
+    "shared",
+    "gas",
+    "composition",
+    "particulate",
+    "layer",
+]);
 
 /** True when the given port type belongs to the config-link family
  *  (scene / solver / atmosphere / shared). Used by `Connection` to
@@ -106,6 +136,10 @@ export const PORT_COLORS: Record<PortType, string> = {
     solver: "#c98be0", // lavender: the integrator config
     atmosphere: "#7ecfb5", // teal: the species inventory
     shared: "#d96b9c", // rose: generic shared resource
+    gas: "#b88c4d", // mustard: single-species descriptor (P9.1; pollutant attrs live on the gas itself)
+    composition: "#e08a6a", // peach: gas mixture aggregator (P9.2)
+    particulate: "#6a6a8c", // slate: particulate matter, stub for V2 (P9.5)
+    layer: "#5cb8b0", // aqua: atmosphere layer (state carrier in a multi-layer atmosphere container)
 };
 
 export interface PortDef {

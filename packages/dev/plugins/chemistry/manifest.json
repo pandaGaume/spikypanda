@@ -1,0 +1,55 @@
+{
+    "id":          "spk.chemistry",
+    "version":     "0.1.0",
+    "displayName": "Chemistry",
+    "description": "Chemical-species descriptors consumed by the physics atmosphere / gate / composition nodes. V1 ships a catalog of 12 common gases (N2, O2, CO2, H2O, Ar, CH4, CO, NH3, He, N2O, Ne, Xe) plus a generic editable Gas. Each gas is a GraphItem (NOT a RuntimeNode) carrying IGasMetadata constants (molar mass, density at STP, Cp, thermal conductivity, viscosity). Future versions add Composition (mixture aggregator with presets earth/mars/iss), Pollutant (VOCs with tox metadata), and Particulate (PM size distributions).",
+    "category":    "Chemistry",
+    "entry":       "bundle/SpkPluginChemistry.js",
+    "nodes":       [],
+    "editors":     [],
+    "subPlugins": [
+        {
+            "id":          "Chemistry.Gas",
+            "displayName": "Gases",
+            "description": "Single-species gas descriptors. Wire the dashed `gas_out` anchor onto a CompositionNode's variadic `gas_in_<k>` to declare a mixture component. Each preset comes pre-filled with canonical-SI constants (molar mass in kg/mol, density at STP in kg/m³, Cp in J/(kg·K), thermal conductivity in W/(m·K), viscosity in Pa·s) that the GasNode surfaces via the engineering-natural units users actually write in (g/mol, μPa·s, …) at the property panel.",
+            "category":    "Chemistry.Gas",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Chemistry.Gas:gas",  "factory": "createGasNode",    "label": "Gas" },
+                { "type": "Chemistry.Gas:n2",   "factory": "createN2GasNode",  "label": "Nitrogen (N₂)" },
+                { "type": "Chemistry.Gas:o2",   "factory": "createO2GasNode",  "label": "Oxygen (O₂)" },
+                { "type": "Chemistry.Gas:co2",  "factory": "createCO2GasNode", "label": "Carbon dioxide (CO₂)" },
+                { "type": "Chemistry.Gas:h2o",  "factory": "createH2OGasNode", "label": "Water vapor (H₂O)" },
+                { "type": "Chemistry.Gas:ar",   "factory": "createArGasNode",  "label": "Argon (Ar)" },
+                { "type": "Chemistry.Gas:ch4",  "factory": "createCH4GasNode", "label": "Methane (CH₄)" },
+                { "type": "Chemistry.Gas:co",   "factory": "createCOGasNode",  "label": "Carbon monoxide (CO)" },
+                { "type": "Chemistry.Gas:nh3",  "factory": "createNH3GasNode", "label": "Ammonia (NH₃)" },
+                { "type": "Chemistry.Gas:he",   "factory": "createHeGasNode",  "label": "Helium (He)" },
+                { "type": "Chemistry.Gas:n2o",  "factory": "createN2OGasNode", "label": "Nitrous oxide (N₂O)" },
+                { "type": "Chemistry.Gas:ne",   "factory": "createNeGasNode",  "label": "Neon (Ne)" },
+                { "type": "Chemistry.Gas:xe",   "factory": "createXeGasNode",  "label": "Xenon (Xe)" },
+                { "type": "Chemistry.Gas:formaldehyde", "factory": "createFormaldehydeGasNode", "label": "Formaldehyde (CH₂O)" },
+                { "type": "Chemistry.Gas:toluene",      "factory": "createTolueneGasNode",      "label": "Toluene (C₇H₈)" },
+                { "type": "Chemistry.Gas:benzene",      "factory": "createBenzeneGasNode",      "label": "Benzene (C₆H₆)" }
+            ]
+        },
+        {
+            "id":          "Chemistry.Composition",
+            "displayName": "Compositions",
+            "description": "Gas-mixture descriptors consumed by Physics.Scene:atmosphere-state. Five built-in presets cover the common cases (Earth humid air at sea level, Earth dry air, Mars atmosphere mean, ISS cabin ECLSS, vacuum); a generic Composition entry lets the user build a mixture from scratch by wiring Chemistry.Gas:* nodes via the variadic gas_in_<k> config-links. The composition_out anchor (dashed config-link) is what the atmosphere reads at session bind to size its state vector and seed the initial inventory.",
+            "category":    "Chemistry.Composition",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Chemistry.Composition:composition",       "factory": "createCompositionNode",                 "label": "Composition" },
+                { "type": "Chemistry.Composition:earth-humid-air",   "factory": "createEarthHumidAirCompositionNode",    "label": "Earth air, sea level (humid)" },
+                { "type": "Chemistry.Composition:earth-dry-air",     "factory": "createEarthDryAirCompositionNode",      "label": "Earth air, sea level (dry)" },
+                { "type": "Chemistry.Composition:mars-atmosphere",   "factory": "createMarsAtmosphereCompositionNode",   "label": "Mars atmosphere (mean)" },
+                { "type": "Chemistry.Composition:iss-cabin",         "factory": "createIssCabinCompositionNode",         "label": "ISS cabin (ECLSS spec)" },
+                { "type": "Chemistry.Composition:vacuum",            "factory": "createVacuumCompositionNode",           "label": "Vacuum" }
+            ]
+        }
+    ],
+    "manifestRefs": []
+}

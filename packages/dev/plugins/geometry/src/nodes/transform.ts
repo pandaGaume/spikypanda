@@ -3,7 +3,6 @@ import {
     Cartesian3,
     Quaternion,
     editable,
-    viewable,
     cloneable,
     IOlink,
     IDeclaresPorts,
@@ -63,7 +62,11 @@ export class Transform extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @viewable("matrix4")
+    /** Current composed TRS matrix from position + rotation editables.
+     *  NOT @viewable — duplicates info already shown by the editables
+     *  (same cleanup as Cartesian3.vec3 and Attitude.rotation). The
+     *  getter stays for the bindPropertyProvider contract: this node's
+     *  output slot is named `matrix`. */
     public get matrix(): ReadonlyArray<number> {
         return computeTRS(this._position, this._rotation);
     }

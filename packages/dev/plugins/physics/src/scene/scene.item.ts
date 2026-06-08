@@ -48,8 +48,8 @@
  * scene wired on that Sim.Graph's `scene_in` anchor as its parent.
  */
 
-import { Cartesian3, cloneable, editable, Frequency, GraphItem, Pressure, Quaternion, Temperature } from "spikypanda-core";
-import type { ICartesian3, IIntegrable, IQuaternion, ITransform, SceneStateView, SceneStateViewSources } from "spikypanda-core";
+import { Cartesian3, cloneable, editable, Frequency, GraphItem, Pressure, Quaternion, Temperature, viewable } from "spikypanda-core";
+import type { IAtmosphereAggregator, ICartesian3, IIntegrable, IQuaternion, ITransform, SceneStateView, SceneStateViewSources } from "spikypanda-core";
 import {
     ATMOSPHERE_ANCHOR_IN,
     DEFAULT_GRAVITY,
@@ -57,6 +57,7 @@ import {
     DEFAULT_TEMPERATURE,
     DEFAULT_TIME_SCALE,
     fieldReader,
+    isAtmosphereAggregator,
     makeTransform,
     MIN_EFFECTIVE_HZ,
     SceneStateViewImpl,
@@ -123,6 +124,12 @@ export class SceneItem extends GraphItem {
     @cloneable private _gravity: Cartesian3 = new Cartesian3(DEFAULT_GRAVITY.x, DEFAULT_GRAVITY.y, DEFAULT_GRAVITY.z);
     @cloneable private _temperatureK: number = DEFAULT_TEMPERATURE.getValue(Temperature.Units.k);
     @cloneable private _pressurePa: number = DEFAULT_PRESSURE.getValue(Pressure.Units.Pa);
+    /** Editable default density [kg/m³]. Only used when no atmosphere
+     *  is wired through `atmosphere_in` — otherwise the atmosphere's
+     *  live aggregate density takes over via the `density` getter.
+     *  1.225 kg/m³ = sea-level standard atmosphere (matches
+     *  DEFAULT_DENSITY in core). */
+    @cloneable private _densityKgPerM3: number = 1.225;
     @cloneable private _timeScale: number = DEFAULT_TIME_SCALE;
 
     // ── Local 3D transform (relative to parent in the scene tree) ─────
@@ -137,8 +144,10 @@ export class SceneItem extends GraphItem {
     // convention) drives this latent live. An empty string means "no
     // source wired — use the static default".
 
+    @cloneable private _gravitySourceId: string = "";
     @cloneable private _temperatureSourceId: string = "";
     @cloneable private _pressureSourceId: string = "";
+    @cloneable private _densitySourceId: string = "";
     @cloneable private _timeScaleSourceId: string = "";
     @cloneable private _localPositionSourceId: string = "";
     @cloneable private _localRotationSourceId: string = "";
@@ -150,6 +159,39 @@ export class SceneItem extends GraphItem {
      *  Wired via the `atmosphere_in` anchor; the editor stores the
      *  publisher node's ID. Empty string = no atmosphere. */
     @cloneable private _atmosphereItemId: string = "";
+
+    /** Live reference to the bound atmosphere node, populated by the
+     *  graph-session-builder's config-link sync pass whenever an
+     *  `atmosphere_out → atmosphere_in` wiring exists on the canvas.
+     *
+     *  NOT @cloneable: this is runtime metadata, not part of the
+     *  SceneItem's serialisable identity. A reloaded canvas re-populates
+     *  it on the first sync pass.
+     *
+     *  Used by:
+     *    1. The atmosphere-aware getters on `temperature`, `pressure`,
+     *       and `density`, which return the live atmosphere aggregate
+     *       when bound and fall back to the static editable default
+     *       otherwise. One field per property: no "EFFECTIVE_" prefix
+     *       duplication in the property panel (revision 2026-06-08).
+     *    2. `buildStateView()` below, which prefers this ref over the
+     *       resolver round-trip when both are available. */
+    private _atmosphereRef: IAtmosphereAggregator | null = null;
+
+    /** Map of property name → live-value provider closure, populated
+     *  by the graph-session-builder whenever a data wire lands on one
+     *  of the Scene's per-property input ports (gravity_in,
+     *  temperature_in, ...). The closure reads the publisher's current
+     *  output value through the getter named after the wired output
+     *  slot — Cartesian3's `vec3`, a number-publisher's `value`, an
+     *  Atmosphere's `pressure`/`temperature`/`density`, etc.
+     *
+     *  Read priority for every per-property getter on SceneItem is:
+     *    1. _propertyProviders entry (explicit data wire)
+     *    2. _atmosphereRef.sampleAggregates() (for the atmosphere-only
+     *       fields: temperature, pressure, density)
+     *    3. The static editable default. */
+    private _propertyProviders: Map<string, () => unknown> = new Map();
 
     /** Solver node IDs in attachment order. Variadic — wired via
      *  `solver_in_<k>` anchors. */
@@ -183,6 +225,8 @@ export class SceneItem extends GraphItem {
 
     @editable("vector3", { layout: "block", alignement: "horizontal", unit: "m/s²" })
     public get gravity(): Cartesian3 {
+        const wired = this._readProvided("gravity", (v): v is Cartesian3 => v instanceof Cartesian3);
+        if (wired) return wired;
         return this._gravity;
     }
     public set gravity(v: Cartesian3) {
@@ -191,12 +235,62 @@ export class SceneItem extends GraphItem {
         });
     }
 
+    // ── Wired-input indicators (V1: panel sees `WIRED` here, the
+    //    actual current value of the publisher lives on the publisher's
+    //    own panel; the runtime path resolves through SceneSourceResolver
+    //    in buildStateView). For atmosphere-driven fields (temperature,
+    //    pressure, density) the getters above already return live values,
+    //    so the indicator is just informative there. ─────────────────
+
+    @viewable("boolean") public get is_gravity_wired(): boolean {
+        return this._propertyProviders.has("gravity") || this._gravitySourceId.length > 0;
+    }
+    @viewable("boolean") public get is_temperature_wired(): boolean {
+        return this._propertyProviders.has("temperature") || this._temperatureSourceId.length > 0 || this._atmosphereRef !== null;
+    }
+    @viewable("boolean") public get is_pressure_wired(): boolean {
+        return this._propertyProviders.has("pressure") || this._pressureSourceId.length > 0 || this._atmosphereRef !== null;
+    }
+    @viewable("boolean") public get is_density_wired(): boolean {
+        return this._propertyProviders.has("density") || this._densitySourceId.length > 0 || this._atmosphereRef !== null;
+    }
+    @viewable("boolean") public get is_time_scale_wired(): boolean {
+        return this._propertyProviders.has("timeScale") || this._timeScaleSourceId.length > 0;
+    }
+    @viewable("boolean") public get is_local_position_wired(): boolean {
+        return this._propertyProviders.has("localPosition") || this._localPositionSourceId.length > 0;
+    }
+    @viewable("boolean") public get is_local_rotation_wired(): boolean {
+        return this._propertyProviders.has("localRotation") || this._localRotationSourceId.length > 0;
+    }
+    @viewable("boolean") public get is_local_scale_wired(): boolean {
+        return this._propertyProviders.has("localScale") || this._localScaleSourceId.length > 0;
+    }
+
     /** Ambient temperature in kelvin (canonical storage unit). The
-     *  property panel surfaces this as a raw number with the K label;
-     *  unit-aware code should prefer `temperatureQ` for arbitrary
-     *  source units. */
+     *  getter is atmosphere-aware: when a `Physics.Scene:atmosphere`
+     *  is wired through `atmosphere_in`, this returns the live
+     *  volume-weighted aggregate temperature from the bound
+     *  atmosphere. When NO atmosphere is wired, it falls back to the
+     *  user-edited default (`_temperatureK`).
+     *
+     *  The setter always writes to the static default — that value
+     *  only matters when no atmosphere is wired, so typing into the
+     *  field while an atmosphere is connected has no visible effect
+     *  (the displayed value comes from the atmosphere). A future
+     *  panel-level "read-only when wired" mode would close that UX
+     *  gap; for V1 the user just sees the live value either way.
+     *
+     *  Unit-aware code should prefer `temperatureQ` for arbitrary
+     *  source units (the Quantity layer wraps the same getter). */
     @editable("number", { unit: "K" })
     public get temperature(): number {
+        const wired = this._readProvided("temperature", (v): v is number => typeof v === "number" && Number.isFinite(v));
+        if (wired !== null) return wired;
+        if (this._atmosphereRef) {
+            const t = this._atmosphereRef.sampleAggregates().temperatureK;
+            if (Number.isFinite(t) && t > 0) return t;
+        }
         return this._temperatureK;
     }
     public set temperature(v: number) {
@@ -205,14 +299,11 @@ export class SceneItem extends GraphItem {
         });
     }
 
-    /** Ambient temperature as a `Temperature` Quantity. Reading returns
-     *  a fresh Quantity over the live K storage; writing accepts a
-     *  Quantity in any unit (K, °C, °F) and converts down to kelvin
-     *  before storing. Use this from any code path that thinks in
-     *  natural temperature units — the editor sample-graph for an
-     *  ECLSS scenario, e.g.: `scene.temperatureQ = new Temperature(20, Temperature.Units.c)`. */
+    /** Ambient temperature as a `Temperature` Quantity. The getter
+     *  delegates to the atmosphere-aware `temperature` getter so a
+     *  wired atmosphere flows through this Quantity surface too. */
     public get temperatureQ(): Temperature {
-        return new Temperature(this._temperatureK, Temperature.Units.k);
+        return new Temperature(this.temperature, Temperature.Units.k);
     }
     public set temperatureQ(q: Temperature) {
         const k = q.getValue(Temperature.Units.k);
@@ -221,9 +312,17 @@ export class SceneItem extends GraphItem {
         });
     }
 
-    /** Ambient pressure in pascal (canonical storage unit). */
+    /** Ambient pressure in pascal (canonical storage unit). Atmosphere-
+     *  aware: when an atmosphere is wired, returns its volume-weighted
+     *  aggregate pressure. Otherwise the editable default. */
     @editable("number", { unit: "Pa" })
     public get pressure(): number {
+        const wired = this._readProvided("pressure", (v): v is number => typeof v === "number" && Number.isFinite(v));
+        if (wired !== null) return wired;
+        if (this._atmosphereRef) {
+            const p = this._atmosphereRef.sampleAggregates().pressure;
+            if (Number.isFinite(p) && p >= 0) return p;
+        }
         return this._pressurePa;
     }
     public set pressure(v: number) {
@@ -232,13 +331,10 @@ export class SceneItem extends GraphItem {
         });
     }
 
-    /** Ambient pressure as a `Pressure` Quantity. Same semantics as
-     *  `temperatureQ`: read returns a fresh Quantity over Pa storage,
-     *  write converts to Pa. Use for `new Pressure(1, Pressure.Units.atm)`
-     *  or `new Pressure(600, Pressure.Units.mbar)` — the storage stays
-     *  Pa regardless. */
+    /** Ambient pressure as a `Pressure` Quantity. Delegates to the
+     *  atmosphere-aware `pressure` getter for live reads. */
     public get pressureQ(): Pressure {
-        return new Pressure(this._pressurePa, Pressure.Units.Pa);
+        return new Pressure(this.pressure, Pressure.Units.Pa);
     }
     public set pressureQ(q: Pressure) {
         const pa = q.getValue(Pressure.Units.Pa);
@@ -247,8 +343,33 @@ export class SceneItem extends GraphItem {
         });
     }
 
+    /** Ambient mass density in kg/m³. Atmosphere-aware: returns the
+     *  live mass / volume aggregate when an atmosphere is wired, else
+     *  the editable default (1.225 kg/m³ = U.S. Standard Atmosphere
+     *  sea-level value). NEW 2026-06-08 — the prior EFFECTIVE_DENSITY_
+     *  KG_PER_M3 viewable is dropped in favor of this single-source
+     *  editable. */
+    @editable("number", { unit: "kg/m³" })
+    public get density(): number {
+        const wired = this._readProvided("density", (v): v is number => typeof v === "number" && Number.isFinite(v));
+        if (wired !== null) return wired;
+        if (this._atmosphereRef) {
+            const d = this._atmosphereRef.sampleAggregates().density;
+            if (Number.isFinite(d) && d >= 0) return d;
+        }
+        return this._densityKgPerM3;
+    }
+    public set density(v: number) {
+        const next = v >= 0 ? v : this._densityKgPerM3;
+        this.setField("density", this._densityKgPerM3, next, (n) => {
+            this._densityKgPerM3 = n;
+        });
+    }
+
     @editable("number", { unit: "×" })
     public get timeScale(): number {
+        const wired = this._readProvided("timeScale", (v): v is number => typeof v === "number" && Number.isFinite(v));
+        if (wired !== null) return wired;
         return this._timeScale;
     }
     public set timeScale(v: number) {
@@ -259,6 +380,8 @@ export class SceneItem extends GraphItem {
 
     @editable("vector3", { layout: "block", alignement: "horizontal", unit: "m" })
     public get localPosition(): Cartesian3 {
+        const wired = this._readProvided("localPosition", (v): v is Cartesian3 => v instanceof Cartesian3);
+        if (wired) return wired;
         return this._localPosition;
     }
     public set localPosition(v: Cartesian3) {
@@ -268,6 +391,8 @@ export class SceneItem extends GraphItem {
     }
 
     public get localRotation(): Quaternion {
+        const wired = this._readProvided("localRotation", (v): v is Quaternion => v instanceof Quaternion);
+        if (wired) return wired;
         return this._localRotation;
     }
     public set localRotation(v: Quaternion) {
@@ -278,6 +403,8 @@ export class SceneItem extends GraphItem {
 
     @editable("vector3", { layout: "block", alignement: "horizontal", unit: "×" })
     public get localScale(): Cartesian3 {
+        const wired = this._readProvided("localScale", (v): v is Cartesian3 => v instanceof Cartesian3);
+        if (wired) return wired;
         return this._localScale;
     }
     public set localScale(v: Cartesian3) {
@@ -334,6 +461,91 @@ export class SceneItem extends GraphItem {
         });
     }
 
+    /** Called by the graph-session-builder's config-link sync pass
+     *  whenever an `atmosphere_out → atmosphere_in` wiring is created
+     *  (or refreshed). Sets BOTH the cloneable ID (so the saved canvas
+     *  re-resolves on reload) and the runtime ref (so the property
+     *  panel's effective_* viewables can read live aggregates without
+     *  a resolver round-trip).
+     *
+     *  Passing null clears the binding (matches what happens when the
+     *  wire is removed on the canvas).
+     *
+     *  The aggregator parameter is typed as `IAtmosphereAggregator | null`
+     *  so any future atmosphere implementation can plug in by just
+     *  implementing `sampleAggregates()`. Plain IIntegrable nodes that
+     *  happen to be wired here gracefully degrade to "no live values
+     *  available" — the panel falls back to the editables. */
+    public bindAtmosphere(atmosphereItemId: string, aggregator: IAtmosphereAggregator | null): void {
+        const prevId = this._atmosphereItemId;
+        const nextId = aggregator ? atmosphereItemId : "";
+        if (prevId !== nextId) {
+            this._atmosphereItemId = nextId;
+            this.notifyPropertyChanged("atmosphereItemId", prevId, nextId);
+        }
+        const prevRef = this._atmosphereRef;
+        if (prevRef !== aggregator) {
+            this._atmosphereRef = aggregator;
+            // Drive a property-changed event on each of the atmosphere-
+            // aware editables so the property panel re-reads them on
+            // the next render pass. The panel's standard subscription
+            // is per-property; without these notifies the user sees
+            // stale defaults until they click another node.
+            this.notifyPropertyChanged("temperature", null, this.temperature);
+            this.notifyPropertyChanged("pressure", null, this.pressure);
+            this.notifyPropertyChanged("density", null, this.density);
+        }
+    }
+
+    /** Called by the graph-session-builder when a data wire lands on
+     *  one of the Scene's per-property input ports. `propertyName` is
+     *  the SceneItem editable name (e.g. "gravity"), `provider` is a
+     *  closure that returns the publisher's current output value (or
+     *  null to clear). The provider closure is called by the property
+     *  getter on every read, so live values flow through.
+     *
+     *  Passing `null` clears the binding so the getter falls back to
+     *  the static editable default. */
+    public bindPropertyProvider(propertyName: string, provider: (() => unknown) | null): void {
+        const prev = this._propertyProviders.get(propertyName);
+        if (provider === null) {
+            if (prev === undefined) return;
+            this._propertyProviders.delete(propertyName);
+        } else {
+            if (prev === provider) return;
+            this._propertyProviders.set(propertyName, provider);
+        }
+        // Wake the property panel so it re-reads the getter through
+        // the new (or cleared) provider on the next render pass.
+        // Reading the getter inline below also has the nice side
+        // effect of failing loudly if the provider is malformed.
+        try {
+            const v = (this as unknown as Record<string, unknown>)[propertyName];
+            this.notifyPropertyChanged(propertyName, null, v);
+        } catch (_e) {
+            // Reading an unknown property name is the caller's
+            // mistake; swallow the failure so the binding sync stays
+            // resilient to bad slot mappings.
+        }
+    }
+
+    /** Internal helper: invoke the bound provider for a property and
+     *  validate the returned value with a type guard. Returns the
+     *  value if it passes the guard, else null (caller falls back to
+     *  the editable default). The guard makes the chain defensive
+     *  against publishers whose output happens not to match the
+     *  expected shape (e.g. a number-publisher mis-wired to gravity_in). */
+    private _readProvided<T>(propertyName: string, guard: (v: unknown) => v is T): T | null {
+        const provider = this._propertyProviders.get(propertyName);
+        if (!provider) return null;
+        try {
+            const v = provider();
+            return guard(v) ? v : null;
+        } catch (_e) {
+            return null;
+        }
+    }
+
     public get solverItemIds(): ReadonlyArray<string> {
         return this._solverItemIds;
     }
@@ -352,12 +564,30 @@ export class SceneItem extends GraphItem {
         });
     }
 
+    public get gravitySourceId(): string {
+        return this._gravitySourceId;
+    }
+    public set gravitySourceId(v: string) {
+        this.setField("gravitySourceId", this._gravitySourceId, v, (n) => {
+            this._gravitySourceId = n;
+        });
+    }
+
     public get temperatureSourceId(): string {
         return this._temperatureSourceId;
     }
     public set temperatureSourceId(v: string) {
         this.setField("temperatureSourceId", this._temperatureSourceId, v, (n) => {
             this._temperatureSourceId = n;
+        });
+    }
+
+    public get densitySourceId(): string {
+        return this._densitySourceId;
+    }
+    public set densitySourceId(v: string) {
+        this.setField("densitySourceId", this._densitySourceId, v, (n) => {
+            this._densitySourceId = n;
         });
     }
 
@@ -460,8 +690,10 @@ export class SceneItem extends GraphItem {
         // means the publisher disappeared since the last bind; we
         // fall back to the static field silently rather than throwing,
         // matching the editor's tolerance for transient invalid wirings.
+        const gravSource = this._gravitySourceId ? resolver.resolveCartesian3Source(this._gravitySourceId) : null;
         const tempSource = this._temperatureSourceId ? resolver.resolveNumberSource(this._temperatureSourceId) : null;
         const pressSource = this._pressureSourceId ? resolver.resolveNumberSource(this._pressureSourceId) : null;
+        const densSource = this._densitySourceId ? resolver.resolveNumberSource(this._densitySourceId) : null;
         const tsSource = this._timeScaleSourceId ? resolver.resolveNumberSource(this._timeScaleSourceId) : null;
         const posSource = this._localPositionSourceId ? resolver.resolveCartesian3Source(this._localPositionSourceId) : null;
         const rotSource = this._localRotationSourceId ? resolver.resolveQuaternionSource(this._localRotationSourceId) : null;
@@ -475,13 +707,48 @@ export class SceneItem extends GraphItem {
         const minHz = MIN_EFFECTIVE_HZ.getValue(Frequency.Units.Hz);
         const effectiveHz = this._manualHzHz > 0 ? this._manualHzHz : Math.max(minHz, aggregateHz);
 
-        const atmosphere = this._atmosphereItemId ? resolver.resolveAtmosphere(this._atmosphereItemId) : null;
+        // Prefer the runtime-bound atmosphere ref (set by the session-
+        // builder's config-link sync) over a resolver round-trip. Both
+        // point at the same node when both are set, but the ref also
+        // lets the atmosphere-aware editable getters read live values
+        // without depending on a session being open. The cast is safe
+        // because the concrete AtmosphereNode implements both
+        // IAtmosphereAggregator AND IIntegrable; SceneStateView's
+        // readAtmosphere consumer is typed as `IIntegrable | null`.
+        const atmosphere: IIntegrable | null = (this._atmosphereRef as IIntegrable | null)
+            ?? (this._atmosphereItemId ? resolver.resolveAtmosphere(this._atmosphereItemId) : null);
+
+        // Wire the atmosphere aggregate path on the readers. When a
+        // bound Atmosphere also implements `IAtmosphereAggregator`
+        // (the multi-layer container in plugin-physics does), the
+        // SceneStateView's temperature / pressure / density resolve
+        // to its live volume-weighted aggregates. The SceneItem's
+        // own editables become fallbacks for the unwired case.
+        //
+        // An explicit publisher-wired source (tempSource / pressSource)
+        // still wins over the atmosphere — the user can override the
+        // atmosphere binding with a per-tick data wire if they need to.
+        const atmoAggregator = isAtmosphereAggregator(atmosphere) ? atmosphere : null;
+        const readTempK: () => number = tempSource ?? (atmoAggregator
+            ? () => atmoAggregator.sampleAggregates().temperatureK
+            : fieldReader<number>(this, "_temperatureK"));
+        const readPressPa: () => number = pressSource ?? (atmoAggregator
+            ? () => atmoAggregator.sampleAggregates().pressure
+            : fieldReader<number>(this, "_pressurePa"));
+        // Density: explicit publisher wire wins, then atmosphere, then
+        // SceneItem's _densityKgPerM3 editable.
+        const readDensity: () => number = densSource ?? (atmoAggregator
+            ? () => atmoAggregator.sampleAggregates().density
+            : fieldReader<number>(this, "_densityKgPerM3"));
 
         const sources: SceneStateViewSources = {
             id: idStr,
-            readGravity: fieldReader<ICartesian3>(this, "_gravity"),
-            readTemperatureK: tempSource ?? fieldReader<number>(this, "_temperatureK"),
-            readPressurePa: pressSource ?? fieldReader<number>(this, "_pressurePa"),
+            // Gravity: explicit publisher wire (gravity_in) wins,
+            // else the SceneItem's _gravity Cartesian3 editable.
+            readGravity: gravSource ?? fieldReader<ICartesian3>(this, "_gravity"),
+            readTemperatureK: readTempK,
+            readPressurePa: readPressPa,
+            readDensity,
             readTimeScale: tsSource ?? fieldReader<number>(this, "_timeScale"),
             readLocalTransform: this._buildLocalTransformReader(posSource, rotSource, sclSource),
             readEffectiveHz: () => effectiveHz,

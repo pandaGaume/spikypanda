@@ -6,6 +6,27 @@ import type { Port } from "./port";
 /**
  * Build a fresh `Session` over the current GraphViewer state.
  *
+ * Three steps:
+ *
+ *   1. **Config-link sync** — walk every `linkKind === "config"`
+ *      Connection and populate the involved SceneItem / SimGraphNode
+ *      `*ItemId` fields. The SceneBindingResolver picks these up at
+ *      SimGraphNode.reset() to bind the live SceneStateView and
+ *      attach solvers; without this step the user's dashed wiring
+ *      has no runtime effect.
+ *
+ *   2. **Runtime node collection** — gather every NodeUI whose
+ *      `item.data` implements the `IRuntimeNode.fire(...)` contract.
+ *      Pure GraphItems (SceneItem and friends) are NOT runtime nodes
+ *      and are deliberately excluded from the runtime graph.
+ *
+ *   3. **Runtime channel wiring** — for each non-config-link
+ *      Connection, allocate a runtime channel between the two
+ *      endpoints. Config-link Connections are explicitly skipped
+ *      here (already consumed in step 1); they also get filtered as
+ *      a side-effect of the "either endpoint is not a runtime node"
+ *      check, but the explicit guard documents the intent.
+ *
  * Each NodeUI's `item.data` is consumed as-is as the runtime node — no
  * cloning, so node-local state (counters, cached values, internal
  * arrays) survives across builds. Channels are freshly created and
@@ -22,6 +43,10 @@ export function buildSessionFromViewer(viewer: GraphViewer): {
     session: Session;
     channels: Channel[];
 } {
+    // Step 1: sync config-links → SceneItem / SimGraphNode metadata.
+    syncConfigLinksFromCanvas(viewer);
+
+    // Step 2: collect runtime nodes.
     const nodes: IRuntimeNode[] = [];
     for (const n of viewer.nodes) {
         const data = n && n.item && (n.item as { data?: unknown }).data;
@@ -32,7 +57,9 @@ export function buildSessionFromViewer(viewer: GraphViewer): {
 
     const builder = new RuntimeGraphBuilder<IRuntimeNode, Channel>().withMode("dynamic").withNodes(...nodes);
 
+    // Step 3: wire runtime channels for non-config Connections.
     for (const conn of viewer.connections) {
+        if (conn.linkKind === "config") continue;
         const fromNode = _findRuntimeNodeByPort(viewer, conn.from, "output");
         const toNode = _findRuntimeNodeByPort(viewer, conn.to, "input");
         if (!fromNode || !toNode) continue;
@@ -42,16 +69,6 @@ export function buildSessionFromViewer(viewer: GraphViewer): {
     }
 
     const graph = builder.build();
-
-    // Note: the FB-Channel delayed-output post-pass that used to live
-    // here is gone. With signal-kind ports (U.0/U.1/U.4) the cycle
-    // break is implicit: signals don't gate the scheduler, so a graph
-    // with a feedback loop topologically containing only signal-kind
-    // edges between IIntegrable leaves does not need any channel-level
-    // `delayed` marker. The Z⁻ᴺ semantic is owned by the FB Channel's
-    // validAtTick stamps. The RunStatic scheduler still requires a
-    // delayed marker for cycle detection (topo sort), but RunDynamic
-    // (the default mode here) is unaffected.
 
     return {
         session: new Session(graph),
@@ -70,6 +87,479 @@ export function disposeChannels(channels: Channel[]): void {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Config-link → SceneItem / SimGraphNode metadata sync
+// ─────────────────────────────────────────────────────────────────────
+
+/** Minimal structural shape of a SceneItem-like model, as seen by the
+ *  builder. We duck-type rather than importing the SceneItem class so
+ *  this file stays free of any plugin dependency — the same sync
+ *  logic works for any plugin that follows the convention.
+ *
+ *  Optional `bindAtmosphere`: when present, the builder calls it with
+ *  both the wired atmosphere's ID and the runtime instance, so the
+ *  SceneItem can surface live atmosphere values via @viewable
+ *  accessors in the property panel. SceneItems that don't implement
+ *  bindAtmosphere still get their atmosphereItemId set the legacy
+ *  way (string only). */
+interface SceneItemLike {
+    atmosphereItemId: string;
+    solverItemIds: ReadonlyArray<string>;
+    sharedNodeIds: ReadonlyArray<string>;
+    bindAtmosphere?(atmosphereItemId: string, aggregator: AtmosphereAggregatorLike | null): void;
+    // Live-value provider binding (V1.5): closure that reads the
+    // publisher's current output through the getter named after the
+    // wired slot. Surfaces live values into the SceneItem panel
+    // viewables WITHOUT requiring a running session.
+    bindPropertyProvider?(propertyName: string, provider: (() => unknown) | null): void;
+    // Per-property source IDs — populated by data-wire connections
+    // landing on the corresponding Scene input port (gravity_in, etc.).
+    // Each is a publisher node UUID string ("" means unwired). The
+    // runtime resolves these into live-value thunks at session bind.
+    gravitySourceId?: string;
+    temperatureSourceId?: string;
+    pressureSourceId?: string;
+    densitySourceId?: string;
+    timeScaleSourceId?: string;
+    localPositionSourceId?: string;
+    localRotationSourceId?: string;
+    localScaleSourceId?: string;
+}
+
+/** Mapping from a Scene's data input slot name to the corresponding
+ *  *SourceId property on SceneItem. Centralised so the per-connection
+ *  loop below stays a single switch table. */
+const SCENE_INPUT_SLOT_TO_SOURCE_ID: Readonly<Record<string, keyof SceneItemLike>> = {
+    gravity_in: "gravitySourceId",
+    temperature_in: "temperatureSourceId",
+    pressure_in: "pressureSourceId",
+    density_in: "densitySourceId",
+    time_scale_in: "timeScaleSourceId",
+    local_position_in: "localPositionSourceId",
+    local_rotation_in: "localRotationSourceId",
+    local_scale_in: "localScaleSourceId",
+};
+
+/** Mapping from a Scene's data input slot name to the SceneItem
+ *  property name consumed by `bindPropertyProvider`. The property
+ *  name is what the getter is named on SceneItem (camelCase). */
+const SCENE_INPUT_SLOT_TO_PROPERTY: Readonly<Record<string, string>> = {
+    gravity_in: "gravity",
+    temperature_in: "temperature",
+    pressure_in: "pressure",
+    density_in: "density",
+    time_scale_in: "timeScale",
+    local_position_in: "localPosition",
+    local_rotation_in: "localRotation",
+    local_scale_in: "localScale",
+};
+
+/** Minimal IAtmosphereAggregator-shaped object. The atmosphere node
+ *  (physics-plugin) implements this with a sampleAggregates() method
+ *  that returns the volume-weighted aggregates across active layers. */
+interface AtmosphereAggregatorLike {
+    sampleAggregates(): { pressure: number; temperatureK: number; density: number; mass: number; volumeM3: number };
+}
+
+function isAtmosphereAggregatorLike(data: unknown): data is AtmosphereAggregatorLike {
+    return !!data && typeof data === "object" && typeof (data as AtmosphereAggregatorLike).sampleAggregates === "function";
+}
+
+/** Minimal structural shape of a SimGraphNode-like model. */
+interface SimGraphNodeLike {
+    sceneItemId: string;
+}
+
+/** Minimal IGasMetadata-shaped object: chemistry plugin's GasNode
+ *  qualifies, but so does any plugin-supplied gas descriptor. */
+interface GasMetadataLike {
+    readonly speciesId: string;
+    readonly displayName: string;
+    readonly molarMass: number;
+}
+
+/** Minimal structural shape of a CompositionNode-like model. The
+ *  bind methods are the seams: every plugin that wants its
+ *  composition-class node populated from wired Gas / Particulate
+ *  references exposes methods with these signatures.
+ *
+ *  The composition holds two bind pools:
+ *    - gases:        bind-additive, persistent across sync passes (the
+ *                    user removes a gas explicitly via the property
+ *                    panel; unwiring leaves the component baked in).
+ *    - particulates: reset-each-sync; `clearParticulates()` is called
+ *                    at the start of every sync pass before re-binding. */
+interface CompositionNodeLike {
+    bindGas(gasItemId: string, gas: GasMetadataLike): void;
+    bindParticulate(particulateItemId: string, particulate: ParticulateMetadataLike): void;
+    clearParticulates(): void;
+    readonly components: ReadonlyArray<{
+        readonly speciesId: string;
+        readonly moleFraction: number;
+        readonly molarMass: number;
+    }>;
+    readonly particulates: ReadonlyArray<ParticulateMetadataLike>;
+    readonly referencePressurePa: number;
+}
+
+/** Minimal IParticulateMetadata-shaped object (P9.5 stub).
+ *  Particulates keep their own class because they are NOT gases
+ *  (solid matter, distinct physics). */
+interface ParticulateMetadataLike {
+    readonly particulateId: string;
+    readonly displayName: string;
+    readonly characteristicDiameter?: number;
+    readonly density?: number;
+    readonly pmClass?: string;
+}
+
+/** Minimal structural shape of an AtmosphereLayerNode-like model.
+ *  The bind methods are the seams the session-builder routes config-
+ *  link wirings onto. `clearBindings` is called once per sync pass
+ *  to wipe stale wirings before re-applying.
+ *
+ *  The Layer's only direct binding is the Composition. Particulates
+ *  ride along inside the Composition; pollutant-class species are
+ *  just gases with toxicology attributes — both reach the Layer
+ *  through the bound Composition. */
+interface AtmosphereLayerLike {
+    bindComposition(compositionItemId: string, composition: CompositionNodeLike | null): void;
+    clearBindings(): void;
+}
+
+/** Minimal IIntegrable-like shape a layer must satisfy so the
+ *  Atmosphere container's composite IIntegrable dispatch works. The
+ *  full AtmosphereLayerNode satisfies this; tests use a stub of the
+ *  same shape. */
+interface LayerIntegrable {
+    readonly stateSize: number;
+    readonly stateNames: ReadonlyArray<string>;
+    gatherState(y: Float64Array, off: number): void;
+    writeState(y: Float64Array, off: number): void;
+    rhs(t: number, y: Float64Array, off: number, inputs: unknown, dydt: Float64Array): void;
+    reset(session: unknown): void;
+    fire(session: unknown, t: number): void;
+    sampleAggregates(session: unknown): { pressure: number; temperatureK: number; mass: number; volumeM3: number };
+}
+
+/** Minimal structural shape of an AtmosphereNode-like model
+ *  (the multi-layer container). Routes `layer_out → layer_in_<k>`
+ *  wirings onto the container's composite IIntegrable. */
+interface AtmosphereContainerLike {
+    bindLayer(layerItemId: string, layer: LayerIntegrable): void;
+    clearBindings(): void;
+}
+
+function isSceneItemLike(data: unknown): data is SceneItemLike {
+    if (!data || typeof data !== "object") return false;
+    const d = data as Partial<SceneItemLike>;
+    return typeof d.atmosphereItemId === "string" && Array.isArray(d.solverItemIds) && Array.isArray(d.sharedNodeIds);
+}
+
+function isSimGraphNodeLike(data: unknown): data is SimGraphNodeLike {
+    if (!data || typeof data !== "object") return false;
+    const d = data as Partial<SimGraphNodeLike>;
+    return typeof d.sceneItemId === "string";
+}
+
+function isGasMetadataLike(data: unknown): data is GasMetadataLike {
+    if (!data || typeof data !== "object") return false;
+    const d = data as Partial<GasMetadataLike>;
+    return (
+        typeof d.speciesId === "string" &&
+        d.speciesId.length > 0 &&
+        typeof d.displayName === "string" &&
+        typeof d.molarMass === "number" &&
+        Number.isFinite(d.molarMass) &&
+        d.molarMass > 0
+    );
+}
+
+function isCompositionNodeLike(data: unknown): data is CompositionNodeLike {
+    if (!data || typeof data !== "object") return false;
+    const d = data as Partial<CompositionNodeLike>;
+    return (
+        typeof d.bindGas === "function" &&
+        typeof d.bindParticulate === "function" &&
+        typeof d.clearParticulates === "function" &&
+        Array.isArray(d.components) &&
+        Array.isArray(d.particulates) &&
+        typeof d.referencePressurePa === "number"
+    );
+}
+
+function isParticulateMetadataLike(data: unknown): data is ParticulateMetadataLike {
+    if (!data || typeof data !== "object") return false;
+    const d = data as Partial<ParticulateMetadataLike>;
+    return (
+        typeof d.particulateId === "string" &&
+        d.particulateId.length > 0 &&
+        typeof d.displayName === "string"
+    );
+}
+
+function isAtmosphereLayerLike(data: unknown): data is AtmosphereLayerLike {
+    if (!data || typeof data !== "object") return false;
+    const d = data as Partial<AtmosphereLayerLike>;
+    return (
+        typeof d.bindComposition === "function" &&
+        typeof d.clearBindings === "function" &&
+        // Disambiguate from CompositionNodeLike (which also has
+        // clearBindings via clearParticulates) by requiring
+        // bindComposition AND NOT bindGas (Composition has bindGas;
+        // Layer doesn't). An AtmosphereNode (which extends Layer)
+        // satisfies this guard AND the container guard simultaneously,
+        // which is intentional: composition_in routes via this map,
+        // layer_in_<k> via the container map.
+        typeof (d as Partial<CompositionNodeLike>).bindGas !== "function"
+    );
+}
+
+function isLayerIntegrableLike(data: unknown): data is LayerIntegrable {
+    if (!data || typeof data !== "object") return false;
+    const d = data as Partial<LayerIntegrable> & { stateSize?: unknown };
+    return (
+        typeof d.stateSize === "number" &&
+        typeof d.gatherState === "function" &&
+        typeof d.writeState === "function" &&
+        typeof d.rhs === "function" &&
+        typeof d.reset === "function" &&
+        typeof d.fire === "function" &&
+        typeof d.sampleAggregates === "function"
+    );
+}
+
+function isAtmosphereContainerLike(data: unknown): data is AtmosphereContainerLike {
+    if (!data || typeof data !== "object") return false;
+    const d = data as Partial<AtmosphereContainerLike>;
+    // Atmosphere extends AtmosphereLayer, so it ALSO has bindComposition.
+    // We discriminate purely on `bindLayer`: any node that exposes
+    // bindLayer is a container, regardless of also being a Layer. The
+    // same instance lives in BOTH the layers map (because of bindComposition)
+    // and the atmospheres map — composition_in routes via the layer
+    // path, layer_in_<k> routes via the container path.
+    return typeof d.bindLayer === "function" && typeof d.clearBindings === "function";
+}
+
+/**
+ * Walk every Connection in the viewer; for each one whose port types
+ * belong to the config-link family, populate the appropriate field on
+ * the receiving SceneItem (or SimGraphNode). Runs from scratch on
+ * every call: SceneItem fields are reset to empty before scanning, so
+ * a removed connection takes effect on the very next build.
+ *
+ * Connection cardinality summary:
+ *   `atmosphere_out → atmosphere_in`    → SceneItem.atmosphereItemId (singular)
+ *   `solver_out → solver_in_<k>`        → SceneItem.solverItemIds (variadic append)
+ *   `scene_share_out → shared_in_<k>`   → SceneItem.sharedNodeIds (variadic append)
+ *   `scene_out → scene_in`               → SimGraphNode.sceneItemId (singular)
+ *
+ * Order of appends in the variadic cases follows Connection iteration
+ * order, which itself follows the user's drag-and-drop order — the
+ * scheduler does not care, but the property panel surfaces this order
+ * to the user.
+ */
+export function syncConfigLinksFromCanvas(viewer: GraphViewer): void {
+    // Reset every candidate's fields up front so stale Connections
+    // (since removed) stop contributing. Compositions are an
+    // exception: their components list is bind-additive — wiring a
+    // gas registers it, unwiring it leaves the component at its last
+    // mole fraction (the user can remove it via the property panel).
+    // This preserves preset-baked species when the user has not
+    // explicitly wired anything.
+    const sceneItemsByNodeId = new Map<string, SceneItemLike>();
+    const simGraphsByNodeId = new Map<string, SimGraphNodeLike>();
+    const compositionsByNodeId = new Map<string, CompositionNodeLike>();
+    const gasNodesByNodeId = new Map<string, GasMetadataLike>();
+    const layersByNodeId = new Map<string, AtmosphereLayerLike>();
+    const layerIntegrablesByNodeId = new Map<string, LayerIntegrable>();
+    const atmospheresByNodeId = new Map<string, AtmosphereContainerLike>();
+    const particulatesByNodeId = new Map<string, ParticulateMetadataLike>();
+    for (const n of viewer.nodes) {
+        const data = n.item && (n.item as { data?: unknown }).data;
+        if (isSceneItemLike(data)) {
+            // Reset all bindings up front. The per-connection loop
+            // below re-applies anything still on the canvas; removing
+            // a wire makes the binding disappear on the next sync.
+            data.atmosphereItemId = "";
+            data.solverItemIds = [];
+            data.sharedNodeIds = [];
+            if (typeof data.bindAtmosphere === "function") {
+                data.bindAtmosphere("", null);
+            }
+            // Reset per-property source IDs (the data-input ports).
+            for (const sourceIdKey of Object.values(SCENE_INPUT_SLOT_TO_SOURCE_ID)) {
+                if (sourceIdKey in data) {
+                    (data as unknown as Record<string, string>)[sourceIdKey as string] = "";
+                }
+            }
+            // Clear all live-value providers; the data-wire loop below
+            // re-installs them for any wire still on the canvas.
+            if (typeof data.bindPropertyProvider === "function") {
+                for (const property of Object.values(SCENE_INPUT_SLOT_TO_PROPERTY)) {
+                    data.bindPropertyProvider(property, null);
+                }
+            }
+            sceneItemsByNodeId.set(String(n.id), data);
+        }
+        if (isSimGraphNodeLike(data)) {
+            data.sceneItemId = "";
+            simGraphsByNodeId.set(String(n.id), data);
+        }
+        if (isCompositionNodeLike(data)) {
+            // Reset-each-sync semantic for particulates (gases are
+            // bind-additive and stay across sync passes).
+            data.clearParticulates();
+            compositionsByNodeId.set(String(n.id), data);
+        }
+        // Pollutant-class gases (VOCs, CO, NH3, ...) are plain
+        // GasNodes whose toxicology fields happen to be populated;
+        // they share the gas slot pool and bind into compositions
+        // through the same gas_in_<k> path as bulk species.
+        if (isGasMetadataLike(data)) {
+            gasNodesByNodeId.set(String(n.id), data);
+        }
+        if (isParticulateMetadataLike(data)) {
+            particulatesByNodeId.set(String(n.id), data);
+        }
+        // An AtmosphereLayerNode satisfies BOTH AtmosphereLayerLike
+        // (binding API) AND LayerIntegrable (IIntegrable surface).
+        // Same instance lives in both maps so the container's
+        // `layer_out → layer_in_<k>` sync can find it by node id.
+        if (isAtmosphereLayerLike(data)) {
+            data.clearBindings();
+            layersByNodeId.set(String(n.id), data);
+        }
+        if (isLayerIntegrableLike(data)) {
+            layerIntegrablesByNodeId.set(String(n.id), data);
+        }
+        if (isAtmosphereContainerLike(data)) {
+            data.clearBindings();
+            atmospheresByNodeId.set(String(n.id), data);
+        }
+    }
+
+    for (const conn of viewer.connections) {
+        if (conn.linkKind !== "config") continue;
+        const fromNode = _findNodeUIByPort(viewer, conn.from, "output");
+        const toNode = _findNodeUIByPort(viewer, conn.to, "input");
+        if (!fromNode || !toNode) continue;
+        const fromType = (conn.from as Port).type;
+        const toSlot = (conn.to as Port).name;
+        const fromId = String(fromNode.id);
+        const toId = String(toNode.id);
+
+        if (fromType === "atmosphere" && toSlot === "atmosphere_in") {
+            const scene = sceneItemsByNodeId.get(toId);
+            if (!scene) {
+                // unreachable in practice — kept as a guard against
+                // future cable-type drift; fall through silently.
+            } else if (typeof scene.bindAtmosphere === "function") {
+                // Pull the actual atmosphere node off the canvas so we
+                // can pass a live IAtmosphereAggregator ref to the
+                // SceneItem (not just its ID). The SceneItem's
+                // effective_* viewables read sampleAggregates() through
+                // this ref so the property panel surfaces the live
+                // pressure/temperature/density.
+                const fromData = fromNode.item && (fromNode.item as { data?: unknown }).data;
+                const aggregator = isAtmosphereAggregatorLike(fromData) ? fromData : null;
+                scene.bindAtmosphere(fromId, aggregator);
+            } else {
+                // Legacy path for SceneItems that don't implement the
+                // bindAtmosphere seam — fall back to setting the ID only.
+                scene.atmosphereItemId = fromId;
+            }
+        } else if (fromType === "solver" && toSlot.startsWith("solver_in_")) {
+            const scene = sceneItemsByNodeId.get(toId);
+            if (scene) scene.solverItemIds = [...scene.solverItemIds, fromId];
+        } else if (fromType === "shared" && toSlot.startsWith("shared_in_")) {
+            const scene = sceneItemsByNodeId.get(toId);
+            if (scene) scene.sharedNodeIds = [...scene.sharedNodeIds, fromId];
+        } else if (fromType === "scene" && toSlot === "scene_in") {
+            const sim = simGraphsByNodeId.get(toId);
+            if (sim) sim.sceneItemId = fromId;
+        } else if (fromType === "gas" && toSlot.startsWith("gas_in_")) {
+            const composition = compositionsByNodeId.get(toId);
+            const gas = gasNodesByNodeId.get(fromId);
+            if (composition && gas) composition.bindGas(fromId, gas);
+        } else if (fromType === "composition" && toSlot === "composition_in") {
+            // Composition → AtmosphereLayer (the layer is what
+            // consumes a composition; the Atmosphere container itself
+            // has no composition_in slot — each of its layers wires
+            // its own composition independently).
+            const layer = layersByNodeId.get(toId);
+            const composition = compositionsByNodeId.get(fromId);
+            if (layer && composition) layer.bindComposition(fromId, composition);
+        } else if (fromType === "layer" && toSlot.startsWith("layer_in_")) {
+            // AtmosphereLayer → Atmosphere container (variadic). Each
+            // wired layer joins the container's active layer set as
+            // an IIntegrable participant. Default (no wirings) =
+            // container's hidden internal layer.
+            const atm = atmospheresByNodeId.get(toId);
+            const layer = layerIntegrablesByNodeId.get(fromId);
+            if (atm && layer) atm.bindLayer(fromId, layer);
+        } else if (fromType === "particulate" && toSlot.startsWith("particulate_in_")) {
+            // Particulate → Composition (V1 stub: composition holds
+            // them as metadata; a downstream AtmosphereLayer reads
+            // `composition.particulates` at session bind). Routing
+            // through the composition matches the user-facing
+            // hierarchy: Atmosphere ─ Layer ─ Composition ─ {gases,
+            // particulates}.
+            const composition = compositionsByNodeId.get(toId);
+            const particulate = particulatesByNodeId.get(fromId);
+            if (composition && particulate) composition.bindParticulate(fromId, particulate);
+        }
+        // Unknown config-link pairing: silently ignored. Any future
+        // config-link slot (gate-pair links, conservation hooks, ...)
+        // adds its branch here when introduced.
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Second pass: data wires landing on Scene per-property input
+    // ports. These are NOT config-links; they're regular runtime
+    // channels at the canvas level. We extract the publisher's node
+    // ID and store it as the SceneItem's *SourceId; buildStateView
+    // resolves it via the SceneSourceResolver at session bind.
+    //
+    // Priority at runtime: data-wire SourceId > Atmosphere binding
+    // (atmosphere_in config-link) > SceneItem editable default. See
+    // the SceneItem.buildStateView comments for the full table.
+    // ─────────────────────────────────────────────────────────────
+    for (const conn of viewer.connections) {
+        if (conn.linkKind === "config") continue;
+        const fromNode = _findNodeUIByPort(viewer, conn.from, "output");
+        const toNode = _findNodeUIByPort(viewer, conn.to, "input");
+        if (!fromNode || !toNode) continue;
+        const toSlot = (conn.to as Port).name;
+        const sourceIdKey = SCENE_INPUT_SLOT_TO_SOURCE_ID[toSlot];
+        if (!sourceIdKey) continue;
+        const scene = sceneItemsByNodeId.get(String(toNode.id));
+        if (!scene) continue;
+        // 1. Runtime path: stamp the publisher's UUID into the
+        //    corresponding *SourceId. SimGraphNode's resolver picks
+        //    it up at session bind to produce a live thunk.
+        (scene as unknown as Record<string, string>)[sourceIdKey as string] = String(fromNode.id);
+        // 2. Panel path: stamp a live closure that reads the publisher's
+        //    current output via the getter named after the wired slot.
+        //    The convention is publisher-side: a node that publishes on
+        //    slot "vec3" (Cartesian3) exposes a getter `vec3` that
+        //    returns the current composed value. AtmosphereNode satisfies
+        //    this for `pressure` / `temperature` / `density` via the
+        //    getters inherited from AtmosphereLayer / its own overrides.
+        const propertyName = SCENE_INPUT_SLOT_TO_PROPERTY[toSlot];
+        if (propertyName && typeof scene.bindPropertyProvider === "function") {
+            const fromData = fromNode.item && (fromNode.item as { data?: unknown }).data;
+            const fromSlot = (conn.from as Port).name;
+            if (fromData && typeof fromData === "object") {
+                const dataRecord = fromData as Record<string, unknown>;
+                if (fromSlot in dataRecord) {
+                    scene.bindPropertyProvider(propertyName, () => dataRecord[fromSlot]);
+                }
+            }
+        }
+    }
+}
+
 function _findRuntimeNodeByPort(viewer: GraphViewer, port: unknown, direction: "input" | "output"): IRuntimeNode | null {
     const list = viewer.nodes as ReadonlyArray<NodeUI>;
     for (const n of list) {
@@ -80,6 +570,21 @@ function _findRuntimeNodeByPort(viewer: GraphViewer, port: unknown, direction: "
         }
         if (direction === "input" && (n.inputs.includes(port as Port) || n.controlInputs.includes(port as Port))) {
             return data as IRuntimeNode;
+        }
+    }
+    return null;
+}
+
+/** Same as `_findRuntimeNodeByPort` but returns the NodeUI (or null),
+ *  so we can read its stable `id`. Used by the config-link sync. */
+function _findNodeUIByPort(viewer: GraphViewer, port: unknown, direction: "input" | "output"): NodeUI | null {
+    const list = viewer.nodes as ReadonlyArray<NodeUI>;
+    for (const n of list) {
+        if (direction === "output" && (n.outputs.includes(port as Port) || n.controlOutputs.includes(port as Port))) {
+            return n;
+        }
+        if (direction === "input" && (n.inputs.includes(port as Port) || n.controlInputs.includes(port as Port))) {
+            return n;
         }
     }
     return null;

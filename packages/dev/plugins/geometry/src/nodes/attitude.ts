@@ -2,7 +2,6 @@ import type { ICartesian } from "spikypanda-core";
 import {
     Quaternion,
     editable,
-    viewable,
     cloneable,
     IOlink,
     IDeclaresPorts,
@@ -69,7 +68,11 @@ export class Attitude extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @viewable("quaternion")
+    /** Current composed quaternion from yaw/pitch/roll. NOT @viewable
+     *  for the same reason as `Cartesian3.vec3` — yaw/pitch/roll are
+     *  already shown as editables, so a duplicate LIVE STATE entry is
+     *  noise. The getter remains because it's the bindPropertyProvider
+     *  contract (this node's output slot is `rotation`). */
     public get rotation(): Quaternion {
         return Quaternion.fromYawPitchRoll(this._yaw * DEG_TO_RAD, this._pitch * DEG_TO_RAD, this._roll * DEG_TO_RAD);
     }

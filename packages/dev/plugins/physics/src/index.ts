@@ -8,6 +8,7 @@ import { gearSubPlugin } from "./mechanical/gear/index.js";
 import { frictionSubPlugin } from "./mechanical/friction/index.js";
 import { vibrationSubPlugin } from "./mechanical/vibration/index.js";
 import { faultSubPlugin } from "./mechanical/fault/index.js";
+import { physicsParticulateSubPlugin } from "./particulate/index.js";
 
 export * from "./transform/index.js";
 export * from "./scene/index.js";
@@ -19,6 +20,8 @@ export * from "./mechanical/gear/index.js";
 export * from "./mechanical/friction/index.js";
 export * from "./mechanical/vibration/index.js";
 export * from "./mechanical/fault/index.js";
+export * from "./particulate/particulate.node.js";
+export { physicsParticulateSubPlugin } from "./particulate/index.js";
 
 /**
  * @spikypanda/plugin-physics
@@ -47,6 +50,12 @@ export * from "./mechanical/fault/index.js";
  *     Vibration — accelerometer transducer (LPF + noise + quantization)
  *     Fault     — generic sinusoidal modulator (composable building block)
  *
+ *   Particulate  — solid-phase matter descriptors (PM2.5, PM10, dust,
+ *                  lunar regolith). Wired to the atmosphere through
+ *                  its `particulate_in_<k>` config-link variadic. V1
+ *                  records metadata only; V2 will add settling under
+ *                  gravity, drag, re-suspension, filtration.
+ *
  * Generic control-system primitives (Setpoint, EmergencyShutdown) used
  * to live here as `Physics.Control:*` but were moved to plugin-control
  * (`Control.Actuator:*` / `Control.Safety:*`) once the catalog grew
@@ -68,5 +77,6 @@ export default {
         "Physics.Mechanical.Friction": frictionSubPlugin,
         "Physics.Mechanical.Vibration": vibrationSubPlugin,
         "Physics.Mechanical.Fault": faultSubPlugin,
+        "Physics.Particulate": physicsParticulateSubPlugin,
     },
 };

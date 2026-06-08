@@ -20,20 +20,28 @@
 import {
     Acceleration,
     Angle,
+    Area,
     Current,
+    Density,
     Dimensionless,
+    DynamicViscosity,
     Frequency,
     Length,
     Luminosity,
     Mass,
+    MassConcentration,
+    MassSpecificHeat,
+    MolarMass,
     Power,
     Pressure,
     Quantity,
     Speed,
     Temperature,
+    ThermalConductivity,
     Timespan,
     Voltage,
     Volume,
+    VolumetricFlow,
 } from "../../dev/core/src/math/math.units";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -335,10 +343,118 @@ describe("Volume", () => {
     });
 });
 
+describe("Area", () => {
+    it("1 cm² = 1e-4 m², 1 mm² = 1e-6 m², 1 km² = 1e6 m²", () => {
+        expect(new Area(1, Area.Units.cm2).getValue(Area.Units.m2)).toBeCloseTo(1e-4, 12);
+        expect(new Area(1, Area.Units.mm2).getValue(Area.Units.m2)).toBeCloseTo(1e-6, 30);
+        expect(new Area(1, Area.Units.km2).getValue(Area.Units.m2)).toBe(1e6);
+    });
+    it("1 in² = 0.00064516 m² exactly (≡ (0.0254)²)", () => {
+        expect(new Area(1, Area.Units.in2).getValue(Area.Units.m2)).toBeCloseTo(0.0254 * 0.0254, 12);
+    });
+    it("1 ft² = 0.09290304 m² (≡ (0.3048)²)", () => {
+        expect(new Area(1, Area.Units.ft2).getValue(Area.Units.m2)).toBeCloseTo(0.3048 * 0.3048, 12);
+    });
+    it("1 hectare = 10000 m²", () => {
+        expect(new Area(1, Area.Units.ha).getValue(Area.Units.m2)).toBe(1e4);
+    });
+});
+
+describe("VolumetricFlow", () => {
+    it("1 L/s = 1e-3 m³/s, 1 m³/h = 1/3600 m³/s", () => {
+        expect(new VolumetricFlow(1, VolumetricFlow.Units.Lps).getValue(VolumetricFlow.Units.m3ps)).toBeCloseTo(1e-3, 12);
+        expect(new VolumetricFlow(1, VolumetricFlow.Units.m3ph).getValue(VolumetricFlow.Units.m3ps)).toBeCloseTo(1 / 3600, 12);
+    });
+    it("1 L/min = 1.667e-5 m³/s and 60 L/min = 1 L/s", () => {
+        expect(new VolumetricFlow(1, VolumetricFlow.Units.Lpmin).getValue(VolumetricFlow.Units.m3ps)).toBeCloseTo(1e-3 / 60, 12);
+        expect(new VolumetricFlow(60, VolumetricFlow.Units.Lpmin).getValue(VolumetricFlow.Units.Lps)).toBeCloseTo(1, 9);
+    });
+    it("1 cfm ≈ 4.72e-4 m³/s (1 ft³/min)", () => {
+        expect(new VolumetricFlow(1, VolumetricFlow.Units.cfm).getValue(VolumetricFlow.Units.m3ps)).toBeCloseTo(4.719474e-4, 6);
+    });
+    it("1 US gpm ≈ 6.309e-5 m³/s (1 US gallon/min)", () => {
+        expect(new VolumetricFlow(1, VolumetricFlow.Units.gpm).getValue(VolumetricFlow.Units.m3ps)).toBeCloseTo(6.3090e-5, 6);
+    });
+    it("round-trip m³/s ↔ L/min preserves the value", () => {
+        const original = new VolumetricFlow(0.5, VolumetricFlow.Units.m3ps);
+        const inLpm = original.getValue(VolumetricFlow.Units.Lpmin);
+        expect(new VolumetricFlow(inLpm, VolumetricFlow.Units.Lpmin).getValue(VolumetricFlow.Units.m3ps)).toBeCloseTo(0.5, 9);
+    });
+});
+
 describe("Dimensionless", () => {
-    it("50% = 0.5, 1000 ppm = 0.001 of base", () => {
+    it("50% = 0.5, 1000 ppm = 0.001 of base, 1000 ppb = 1 ppm", () => {
         expect(new Dimensionless(50, Dimensionless.Units.percent).getValue(Dimensionless.Units.none)).toBeCloseTo(0.5, 12);
         expect(new Dimensionless(1000, Dimensionless.Units.ppm).getValue(Dimensionless.Units.none)).toBeCloseTo(0.001, 12);
+        expect(new Dimensionless(1000, Dimensionless.Units.ppb).getValue(Dimensionless.Units.ppm)).toBeCloseTo(1, 9);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Chemistry quantities (P9.0)
+// ─────────────────────────────────────────────────────────────────────
+
+describe("MolarMass", () => {
+    it("1 g/mol = 1e-3 kg/mol", () => {
+        expect(new MolarMass(1, MolarMass.Units.gpmol).getValue(MolarMass.Units.kgpmol)).toBeCloseTo(1e-3, 12);
+    });
+    it("28.0134 g/mol (N2) round-trips", () => {
+        const q = new MolarMass(28.0134, MolarMass.Units.gpmol);
+        expect(q.getValue(MolarMass.Units.kgpmol)).toBeCloseTo(0.0280134, 12);
+    });
+});
+
+describe("Density", () => {
+    it("1 g/cm³ = 1000 kg/m³ (water)", () => {
+        expect(new Density(1, Density.Units.gpcm3).getValue(Density.Units.kgpm3)).toBe(1000);
+    });
+    it("1 g/L = 1 kg/m³ (gas at STP scale)", () => {
+        expect(new Density(1, Density.Units.gpL).getValue(Density.Units.kgpm3)).toBeCloseTo(1, 12);
+    });
+    it("Air density at STP ≈ 1.225 kg/m³ round-trips through g/L", () => {
+        const q = new Density(1.225, Density.Units.kgpm3);
+        expect(q.getValue(Density.Units.gpL)).toBeCloseTo(1.225, 9);
+    });
+});
+
+describe("MassConcentration", () => {
+    it("1 mg/m³ = 1e-6 kg/m³, 1 µg/m³ = 1e-9 kg/m³", () => {
+        expect(new MassConcentration(1, MassConcentration.Units.mgpm3).getValue(MassConcentration.Units.kgpm3)).toBeCloseTo(1e-6, 30);
+        expect(new MassConcentration(1, MassConcentration.Units.ugpm3).getValue(MassConcentration.Units.kgpm3)).toBeCloseTo(1e-9, 30);
+    });
+    it("1000 µg/m³ = 1 mg/m³", () => {
+        expect(new MassConcentration(1000, MassConcentration.Units.ugpm3).getValue(MassConcentration.Units.mgpm3)).toBeCloseTo(1, 9);
+    });
+    it("CO 8h TWA limit (~25 mg/m³ OSHA) round-trips", () => {
+        const q = new MassConcentration(25, MassConcentration.Units.mgpm3);
+        expect(q.getValue(MassConcentration.Units.ugpm3)).toBeCloseTo(25000, 6);
+    });
+});
+
+describe("MassSpecificHeat", () => {
+    it("1 kJ/(kg·K) = 1000 J/(kg·K) (air ≈ 1.005 kJ/(kg·K))", () => {
+        expect(new MassSpecificHeat(1, MassSpecificHeat.Units.kJpkgK).getValue(MassSpecificHeat.Units.JpkgK)).toBe(1000);
+    });
+    it("Water Cp ≈ 4.184 kJ/(kg·K) round-trips", () => {
+        const q = new MassSpecificHeat(4184, MassSpecificHeat.Units.JpkgK);
+        expect(q.getValue(MassSpecificHeat.Units.kJpkgK)).toBeCloseTo(4.184, 6);
+    });
+});
+
+describe("ThermalConductivity", () => {
+    it("26 mW/(m·K) = 0.026 W/(m·K) (air at room temperature)", () => {
+        expect(new ThermalConductivity(26, ThermalConductivity.Units.mWpmK).getValue(ThermalConductivity.Units.WpmK)).toBeCloseTo(0.026, 9);
+    });
+});
+
+describe("DynamicViscosity", () => {
+    it("1 cP = 1 mPa·s = 1e-3 Pa·s (water at 20 °C)", () => {
+        expect(new DynamicViscosity(1, DynamicViscosity.Units.cP).getValue(DynamicViscosity.Units.Pas)).toBeCloseTo(1e-3, 12);
+        expect(new DynamicViscosity(1, DynamicViscosity.Units.cP).getValue(DynamicViscosity.Units.mPas)).toBeCloseTo(1, 9);
+    });
+    it("Air at 20 °C ≈ 18 µPa·s round-trips", () => {
+        const q = new DynamicViscosity(18, DynamicViscosity.Units.uPas);
+        expect(q.getValue(DynamicViscosity.Units.Pas)).toBeCloseTo(1.8e-5, 12);
     });
 });
 
@@ -370,6 +486,8 @@ describe("Symbol uniqueness within each Quantity", () => {
         ["Length", Length],
         ["Mass", Mass],
         ["Volume", Volume],
+        ["Area", Area],
+        ["VolumetricFlow", VolumetricFlow],
         ["Pressure", Pressure],
         ["Temperature", Temperature],
         ["Frequency", Frequency],
@@ -381,6 +499,12 @@ describe("Symbol uniqueness within each Quantity", () => {
         ["Luminosity", Luminosity],
         ["Angle", Angle],
         ["Dimensionless", Dimensionless],
+        ["MolarMass", MolarMass],
+        ["Density", Density],
+        ["MassConcentration", MassConcentration],
+        ["MassSpecificHeat", MassSpecificHeat],
+        ["ThermalConductivity", ThermalConductivity],
+        ["DynamicViscosity", DynamicViscosity],
     ] as const;
 
     for (const [name, Klass] of allQuantities) {

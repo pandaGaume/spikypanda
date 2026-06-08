@@ -1,4 +1,4 @@
-import { buildDefaultStateView, cloneable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, RuntimeNode, inSlotOf, viewable } from "spikypanda-core";
+import { buildDefaultStateView, cloneable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, RuntimeNode, inSlotOf } from "spikypanda-core";
 import type { ICartesian, Nullable, SceneStateView } from "spikypanda-core";
 
 /**
@@ -166,8 +166,17 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
         super(onsc, opsc, position);
     }
 
-    /** Read-only mirror of the world transform for the property panel. */
-    @viewable("matrix4")
+    /** Current world transform — equals parent_world × local after the
+     *  last fire() consumed inputs. NOT @viewable: the panel already
+     *  shows the inputs (the local transform when a child of a Scene)
+     *  and the output is visible by wiring it downstream. Same UX
+     *  principle as the Cartesian3 / Attitude / geometry-Transform
+     *  cleanup (2026-06-08): one display per property, no LIVE STATE
+     *  duplicate of the node's output.
+     *
+     *  The getter remains because it's the bindPropertyProvider
+     *  contract (output slot named `world`) and because subclasses
+     *  read it (motors, sensors, mechanical bodies). */
     public get world(): ReadonlyArray<number> {
         return this._world;
     }

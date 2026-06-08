@@ -5,3 +5,6 @@ export * from "./rk4-adaptive.solver";
 export * from "./scene-state-view.interface";
 export * from "./scene-state-view.impl";
 export * from "./sim-graph.node";
+export * from "./chemical.species";
+export * from "./chemistry.interfaces";
+export * from "./particulate.interfaces";

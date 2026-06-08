@@ -2076,3 +2076,65 @@
     pointer-events:  none;
     z-index:         5;
 }
+
+/* ── Config-link cables (P5a) ──────────────────────────────────────────
+   Scene / solver / atmosphere / shared wirings render dashed at
+   reduced opacity to distinguish them from data cables. The inline
+   stroke-dasharray + stroke-opacity attributes on the <path> element
+   give the same effect, but a skin can override here without
+   touching the JS. */
+
+.ne-svg .ne-connection-config {
+    stroke-dasharray: 8 5;
+    stroke-opacity:   0.85;
+}
+
+.ne-svg .ne-connection-config:hover {
+    stroke-opacity:   1;
+}
+
+/* ── Breadcrumb (P5b) ──────────────────────────────────────────────────
+   Drill-down navigation strip. The component hides itself at root
+   depth, so this block only paints when the user is at least one
+   level deep. */
+
+.ne-breadcrumb {
+    padding:         6px 12px;
+    font-size:       12px;
+    color:           var(--ne-color-text-dim, #aaa);
+    background:      var(--ne-color-panel, rgba(0, 0, 0, 0.4));
+    border-bottom:   1px solid var(--ne-color-border, rgba(255, 255, 255, 0.08));
+    user-select:     none;
+    display:         flex;
+    align-items:     center;
+    gap:             4px;
+    flex-wrap:       wrap;
+}
+
+.ne-breadcrumb-crumb {
+    color:           var(--ne-color-primary, #4ea);
+    text-decoration: none;
+    cursor:          pointer;
+    padding:         2px 6px;
+    border-radius:   3px;
+    transition:      background 0.15s;
+}
+
+.ne-breadcrumb-crumb:hover {
+    background:      var(--ne-color-hover, rgba(255, 255, 255, 0.08));
+}
+
+.ne-breadcrumb-current {
+    color:           var(--ne-color-text, #eee);
+    cursor:          default;
+    font-weight:     600;
+}
+
+.ne-breadcrumb-current:hover {
+    background:      transparent;
+}
+
+.ne-breadcrumb-separator {
+    color:           var(--ne-color-text-dim, #777);
+    padding:         0 2px;
+}

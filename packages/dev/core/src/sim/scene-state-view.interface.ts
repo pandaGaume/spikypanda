@@ -47,6 +47,51 @@ import { Frequency, Pressure, Temperature } from "../math/math.units";
 import type { IIntegrable } from "./sim.interfaces";
 
 /**
+ * Aggregated snapshot the SceneStateView reads off a wired atmosphere
+ * to drive the Scene's temperature / pressure / density displays.
+ *
+ * Any concrete Atmosphere node (the multi-layer `Physics.Scene:atmosphere`
+ * container or any future single-layer variant) exposes a
+ * `sampleAggregates()` method returning this shape. The SceneItem
+ * stores a reference to the bound atmosphere at session build and
+ * the SceneStateView source-resolver thunks invoke `sampleAggregates()`
+ * whenever a consumer reads `temperature` / `pressure` / `density`.
+ *
+ * Session-free by design: layers own their own temperature and
+ * compute their pressure from current mass + volume + their own T,
+ * so there is no cycle through the SceneStateView. A null binding
+ * (no atmosphere wired) sends consumers to the SceneItem's editable
+ * defaults instead.
+ */
+export interface IAtmosphereAggregate {
+    /** Pa, volume-weighted across active layers. */
+    readonly pressure: number;
+    /** K, volume-weighted across active layers. */
+    readonly temperatureK: number;
+    /** kg/m³, total mass / total volume across active layers. */
+    readonly density: number;
+    /** Sum of layer masses, kg. */
+    readonly mass: number;
+    /** Sum of layer volumes, m³. */
+    readonly volumeM3: number;
+}
+
+/**
+ * Duck-type for atmosphere nodes the SceneStateView can pull
+ * aggregates from. A concrete Atmosphere class satisfies this by
+ * implementing `sampleAggregates()` — the SceneItem queries it
+ * lazily on each scene-state read.
+ */
+export interface IAtmosphereAggregator {
+    sampleAggregates(): IAtmosphereAggregate;
+}
+
+/** Structural guard for `IAtmosphereAggregator`. */
+export function isAtmosphereAggregator(v: unknown): v is IAtmosphereAggregator {
+    return !!v && typeof v === "object" && typeof (v as IAtmosphereAggregator).sampleAggregates === "function";
+}
+
+/**
  * Local-or-world 3D transform carried by a scene. Decomposed into
  * translation + quaternion rotation + non-uniform scale (UE5
  * `FTransform`, Babylon.js `TransformNode` style), with `toMatrix4()`
@@ -103,6 +148,15 @@ export const DEFAULT_TEMPERATURE: Temperature = Object.freeze(new Temperature(29
  * `Pressure` Quantity, same rationale as `DEFAULT_TEMPERATURE`.
  */
 export const DEFAULT_PRESSURE: Pressure = Object.freeze(new Pressure(101325, Pressure.Units.Pa)) as Pressure;
+
+/**
+ * Earth sea-level default ambient air density [kg/m³]. Same role as
+ * DEFAULT_TEMPERATURE / DEFAULT_PRESSURE: the SceneStateView's density
+ * accessor falls back to this when no atmosphere is wired AND no
+ * dynamic source supplies one. 1.225 kg/m³ is the U.S. Standard
+ * Atmosphere value at sea level, 15 °C.
+ */
+export const DEFAULT_DENSITY = 1.225;
 
 /** Sim-to-wall time multiplier neutral value (dimensionless). Kept as
  *  a bare number because the underlying quantity has no unit. */
@@ -169,8 +223,19 @@ export interface SceneStateView {
     readonly temperature: Temperature;
 
     /** Ambient pressure as a `Pressure` Quantity. Canonical storage in
-     *  pascal. Same access semantics as `temperature`. */
+     *  pascal. Same access semantics as `temperature`. When a wired
+     *  Atmosphere is bound, this resolves to the atmosphere's volume-
+     *  weighted aggregate pressure (live, updated each tick); else it
+     *  falls back to the SceneItem's editable. */
     readonly pressure: Pressure;
+
+    /** Ambient mass density [kg/m³]. Plain number — V1 doesn't carry a
+     *  Density Quantity through the SceneStateView surface (the
+     *  Density type exists in math.units but the scene-level reading
+     *  is rarely converted between units). When a wired Atmosphere is
+     *  bound, resolves to its mass / volume aggregate; else falls back
+     *  to DEFAULT_DENSITY. */
+    readonly density: number;
 
     /** Sim-clock multiplier (mirror of UE5 `WorldSettings.TimeDilation`).
      *  Dimensionless — kept as a plain number. Static for V1; dynamic
@@ -285,6 +350,7 @@ export function isSceneStateView(v: unknown): v is SceneStateView {
     const c = v as Partial<SceneStateView>;
     if (typeof c.id !== "string") return false;
     if (typeof c.timeScale !== "number") return false;
+    if (typeof c.density !== "number") return false;
     if (!(c.temperature instanceof Temperature)) return false;
     if (!(c.pressure instanceof Pressure)) return false;
     if (!(c.effectiveHz instanceof Frequency)) return false;

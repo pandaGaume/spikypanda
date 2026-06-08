@@ -2,7 +2,6 @@ import type { ICartesian } from "spikypanda-core";
 import {
     Cartesian3,
     editable,
-    viewable,
     cloneable,
     IOlink,
     IDeclaresPorts,
@@ -65,7 +64,16 @@ export class Cartesian3Node extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @viewable("vector3", { layout: "block", alignement: "horizontal" })
+    /** Current composed Cartesian3 from x/y/z. NOT @viewable — the
+     *  panel already shows x/y/z as individual editables, so a
+     *  duplicate "LIVE STATE → VEC3" section would just be noise (per
+     *  the 2026-06-08 SceneItem EFFECTIVE_* cleanup — one display per
+     *  property). The getter stays for two reasons:
+     *    1. fire() (below) does NOT call it (it pulls inputs +
+     *       editables manually) — but other code paths might.
+     *    2. The graph-session-builder's bindPropertyProvider routing
+     *       uses `publisher[slotName]` to fetch live values; the
+     *       output slot is `vec3` so this getter IS the contract. */
     public get vec3(): Cartesian3 {
         return new Cartesian3(this._x, this._y, this._z);
     }

@@ -41,6 +41,28 @@
             "nodes": [
                 { "type": "Control.Safety:emergency-shutdown", "factory": "EmergencyShutdownNode", "label": "Emergency Shutdown" }
             ]
+        },
+        {
+            "id":          "Control.Sim",
+            "displayName": "Sim infrastructure",
+            "description": "Simulation-infrastructure primitives. RK4 Solver is the Cash-Karp adaptive integrator (F3); it lives as a config carrier in the scene wiring and is attached to whichever Sim.Graph references its enclosing SceneItem. Future Rosenbrock4 / SUNDIALS solvers will register here.",
+            "category":    "Control.Sim",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Control.Sim:rk4-solver", "factory": "createRk4SolverNode", "label": "RK4 Solver" }
+            ]
+        },
+        {
+            "id":          "Sim.Graph",
+            "displayName": "Sub-graph (Sim.Graph)",
+            "description": "Fractal container that wraps an inner RuntimeGraph + Session via IGraphNodeState. Binds to a SceneItem via sceneItemId (set automatically by the editor's config-link), attaches the scene's solvers to its inner session, and sub-steps the inner at K = round(innerHz / parentHz) per parent fire. Lazy-stores its inner graph as serialized JSON on item.data.subGraphJson; the editor's drill-down (double-click) and breadcrumb (Esc / Ctrl+↑) navigate in and out without keeping multiple canvases live at once.",
+            "category":    "Sim.Graph",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Sim.Graph:graph", "factory": "createSimGraphNode", "label": "Sub-graph" }
+            ]
         }
     ],
     "manifestRefs": []

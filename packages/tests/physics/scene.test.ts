@@ -240,6 +240,7 @@ describe("buildDefaultStateView + isSceneStateView", () => {
             gravity: { x: 0, y: 0, z: -9.81 },
             temperature: new Temperature(293.15, Temperature.Units.k),
             pressure: new Pressure(101325, Pressure.Units.Pa),
+            density: 1.225,
             timeScale: 1,
             effectiveHz: new Frequency(60, Frequency.Units.Hz),
             localTransform: {},

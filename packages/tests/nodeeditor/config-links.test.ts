@@ -18,12 +18,21 @@ import { deriveLinkKind } from "../../dev/nodeeditor/src/connection";
 import { CONFIG_LINK_TYPES, PORT_COLORS, arePortTypesCompatible, isConfigLinkType, type PortType } from "../../dev/nodeeditor/src/types";
 
 const DATA_TYPES: PortType[] = ["float", "vec2", "vec3", "vec4", "tensor", "any", "exec", "matrix44", "boolean", "trigger", "array"];
-const CONFIG_TYPES: PortType[] = ["scene", "solver", "atmosphere", "shared"];
+const CONFIG_TYPES: PortType[] = ["scene", "solver", "atmosphere", "shared", "gas", "composition", "particulate", "layer"];
 
 describe("CONFIG_LINK_TYPES + isConfigLinkType", () => {
-    it("enumerates exactly scene / solver / atmosphere / shared", () => {
+    it("enumerates the eight config-link types (Layer added 2026-06-08 for the multi-layer Atmosphere container)", () => {
         const got = Array.from(CONFIG_LINK_TYPES).sort();
-        expect(got).toEqual(["atmosphere", "scene", "shared", "solver"]);
+        expect(got).toEqual([
+            "atmosphere",
+            "composition",
+            "gas",
+            "layer",
+            "particulate",
+            "scene",
+            "shared",
+            "solver",
+        ]);
     });
 
     it.each(CONFIG_TYPES)("classifies %s as a config-link type", (t) => {

@@ -90,6 +90,19 @@ export function isSimSession(s: ISession): s is ISimSession {
 export interface IIntegrationInputs {
     get(portName: string): number | undefined;
     has(portName: string): boolean;
+    /**
+     * Sum every input whose port name starts with `prefix`. Returns 0
+     * when no slot matches (the AtmosphereStateNode's rhs relies on
+     * this: "if nothing is wired on `delta_CO2_*` yet, the species
+     * inventory just doesn't change this tick").
+     *
+     * The contract is intentionally minimal — no allocation, no slot
+     * enumeration leaked to the caller. Implementations are expected
+     * to be O(N) where N is the total slot count, since N is bounded
+     * by the leaf's port descriptor and we don't care about
+     * micro-optimising the rhs cost given the solver's own outer cost.
+     */
+    sumPrefix(prefix: string): number;
 }
 
 /**
