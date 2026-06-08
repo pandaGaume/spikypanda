@@ -1,4 +1,5 @@
 import { IOlink } from "../graph/graph.interfaces";
+import type { SceneStateView } from "../sim/scene-state-view.interface";
 import { isControlSlot } from "./control-ports";
 import { IChannel, ILinkRef, ILinkState, INodeState, IRuntimeGraph, IRuntimeNode, ISession, ISolverHandle, inSlotOf } from "./execution.interfaces";
 import { Scheduler } from "./execution.scheduler";
@@ -110,6 +111,19 @@ export class Session implements ISession {
      * owns the flag and flips it on play/pause/stop transitions.
      */
     public running: boolean = false;
+
+    /**
+     * Scene-state view this session is bound to (see
+     * `ISession.sceneStateView`). Set by the host:
+     *   - `Sim.Graph.reset()` writes its inner session's view from
+     *     the wired SceneItem;
+     *   - `GraphRunner` writes the root session's view from the
+     *     primary SceneItem at the root canvas;
+     *   - left null when no SceneItem participates in the session,
+     *     in which case TransformNode-derived consumers fall back
+     *     to their own default (Earth surface) rather than throw.
+     */
+    public sceneStateView: SceneStateView | null = null;
 
     private _required: number[];
     private _linkStatesProxy: ILinkState[];

@@ -63,3 +63,34 @@ export interface IQuaternion {
     z: number;
     w: number;
 }
+
+/**
+ * 4×4 homogeneous transform matrix. Backed by a flat 16-entry buffer
+ * in COLUMN-MAJOR layout, matching the convention used by every major
+ * 3D engine bridge (UE5 `FMatrix`, Babylon.js `Matrix.m`, three.js
+ * `Matrix4.elements`, WebGL / glsl `mat4`). This ordering lets us
+ * upload the buffer to a GPU shader uniform with zero transposition.
+ *
+ * Index layout (`m[col*4 + row]`):
+ *
+ *       col 0   col 1   col 2   col 3
+ *   ─────────────────────────────────────────
+ *   m[0]    m[4]    m[8]     m[12]   ← row 0
+ *   m[1]    m[5]    m[9]     m[13]   ← row 1
+ *   m[2]    m[6]    m[10]    m[14]   ← row 2
+ *   m[3]    m[7]    m[11]    m[15]   ← row 3
+ *
+ * Translation lives in `m[12..14]`, the upper-left 3×3 carries
+ * rotation × non-uniform scale, and the bottom row is `[0, 0, 0, 1]`
+ * for affine transforms.
+ *
+ * The interface is intentionally narrow (just the buffer) so a plain
+ * `Float64Array` of length 16 satisfies it structurally — useful for
+ * the SceneStateView, which may return a matrix that lives in a
+ * scratch buffer the consumer is expected to read-and-discard rather
+ * than hold onto.
+ */
+export interface IMatrix4 {
+    /** Column-major 4×4 entries, length 16. */
+    readonly m: ArrayLike<number>;
+}

@@ -1,10 +1,15 @@
-import { cloneable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, RuntimeNode, inSlotOf } from "spikypanda-core";
-import type { ICartesian, Nullable } from "spikypanda-core";
-import { DEFAULT_SCENE, IScene, isScene, SCENE_SLOT } from "./scene.js";
+import { buildDefaultStateView, cloneable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, RuntimeNode, inSlotOf, viewable } from "spikypanda-core";
+import type { ICartesian, Nullable, SceneStateView } from "spikypanda-core";
 
 /**
  * Column-major 4×4 identity. Frozen so subclasses that read it cannot
  * accidentally mutate the shared fallback.
+ *
+ * Kept as a flat-number-array constant for compatibility with the
+ * existing matrix44 channel payload type; the new core `Matrix4` class
+ * (column-major Float64Array) is the canonical math citizen, but
+ * channels still carry plain arrays. Conversion is trivial when
+ * needed.
  */
 export const IDENTITY44: ReadonlyArray<number> = Object.freeze([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 
@@ -100,11 +105,19 @@ function matrices44Equal(a: ReadonlyArray<number>, b: ReadonlyArray<number>): bo
  * Output:
  *   world         this object's pose in the world frame    [matrix44]
  *
- * Subclasses (motors, sensors, mechanical assemblies) inherit the three
- * ports for free and gain a `super.fire()` that they call before their
- * own physics. The shared static helper `isTransformInputSlot` lets
- * subclasses skip the transform inputs in their own consume loop so
- * they don't double-consume tokens that `super.fire()` already handled.
+ * Environmental context (gravity, ambient temperature, pressure,
+ * timeScale, atmosphere) is NOT a runtime cable any more — it lives
+ * on `session.sceneStateView` (a live binding established at session
+ * bind by the enclosing Sim.Graph or by the GraphRunner). Subclasses
+ * read it through `getScene()`, which falls back to a sane Earth-
+ * surface default when no scene has been bound to the session.
+ *
+ * Subclasses (motors, sensors, mechanical assemblies) inherit the
+ * `local` / `parent_world` ports for free and gain a `super.fire()`
+ * that they call before their own physics. The shared static helper
+ * `isTransformInputSlot` lets subclasses skip the transform inputs in
+ * their own consume loop so they don't double-consume tokens that
+ * `super.fire()` already handled.
  *
  * The matrix is stored as a flat array of 16 numbers in column-major
  * layout, matching `Physics.Geometry.Transform`'s convention. Composing
@@ -114,19 +127,17 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
     /** Slot names exposed as static so subclasses can reference them. */
     public static readonly INPUT_LOCAL = "local";
     public static readonly INPUT_PARENT_WORLD = "parent_world";
-    public static readonly INPUT_SCENE = SCENE_SLOT;
     public static readonly OUTPUT_WORLD = "world";
 
     /** The set of input slot names owned by this base class. */
-    private static readonly TRANSFORM_INPUT_SLOTS: ReadonlySet<string> = new Set([TransformNode.INPUT_LOCAL, TransformNode.INPUT_PARENT_WORLD, TransformNode.INPUT_SCENE]);
+    private static readonly TRANSFORM_INPUT_SLOTS: ReadonlySet<string> = new Set([TransformNode.INPUT_LOCAL, TransformNode.INPUT_PARENT_WORLD]);
 
     /** Reusable port descriptor blocks so subclasses can spread them.
-     *  Includes the scene attach point (any-typed, optional) — when
-     *  unwired, getScene() falls back to DEFAULT_SCENE. */
+     *  The scene is no longer a port — it's bound at the session
+     *  level via `ISession.sceneStateView`. */
     public static readonly TRANSFORM_INPUT_PORTS: ReadonlyArray<IPortDescriptor> = [
         { slot: TransformNode.INPUT_LOCAL, optional: true, type: "matrix44" },
         { slot: TransformNode.INPUT_PARENT_WORLD, optional: true, type: "matrix44" },
-        { slot: TransformNode.INPUT_SCENE, optional: true, type: "any" },
     ];
     public static readonly TRANSFORM_OUTPUT_PORTS: ReadonlyArray<IPortDescriptor> = [{ slot: TransformNode.OUTPUT_WORLD, optional: false, type: "matrix44" }];
 
@@ -142,10 +153,11 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
     /** Internal world transform; cloneable so editor save/restore preserves it. */
     @cloneable private _world: number[] = (IDENTITY44 as number[]).slice();
 
-    /** Effective scene for the current tick. Reset to DEFAULT_SCENE at
-     *  the start of every fire(); replaced by the consumed scene if one
-     *  was wired and ready. Subclasses read it through getScene(). */
-    private _scene: IScene = DEFAULT_SCENE;
+    /** Per-process fallback scene view used when the bound session has
+     *  no `sceneStateView` (e.g. unit tests, sample graphs without a
+     *  SceneItem). Constructed lazily on first `getScene()` access; the
+     *  builder returns a view backed by Earth-surface defaults. */
+    private _fallbackSceneView: SceneStateView | null = null;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = TransformNode.TRANSFORM_INPUT_PORTS;
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = TransformNode.TRANSFORM_OUTPUT_PORTS;
@@ -161,18 +173,30 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
     }
 
     /**
-     * Returns the effective scene for the current tick. Reflects:
-     *   - the latest IScene consumed on the `scene` input port this tick,
-     *   - or DEFAULT_SCENE when nothing was wired/ready.
+     * Returns the effective scene view for the current tick.
      *
-     * Safe to call before fire() has run (returns DEFAULT_SCENE).
-     * Subclasses use this for env-dependent physics:
+     * Reads `session.sceneStateView` when one has been bound (the Sim.Graph
+     * that contains this node, or the GraphRunner at root, sets it
+     * at session bind time from the wired SceneItem). Falls back to
+     * a per-node default view (Earth surface, identity transform,
+     * no atmosphere) when no scene is bound — keeps unit tests and
+     * sample graphs without a SceneItem running cleanly.
      *
-     *     const g = this.getScene().gravity;     // [m/s²] body frame
-     *     const T = this.getScene().temperature; // [K] for thermal drift
+     * The returned view's accessors are live: a `scene.gravity` read
+     * sees whatever the SceneItem holds right now, including dynamic
+     * source overrides published this tick by upstream nodes.
+     *
+     *     const g = this.getScene(session).gravity;     // ICartesian3
+     *     const T = this.getScene(session).temperature; // K
+     *     const w = this.getScene(session).worldTransform.toMatrix4();
      */
-    protected getScene(): IScene {
-        return this._scene;
+    protected getScene(session: ISession): SceneStateView {
+        const bound = session.sceneStateView;
+        if (bound) return bound;
+        if (!this._fallbackSceneView) {
+            this._fallbackSceneView = buildDefaultStateView("__transform_fallback__");
+        }
+        return this._fallbackSceneView;
     }
 
     public override reset(_session: ISession): void {
@@ -180,16 +204,12 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
         this.setField("world", this._world, id, (n) => {
             this._world = n;
         });
-        this._scene = DEFAULT_SCENE;
     }
 
     public override fire(session: ISession, _t: number): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
         let local: ReadonlyArray<number> = IDENTITY44;
         let parentWorld: ReadonlyArray<number> = IDENTITY44;
-        // Reset the per-tick scene to the global default; an incoming
-        // wired IScene below overrides it.
-        this._scene = DEFAULT_SCENE;
 
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
@@ -201,10 +221,6 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
             const idx = links.indexOf(link);
             if (idx < 0 || !session.linkStates[idx].ready) continue;
             const value = session.consume(idx);
-            if (slot === TransformNode.INPUT_SCENE) {
-                if (isScene(value)) this._scene = value;
-                continue;
-            }
             if (!isMatrix44(value)) continue;
             if (slot === TransformNode.INPUT_LOCAL) local = value;
             else if (slot === TransformNode.INPUT_PARENT_WORLD) parentWorld = value;

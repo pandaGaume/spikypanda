@@ -1,4 +1,5 @@
 import { IEnabled, IGraph, INode, IOlink } from "../graph/graph.interfaces";
+import type { SceneStateView } from "../sim/scene-state-view.interface";
 
 /**
  * Execution layer. Reuses the topology of core/graph (INode, IOlink,
@@ -407,6 +408,29 @@ export interface ISession {
      * change mid-session.
      */
     detachSolver(solver: ISolverHandle): void;
+
+    /**
+     * Scene-state binding for this session.
+     *
+     * - `Sim.Graph` nodes set their `innerSession.sceneStateView` at
+     *   `reset(parentSession)` by reading the wired `SceneItem` and
+     *   building a `SceneStateView` from it.
+     * - `GraphRunner` sets the root session's `sceneStateView` to the
+     *   primary `SceneItem` at the root canvas (the one with
+     *   `isPrimary === true`, or the sole one if there is only one).
+     * - When no scene is wired anywhere, the runtime falls back to a
+     *   default view (Earth gravity, 20 °C, identity transform).
+     *
+     * Consumers (TransformNode-derived nodes, future gates, sensors)
+     * read this once at session bind and cache the reference; the
+     * view's getters are live, so subsequent reads see fresh values
+     * even though the reference is stable.
+     *
+     * Nullable in the interface so an implementation may set it
+     * lazily; consumers should handle the null case by falling back
+     * to a default view of their own.
+     */
+    sceneStateView: SceneStateView | null;
 
     /**
      * Inject a value into a channel from outside the graph. Equivalent

@@ -1,83 +1,73 @@
 /**
- * Unit tests for `Physics.Scene` and the TransformNode.getScene()
- * accessor exposed to subclasses.
+ * Unit tests for the new `Physics.Scene:scene` (SceneItem descriptor)
+ * and the TransformNode.getScene() accessor which now reads from
+ * `session.sceneStateView` instead of consuming a runtime `scene`
+ * cable.
  *
- * Test layout:
- *   1. IScene + isScene guard structural tests, DEFAULT_SCENE values.
- *   2. SceneNode emits an IScene with editable defaults / per-field
- *      overrides applied.
- *   3. TransformNode.getScene() returns DEFAULT_SCENE before/without a
- *      wired scene and the consumed scene when one is provided.
- *   4. The Scene input port is exposed at the right slot index on the
- *      TransformNode + on every motor (inheritance check).
+ * Coverage:
+ *   1. SceneItem editables round-trip and feed a live SceneStateView
+ *      via buildStateView() with the right closures.
+ *   2. SceneStateView getters reflect live SceneItem edits without
+ *      rebuild (mutate temperature, view sees it next read).
+ *   3. SceneStateView.worldTransform chains the parent's world via
+ *      composeTransform / Matrix4 — non-trivial chain validated.
+ *   4. TransformNode.getScene(session) returns the session's bound
+ *      view when set; falls back to a default Earth-surface view
+ *      when not set.
+ *   5. Motors inherit only `local` + `parent_world` ports (no `scene`
+ *      port anymore).
  */
-import type { IChannel, IOlink, ISession } from "spikypanda-core";
-import { Cartesian3 } from "spikypanda-core";
+import type { ISession } from "spikypanda-core";
 import {
-    SceneNode, DEFAULT_SCENE, isScene, TransformNode,
-} from "../../dev/plugins/physics/src/index";
-import type { IScene } from "../../dev/plugins/physics/src/index";
+    buildDefaultStateView,
+    Cartesian3,
+    composeTransform,
+    DEFAULT_GRAVITY,
+    DEFAULT_TEMPERATURE,
+    Frequency,
+    isSceneStateView,
+    makeTransform,
+    MIN_EFFECTIVE_HZ,
+    Pressure,
+    Quaternion,
+    Temperature,
+} from "spikypanda-core";
+import type { SceneStateView } from "spikypanda-core";
+import { SceneItem, TransformNode } from "../../dev/plugins/physics/src/index";
+import type { SceneSourceResolver } from "../../dev/plugins/physics/src/index";
 import { DcMotorDynamicNode } from "../../dev/plugins/physics/src/electric/motor-dc/index";
 import { BldcMotorDynamicNode } from "../../dev/plugins/physics/src/electric/motor-bldc/index";
 
 // ---------------------------------------------------------------------------
-// Session mocks (reused from faultable.test pattern, slim copy here so the
-// test file is self-contained).
+// Resolver mock — the SceneItem.buildStateView contract under test
 // ---------------------------------------------------------------------------
 
-interface ChannelSpec {
-    slot:    string;
-    value:   unknown;
-    ready?:  boolean;
-    enabled?: boolean;
-}
-
-function bindOpsc(node: { _opsc: IOlink[] }, channels: ChannelSpec[]): {
-    session: ISession;
-} {
-    const links: IChannel[] = channels.map((c) => ({
-        slot: c.slot,
-        enabled: c.enabled !== false,
-    } as unknown as IChannel));
-    const linkStates = channels.map((c) => ({ ready: c.ready !== false }));
-    node._opsc = links as unknown as IOlink[];
-    const session: ISession = {
-        graph: { links },
-        linkStates,
-        consume: (i: number) => {
-            if (!linkStates[i].ready) return undefined;
-            linkStates[i].ready = false;
-            return channels[i].value;
-        },
-        publish: () => undefined,
-        peek: () => undefined,
-    } as unknown as ISession;
-    return { session };
-}
-
-function bindOnsc(node: { _onsc: IOlink[] }, channels: { slot: string }[]): {
-    session: ISession;
-    published: { idx: number; value: unknown }[];
-} {
-    const links: IChannel[] = channels.map((c) => ({
-        slot: c.slot, enabled: true,
-    } as unknown as IChannel));
-    node._onsc = links as unknown as IOlink[];
-    const published: { idx: number; value: unknown }[] = [];
-    const session: ISession = {
-        graph: { links },
-        linkStates: links.map(() => ({ ready: false })),
-        consume: () => undefined,
-        publish: (idx: number, value: unknown) => { published.push({ idx, value }); },
-        peek: () => undefined,
-    } as unknown as ISession;
-    return { session, published };
+function noopResolver(effectiveHz: number = MIN_EFFECTIVE_HZ.getValue(Frequency.Units.Hz)): SceneSourceResolver {
+    return {
+        resolveNumberSource: () => null,
+        resolveCartesian3Source: () => null,
+        resolveQuaternionSource: () => null,
+        resolveAtmosphere: () => null,
+        aggregateEffectiveHz: () => effectiveHz,
+    };
 }
 
 function emptySession(): ISession {
     return {
         graph: { links: [] },
         linkStates: [],
+        sceneStateView: null,
+        consume: () => undefined,
+        publish: () => undefined,
+        peek: () => undefined,
+    } as unknown as ISession;
+}
+
+function sessionWithScene(view: SceneStateView): ISession {
+    return {
+        graph: { links: [] },
+        linkStates: [],
+        sceneStateView: view,
         consume: () => undefined,
         publish: () => undefined,
         peek: () => undefined,
@@ -85,209 +75,242 @@ function emptySession(): ISession {
 }
 
 // ---------------------------------------------------------------------------
-// IScene / DEFAULT_SCENE / isScene
+// SceneItem constructor defaults + live view round-trip
 // ---------------------------------------------------------------------------
 
-describe("IScene + DEFAULT_SCENE + isScene", () => {
-    it("DEFAULT_SCENE has Earth-surface values (Z-down convention)", () => {
-        expect(DEFAULT_SCENE.gravity).toEqual({ x: 0, y: 0, z: -9.81 });
-        expect(DEFAULT_SCENE.temperature).toBeCloseTo(293.15, 6);
-        expect(DEFAULT_SCENE.pressure).toBe(101325);
-        expect(DEFAULT_SCENE.timeScale).toBe(1);
+describe("SceneItem defaults + buildStateView", () => {
+    it("constructor defaults match Earth-surface (z-down)", () => {
+        const s = new SceneItem();
+        expect(s.gravity.x).toBe(0);
+        expect(s.gravity.y).toBe(0);
+        expect(s.gravity.z).toBeCloseTo(-9.81, 6);
+        expect(s.temperature).toBeCloseTo(293.15, 6);
+        expect(s.pressure).toBe(101325);
+        expect(s.timeScale).toBe(1);
     });
 
-    it("DEFAULT_SCENE is frozen at every level", () => {
-        expect(Object.isFrozen(DEFAULT_SCENE)).toBe(true);
-        expect(Object.isFrozen(DEFAULT_SCENE.gravity)).toBe(true);
+    it("buildStateView yields a live view that returns the SceneItem's values as Quantity instances", () => {
+        const s = new SceneItem();
+        const view = s.buildStateView(noopResolver());
+        expect(view.gravity.x).toBe(0);
+        expect(view.gravity.z).toBeCloseTo(-9.81, 6);
+        // Temperature / Pressure / Frequency are Quantity-wrapped now;
+        // canonical storage in K / Pa / Hz.
+        expect(view.temperature).toBeInstanceOf(Temperature);
+        expect(view.temperature.getValue(Temperature.Units.k)).toBeCloseTo(293.15, 6);
+        expect(view.pressure).toBeInstanceOf(Pressure);
+        expect(view.pressure.getValue(Pressure.Units.Pa)).toBe(101325);
+        expect(view.atmosphere).toBeNull();
     });
 
-    it("isScene accepts the default + duck-typed equivalents", () => {
-        expect(isScene(DEFAULT_SCENE)).toBe(true);
-        expect(isScene({
-            gravity: { x: 0, y: 0, z: -3.72 },
-            temperature: 210, pressure: 600, timeScale: 1,
-        })).toBe(true);
-        // Cartesian3 instance for gravity is structurally fine too.
-        expect(isScene({
-            gravity: new Cartesian3(0, 0, -9.81),
-            temperature: 293, pressure: 101325, timeScale: 1,
-        })).toBe(true);
+    it("view getters reflect live SceneItem edits without rebuild (closures)", () => {
+        const s = new SceneItem();
+        const view = s.buildStateView(noopResolver());
+        // SceneItem editables expose raw SI scalars; the view wraps in Quantity.
+        s.temperature = 250;
+        s.pressure = 600;
+        expect(view.temperature.getValue(Temperature.Units.k)).toBe(250);
+        expect(view.pressure.getValue(Pressure.Units.Pa)).toBe(600);
+        s.gravity = new Cartesian3(0, 0, -1.625);
+        expect(view.gravity.z).toBeCloseTo(-1.625, 6);
     });
 
-    it("isScene rejects malformed payloads", () => {
-        expect(isScene(null)).toBe(false);
-        expect(isScene(undefined)).toBe(false);
-        expect(isScene({})).toBe(false);
-        expect(isScene({ gravity: { x: 0, y: 0 } /* missing z */, temperature: 1, pressure: 1, timeScale: 1 })).toBe(false);
-        expect(isScene({ gravity: { x: 0, y: 0, z: 0 }, temperature: "20", pressure: 1, timeScale: 1 })).toBe(false);
-        expect(isScene(42)).toBe(false);
+    it("temperatureQ / pressureQ / manualHzQ accept arbitrary units and store in canonical SI", () => {
+        const s = new SceneItem();
+        s.temperatureQ = new Temperature(20, Temperature.Units.c); // 293.15 K
+        expect(s.temperature).toBeCloseTo(293.15, 6);
+        s.temperatureQ = new Temperature(32, Temperature.Units.f); // 0 °C → 273.15 K
+        expect(s.temperature).toBeCloseTo(273.15, 6);
+        s.pressureQ = new Pressure(1, Pressure.Units.atm); // 101325 Pa
+        expect(s.pressure).toBeCloseTo(101325, 6);
+        s.pressureQ = new Pressure(1, Pressure.Units.bar); // 100000 Pa
+        expect(s.pressure).toBe(1e5);
+        s.manualHzQ = new Frequency(1, Frequency.Units.kHz); // 1000 Hz
+        expect(s.manualHz).toBe(1000);
+    });
+
+    it("effectiveHz follows manualHz override when positive (Quantity-wrapped)", () => {
+        const s = new SceneItem();
+        s.manualHz = 0;
+        let view = s.buildStateView(noopResolver(120));
+        expect(view.effectiveHz).toBeInstanceOf(Frequency);
+        expect(view.effectiveHz.getValue(Frequency.Units.Hz)).toBe(120);
+        s.manualHz = 1000;
+        view = s.buildStateView(noopResolver(120));
+        expect(view.effectiveHz.getValue(Frequency.Units.Hz)).toBe(1000);
+        expect(view.effectiveHz.getValue(Frequency.Units.kHz)).toBe(1);
     });
 });
 
 // ---------------------------------------------------------------------------
-// SceneNode emission
+// Transform chain (composeTransform + worldTransform)
 // ---------------------------------------------------------------------------
 
-describe("SceneNode", () => {
-    it("publishes DEFAULT_SCENE values when no inputs wired and no editables changed", () => {
-        const node = new SceneNode();
-        const { session, published } = bindOnsc(node as unknown as { _onsc: IOlink[] }, [
-            { slot: "scene" },
-        ]);
-        node.fire(session, 0);
-        expect(published).toHaveLength(1);
-        const scene = published[0].value as IScene;
-        expect(isScene(scene)).toBe(true);
-        expect(scene.gravity).toEqual({ x: 0, y: 0, z: -9.81 });
-        expect(scene.temperature).toBeCloseTo(293.15, 6);
-        expect(scene.pressure).toBe(101325);
-        expect(scene.timeScale).toBe(1);
+describe("SceneStateView 3D-tree chain", () => {
+    it("composeTransform produces world = parent · child for a pure translation", () => {
+        const parent = makeTransform(new Cartesian3(10, 0, 0), Quaternion.identity(), new Cartesian3(1, 1, 1));
+        const child = makeTransform(new Cartesian3(0, 5, 0), Quaternion.identity(), new Cartesian3(1, 1, 1));
+        const world = composeTransform(parent, child);
+        expect(world.position.x).toBeCloseTo(10, 9);
+        expect(world.position.y).toBeCloseTo(5, 9);
+        expect(world.position.z).toBeCloseTo(0, 9);
     });
 
-    it("editables override DEFAULT_SCENE in the published payload (Mars surface)", () => {
-        const node = new SceneNode();
-        node.gravity     = new Cartesian3(0, 0, -3.72);
-        node.temperature = 210;
-        node.pressure    = 600;
-        node.timeScale   = 0.5;
-        const { session, published } = bindOnsc(node as unknown as { _onsc: IOlink[] }, [
-            { slot: "scene" },
-        ]);
-        node.fire(session, 0);
-        const scene = published[0].value as IScene;
-        expect(scene.gravity).toEqual({ x: 0, y: 0, z: -3.72 });
-        expect(scene.temperature).toBe(210);
-        expect(scene.pressure).toBe(600);
-        expect(scene.timeScale).toBe(0.5);
+    it("composeTransform produces world = parent · child for a uniform scale", () => {
+        const parent = makeTransform(new Cartesian3(0, 0, 0), Quaternion.identity(), new Cartesian3(2, 2, 2));
+        const child = makeTransform(new Cartesian3(3, 0, 0), Quaternion.identity(), new Cartesian3(1, 1, 1));
+        const world = composeTransform(parent, child);
+        // Child position 3 in X gets scaled by parent's 2× → 6.
+        expect(world.position.x).toBeCloseTo(6, 9);
+        expect(world.scale.x).toBeCloseTo(2, 9);
     });
 
-    it("per-field input wires override the corresponding editable", () => {
-        const node = new SceneNode();
-        // Start from defaults; override only pressure via input.
-        bindOpsc(node as unknown as { _opsc: IOlink[] }, [
-            { slot: "pressure", value: 50000 },
-        ]);
-        // Set onsc separately (bindOpsc clobbers _opsc only).
-        const { session: pubSession, published } = bindOnsc(node as unknown as { _onsc: IOlink[] }, [
-            { slot: "scene" },
-        ]);
-        // Splice the same opsc back since bindOnsc reset _opsc only if we re-called.
-        // Cleanly: rebuild a combined session.
-        const combinedLinks: IChannel[] = [
-            { slot: "pressure", enabled: true } as unknown as IChannel,
-            { slot: "scene",    enabled: true } as unknown as IChannel,
-        ];
-        (node as unknown as { _opsc: IOlink[] })._opsc = [combinedLinks[0]] as unknown as IOlink[];
-        (node as unknown as { _onsc: IOlink[] })._onsc = [combinedLinks[1]] as unknown as IOlink[];
-        const linkStates = [{ ready: true }, { ready: false }];
-        const pub: { idx: number; value: unknown }[] = [];
-        const session: ISession = {
-            graph: { links: combinedLinks },
-            linkStates,
-            consume: (i: number) => i === 0 ? 50000 : undefined,
-            publish: (idx: number, value: unknown) => { pub.push({ idx, value }); },
-            peek: () => undefined,
-        } as unknown as ISession;
-        node.fire(session, 0);
-        // pubSession + published unused; assert through pub.
-        void pubSession; void published;
-        expect(pub).toHaveLength(1);
-        const scene = pub[0].value as IScene;
-        expect(scene.pressure).toBe(50000);
-        // Other fields stay at the editable defaults (i.e. DEFAULT_SCENE).
-        expect(scene.gravity).toEqual({ x: 0, y: 0, z: -9.81 });
-        expect(scene.temperature).toBeCloseTo(293.15, 6);
+    it("a SceneStateView with setParent(parent) chains worldTransform automatically", () => {
+        const parentItem = new SceneItem();
+        parentItem.localPosition = new Cartesian3(10, 0, 0);
+        const parentView = parentItem.buildStateView(noopResolver());
+
+        const childItem = new SceneItem();
+        childItem.localPosition = new Cartesian3(0, 5, 0);
+        const childView = childItem.buildStateView(noopResolver());
+
+        // SceneStateViewImpl.setParent is the public seam.
+        (childView as { setParent(p: SceneStateView | null): void }).setParent(parentView);
+        const w = childView.worldTransform;
+        expect(w.position.x).toBeCloseTo(10, 9);
+        expect(w.position.y).toBeCloseTo(5, 9);
     });
 
-    it("the published scene payload is frozen (can't be mutated by consumers)", () => {
-        const node = new SceneNode();
-        const { session, published } = bindOnsc(node as unknown as { _onsc: IOlink[] }, [
-            { slot: "scene" },
-        ]);
-        node.fire(session, 0);
-        const scene = published[0].value as IScene;
-        expect(Object.isFrozen(scene)).toBe(true);
-        expect(Object.isFrozen(scene.gravity)).toBe(true);
+    it("worldTransform.toMatrix4 returns a 16-entry column-major Float64Array", () => {
+        const item = new SceneItem();
+        item.localPosition = new Cartesian3(1, 2, 3);
+        const view = item.buildStateView(noopResolver());
+        const m = view.worldTransform.toMatrix4().m;
+        expect(m.length).toBe(16);
+        // Translation in column 3.
+        expect(m[12]).toBeCloseTo(1, 9);
+        expect(m[13]).toBeCloseTo(2, 9);
+        expect(m[14]).toBeCloseTo(3, 9);
+        // Identity rotation / unit scale on the diagonal.
+        expect(m[0]).toBeCloseTo(1, 9);
+        expect(m[5]).toBeCloseTo(1, 9);
+        expect(m[10]).toBeCloseTo(1, 9);
+        expect(m[15]).toBe(1);
     });
 });
 
 // ---------------------------------------------------------------------------
-// TransformNode.getScene + motor inheritance
+// buildDefaultStateView fallback
+// ---------------------------------------------------------------------------
+
+describe("buildDefaultStateView + isSceneStateView", () => {
+    it("returns an Earth-surface view that consumers can read without crashing", () => {
+        const view = buildDefaultStateView("test");
+        expect(view.id).toBe("test");
+        expect(view.gravity).toBe(DEFAULT_GRAVITY);
+        expect(view.temperature.getValue(Temperature.Units.k)).toBe(DEFAULT_TEMPERATURE.getValue(Temperature.Units.k));
+        expect(view.atmosphere).toBeNull();
+        expect(view.effectiveHz.getValue(Frequency.Units.Hz)).toBe(MIN_EFFECTIVE_HZ.getValue(Frequency.Units.Hz));
+    });
+
+    it("isSceneStateView accepts a real view from buildDefaultStateView", () => {
+        const view = buildDefaultStateView("test");
+        expect(isSceneStateView(view)).toBe(true);
+    });
+
+    it("isSceneStateView rejects malformed payloads", () => {
+        expect(isSceneStateView(null)).toBe(false);
+        expect(isSceneStateView(undefined)).toBe(false);
+        expect(isSceneStateView({})).toBe(false);
+        expect(isSceneStateView(42)).toBe(false);
+        // The legacy shape with bare-number scalars no longer passes.
+        expect(isSceneStateView({
+            id: "x",
+            gravity: { x: 0, y: 0, z: -9.81 },
+            temperature: 293.15,
+            pressure: 101325,
+            timeScale: 1,
+            effectiveHz: 60,
+            localTransform: {},
+            worldTransform: {},
+        })).toBe(false);
+        // Same payload with Quantity-wrapped scalars passes.
+        expect(isSceneStateView({
+            id: "x",
+            gravity: { x: 0, y: 0, z: -9.81 },
+            temperature: new Temperature(293.15, Temperature.Units.k),
+            pressure: new Pressure(101325, Pressure.Units.Pa),
+            timeScale: 1,
+            effectiveHz: new Frequency(60, Frequency.Units.Hz),
+            localTransform: {},
+            worldTransform: {},
+        })).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// TransformNode.getScene reads from session.sceneStateView
 // ---------------------------------------------------------------------------
 
 class TestableTransformNode extends TransformNode {
-    public readScene(): IScene {
-        return (this as unknown as { getScene: () => IScene }).getScene();
+    public readScene(session: ISession): SceneStateView {
+        return (this as unknown as { getScene: (s: ISession) => SceneStateView }).getScene(session);
     }
 }
 
 describe("TransformNode.getScene", () => {
-    it("returns DEFAULT_SCENE when no scene was wired", () => {
+    it("falls back to a default view when session.sceneStateView is null", () => {
         const node = new TestableTransformNode();
         node.reset(emptySession());
-        expect(node.readScene()).toBe(DEFAULT_SCENE);
-        node.fire(emptySession(), 0);
-        expect(node.readScene()).toBe(DEFAULT_SCENE);
+        const view = node.readScene(emptySession());
+        expect(view.gravity.z).toBeCloseTo(-9.81, 6);
+        expect(view.temperature.getValue(Temperature.Units.k)).toBeCloseTo(293.15, 6);
     });
 
-    it("captures the wired scene token after fire()", () => {
+    it("returns the bound session view when one is set", () => {
+        const item = new SceneItem();
+        item.gravity = new Cartesian3(0, 0, -1.625);
+        item.temperature = 250;
+        const view = item.buildStateView(noopResolver());
         const node = new TestableTransformNode();
-        const customScene: IScene = Object.freeze({
-            gravity: Object.freeze({ x: 0, y: 0, z: -1.62 }), // Moon, Z-down
-            temperature: 250, pressure: 0, timeScale: 1,
-        });
-        const { session } = bindOpsc(node as unknown as { _opsc: IOlink[] }, [
-            { slot: "scene", value: customScene },
-        ]);
-        node.fire(session, 0);
-        const s = node.readScene();
-        expect(s.gravity.z).toBeCloseTo(-1.62, 6);
-        expect(s.temperature).toBe(250);
-        expect(s.pressure).toBe(0);
+        const session = sessionWithScene(view);
+        node.reset(session);
+        const got = node.readScene(session);
+        expect(got).toBe(view);
+        expect(got.gravity.z).toBeCloseTo(-1.625, 6);
+        expect(got.temperature.getValue(Temperature.Units.k)).toBe(250);
     });
 
-    it("falls back to DEFAULT_SCENE on the next tick when the wire stops emitting", () => {
+    it("a live edit on the SceneItem propagates through the bound view", () => {
+        const item = new SceneItem();
+        const view = item.buildStateView(noopResolver());
         const node = new TestableTransformNode();
-        const moon: IScene = {
-            gravity: { x: 0, y: 0, z: -1.62 },
-            temperature: 250, pressure: 0, timeScale: 1,
-        };
-        const { session: s1 } = bindOpsc(node as unknown as { _opsc: IOlink[] }, [
-            { slot: "scene", value: moon },
-        ]);
-        node.fire(s1, 0);
-        expect(node.readScene().gravity.z).toBeCloseTo(-1.62, 6);
-        // Tick 2: nothing wired.
-        node.fire(emptySession(), 1e-3);
-        expect(node.readScene()).toBe(DEFAULT_SCENE);
-    });
-
-    it("ignores tokens on the scene slot that aren't IScene-shaped", () => {
-        const node = new TestableTransformNode();
-        const { session } = bindOpsc(node as unknown as { _opsc: IOlink[] }, [
-            { slot: "scene", value: { temperature: 1 } /* missing gravity etc. */ },
-        ]);
-        node.fire(session, 0);
-        expect(node.readScene()).toBe(DEFAULT_SCENE);
+        const session = sessionWithScene(view);
+        // Mutate before second read; view returns the new value.
+        item.temperature = 400;
+        const got = node.readScene(session);
+        expect(got.temperature.getValue(Temperature.Units.k)).toBe(400);
     });
 });
 
 // ---------------------------------------------------------------------------
-// Motors inherit the scene port
+// Motors inherit only local + parent_world (no scene port any more)
 // ---------------------------------------------------------------------------
 
-describe("Motor inheritance: scene port", () => {
-    it("DcMotorDynamicNode exposes the scene input port", () => {
+describe("Motor inheritance: transform ports without scene", () => {
+    it("DcMotorDynamicNode exposes local + parent_world, NOT scene", () => {
         const node = new DcMotorDynamicNode();
         const slots = node.inputPorts.map((p) => p.slot);
-        expect(slots).toContain("scene");
-        // Order: local, parent_world, scene, fault_0, then motor own slots.
-        expect(slots.slice(0, 4)).toEqual(["local", "parent_world", "scene", "fault_0"]);
+        expect(slots).toContain("local");
+        expect(slots).toContain("parent_world");
+        expect(slots).not.toContain("scene");
     });
 
-    it("BldcMotorDynamicNode exposes the scene input port", () => {
+    it("BldcMotorDynamicNode exposes local + parent_world, NOT scene", () => {
         const node = new BldcMotorDynamicNode();
         const slots = node.inputPorts.map((p) => p.slot);
-        expect(slots.slice(0, 4)).toEqual(["local", "parent_world", "scene", "fault_0"]);
+        expect(slots).toContain("local");
+        expect(slots).toContain("parent_world");
+        expect(slots).not.toContain("scene");
     });
 });

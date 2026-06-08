@@ -1,24 +1,25 @@
 import type { IPlugin, IPluginContext } from "spikypanda-nodeeditor";
-import { createSceneNode, SceneNode } from "./scene.node.js";
 import {
-    createEarthSceneNode,
-    createMoonSceneNode,
-    createMarsSceneNode,
-    createOrbitalSceneNode,
+    createEarthSceneItem,
+    createMarsSceneItem,
+    createMoonSceneItem,
+    createOrbitalSceneItem,
     EARTH_PRESET,
-    MOON_PRESET,
     MARS_PRESET,
+    MOON_PRESET,
     ORBITAL_PRESET,
     SCENE_PRESETS,
 } from "./presets.js";
+import { createSceneItem, SceneItem } from "./scene.item.js";
+import type { SceneSourceResolver } from "./scene.item.js";
 
 export {
-    SceneNode,
-    createSceneNode,
-    createEarthSceneNode,
-    createMoonSceneNode,
-    createMarsSceneNode,
-    createOrbitalSceneNode,
+    SceneItem,
+    createSceneItem,
+    createEarthSceneItem,
+    createMoonSceneItem,
+    createMarsSceneItem,
+    createOrbitalSceneItem,
     EARTH_PRESET,
     MOON_PRESET,
     MARS_PRESET,
@@ -26,24 +27,15 @@ export {
     SCENE_PRESETS,
 };
 export type { IScenePreset } from "./presets.js";
-
-/** Shared port descriptor blocks; identical across the generic Scene
- *  node and every preset, since presets are just pre-configured
- *  SceneNode instances. */
-const SCENE_IN_PORTS = [
-    { slot: "gravity", optional: true, type: "vec3" },
-    { slot: "temperature", optional: true, type: "float" },
-    { slot: "pressure", optional: true, type: "float" },
-    { slot: "time_scale", optional: true, type: "float" },
-] as const;
-const SCENE_OUT_PORTS = [{ slot: "scene", optional: false, type: "any" }] as const;
+export type { SceneSourceResolver };
 
 /**
  * `Physics.Scene` sub-plugin. Exposes a generic editable Scene plus four
- * planetary presets (Earth, Moon, Mars, Orbital). All five entries
- * share the same SceneNode runtime class — presets just hand-configure
- * its editables on construction. Users can drop a preset and still
- * tweak any field afterwards via the property panel.
+ * planetary presets (Earth, Moon, Mars, Orbital). All five entries are
+ * `SceneItem` instances (GraphItem, NOT RuntimeNode) — they are pure
+ * descriptors of an environment + simulation domain, read at session
+ * bind by the enclosing Sim.Graph (or by the GraphRunner at root) to
+ * build a live SceneStateView consumers read each tick.
  *
  * Layout in the palette (all under "Physics.Scene"):
  *   Scene     — generic, defaults to Earth surface
@@ -54,34 +46,41 @@ const SCENE_OUT_PORTS = [{ slot: "scene", optional: false, type: "any" }] as con
  */
 export const sceneSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
-        const inputPorts: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [...SCENE_IN_PORTS];
-        const outputPorts: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [...SCENE_OUT_PORTS];
+        // SceneItem is a GraphItem, not a RuntimeNode — it has no
+        // runtime input/output ports. The editor surfaces its
+        // anchors (sceneOut / atmosphereIn / solverIn / sharedIn) as
+        // config-links (dashed style) handled by the editor renderer,
+        // not as scheduler-visible channels. The empty port arrays
+        // below preserve the registration shape for backward
+        // compatibility with the palette UI.
+        const inputPorts: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [];
+        const outputPorts: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [];
 
-        ctx.nodes.register("Physics.Scene:scene", () => createSceneNode() as never, {
+        ctx.nodes.register("Physics.Scene:scene", () => createSceneItem() as never, {
             label: "Scene",
             category: "Physics.Scene",
             inputPorts,
             outputPorts,
         });
-        ctx.nodes.register("Physics.Scene:earth", () => createEarthSceneNode() as never, {
+        ctx.nodes.register("Physics.Scene:earth", () => createEarthSceneItem() as never, {
             label: EARTH_PRESET.name,
             category: "Physics.Scene",
             inputPorts,
             outputPorts,
         });
-        ctx.nodes.register("Physics.Scene:moon", () => createMoonSceneNode() as never, {
+        ctx.nodes.register("Physics.Scene:moon", () => createMoonSceneItem() as never, {
             label: MOON_PRESET.name,
             category: "Physics.Scene",
             inputPorts,
             outputPorts,
         });
-        ctx.nodes.register("Physics.Scene:mars", () => createMarsSceneNode() as never, {
+        ctx.nodes.register("Physics.Scene:mars", () => createMarsSceneItem() as never, {
             label: MARS_PRESET.name,
             category: "Physics.Scene",
             inputPorts,
             outputPorts,
         });
-        ctx.nodes.register("Physics.Scene:orbital", () => createOrbitalSceneNode() as never, {
+        ctx.nodes.register("Physics.Scene:orbital", () => createOrbitalSceneItem() as never, {
             label: ORBITAL_PRESET.name,
             category: "Physics.Scene",
             inputPorts,

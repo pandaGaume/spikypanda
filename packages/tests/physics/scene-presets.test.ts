@@ -1,72 +1,42 @@
 /**
  * Unit tests for the 4 Physics.Scene presets (Earth, Moon, Mars, Orbital).
  *
- * Each preset is verified at three levels:
+ * Each preset is verified at two levels:
  *   1. The static IScenePreset constant carries the documented values,
  *      and is frozen at every level (defensive contract).
- *   2. The preset factory builds a SceneNode whose editables match the
+ *   2. The preset factory builds a SceneItem whose editables match the
  *      preset constants exactly (no drift between data + factory).
- *   3. The factory-built SceneNode publishes those same values when
- *      fired, validating that the editable-to-output pipeline works
- *      end-to-end with a preset.
+ *
+ * In the v2 model SceneItem is a descriptor (GraphItem, NOT RuntimeNode),
+ * so there is no longer a fire()/publish path to assert against. The
+ * editables-to-SceneStateView pipeline is exercised by the
+ * scene.test.ts companion suite via SceneItem.buildStateView().
  */
-import type { IChannel, IOlink, ISession } from "spikypanda-core";
 import {
-    SceneNode,
-    EARTH_PRESET, MOON_PRESET, MARS_PRESET, ORBITAL_PRESET, SCENE_PRESETS,
-    createEarthSceneNode, createMoonSceneNode,
-    createMarsSceneNode,  createOrbitalSceneNode,
-    DEFAULT_SCENE, isScene,
+    EARTH_PRESET,
+    MARS_PRESET,
+    MOON_PRESET,
+    ORBITAL_PRESET,
+    SCENE_PRESETS,
+    SceneItem,
+    createEarthSceneItem,
+    createMarsSceneItem,
+    createMoonSceneItem,
+    createOrbitalSceneItem,
 } from "../../dev/plugins/physics/src/index";
-import type { IScene, IScenePreset } from "../../dev/plugins/physics/src/index";
+import type { IScenePreset } from "../../dev/plugins/physics/src/index";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function bindOnsc(node: { _onsc: IOlink[] }): {
-    session: ISession;
-    published: { idx: number; value: unknown }[];
-} {
-    const links: IChannel[] = [{ slot: "scene", enabled: true } as unknown as IChannel];
-    node._onsc = links as unknown as IOlink[];
-    const published: { idx: number; value: unknown }[] = [];
-    const session: ISession = {
-        graph: { links },
-        linkStates: [{ ready: false }],
-        consume: () => undefined,
-        publish: (idx: number, value: unknown) => { published.push({ idx, value }); },
-        peek: () => undefined,
-    } as unknown as ISession;
-    return { session, published };
-}
-
-function assertSceneEquals(actual: IScene, expected: IScene): void {
-    expect(actual.gravity.x).toBeCloseTo(expected.gravity.x, 12);
-    expect(actual.gravity.y).toBeCloseTo(expected.gravity.y, 12);
-    expect(actual.gravity.z).toBeCloseTo(expected.gravity.z, 12);
-    expect(actual.temperature).toBeCloseTo(expected.temperature, 12);
-    expect(actual.pressure).toBeCloseTo(expected.pressure, 12);
-    expect(actual.timeScale).toBeCloseTo(expected.timeScale, 12);
-}
-
-function assertNodeMatchesPreset(node: SceneNode, preset: IScenePreset): void {
-    expect(node.gravity.x).toBeCloseTo(preset.scene.gravity.x, 12);
-    expect(node.gravity.y).toBeCloseTo(preset.scene.gravity.y, 12);
-    expect(node.gravity.z).toBeCloseTo(preset.scene.gravity.z, 12);
-    expect(node.temperature).toBeCloseTo(preset.scene.temperature, 12);
-    expect(node.pressure).toBeCloseTo(preset.scene.pressure, 12);
-    expect(node.timeScale).toBeCloseTo(preset.scene.timeScale, 12);
-}
-
-function assertPublishesPreset(factory: () => SceneNode, preset: IScenePreset): void {
-    const node = factory();
-    const { session, published } = bindOnsc(node as unknown as { _onsc: IOlink[] });
-    node.fire(session, 0);
-    expect(published).toHaveLength(1);
-    const scene = published[0].value as IScene;
-    expect(isScene(scene)).toBe(true);
-    assertSceneEquals(scene, preset.scene);
+function assertItemMatchesPreset(item: SceneItem, preset: IScenePreset): void {
+    expect(item.gravity.x).toBeCloseTo(preset.gravity.x, 12);
+    expect(item.gravity.y).toBeCloseTo(preset.gravity.y, 12);
+    expect(item.gravity.z).toBeCloseTo(preset.gravity.z, 12);
+    expect(item.temperature).toBeCloseTo(preset.temperature, 12);
+    expect(item.pressure).toBeCloseTo(preset.pressure, 12);
+    expect(item.timeScale).toBeCloseTo(preset.timeScale, 12);
 }
 
 // ---------------------------------------------------------------------------
@@ -74,43 +44,47 @@ function assertPublishesPreset(factory: () => SceneNode, preset: IScenePreset): 
 // ---------------------------------------------------------------------------
 
 describe("Scene preset constants", () => {
-    it("EARTH_PRESET matches DEFAULT_SCENE (single source of truth)", () => {
-        assertSceneEquals(EARTH_PRESET.scene, DEFAULT_SCENE);
+    it("EARTH_PRESET has Earth-surface values (Z-down convention)", () => {
+        expect(EARTH_PRESET.gravity.x).toBe(0);
+        expect(EARTH_PRESET.gravity.y).toBe(0);
+        expect(EARTH_PRESET.gravity.z).toBeCloseTo(-9.81, 6);
+        expect(EARTH_PRESET.temperature).toBeCloseTo(293.15, 6);
+        expect(EARTH_PRESET.pressure).toBe(101325);
+        expect(EARTH_PRESET.timeScale).toBe(1);
         expect(EARTH_PRESET.name).toBe("Earth");
     });
 
     it("MOON_PRESET has lunar gravity (Z-down), ~250 K, near-vacuum", () => {
-        expect(MOON_PRESET.scene.gravity.x).toBe(0);
-        expect(MOON_PRESET.scene.gravity.y).toBe(0);
-        expect(MOON_PRESET.scene.gravity.z).toBeCloseTo(-1.625, 6);
-        expect(MOON_PRESET.scene.temperature).toBe(250);
-        expect(MOON_PRESET.scene.pressure).toBe(0);
+        expect(MOON_PRESET.gravity.x).toBe(0);
+        expect(MOON_PRESET.gravity.y).toBe(0);
+        expect(MOON_PRESET.gravity.z).toBeCloseTo(-1.625, 6);
+        expect(MOON_PRESET.temperature).toBe(250);
+        expect(MOON_PRESET.pressure).toBe(0);
         expect(MOON_PRESET.name).toBe("Moon");
     });
 
     it("MARS_PRESET has Martian gravity (Z-down), 210 K, 600 Pa", () => {
-        expect(MARS_PRESET.scene.gravity.x).toBe(0);
-        expect(MARS_PRESET.scene.gravity.y).toBe(0);
-        expect(MARS_PRESET.scene.gravity.z).toBeCloseTo(-3.721, 6);
-        expect(MARS_PRESET.scene.temperature).toBe(210);
-        expect(MARS_PRESET.scene.pressure).toBe(600);
+        expect(MARS_PRESET.gravity.x).toBe(0);
+        expect(MARS_PRESET.gravity.y).toBe(0);
+        expect(MARS_PRESET.gravity.z).toBeCloseTo(-3.721, 6);
+        expect(MARS_PRESET.temperature).toBe(210);
+        expect(MARS_PRESET.pressure).toBe(600);
         expect(MARS_PRESET.name).toBe("Mars");
     });
 
     it("ORBITAL_PRESET is free-space vacuum at grey-body thermal equilibrium", () => {
-        expect(ORBITAL_PRESET.scene.gravity.x).toBe(0);
-        expect(ORBITAL_PRESET.scene.gravity.y).toBe(0);
-        expect(ORBITAL_PRESET.scene.gravity.z).toBe(0);
-        expect(ORBITAL_PRESET.scene.temperature).toBeCloseTo(278.6, 1);
-        expect(ORBITAL_PRESET.scene.pressure).toBe(0);
+        expect(ORBITAL_PRESET.gravity.x).toBe(0);
+        expect(ORBITAL_PRESET.gravity.y).toBe(0);
+        expect(ORBITAL_PRESET.gravity.z).toBe(0);
+        expect(ORBITAL_PRESET.temperature).toBeCloseTo(278.6, 1);
+        expect(ORBITAL_PRESET.pressure).toBe(0);
         expect(ORBITAL_PRESET.name).toBe("Orbital");
     });
 
     it("all preset constants are frozen at every level", () => {
         for (const preset of [EARTH_PRESET, MOON_PRESET, MARS_PRESET, ORBITAL_PRESET]) {
             expect(Object.isFrozen(preset)).toBe(true);
-            expect(Object.isFrozen(preset.scene)).toBe(true);
-            expect(Object.isFrozen(preset.scene.gravity)).toBe(true);
+            expect(Object.isFrozen(preset.gravity)).toBe(true);
         }
         expect(Object.isFrozen(SCENE_PRESETS)).toBe(true);
     });
@@ -124,31 +98,20 @@ describe("Scene preset constants", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Factory functions produce nodes with the preset editables applied
+// Factory functions produce SceneItems with the preset editables applied
 // ---------------------------------------------------------------------------
 
 describe("Scene preset factories: editables wired to preset values", () => {
-    it("createEarthSceneNode applies EARTH_PRESET to its editables", () => {
-        assertNodeMatchesPreset(createEarthSceneNode(), EARTH_PRESET);
+    it("createEarthSceneItem applies EARTH_PRESET to its editables", () => {
+        assertItemMatchesPreset(createEarthSceneItem(), EARTH_PRESET);
     });
-    it("createMoonSceneNode applies MOON_PRESET to its editables", () => {
-        assertNodeMatchesPreset(createMoonSceneNode(), MOON_PRESET);
+    it("createMoonSceneItem applies MOON_PRESET to its editables", () => {
+        assertItemMatchesPreset(createMoonSceneItem(), MOON_PRESET);
     });
-    it("createMarsSceneNode applies MARS_PRESET to its editables", () => {
-        assertNodeMatchesPreset(createMarsSceneNode(), MARS_PRESET);
+    it("createMarsSceneItem applies MARS_PRESET to its editables", () => {
+        assertItemMatchesPreset(createMarsSceneItem(), MARS_PRESET);
     });
-    it("createOrbitalSceneNode applies ORBITAL_PRESET to its editables", () => {
-        assertNodeMatchesPreset(createOrbitalSceneNode(), ORBITAL_PRESET);
+    it("createOrbitalSceneItem applies ORBITAL_PRESET to its editables", () => {
+        assertItemMatchesPreset(createOrbitalSceneItem(), ORBITAL_PRESET);
     });
-});
-
-// ---------------------------------------------------------------------------
-// End-to-end: factory → fire() → published IScene matches the preset
-// ---------------------------------------------------------------------------
-
-describe("Scene preset factories: fire() publishes the preset's IScene", () => {
-    it("Earth", () => { assertPublishesPreset(createEarthSceneNode,   EARTH_PRESET);   });
-    it("Moon",  () => { assertPublishesPreset(createMoonSceneNode,    MOON_PRESET);    });
-    it("Mars",  () => { assertPublishesPreset(createMarsSceneNode,    MARS_PRESET);    });
-    it("Orbital", () => { assertPublishesPreset(createOrbitalSceneNode, ORBITAL_PRESET); });
 });

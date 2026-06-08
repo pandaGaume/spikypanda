@@ -6,9 +6,6 @@ export { TransformNode, createTransformNode, IDENTITY44, isMatrix44, mul44 } fro
 export { FaultableNode, isFaultDescriptor } from "./fault.node.js";
 export type { IFaultDescriptor } from "./fault.node.js";
 
-export { DEFAULT_SCENE, isScene, SCENE_SLOT } from "./scene.js";
-export type { IScene, IVec3 } from "./scene.js";
-
 /**
  * `Physics.Transform` sub-plugin. Exposes a single registrable node,
  * `Physics.Transform:transform`, that composes a local pose with the
@@ -19,11 +16,16 @@ export type { IScene, IVec3 } from "./scene.js";
  * The node is registered so the user can drop a standalone Transform on
  * the canvas (intermediate frame, marker, debug attach-point) without
  * having to instantiate a motor or a sensor.
+ *
+ * Environmental context (gravity, T, P, atmosphere) used to be carried
+ * by a `scene` input port on every TransformNode and broadcast by the
+ * legacy Physics.Scene:scene RuntimeNode. It now lives on the session
+ * (`ISession.sceneStateView`), populated by the enclosing Sim.Graph
+ * from a wired SceneItem (see plugins/physics/src/scene). The
+ * TransformNode therefore exposes only `local` + `parent_world` here.
  */
 export const transformSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
-        // TRANSFORM_INPUT_PORTS already includes the `scene` port; spreading
-        // it gives the palette entry the full pose + env attach surface.
         ctx.nodes.register("Physics.Transform:transform", () => createTransformNode() as never, {
             label: "Transform",
             category: "Physics.Transform",

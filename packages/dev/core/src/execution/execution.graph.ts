@@ -159,7 +159,7 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
      * against an internal input port (a channel whose oini is null).
      * Lazily memoized in _portIndex for O(1) subsequent lookups.
      */
-    private _routeInputsFromParent(parentSession: ISession): ISession | undefined {
+    protected _routeInputsFromParent(parentSession: ISession): ISession | undefined {
         const inner = this._internalSessionIn(parentSession);
         if (!inner) {
             return undefined;
@@ -201,7 +201,7 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
      * Boundary matching: each external outgoing link's slot is matched
      * against an internal output port (a channel whose ofin is null).
      */
-    private _routeOutputsToParent(parentSession: ISession, inner: ISession): void {
+    protected _routeOutputsToParent(parentSession: ISession, inner: ISession): void {
         const parentLinks = parentSession.graph.links as ReadonlyArray<IChannel>;
         for (const link of this.onsc<IChannel>()) {
             if (!link.enabled) {
@@ -350,7 +350,7 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
      * session was not constructed against a graph containing this
      * sub-graph (defensive).
      */
-    private _internalSessionIn(parentSession: ISession): ISession | undefined {
+    protected _internalSessionIn(parentSession: ISession): ISession | undefined {
         const state = parentSession.nodeStateOf(this) as IGraphNodeState | INodeState | undefined;
         if (state && "internalSession" in state) {
             return state.internalSession;

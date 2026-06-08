@@ -118,14 +118,14 @@ describe("TransformNode", () => {
         expect(published).toHaveLength(0);
     });
 
-    it("declares matrix44 + scene input ports with the canonical slot names", () => {
+    it("declares matrix44 input ports with the canonical slot names (scene moved to session)", () => {
         const node = new TransformNode();
-        expect(node.inputPorts.map((p) => p.slot)).toEqual(["local", "parent_world", "scene"]);
+        expect(node.inputPorts.map((p) => p.slot)).toEqual(["local", "parent_world"]);
         expect(node.outputPorts.map((p) => p.slot)).toEqual(["world"]);
-        // local + parent_world are matrix44; scene is any (structured payload).
+        // Both transform inputs are matrix44 now; scene context is read
+        // from `session.sceneStateView`, not from a runtime cable.
         expect(node.inputPorts.find((p) => p.slot === "local")?.type).toBe("matrix44");
         expect(node.inputPorts.find((p) => p.slot === "parent_world")?.type).toBe("matrix44");
-        expect(node.inputPorts.find((p) => p.slot === "scene")?.type).toBe("any");
         for (const p of node.outputPorts) expect(p.type).toBe("matrix44");
     });
 });
@@ -135,23 +135,25 @@ describe("TransformNode", () => {
 // ---------------------------------------------------------------------------
 
 describe("Motor TransformNode inheritance", () => {
-    it("DcMotorDynamicNode exposes transform + scene + fault ports alongside its own", () => {
+    it("DcMotorDynamicNode exposes transform + fault ports alongside its own (scene moved to session)", () => {
         const node = new DcMotorDynamicNode();
         const inSlots  = node.inputPorts.map((p) => p.slot);
         const outSlots = node.outputPorts.map((p) => p.slot);
-        // Base-class ports first (transform, scene, fault), then own.
+        // Base-class ports first (transform, fault), then own.
         // `dt` port was dropped in F3 — the motor is now IIntegrable
         // and the Session's attached solver owns the timebase.
-        expect(inSlots.slice(0, 4)).toEqual(["local", "parent_world", "scene", "fault_0"]);
-        expect(inSlots).toEqual(["local", "parent_world", "scene", "fault_0", "V", "tau_load"]);
+        // The scene port was dropped in P2 — scene context is now
+        // read from `session.sceneStateView`, not from a cable.
+        expect(inSlots.slice(0, 3)).toEqual(["local", "parent_world", "fault_0"]);
+        expect(inSlots).toEqual(["local", "parent_world", "fault_0", "V", "tau_load"]);
         expect(outSlots).toEqual(["world", "i", "omega", "tau_em"]);
     });
 
-    it("BldcMotorDynamicNode exposes transform + scene + fault ports alongside its own", () => {
+    it("BldcMotorDynamicNode exposes transform + fault ports alongside its own (scene moved to session)", () => {
         const node = new BldcMotorDynamicNode();
         const inSlots  = node.inputPorts.map((p) => p.slot);
         const outSlots = node.outputPorts.map((p) => p.slot);
-        expect(inSlots).toEqual(["local", "parent_world", "scene", "fault_0", "V_a", "V_b", "V_c", "tau_load", "dt"]);
+        expect(inSlots).toEqual(["local", "parent_world", "fault_0", "V_a", "V_b", "V_c", "tau_load", "dt"]);
         expect(outSlots).toEqual(["world", "i_a", "i_b", "i_c", "omega", "theta_m", "tau_em"]);
     });
 

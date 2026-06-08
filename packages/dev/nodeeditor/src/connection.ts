@@ -1,7 +1,44 @@
 import { UIItemBase } from "./inspectable";
 import { Port } from "./port";
+import { isConfigLinkType, type PortType } from "./types";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+
+/**
+ * Cable rendering kind.
+ *
+ *   "data"   — solid bezier, the canonical runtime cable. Carries a
+ *              payload at every fire.
+ *   "config" — dashed bezier, the P4/P5 config-link family. Resolved
+ *              once at session-bind (SceneItem ↔ Sim.Graph, SolverNode
+ *              ↔ SceneItem, etc.) and never carries a runtime payload
+ *              during fire(). The dash makes "this is not a normal
+ *              wire — it's a binding" visible at a glance.
+ *
+ * The kind is normally DERIVED from the connected ports' types via
+ * `deriveLinkKind` rather than passed explicitly: any wire between two
+ * config-link-typed ports (scene / solver / atmosphere / shared)
+ * renders as a config-link, everything else stays a data cable.
+ * Callers that want to override can pass the kind directly to the
+ * Connection constructor.
+ */
+export type LinkKind = "data" | "config";
+
+/**
+ * Decide a cable's render style purely from its endpoint types. Used
+ * by the GraphViewer's `connect()` so every new cable picks the
+ * right style automatically — no per-call routing logic in the
+ * viewer, no separate registration step in the plugins.
+ *
+ * The rule: if either endpoint is a config-link type, the whole wire
+ * renders as a config-link. The `arePortTypesCompatible` guard in
+ * `types.ts` already ensures the two endpoints MUST share the same
+ * config-link type when one of them is config, so "either" is
+ * equivalent to "both" here in practice.
+ */
+export function deriveLinkKind(from: PortType, to: PortType): LinkKind {
+    return isConfigLinkType(from) || isConfigLinkType(to) ? "config" : "data";
+}
 
 function bezierPath(x1: number, y1: number, x2: number, y2: number): string {
     const dx = Math.abs(x2 - x1) * 0.5;
@@ -23,20 +60,50 @@ export class Connection {
     readonly to: Port;
     readonly path: SVGPathElement;
     readonly item: UIItemBase<unknown>;
+    readonly linkKind: LinkKind;
 
     private readonly svg: SVGSVGElement;
 
-    constructor(from: Port, to: Port, svg: SVGSVGElement, strokeColor = "#fff") {
+    /**
+     * Construct a cable between two ports.
+     *
+     * `linkKind` selects the visual style; when omitted it is derived
+     * from the endpoint types via `deriveLinkKind` so config-link
+     * ports automatically get the dashed style without callers
+     * needing to know. Explicit values are still honoured for the
+     * edge case of a config-style wire between two `any` ports (e.g.
+     * a plugin-defined virtual binding).
+     */
+    constructor(from: Port, to: Port, svg: SVGSVGElement, strokeColor = "#fff", linkKind?: LinkKind) {
         this.from = from;
         this.to = to;
         this.svg = svg;
-        this.item = new UIItemBase({ name: "Connection", from: from.name, to: to.name, fromType: from.type, toType: to.type });
+        this.linkKind = linkKind ?? deriveLinkKind(from.type, to.type);
+        this.item = new UIItemBase({
+            name: "Connection",
+            from: from.name,
+            to: to.name,
+            fromType: from.type,
+            toType: to.type,
+            linkKind: this.linkKind,
+        });
 
         this.path = document.createElementNS(SVG_NS, "path") as SVGPathElement;
         this.path.setAttribute("stroke", strokeColor);
         this.path.setAttribute("fill", "none");
         this.path.setAttribute("stroke-width", "2");
         this.path.classList.add("ne-connection");
+        // Config-link cables render dashed at reduced opacity to
+        // mark them as "binding, not data flow". Solid (default)
+        // covers the data-cable case. The class hooks let stylesheets
+        // override the inline attributes without us caring.
+        if (this.linkKind === "config") {
+            this.path.classList.add("ne-connection-config");
+            this.path.setAttribute("stroke-dasharray", "8,5");
+            this.path.setAttribute("stroke-opacity", "0.85");
+        } else {
+            this.path.classList.add("ne-connection-data");
+        }
         this.svg.appendChild(this.path);
 
         this.update();

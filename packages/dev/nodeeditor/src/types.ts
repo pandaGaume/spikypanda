@@ -1,13 +1,76 @@
 export type PortDirection = "input" | "output";
 
-export type PortType = "float" | "vec2" | "vec3" | "vec4" | "tensor" | "any" | "exec" | "matrix44" | "boolean" | "trigger" | "array";
+/**
+ * Port type catalog.
+ *
+ * Data types (carry a value through a runtime cable on every fire):
+ *   float, vec2, vec3, vec4, tensor, any, exec, matrix44, boolean,
+ *   trigger, array.
+ *
+ * Config-link types (P4/P5 architecture — carry a REFERENCE resolved
+ * at session bind, never a runtime payload during fire). Rendered
+ * with a dashed cable style to make the distinction visually
+ * unmistakable in the canvas:
+ *
+ *   scene       SceneItem ↔ Sim.Graph binding (the canonical "this
+ *               sub-graph belongs to that Scene" link).
+ *   solver      SolverNode ↔ SceneItem (the Scene's variadic
+ *               `solver_in_<k>` collection; each SolverNode
+ *               publishes `solver_out` here).
+ *   atmosphere  AtmosphereStateNode ↔ SceneItem (single-slot typed
+ *               wiring; the gate code consumes the resolved
+ *               atmosphere via this slot, not a runtime cable).
+ *   shared      Generic shared-node ↔ SceneItem (the variadic
+ *               `shared_in_<k>` pool that generates proxy nodes
+ *               inside every Sim.Graph that references the Scene).
+ *
+ * Compatibility rule below routes config-link pairs only against
+ * matching config types; you cannot wire a `scene` source into a
+ * `float` consumer or vice versa (the editor silently refuses such
+ * drops).
+ */
+export type PortType =
+    | "float"
+    | "vec2"
+    | "vec3"
+    | "vec4"
+    | "tensor"
+    | "any"
+    | "exec"
+    | "matrix44"
+    | "boolean"
+    | "trigger"
+    | "array"
+    | "scene"
+    | "solver"
+    | "atmosphere"
+    | "shared";
+
+/**
+ * The four config-link types — referenced from `Connection` to decide
+ * whether a cable should render dashed. Centralised here so the
+ * runtime layer (core/sim anchors) and the rendering layer share a
+ * single source of truth.
+ */
+export const CONFIG_LINK_TYPES: ReadonlySet<PortType> = new Set<PortType>(["scene", "solver", "atmosphere", "shared"]);
+
+/** True when the given port type belongs to the config-link family
+ *  (scene / solver / atmosphere / shared). Used by `Connection` to
+ *  pick the dashed style. */
+export function isConfigLinkType(t: PortType): boolean {
+    return CONFIG_LINK_TYPES.has(t);
+}
 
 /**
  * True iff a wire from a producer port of type `from` to a consumer port
  * of type `to` is type-safe. The rule is intentionally minimal:
  *   - identical types match
- *   - "any" acts as a wildcard on either side (collection element ports
- *     in the logic plugin rely on this)
+ *   - "any" acts as a wildcard on either side EXCEPT for config-link
+ *     types: a `scene` / `solver` / `atmosphere` / `shared` port may
+ *     only connect to another port of the SAME config-link type.
+ *     Config-links are reference handoffs resolved at session bind;
+ *     letting them silently match `any` would let the editor accept
+ *     wirings the runtime can't make sense of.
  * Everything else is rejected, including looking-alike pairs like
  * trigger vs exec or boolean vs trigger. Editors call this from their
  * connect() path to silently refuse drops that would produce a runtime
@@ -15,6 +78,7 @@ export type PortType = "float" | "vec2" | "vec3" | "vec4" | "tensor" | "any" | "
  */
 export function arePortTypesCompatible(from: PortType, to: PortType): boolean {
     if (from === to) return true;
+    if (isConfigLinkType(from) || isConfigLinkType(to)) return false;
     if (from === "any" || to === "any") return true;
     return false;
 }
@@ -35,6 +99,13 @@ export const PORT_COLORS: Record<PortType, string> = {
     // Collection ports: carry an opaque array. Pair with `any` for
     // element-level ports on array nodes (item, find result, etc.).
     array: "#a8d",
+    // Config-link family — warm hues to read as "metadata" against the
+    // cool data palette. Cables render dashed; ports show this colour
+    // on the dot for at-a-glance identification.
+    scene: "#f6b94d", // amber: the environment carrier
+    solver: "#c98be0", // lavender: the integrator config
+    atmosphere: "#7ecfb5", // teal: the species inventory
+    shared: "#d96b9c", // rose: generic shared resource
 };
 
 export interface PortDef {

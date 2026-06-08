@@ -1,39 +1,47 @@
-import { cloneable, editable, viewable, IDeclaresPorts, IOlink, IPortDescriptor, ISession, RuntimeNode, isIntegrable, RK4AdaptiveSolver } from "spikypanda-core";
+import { cloneable, editable, viewable, IDeclaresPorts, IOlink, IPortDescriptor, IRuntimeGraph, ISession, ISolverHandle, RuntimeNode, isIntegrable, RK4AdaptiveSolver } from "spikypanda-core";
 import type { ICartesian, Nullable, IIntegrable } from "spikypanda-core";
 
 /**
- * RK4 adaptive solver marker node. Per the F3 / sim-framework-api-v2
- * plan: the solver is a Session concern, NOT a data-flow node. This
- * node exists in the graph purely for editability and serialization —
- * its `reset()` discovers IIntegrable leaves in the session's graph,
- * instantiates an `RK4AdaptiveSolver`, and calls `session.attachSolver`.
- * The actual integration runs in the Session's integration phase
- * (BEFORE the dispatch phase fires any node), so a leaf's `fire()`
- * always sees already-updated state.
+ * RK4 adaptive solver marker node.
+ *
+ * In the P4 architecture this node is a **config carrier + diagnostic
+ * publisher**, NOT a session-attaching agent. The actual lifetime is:
+ *
+ *   1. The user drops a SceneItem on the canvas, a `Sim.Graph:graph`
+ *      sub-graph, and one or more `Control.Sim:rk4-solver` nodes
+ *      beside the Scene. Config-links wire the SolverNode's `solver_out`
+ *      anchor to the Scene's variadic `solver_in_<k>` (P5).
+ *
+ *   2. At session-build the editor's `SceneBindingResolver`
+ *      enumerates the Scene's `solverItemIds`, looks up each
+ *      SolverNode by ID, and calls `node.buildSolverFor(innerGraph)`
+ *      to obtain a ready-to-attach `ISolverHandle`. The resolver
+ *      hands the handles back to `SimGraphNode.reset()` which
+ *      attaches them to the inner session.
+ *
+ *   3. The SolverNode's own `reset(parentSession)` only resets its
+ *      diagnostic counters — it never calls `session.attachSolver`
+ *      directly. `fire(parentSession, t)` reads the previously-built
+ *      solver's `lastStep` into its viewables so the user can plot
+ *      `lastMicroSteps` / `lastMaxError` / `rhsEvalsTotal` from a
+ *      Time-series tile (the solver lives in a different session —
+ *      the inner one — but the reference is held on this node for
+ *      diagnostics).
  *
  * Editables:
  *   tolerance     embedded-error threshold per state entry (default 1e-6)
  *   maxStep       hard cap on adaptive step size (default 10 ms)
  *   leafFilter    glob on each leaf's `typeId` (default "*" = catch-all).
- *                 Future: when multiple solvers coexist, partition
- *                 leaves so an RK4 owns physics motors and a Rosenbrock
- *                 owns Sabatier chemistry.
+ *                 Future: when multiple solvers coexist on the same
+ *                 scene, partition leaves so an RK4 owns physics
+ *                 motors and a Rosenbrock owns Sabatier chemistry.
  *
- * Viewables (live diagnostics, updated each `fire()` from the solver's
- * last step):
+ * Viewables (live diagnostics, refreshed on each `fire()`):
  *   lastMicroSteps  count of adaptive sub-steps the solver used last
  *                   macro-step. 1 = no subdivision; high = transient.
  *   lastMaxError    L∞ embedded-error estimate over the accepted state.
  *   rhsEvalsTotal   running total of rhs evaluations since reset.
- *
- * The node's `fire()` NEVER does integration work — it only refreshes
- * diagnostic viewables. The user can drop a Time-series Plot tile bound
- * to `lastMicroSteps` to watch solver behaviour live.
- *
- * Multi-solver and hierarchical solvers fall out naturally: drop two
- * RK4 marker nodes with disjoint `leafFilter` globs and each attaches
- * its own solver to the session. Drop a marker inside a sub-graph and
- * it attaches to that sub-graph's internal session.
+ *   ownedLeaves     leaves the solver claimed at build time.
  */
 export class Rk4SolverNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _tolerance: number = 1e-6;
@@ -45,8 +53,9 @@ export class Rk4SolverNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _rhsEvalsTotal: number = 0;
     @cloneable private _ownedCount: number = 0;
 
+    /** Solver instance built by `buildSolverFor()` and held here so
+     *  `fire()` can read its `lastStep` for diagnostic viewables. */
     private _solver: RK4AdaptiveSolver | null = null;
-    private _activeSession: ISession | null = null;
 
     // No data-flow ports. The solver doesn't consume tokens and
     // doesn't publish (broadcast for stats is intentionally NOT
@@ -102,58 +111,80 @@ export class Rk4SolverNode extends RuntimeNode implements IDeclaresPorts {
         return this._ownedCount;
     }
 
-    public override reset(session: ISession): void {
-        // Detach the previous solver (if any) and any associated
-        // session attachment before rebuilding. Handles both first
-        // reset (no-op) and mid-session reconfigure (drop old solver,
-        // build new one with current editables).
-        if (this._solver && this._activeSession) {
-            this._activeSession.detachSolver(this._solver);
-        }
-        this._solver = null;
-        this._activeSession = null;
-        this._rhsEvalsTotal = 0;
-
-        // Discover IIntegrable leaves in this session's graph, filtered
-        // by the editor-configured leafFilter glob. We import isIntegrable
-        // from core to do the structural check.
+    /**
+     * Filter the given graph's IIntegrable leaves by this node's
+     * `leafFilter` glob. Exposed publicly so the editor's
+     * SceneBindingResolver can call it directly when populating
+     * `buildSolverAttachments`. The graph passed in is the INNER
+     * graph of the Sim.Graph that owns the calling scene — not the
+     * graph that contains this SolverNode itself.
+     */
+    public resolveOwnedLeaves(innerGraph: IRuntimeGraph): IIntegrable[] {
         const filterRegex = _globToRegex(this._leafFilter);
         const owned: IIntegrable[] = [];
-        for (const n of session.graph.nodes) {
+        for (const n of innerGraph.nodes) {
             if (!isIntegrable(n)) continue;
-            // Pull typeId off the node if it exposes one. Convention:
-            // RuntimeNode subclasses don't carry typeId at the runtime
-            // layer (typeId lives on the editor NodeUI). For glob
-            // matching at the leaf level we fall back to the node's
-            // constructor name when typeId isn't present. Good enough
-            // for V1; precise typeId-aware globbing is a future polish.
             const candidate = n as IIntegrable & { typeId?: string; constructor: { name: string } };
             const typeIdentity = candidate.typeId ?? candidate.constructor.name;
             if (!filterRegex.test(typeIdentity)) continue;
             owned.push(candidate);
         }
-        this._ownedCount = owned.length;
-        if (owned.length === 0) {
-            // No leaves to integrate — solver doesn't attach. Property
-            // panel still surfaces the ownedLeaves viewable so the user
-            // sees "no leaves matched the filter" without digging.
-            return;
-        }
+        return owned;
+    }
 
+    /**
+     * Build (or rebuild) an `RK4AdaptiveSolver` configured with this
+     * node's current editables, initialise it against the leaves it
+     * claims from `innerGraph` via `leafFilter`, and return the
+     * `ISolverHandle`. Returns `null` when no leaves matched — the
+     * editor's resolver skips the attachment in that case to avoid
+     * registering a no-op solver.
+     *
+     * The created solver instance is also stored on `_solver` so
+     * `fire()` can read its `lastStep` for diagnostic viewables.
+     * Re-calling this method (mid-session reconfigure) replaces the
+     * stored instance; the previous handle is the caller's
+     * responsibility to detach from any inner session it was
+     * attached to.
+     */
+    public buildSolverFor(innerGraph: IRuntimeGraph): ISolverHandle | null {
+        const owned = this.resolveOwnedLeaves(innerGraph);
+        this.setField("ownedLeaves", this._ownedCount, owned.length, (n) => {
+            this._ownedCount = n;
+        });
+        if (owned.length === 0) {
+            this._solver = null;
+            return null;
+        }
         const solver = new RK4AdaptiveSolver({
             tolerance: this._tolerance,
             maxStep: this._maxStep,
         });
         solver.initialize(owned, 0);
-        session.attachSolver(solver);
         this._solver = solver;
-        this._activeSession = session;
+        return solver;
+    }
+
+    public override reset(_session: ISession): void {
+        // Diagnostic reset only — solver attachment is owned by the
+        // SimGraphNode (P4 architecture). Topology re-binds happen
+        // when `SimGraphNode.reset()` calls `buildSolverFor()`
+        // through the SceneBindingResolver.
+        this.setField("rhsEvalsTotal", this._rhsEvalsTotal, 0, (n) => {
+            this._rhsEvalsTotal = n;
+        });
+        this.setField("lastMicroSteps", this._lastMicroSteps, 0, (n) => {
+            this._lastMicroSteps = n;
+        });
+        this.setField("lastMaxError", this._lastMaxError, 0, (n) => {
+            this._lastMaxError = n;
+        });
     }
 
     public override fire(_session: ISession, _t: number): void {
-        // No integration work here — the Session ran solver.step() in
-        // its integration phase before this fire. We're only here to
-        // refresh diagnostic viewables.
+        // No integration work — the inner session ran solver.step()
+        // in its integration phase before our parent's dispatch
+        // phase reaches us. We just refresh diagnostic viewables.
         const last = this._solver?.lastStep ?? null;
         if (!last) return;
         this.setField("lastMicroSteps", this._lastMicroSteps, last.microSteps, (n) => {

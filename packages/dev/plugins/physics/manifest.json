@@ -11,7 +11,7 @@
         {
             "id":          "Physics.Transform",
             "displayName": "Transform",
-            "description": "World-frame transform composer (world = parent_world × local). Acts as the base class shared by every Physics object that lives in a world reference frame: motors, sensors, mechanical bodies. Drop a standalone Transform on the canvas for intermediate frames, markers and debug attach-points. Carries a `scene` input port so the transform participates in the same environmental context (gravity, temperature, ...) as its physical siblings.",
+            "description": "World-frame transform composer (world = parent_world × local). Acts as the base class shared by every Physics object that lives in a world reference frame: motors, sensors, mechanical bodies. Drop a standalone Transform on the canvas for intermediate frames, markers and debug attach-points. Environmental context (gravity, temperature, ...) is read from the session's SceneStateView, populated by the enclosing Sim.Graph or by the runner at root from the primary SceneItem.",
             "category":    "Physics.Transform",
             "version":     "0.1.0",
             "standards":   [],
@@ -22,16 +22,16 @@
         {
             "id":          "Physics.Scene",
             "displayName": "Scene",
-            "description": "Environmental context broadcaster: gravity vector [m/s²], temperature [K], pressure [Pa], time_scale [-]. Wire the `scene` output to the `scene` input port of any TransformNode-derived physical object (motors, sensors) to attach it to this environment. Multiple Scene nodes can coexist for A/B testing two environments side by side; each physical object attaches to exactly one Scene at a time. Ships with 4 planetary presets (Earth, Moon, Mars, Orbital) as one-click palette entries; presets are just SceneNode instances with pre-configured editables, so the user can still tweak any field after dropping.",
+            "description": "Descriptive scene carrier: gravity [m/s²], temperature [K], pressure [Pa], time_scale [-], local transform (position / rotation / scale), and references to wired solvers / atmosphere / shared nodes. SceneItem is a descriptor (GraphItem, not RuntimeNode); the enclosing Sim.Graph reads it at session bind to build a SceneStateView consumers read live each tick. Ships with 4 planetary presets (Earth, Moon, Mars, Orbital) as one-click palette entries.",
             "category":    "Physics.Scene",
             "version":     "0.1.0",
             "standards":   [],
             "nodes": [
-                { "type": "Physics.Scene:scene",   "factory": "createSceneNode",        "label": "Scene" },
-                { "type": "Physics.Scene:earth",   "factory": "createEarthSceneNode",   "label": "Earth" },
-                { "type": "Physics.Scene:moon",    "factory": "createMoonSceneNode",    "label": "Moon" },
-                { "type": "Physics.Scene:mars",    "factory": "createMarsSceneNode",    "label": "Mars" },
-                { "type": "Physics.Scene:orbital", "factory": "createOrbitalSceneNode", "label": "Orbital" }
+                { "type": "Physics.Scene:scene",   "factory": "createSceneItem",        "label": "Scene" },
+                { "type": "Physics.Scene:earth",   "factory": "createEarthSceneItem",   "label": "Earth" },
+                { "type": "Physics.Scene:moon",    "factory": "createMoonSceneItem",    "label": "Moon" },
+                { "type": "Physics.Scene:mars",    "factory": "createMarsSceneItem",    "label": "Mars" },
+                { "type": "Physics.Scene:orbital", "factory": "createOrbitalSceneItem", "label": "Orbital" }
             ]
         },
         {
