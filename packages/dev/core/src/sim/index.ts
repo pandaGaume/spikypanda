@@ -1,4 +1,6 @@
 export * from "./sim.interfaces";
+export * from "./solver.registry";
+export * from "./solver.attachment";
 export * from "./integrable-runtime.node";
 export * from "./sim.phased.node";
 export * from "./sim.session";

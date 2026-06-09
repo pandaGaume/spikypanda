@@ -20,7 +20,7 @@ const FLOAT_OUT = { optional: false, type: "float" } as const;
 const MAT44_IN = { optional: true, type: "matrix44" } as const;
 const MAT44_OUT = { optional: false, type: "matrix44" } as const;
 const FAULT_IN = { optional: true, type: "any" } as const;
-const SCENE_IN = { optional: true, type: "any" } as const;
+const SCENE_IN = { optional: true, type: "scene" } as const;
 
 /** Base-class-inherited port blocks shared by the BLDC and PMSM motors:
  *  transform pose + scene attach + variadic fault bank (fault_0 grows on connect). */

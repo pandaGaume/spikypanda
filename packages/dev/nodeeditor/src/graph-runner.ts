@@ -1,6 +1,32 @@
-import type { Channel, IDisposable, Session } from "spikypanda-core";
+import { hasSampleRateRequirement } from "spikypanda-core";
+import type { Channel, IDisposable, ISession, Session } from "spikypanda-core";
 import type { GraphViewer } from "./components/graph-viewer";
 import { buildSessionFromViewer, disposeChannels } from "./graph-session-builder";
+
+/**
+ * Local copy of `SimGraphNode._aggregateRequiredHzFromSession` to keep
+ * the runner from pulling the full SimGraphNode (and its scene-state-view
+ * dependency chain) into the nodeeditor bundle. Same semantics: walk the
+ * session's leaves, take `max(requiredHz)` over IHasSampleRateRequirement
+ * implementers, return 0 when no one opts in. The caller floors at
+ * MIN_EFFECTIVE_HZ.
+ */
+function aggregateRequiredHz(session: ISession): number {
+    const nodes = session.graph?.nodes;
+    if (!nodes || nodes.length === 0) return 0;
+    let max = 0;
+    for (const node of nodes) {
+        if (hasSampleRateRequirement(node) && node.requiredHz > max) {
+            max = node.requiredHz;
+        }
+    }
+    return max;
+}
+
+/** MIN_EFFECTIVE_HZ value mirrored from core/sim/scene-state-view.interface.
+ *  Kept as a plain number here to avoid pulling the Frequency Quantity +
+ *  the scene-state-view chain into the nodeeditor bundle. */
+const MIN_EFFECTIVE_HZ_VALUE = 60;
 
 export type RunnerState = "idle" | "playing" | "paused";
 
@@ -65,20 +91,31 @@ export class GraphRunner implements IDisposable {
     public t: number = 0;
 
     /**
-     * Scheduling strategy. Default "free" preserves the legacy 1-tick-
-     * per-rAF behaviour. Switch to "fixed-realtime" when you need
-     * deterministic dt for physics / control / signal analysis.
+     * Scheduling strategy. Derived at `_bootstrapSession()` from the
+     * graph's leaves:
+     *   - "fixed-realtime" when at least one IHasSampleRateRequirement
+     *     leaf opts in (SimGraphNode._aggregateRequiredHzFromSession
+     *     returns > 0). simRate is set to that aggregate.
+     *   - "free" otherwise.
+     *
+     * The user does NOT pick this from the toolbar anymore (P8 + the
+     * 2026-06-09 auto-derivation pass): rates are declarative on the
+     * leaves themselves. Override per-leaf via `required_hz` on the
+     * node's property panel.
      */
     public mode: RunnerMode = "free";
 
     /**
      * Target sim tick rate in Hz when `mode === "fixed-realtime"`.
      * Each rAF runs ≈ `wall_dt × simRate` ticks of `1/simRate` dt.
-     * Typical values:
-     *   60   — matches free-mode (just stabilises the jitter)
-     *   1000 — 1 kHz, typical control loop rate
-     *   10000 — 10 kHz, typical MCSA / vibration analysis sampling
-     * Ignored in "free" mode.
+     * Auto-derived from the graph: `max(leaf.requiredHz)` floored at
+     * `MIN_EFFECTIVE_HZ = 60 Hz`. Typical end-to-end values:
+     *   60   — pure-data graph with no opt-in leaves (would be free-mode)
+     *   100  — atmosphere-only habitat
+     *   10000 — atmosphere + DC motor (L=1mH R=1Ω → 10 kHz)
+     *   200000 — motor + PWM inverter (fPwm = 10 kHz → 20×)
+     * Ignored in "free" mode. Read-only consequence of the graph
+     * topology + per-leaf required_hz editables.
      */
     public simRate: number = 1000;
 
@@ -94,6 +131,12 @@ export class GraphRunner implements IDisposable {
     public onTime: ((t: number) => void) | null = null;
     public onStateChanged: ((state: RunnerState) => void) | null = null;
     public onError: ((error: Error) => void) | null = null;
+    /**
+     * Fired once per bootstrap when the runner has resolved its mode +
+     * simRate from the graph. The toolbar uses this to display a read-only
+     * readout (e.g. "10 kHz" or "free") instead of letting the user pick.
+     */
+    public onRateDerived: ((mode: RunnerMode, simRate: number) => void) | null = null;
 
     private readonly _viewer: GraphViewer;
     private _session: Session | null = null;
@@ -191,6 +234,7 @@ export class GraphRunner implements IDisposable {
         this.onTime = null;
         this.onStateChanged = null;
         this.onError = null;
+        this.onRateDerived = null;
     }
 
     private _bootstrapSession(): boolean {
@@ -198,13 +242,34 @@ export class GraphRunner implements IDisposable {
             const built = buildSessionFromViewer(this._viewer);
             this._session = built.session;
             this._channels = built.channels;
+            // Auto-derive mode + simRate from the graph's IHasSampleRateRequirement
+            // leaves. Replaces the legacy toolbar dropdown (dropped 2026-06-09
+            // with P8 follow-up). When no leaf opts in, fall back to free
+            // mode and let the rAF cadence drive the simulation. When at
+            // least one opts in, switch to fixed-realtime so the dt seen
+            // by every fire() is deterministic.
+            //
+            // We use the local `aggregateRequiredHz` helper rather than
+            // SimGraphNode's static method to avoid pulling the whole
+            // SimGraphNode + scene-state-view dependency chain into the
+            // nodeeditor bundle. The semantics are identical.
+            const aggregated = aggregateRequiredHz(this._session);
+            if (aggregated > 0) {
+                this.mode = "fixed-realtime";
+                this.simRate = Math.max(MIN_EFFECTIVE_HZ_VALUE, aggregated);
+            } else {
+                this.mode = "free";
+            }
             // Publish the authoritative sample rate to the session so
             // downstream consumers (FFT spectrum / waterfall tiles, any
-            // sampleRate-dependent op) can read a single source of
-            // truth instead of being configured per-instance. Free
-            // mode = 0 (unknown/jittered); fixed-realtime = our simRate.
+            // sampleRate-dependent op) can read a single source of truth
+            // instead of being configured per-instance. Free mode = 0
+            // (unknown/jittered); fixed-realtime = our simRate.
             this._session.simRate = this.mode === "fixed-realtime" ? this.simRate : 0;
             this._session.start();
+            // Surface the picked rate to UI listeners (toolbar readout)
+            // so the user sees what was derived rather than guessing.
+            if (this.onRateDerived) this.onRateDerived(this.mode, this.simRate);
             return true;
         } catch (e) {
             this._emitError(e);

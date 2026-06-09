@@ -7,7 +7,7 @@ import { simGraphSubPlugin } from "./sim-graph/index.js";
 export * from "./actuator/setpoint.node.js";
 export * from "./feedback/channel.node.js";
 export * from "./safety/emergency-shutdown.node.js";
-export * from "./sim/rk4-solver.node.js";
+export * from "./sim/rk4-solver.item.js";
 
 export { controlActuatorSubPlugin } from "./actuator/index.js";
 export { controlFeedbackSubPlugin } from "./feedback/index.js";

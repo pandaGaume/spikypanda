@@ -146,6 +146,30 @@ export interface IIntegrable {
     readonly stateNames?: ReadonlyArray<string>;
 
     /**
+     * Solver kind this leaf wants to be integrated with. Leaf-centric
+     * pull pattern (replaces the old solver-side `leafFilter` glob):
+     * at session bind, the attachment helper groups leaves by this
+     * field and resolves each group's descriptor from the Scene's
+     * solver list — auto-filling from `SOLVER_REGISTRY` defaults if
+     * the Scene doesn't carry that kind.
+     *
+     * Optional with a default of `DEFAULT_SOLVER_KIND` ("rk4-adaptive").
+     * Legacy leaves that don't declare it fall into the default group.
+     */
+    readonly solverKind?: string;
+
+    /**
+     * Per-leaf option overrides. Merged with the descriptor's
+     * `commonOptions` by `mergeSolverOptions` (tightening rules: min
+     * for tolerance / maxStep, max for minStep). Lets a single fast
+     * leaf request a tighter step cap without burdening the rest of
+     * the same solver's leaves.
+     *
+     * Optional. When absent, the descriptor's options apply as-is.
+     */
+    readonly solverOptions?: import("./solver.registry").ISolverOptions;
+
+    /**
      * Copy this leaf's current state INTO `y[offset .. offset+stateSize)`.
      * Called by the solver at the start of each accepted macro-step and
      * by Snapshot Restore. Must NOT mutate the leaf's own state.

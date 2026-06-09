@@ -281,6 +281,19 @@ a {
 }
 .nev2-player-speed:hover { color: var(--ne-color-text); }
 
+.nev2-player-rate {
+    font-family:    var(--ne-font-mono);
+    font-size:      11px;
+    letter-spacing: .08em;
+    color:          var(--ne-color-text-muted);
+    padding:        0 10px;
+    height:         100%;
+    display:        inline-flex;
+    align-items:    center;
+    cursor:         help;
+    border-left:    1px solid var(--ne-color-border, rgba(255,255,255,0.08));
+}
+
 /* ── 7. Body: 3 columns ──────────────────────────────────────────────── */
 
 .nev2-body {
