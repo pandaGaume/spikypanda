@@ -56,6 +56,24 @@ These anchors render as **dashed cables** in the canvas to distinguish them from
 
 The `atmosphere` reference on each preset is **metadata** — it does NOT auto-spawn an `AtmosphereStateNode`. The editor uses it to pre-fill the `initialAtmosphere` field on any atmosphere-state node the user drops alongside the scene.
 
+## Wiring-aware panel
+
+When a per-property input port is wired (e.g. a publisher feeding `gravity_in`), the corresponding editable on the Scene's property panel renders in a **read-only / dimmed** style: typing in the dimmed field has no effect because the live value comes from the wire. The unwired editables stay live, as do the property's `is_X_wired` viewables that drive the dim state.
+
+The convention is generic: any node can declare `disabledWhen: "is_X_wired"` on an `@editable` option to bind its dim state to a sibling viewable. The Scene applies it to:
+
+| Editable          | Disabled when               |
+|-------------------|-----------------------------|
+| `gravity`         | `is_gravity_wired = true`   |
+| `temperature`     | `is_temperature_wired = true` |
+| `pressure`        | `is_pressure_wired = true`  |
+| `density`         | `is_density_wired = true`   |
+| `timeScale`       | `is_time_scale_wired = true` |
+| `localPosition`   | `is_local_position_wired = true` |
+| `localScale`      | `is_local_scale_wired = true` |
+
+The Atmosphere binding follows the same precedence rule at the value-resolution level: when an `AtmosphereLayer` or `Atmosphere` container is wired through `atmosphere_in`, the Scene's `temperature` / `pressure` / `density` viewables prefer the atmosphere's live aggregates over the SceneItem's editable defaults — and the editables dim accordingly.
+
 ## Consumer reading pattern
 
 ```ts
@@ -75,4 +93,5 @@ When no scene is bound to the session (sample graphs without a Scene, unit tests
 - **Multiple primary scenes.** If two `SceneItem` at the root canvas both have `isPrimary = true`, the GraphRunner picks the first one and warns. Use the property panel to disambiguate.
 - **Atmosphere preset confusion.** The preset `atmosphere` field is informational — a `Physics.Scene:earth` does NOT come with a wired atmosphere node. Drop a `Physics.Scene:atmosphere-state` separately and pick `initialAtmosphere = "earthHumidAirSeaLevel"` to match.
 - **Editing manualHz with no IIntegrable leaves.** When the scene's owned leaves declare no `requiredHz`, the effective rate floors at `MIN_EFFECTIVE_HZ` (60 Hz). Setting `manualHz` to a value below 60 Hz is overridden by the floor unless you also tighten the floor.
+- **Dimmed editable is just a hint, not a hard lock.** The disabledWhen mechanism prevents the panel widget from accepting input visually but the underlying setter is still callable from code (cloned graphs, presets, undo). Treat the dim state as "the live value comes from elsewhere" rather than "this field is sealed."
 - **Mutating scene values directly.** The `Temperature` / `Pressure` Quantity instances exposed by SceneStateView are fresh wrappers over the SceneItem's storage. Mutating them via `.value = …` does NOT write back to the SceneItem (the setter is on `temperatureQ` / `pressureQ` of the SceneItem, not on the Quantity itself). Use the Quantity accessors on the SceneItem to mutate the storage.

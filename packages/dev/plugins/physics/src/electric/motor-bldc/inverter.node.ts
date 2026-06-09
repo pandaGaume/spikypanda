@@ -1,5 +1,5 @@
-import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, RuntimeNode, inSlotOf } from "spikypanda-core";
-import type { ICartesian, Nullable } from "spikypanda-core";
+import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IntegrableRuntimeNode, IOlink, IPortDescriptor, ISession, inSlotOf } from "spikypanda-core";
+import type { ICartesian, Nullable, IHasSampleRateRequirement } from "spikypanda-core";
 import { hallSector } from "./back-emf.js";
 
 /**
@@ -31,7 +31,16 @@ import { hallSector } from "./back-emf.js";
  *
  * Outputs: V_a, V_b, V_c, sector (informational).
  */
-export class BldcInverterNode extends RuntimeNode implements IDeclaresPorts {
+export class BldcInverterNode extends IntegrableRuntimeNode implements IDeclaresPorts, IHasSampleRateRequirement {
+    /** 6-step commutation against a documented 20 kHz PWM carrier:
+     *  the average-voltage model assumes we sample at 100 µs against
+     *  the 50 µs carrier. We honor 10 kHz as the parameter-independent
+     *  baseline; users can pin a higher rate if they model a higher
+     *  carrier frequency. */
+    protected override computeRequiredHz(): number {
+        return 10_000;
+    }
+
     @cloneable private _VdcDefault: number = 24;
 
     @cloneable private _Va: number = 0;

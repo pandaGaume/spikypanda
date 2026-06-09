@@ -203,8 +203,22 @@ export class PropertyEditor {
             const widgetHost = document.createElement("div");
             row.appendChild(widgetHost);
             grid.appendChild(row);
+            // `disabledWhen` convention (2026-06-09): an @editable can
+            // declare `options.disabledWhen = "is_X_wired"`. The panel
+            // looks up that boolean on the model AT RENDER TIME; if
+            // truthy, the row downgrades to read-only behavior:
+            //   - factory receives editable=false (input.readOnly = true)
+            //   - row gets the `ne-property-editor-row-disabled` class
+            // so the user sees a visual cue that the value is driven
+            // by an upstream wire. The static editable default is still
+            // there in the model, just not consumed by the getter.
+            const disabledByWire = field.editable && this._isDisabledByWire(field, data);
+            if (disabledByWire) {
+                row.classList.add("ne-property-editor-row-disabled");
+            }
+            const effectiveEditable = field.editable && !disabledByWire;
             try {
-                const ed = factory(widgetHost, data, field.propertyName, field.options, field.editable);
+                const ed = factory(widgetHost, data, field.propertyName, field.options, effectiveEditable);
                 if (ed) this._activeFieldEditors.push(ed);
                 rendered += 1;
             } catch (e) {
@@ -212,6 +226,23 @@ export class PropertyEditor {
             }
         }
         return rendered;
+    }
+
+    /** Resolve `options.disabledWhen` on an @editable field: if it
+     *  points to a truthy property on the model, the field is treated
+     *  as read-only in the panel for this render pass. Reads are best-
+     *  effort: malformed options, missing properties, or throwing
+     *  getters all degrade silently to "not disabled". */
+    private _isDisabledByWire(field: IEditableField, data: object): boolean {
+        if (!field.options || typeof field.options !== "object") return false;
+        const disabledWhen = (field.options as { disabledWhen?: string }).disabledWhen;
+        if (!disabledWhen || typeof disabledWhen !== "string") return false;
+        try {
+            const v = (data as Record<string, unknown>)[disabledWhen];
+            return !!v;
+        } catch (_e) {
+            return false;
+        }
     }
 
     private _renderShieldsForNode(node: NodeUI): void {

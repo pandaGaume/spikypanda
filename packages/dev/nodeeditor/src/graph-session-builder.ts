@@ -250,6 +250,31 @@ interface AtmosphereContainerLike {
     clearBindings(): void;
 }
 
+/** Minimal structural shape of an AtmosphereGate-like model (#3
+ *  refactor 2026-06-09). The gate config-links DIRECTLY to two
+ *  atmospheres via atmosphere_A_in / atmosphere_B_in and reads /
+ *  writes them through IAtmosphereGateHandle methods at runtime —
+ *  no per-species data channels anymore. */
+interface AtmosphereGateLike {
+    bindAtmosphereA(atmosphereItemId: string, atmosphere: AtmosphereGateHandleLike | null): void;
+    bindAtmosphereB(atmosphereItemId: string, atmosphere: AtmosphereGateHandleLike | null): void;
+    clearBindings(): void;
+}
+
+/** Minimal IAtmosphereGateHandle-shaped object. Both AtmosphereLayer
+ *  and AtmosphereNode satisfy this through their gate-facing API
+ *  (getMassKg / getMoleFraction / applyMassDelta / pressurePa /
+ *  temperatureK / volume / activeSpecies). */
+interface AtmosphereGateHandleLike {
+    readonly activeSpecies: ReadonlyArray<string>;
+    readonly temperatureK: number;
+    readonly pressurePa: number;
+    readonly volume: number;
+    getMassKg(speciesId: string): number;
+    getMoleFraction(speciesId: string): number;
+    applyMassDelta(speciesId: string, deltaKg: number): void;
+}
+
 function isSceneItemLike(data: unknown): data is SceneItemLike {
     if (!data || typeof data !== "object") return false;
     const d = data as Partial<SceneItemLike>;
@@ -341,6 +366,30 @@ function isAtmosphereContainerLike(data: unknown): data is AtmosphereContainerLi
     return typeof d.bindLayer === "function" && typeof d.clearBindings === "function";
 }
 
+function isAtmosphereGateLike(data: unknown): data is AtmosphereGateLike {
+    if (!data || typeof data !== "object") return false;
+    const d = data as Partial<AtmosphereGateLike>;
+    return (
+        typeof d.bindAtmosphereA === "function" &&
+        typeof d.bindAtmosphereB === "function" &&
+        typeof d.clearBindings === "function"
+    );
+}
+
+function isAtmosphereGateHandleLike(data: unknown): data is AtmosphereGateHandleLike {
+    if (!data || typeof data !== "object") return false;
+    const d = data as Partial<AtmosphereGateHandleLike>;
+    return (
+        Array.isArray(d.activeSpecies) &&
+        typeof d.temperatureK === "number" &&
+        typeof d.pressurePa === "number" &&
+        typeof d.volume === "number" &&
+        typeof d.getMassKg === "function" &&
+        typeof d.getMoleFraction === "function" &&
+        typeof d.applyMassDelta === "function"
+    );
+}
+
 /**
  * Walk every Connection in the viewer; for each one whose port types
  * belong to the config-link family, populate the appropriate field on
@@ -374,6 +423,8 @@ export function syncConfigLinksFromCanvas(viewer: GraphViewer): void {
     const layersByNodeId = new Map<string, AtmosphereLayerLike>();
     const layerIntegrablesByNodeId = new Map<string, LayerIntegrable>();
     const atmospheresByNodeId = new Map<string, AtmosphereContainerLike>();
+    const atmosphereGatesByNodeId = new Map<string, AtmosphereGateLike>();
+    const atmosphereHandlesByNodeId = new Map<string, AtmosphereGateHandleLike>();
     const particulatesByNodeId = new Map<string, ParticulateMetadataLike>();
     for (const n of viewer.nodes) {
         const data = n.item && (n.item as { data?: unknown }).data;
@@ -437,6 +488,18 @@ export function syncConfigLinksFromCanvas(viewer: GraphViewer): void {
             data.clearBindings();
             atmospheresByNodeId.set(String(n.id), data);
         }
+        if (isAtmosphereGateLike(data)) {
+            data.clearBindings();
+            atmosphereGatesByNodeId.set(String(n.id), data);
+        }
+        // Any atmosphere (Layer OR Container) that satisfies the gate-
+        // facing IAtmosphereGateHandle contract is registered here so
+        // the gate's `atmosphere_A_in / atmosphere_B_in` wiring can
+        // find it. Both AtmosphereLayer and the AtmosphereNode
+        // container (which extends Layer) satisfy this duck-type.
+        if (isAtmosphereGateHandleLike(data)) {
+            atmosphereHandlesByNodeId.set(String(n.id), data);
+        }
     }
 
     for (const conn of viewer.connections) {
@@ -469,6 +532,15 @@ export function syncConfigLinksFromCanvas(viewer: GraphViewer): void {
                 // bindAtmosphere seam — fall back to setting the ID only.
                 scene.atmosphereItemId = fromId;
             }
+        } else if (fromType === "atmosphere" && toSlot === "atmosphere_A_in") {
+            // #3 gate refactor (2026-06-09): atmosphere → AtmosphereGate.A
+            const gate = atmosphereGatesByNodeId.get(toId);
+            const handle = atmosphereHandlesByNodeId.get(fromId);
+            if (gate && handle) gate.bindAtmosphereA(fromId, handle);
+        } else if (fromType === "atmosphere" && toSlot === "atmosphere_B_in") {
+            const gate = atmosphereGatesByNodeId.get(toId);
+            const handle = atmosphereHandlesByNodeId.get(fromId);
+            if (gate && handle) gate.bindAtmosphereB(fromId, handle);
         } else if (fromType === "solver" && toSlot.startsWith("solver_in_")) {
             const scene = sceneItemsByNodeId.get(toId);
             if (scene) scene.solverItemIds = [...scene.solverItemIds, fromId];

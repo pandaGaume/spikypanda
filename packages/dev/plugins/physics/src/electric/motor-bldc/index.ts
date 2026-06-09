@@ -37,6 +37,7 @@ export const motorBldcSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Electric.Motor.BLDC:dynamic", () => createBldcMotorDynamicNode() as never, {
             label: "BLDC Motor (Dynamic)",
             category: "Physics.Electric.Motor.BLDC",
+            docPath: ctx.assetUrl("docs/physics/motor-bldc/bldc-dynamic.md"),
             inputPorts: [
                 ...BASE_IN_PORTS,
                 { slot: "V_a", ...FLOAT_IN },
@@ -59,6 +60,7 @@ export const motorBldcSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Electric.Motor.BLDC:pmsm", () => createPmsmMotorDynamicNode() as never, {
             label: "PMSM Motor (Dynamic, sinusoidal)",
             category: "Physics.Electric.Motor.BLDC",
+            docPath: ctx.assetUrl("docs/physics/motor-bldc/pmsm-dynamic.md"),
             inputPorts: [
                 ...BASE_IN_PORTS,
                 { slot: "V_a", ...FLOAT_IN },
@@ -81,6 +83,7 @@ export const motorBldcSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Electric.Motor.BLDC:inverter", () => createBldcInverterNode() as never, {
             label: "BLDC 6-step Inverter",
             category: "Physics.Electric.Motor.BLDC",
+            docPath: ctx.assetUrl("docs/physics/motor-bldc/inverter.md"),
             inputPorts: [
                 { slot: "V_dc", ...FLOAT_IN },
                 { slot: "duty", ...FLOAT_IN },

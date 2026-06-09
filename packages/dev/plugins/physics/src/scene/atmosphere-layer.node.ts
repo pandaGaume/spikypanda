@@ -33,6 +33,12 @@
  *   - Expose `layer_out` as the config-link anchor consumed by the
  *     container's variadic `layer_in_<k>` slot pool.
  *
+ * Base class: extends `IntegrableRuntimeNode`, which bundles the
+ * `IHasSampleRateRequirement` scaffolding (user-pin + `computeRequiredHz()`
+ * virtual hook). The layer's `computeRequiredHz()` returns a constant
+ * 100 Hz baseline; the user can pin a different rate through the
+ * inherited `required_hz` editable.
+ *
  * Design choices preserved from the pre-split atmosphere:
  *   - Composition is the species schema + initial-conditions snapshot
  *     at t=0; the layer then OWNS the mass evolution. Displayed mole
@@ -57,13 +63,14 @@ import {
     editable,
     GAS_CONSTANT_R,
     IDeclaresPorts,
+    IHasSampleRateRequirement,
     IIntegrable,
     IIntegrationInputs,
+    IntegrableRuntimeNode,
     IOlink,
     IPortDescriptor,
     isGasMetadata,
     ISession,
-    RuntimeNode,
     Temperature,
     V1_SPECIES_ORDER,
     viewable,
@@ -119,7 +126,7 @@ export function isCompositionView(v: unknown): v is ICompositionView {
     return Array.isArray(c.components) && Array.isArray(c.particulates) && typeof c.referencePressurePa === "number" && Number.isFinite(c.referencePressurePa);
 }
 
-export class AtmosphereLayerNode extends RuntimeNode implements IDeclaresPorts, IIntegrable {
+export class AtmosphereLayerNode extends IntegrableRuntimeNode implements IDeclaresPorts, IIntegrable, IHasSampleRateRequirement {
     /** Effective species schema in state-vector order. Re-derived at
      *  `reset()` from the bound composition (the config-link path) OR
      *  from the V1 fallback when nothing is wired. Stable across the
@@ -168,6 +175,15 @@ export class AtmosphereLayerNode extends RuntimeNode implements IDeclaresPorts, 
      *  accessed through `_boundComposition.particulates` — the Layer
      *  no longer owns a particulate slot of its own. */
     private _boundComposition: ICompositionView | null = null;
+
+    /** P8 sample-rate: 100 Hz is the layer's parameter-independent
+     *  baseline. ECLSS / habitat-air mass-balance dynamics happen on
+     *  the sub-second scale; integrating faster doesn't add accuracy
+     *  for a well-stirred volume. The user can pin a different value
+     *  via the inherited `required_hz` editable. */
+    protected override computeRequiredHz(): number {
+        return 100;
+    }
 
     @editable("number", { unit: "m³" })
     public get volume(): number {
@@ -398,6 +414,57 @@ export class AtmosphereLayerNode extends RuntimeNode implements IDeclaresPorts, 
         this._publishScalar(session, ATMOSPHERE_LAYER_OUT_PRESSURE, P);
         this._publishScalar(session, ATMOSPHERE_LAYER_OUT_TEMPERATURE, T);
         this._publishScalar(session, ATMOSPHERE_LAYER_OUT_DENSITY, totalMass / Math.max(1e-12, this._volumeM3));
+    }
+
+    // ── Gate-facing API (P9.6, AtmosphereGate refactor 2026-06-09) ──
+    //
+    // AtmosphereGate config-links directly to two atmospheres and
+    // reads/writes them via the three methods below — no per-species
+    // editor channels needed (those are gone since P9.3). The contract
+    // is intentionally minimal: lookup by speciesId string, return /
+    // apply scalar mass values. Unknown species (not in the bound
+    // composition's effective list) read as 0 / silently no-op on
+    // apply, so a gate whose two atmospheres carry overlapping but
+    // non-identical species lists degrades gracefully.
+
+    /** Look up this layer's current mass [kg] for `speciesId`. Returns
+     *  0 when the species is not in the effective list. */
+    public getMassKg(speciesId: string): number {
+        const idx = this._effectiveSpecies.indexOf(speciesId);
+        if (idx < 0) return 0;
+        return this._mass[idx] ?? 0;
+    }
+
+    /** Look up this layer's current mole fraction for `speciesId`.
+     *  Computed from per-species moles / total moles; returns 0 when
+     *  the species is not in the layer or the layer carries no mass. */
+    public getMoleFraction(speciesId: string): number {
+        const idx = this._effectiveSpecies.indexOf(speciesId);
+        if (idx < 0) return 0;
+        const totalMoles = this._totalMoles();
+        if (totalMoles <= 0) return 0;
+        const moles = (this._mass[idx] ?? 0) / this._effectiveMolarMass[idx];
+        return moles / totalMoles;
+    }
+
+    /** Apply a signed mass delta [kg] to this layer's `speciesId` slot.
+     *  Used by AtmosphereGate to push/pull mass per tick. Negative
+     *  results are clamped to zero (no negative mass). Species not in
+     *  the effective list silently no-op. */
+    public applyMassDelta(speciesId: string, deltaKg: number): void {
+        if (!Number.isFinite(deltaKg) || deltaKg === 0) return;
+        const idx = this._effectiveSpecies.indexOf(speciesId);
+        if (idx < 0) return;
+        const cur = this._mass[idx] ?? 0;
+        const next = cur + deltaKg;
+        this._mass[idx] = next > 0 ? next : 0;
+    }
+
+    /** Read-only accessor for the gate's iteration loop: yields the
+     *  layer's pressure (Pa), temperature (K), and volume (m³) without
+     *  forcing the gate to know about sampleAggregates's full shape. */
+    public get pressurePa(): number {
+        return this._computeTotalPressure(this._temperatureK);
     }
 
     /** Container-facing accessor: the Atmosphere container queries this

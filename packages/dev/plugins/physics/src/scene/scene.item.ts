@@ -223,7 +223,7 @@ export class SceneItem extends GraphItem {
     // Editable accessors
     // ─────────────────────────────────────────────────────────────────
 
-    @editable("vector3", { layout: "block", alignement: "horizontal", unit: "m/s²" })
+    @editable("vector3", { layout: "block", alignement: "horizontal", unit: "m/s²", disabledWhen: "is_gravity_wired" })
     public get gravity(): Cartesian3 {
         const wired = this._readProvided("gravity", (v): v is Cartesian3 => v instanceof Cartesian3);
         if (wired) return wired;
@@ -283,7 +283,7 @@ export class SceneItem extends GraphItem {
      *
      *  Unit-aware code should prefer `temperatureQ` for arbitrary
      *  source units (the Quantity layer wraps the same getter). */
-    @editable("number", { unit: "K" })
+    @editable("number", { unit: "K", disabledWhen: "is_temperature_wired" })
     public get temperature(): number {
         const wired = this._readProvided("temperature", (v): v is number => typeof v === "number" && Number.isFinite(v));
         if (wired !== null) return wired;
@@ -315,7 +315,7 @@ export class SceneItem extends GraphItem {
     /** Ambient pressure in pascal (canonical storage unit). Atmosphere-
      *  aware: when an atmosphere is wired, returns its volume-weighted
      *  aggregate pressure. Otherwise the editable default. */
-    @editable("number", { unit: "Pa" })
+    @editable("number", { unit: "Pa", disabledWhen: "is_pressure_wired" })
     public get pressure(): number {
         const wired = this._readProvided("pressure", (v): v is number => typeof v === "number" && Number.isFinite(v));
         if (wired !== null) return wired;
@@ -349,7 +349,7 @@ export class SceneItem extends GraphItem {
      *  sea-level value). NEW 2026-06-08 — the prior EFFECTIVE_DENSITY_
      *  KG_PER_M3 viewable is dropped in favor of this single-source
      *  editable. */
-    @editable("number", { unit: "kg/m³" })
+    @editable("number", { unit: "kg/m³", disabledWhen: "is_density_wired" })
     public get density(): number {
         const wired = this._readProvided("density", (v): v is number => typeof v === "number" && Number.isFinite(v));
         if (wired !== null) return wired;
@@ -366,7 +366,7 @@ export class SceneItem extends GraphItem {
         });
     }
 
-    @editable("number", { unit: "×" })
+    @editable("number", { unit: "×", disabledWhen: "is_time_scale_wired" })
     public get timeScale(): number {
         const wired = this._readProvided("timeScale", (v): v is number => typeof v === "number" && Number.isFinite(v));
         if (wired !== null) return wired;
@@ -378,7 +378,7 @@ export class SceneItem extends GraphItem {
         });
     }
 
-    @editable("vector3", { layout: "block", alignement: "horizontal", unit: "m" })
+    @editable("vector3", { layout: "block", alignement: "horizontal", unit: "m", disabledWhen: "is_local_position_wired" })
     public get localPosition(): Cartesian3 {
         const wired = this._readProvided("localPosition", (v): v is Cartesian3 => v instanceof Cartesian3);
         if (wired) return wired;
@@ -401,7 +401,7 @@ export class SceneItem extends GraphItem {
         });
     }
 
-    @editable("vector3", { layout: "block", alignement: "horizontal", unit: "×" })
+    @editable("vector3", { layout: "block", alignement: "horizontal", unit: "×", disabledWhen: "is_local_scale_wired" })
     public get localScale(): Cartesian3 {
         const wired = this._readProvided("localScale", (v): v is Cartesian3 => v instanceof Cartesian3);
         if (wired) return wired;

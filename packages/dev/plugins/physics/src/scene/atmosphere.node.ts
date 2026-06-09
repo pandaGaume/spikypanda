@@ -93,10 +93,7 @@ export class AtmosphereNode extends AtmosphereLayerNode implements IAtmosphereAg
     //     SceneItem's atmosphere_in slot
 
     protected override _buildInputPorts(): IPortDescriptor[] {
-        return [
-            ...super._buildInputPorts(),
-            { slot: `${ATMOSPHERE_IN_LAYER_PREFIX}0`, optional: true, type: "layer" },
-        ];
+        return [...super._buildInputPorts(), { slot: `${ATMOSPHERE_IN_LAYER_PREFIX}0`, optional: true, type: "layer" }];
     }
 
     protected override _buildOutputPorts(): IPortDescriptor[] {
@@ -211,6 +208,75 @@ export class AtmosphereNode extends AtmosphereLayerNode implements IAtmosphereAg
         this._publishScalar(session, ATMOSPHERE_OUT_PRESSURE, agg.pressure);
         this._publishScalar(session, ATMOSPHERE_OUT_TEMPERATURE, agg.temperatureK);
         this._publishScalar(session, ATMOSPHERE_OUT_DENSITY, agg.density);
+    }
+
+    // ── Gate-facing API: aggregate across active layers ─────────────
+    //
+    // Inherits getMassKg / getMoleFraction / applyMassDelta from
+    // AtmosphereLayer (which addresses this node's own self-state
+    // when in default mode). When external Layers are wired, we
+    // override to dispatch across the active set:
+    //   - getMassKg → SUM across active layers
+    //   - getMoleFraction → volume-weighted (Σ V_i x_i) / V_total
+    //   - applyMassDelta → split proportionally by volume
+    //
+    // Default mode (no external layers): falls through to super, which
+    // reads/writes self. So a gate config-linked to an Atmosphere works
+    // in both default and multi-layer scenarios with no special-casing
+    // at the gate site.
+
+    public override getMassKg(speciesId: string): number {
+        if (!this._boundLayers || this._boundLayers.length === 0) {
+            return super.getMassKg(speciesId);
+        }
+        let sum = 0;
+        for (const layer of this._boundLayers) {
+            const m = (layer as unknown as { getMassKg?(id: string): number }).getMassKg?.(speciesId) ?? 0;
+            sum += m;
+        }
+        return sum;
+    }
+
+    public override getMoleFraction(speciesId: string): number {
+        if (!this._boundLayers || this._boundLayers.length === 0) {
+            return super.getMoleFraction(speciesId);
+        }
+        let totalVolume = 0;
+        let numerator = 0;
+        for (const layer of this._boundLayers) {
+            const x = (layer as unknown as { getMoleFraction?(id: string): number }).getMoleFraction?.(speciesId) ?? 0;
+            const v = layer.sampleAggregates().volumeM3;
+            totalVolume += v;
+            numerator += v * x;
+        }
+        return totalVolume > 0 ? numerator / totalVolume : 0;
+    }
+
+    public override applyMassDelta(speciesId: string, deltaKg: number): void {
+        if (!this._boundLayers || this._boundLayers.length === 0) {
+            super.applyMassDelta(speciesId, deltaKg);
+            return;
+        }
+        // Split proportionally by volume so the addition lands in
+        // larger compartments more heavily. Layers with applyMassDelta
+        // absent get nothing — the type guard keeps this defensive
+        // against stub ILayerHandle test objects.
+        let totalVolume = 0;
+        for (const layer of this._boundLayers) totalVolume += layer.sampleAggregates().volumeM3;
+        if (totalVolume <= 0) return;
+        for (const layer of this._boundLayers) {
+            const apply = (layer as unknown as { applyMassDelta?(id: string, d: number): void }).applyMassDelta;
+            if (typeof apply !== "function") continue;
+            const share = (layer.sampleAggregates().volumeM3 / totalVolume) * deltaKg;
+            apply.call(layer, speciesId, share);
+        }
+    }
+
+    public override get pressurePa(): number {
+        if (!this._boundLayers || this._boundLayers.length === 0) {
+            return super.pressurePa;
+        }
+        return this.sampleAggregates().pressure;
     }
 
     /**

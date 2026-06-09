@@ -23,7 +23,7 @@ For each tick at parent sim-time `t`:
 6. lastT = t
 ```
 
-Hz lookups go through the bound `SceneStateView`'s `effectiveHz.getValue(Frequency.Units.Hz)` when available, otherwise fall back to `session.simRate`. When neither is usable, K defaults to 1 (no sub-stepping).
+Hz lookups (both sides) resolve through the bound `SceneStateView`'s `effectiveHz.getValue(Frequency.Units.Hz)`. When no SceneStateView is bound, the SimGraphNode aggregates `IHasSampleRateRequirement.requiredHz` directly across its inner leaves (`max(leaves) ∨ MIN_EFFECTIVE_HZ`). The legacy `session.simRate` fallback is GONE (dropped 2026-06-09 with task P8): rates are purely declarative now — leaves advertise their requirements, the SimGraphNode picks the max. K defaults to 1 only when neither path yields a usable rate (e.g. a freshly built session with no leaves declaring requiredHz yet).
 
 ## Ports
 

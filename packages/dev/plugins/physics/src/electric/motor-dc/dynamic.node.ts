@@ -1,5 +1,5 @@
 import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession } from "spikypanda-core";
-import type { ICartesian, Nullable, IIntegrable, IIntegrationInputs } from "spikypanda-core";
+import type { ICartesian, Nullable, IHasSampleRateRequirement, IIntegrable, IIntegrationInputs } from "spikypanda-core";
 import { FaultableNode } from "../../transform/fault.node.js";
 
 /**
@@ -42,10 +42,79 @@ import { FaultableNode } from "../../transform/fault.node.js";
  *   - State (i, omega) is restored to (i0, omega0) on session reset.
  *     The solver gathers from these fields at attach time.
  */
-export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts, IIntegrable {
+export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts, IIntegrable, IHasSampleRateRequirement {
     // ── IIntegrable trait ──────────────────────────────────────────────
     public readonly stateSize = 2;
     public readonly stateNames: ReadonlyArray<string> = ["i", "omega"];
+
+    // ── P8 sample-rate requirement ─────────────────────────────────────
+    // FaultableNode → TransformNode → RuntimeNode chain prevents this
+    // class from extending IntegrableRuntimeNode directly, so the
+    // computeRequiredHz / user-pin pattern is duplicated here. Keep
+    // signatures identical to IntegrableRuntimeNode so a future mixin
+    // refactor is straightforward.
+    @cloneable private _requiredHzValue: number = 0;
+    @cloneable private _requiredHzUserDefined: boolean = false;
+
+    /** Derive the recommended sample rate from the dominant time
+     *  constant. The motor has two poles:
+     *
+     *      τ_e = L / R   (electrical, fast)
+     *      τ_m = J / b   (mechanical, slow)
+     *
+     *  Honoring the fast pole keeps the inner integrator stable; we
+     *  pick 10 / τ_min as a comfortable margin (~10 samples per
+     *  exponential e-fold). Examples:
+     *      L=1mH R=1Ω      → τ_e=1ms  → 10 kHz
+     *      L=10mH R=1Ω     → τ_e=10ms → 1 kHz
+     *      L=1mH R=0.1Ω    → τ_e=10ms → 1 kHz
+     *  Clamped to [60, 1e6] to keep the panel sensible. */
+    protected computeRequiredHz(): number {
+        const tauE = this._L > 0 && this._R > 0 ? this._L / this._R : Infinity;
+        const tauM = this._J > 0 && this._b > 0 ? this._J / this._b : Infinity;
+        const tauMin = Math.min(tauE, tauM);
+        if (!Number.isFinite(tauMin) || tauMin <= 0) return 1000;
+        const hz = 10 / tauMin;
+        return Math.max(60, Math.min(1e6, hz));
+    }
+
+    public get requiredHz(): number {
+        if (this._requiredHzUserDefined && this._requiredHzValue > 0) {
+            return this._requiredHzValue;
+        }
+        return this.computeRequiredHz();
+    }
+
+    @editable("number", { unit: "Hz" })
+    public get required_hz(): number {
+        return this.requiredHz;
+    }
+    public set required_hz(v: number) {
+        if (!Number.isFinite(v) || v <= 0) {
+            if (this._requiredHzUserDefined || this._requiredHzValue !== 0) {
+                const prev = this.requiredHz;
+                this._requiredHzUserDefined = false;
+                this._requiredHzValue = 0;
+                this.notifyPropertyChanged("required_hz", prev, this.requiredHz);
+            }
+            return;
+        }
+        const prev = this.requiredHz;
+        if (this._requiredHzValue !== v || !this._requiredHzUserDefined) {
+            this._requiredHzValue = v;
+            this._requiredHzUserDefined = true;
+            this.notifyPropertyChanged("required_hz", prev, v);
+        }
+    }
+
+    @viewable("boolean") public get required_hz_user_defined(): boolean {
+        return this._requiredHzUserDefined;
+    }
+
+    private _notifyRequiredHzMayHaveChanged(): void {
+        if (this._requiredHzUserDefined && this._requiredHzValue > 0) return;
+        this.notifyPropertyChanged("required_hz", null, this.requiredHz);
+    }
 
     // ── Physical parameters ─────────────────────────────────────────────
     @cloneable private _R: number = 1.0; // armature resistance  [Ω]
@@ -95,18 +164,24 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         return this._R;
     }
     public set R(v: number) {
-        this.setField("R", this._R, v, (n) => {
-            this._R = n;
-        });
+        if (
+            this.setField("R", this._R, v, (n) => {
+                this._R = n;
+            })
+        )
+            this._notifyRequiredHzMayHaveChanged();
     }
 
     @editable("number") public get L(): number {
         return this._L;
     }
     public set L(v: number) {
-        this.setField("L", this._L, v, (n) => {
-            this._L = n;
-        });
+        if (
+            this.setField("L", this._L, v, (n) => {
+                this._L = n;
+            })
+        )
+            this._notifyRequiredHzMayHaveChanged();
     }
 
     @editable("number") public get Kt(): number {
@@ -131,18 +206,24 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         return this._J;
     }
     public set J(v: number) {
-        this.setField("J", this._J, v, (n) => {
-            this._J = n;
-        });
+        if (
+            this.setField("J", this._J, v, (n) => {
+                this._J = n;
+            })
+        )
+            this._notifyRequiredHzMayHaveChanged();
     }
 
     @editable("number") public get b(): number {
         return this._b;
     }
     public set b(v: number) {
-        this.setField("b", this._b, v, (n) => {
-            this._b = n;
-        });
+        if (
+            this.setField("b", this._b, v, (n) => {
+                this._b = n;
+            })
+        )
+            this._notifyRequiredHzMayHaveChanged();
     }
 
     @editable("number") public get i0(): number {

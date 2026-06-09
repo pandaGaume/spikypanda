@@ -1,5 +1,5 @@
 import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, inSlotOf } from "spikypanda-core";
-import type { ICartesian, Nullable } from "spikypanda-core";
+import type { ICartesian, Nullable, IHasSampleRateRequirement } from "spikypanda-core";
 import { PHASE_OFFSET_B, PHASE_OFFSET_C, sinusoidalBackEmf } from "./back-emf.js";
 import { FaultableNode } from "../../transform/fault.node.js";
 
@@ -21,8 +21,66 @@ import { FaultableNode } from "../../transform/fault.node.js";
  * Inherits world-frame placement from TransformNode and the variadic
  * fault bank from FaultableNode (target="tau" folds into τ_load).
  */
-export class PmsmMotorDynamicNode extends FaultableNode implements IDeclaresPorts {
+export class PmsmMotorDynamicNode extends FaultableNode implements IDeclaresPorts, IHasSampleRateRequirement {
     private static readonly OWN_INPUT_SLOTS: ReadonlySet<string> = new Set(["V_a", "V_b", "V_c", "tau_load", "dt"]);
+
+    // ── P8 sample-rate (boilerplate mirror of IntegrableRuntimeNode) ──
+    @cloneable private _requiredHzValue: number = 0;
+    @cloneable private _requiredHzUserDefined: boolean = false;
+
+    /** PMSM is sinusoidal: dominant electrical frequency is f_e = P · ω
+     *  / (2π). We honor the electrical pole τ_e = L/R and Nyquist on the
+     *  fundamental at a design omega_max = 1000 rad/s. Clamped
+     *  [60, 1e6]. */
+    protected computeRequiredHz(): number {
+        const tauE = this._L > 0 && this._R > 0 ? this._L / this._R : Infinity;
+        const tauM = this._J > 0 && this._b > 0 ? this._J / this._b : Infinity;
+        const tauMin = Math.min(tauE, tauM);
+        const omegaMax = 1000;
+        const fe = (this._P * omegaMax) / (2 * Math.PI);
+        const fromTau = Number.isFinite(tauMin) && tauMin > 0 ? 10 / tauMin : 0;
+        const hz = Math.max(fromTau, 10 * fe);
+        if (!Number.isFinite(hz) || hz <= 0) return 5000;
+        return Math.max(60, Math.min(1e6, hz));
+    }
+
+    public get requiredHz(): number {
+        if (this._requiredHzUserDefined && this._requiredHzValue > 0) {
+            return this._requiredHzValue;
+        }
+        return this.computeRequiredHz();
+    }
+
+    @editable("number", { unit: "Hz" })
+    public get required_hz(): number {
+        return this.requiredHz;
+    }
+    public set required_hz(v: number) {
+        if (!Number.isFinite(v) || v <= 0) {
+            if (this._requiredHzUserDefined || this._requiredHzValue !== 0) {
+                const prev = this.requiredHz;
+                this._requiredHzUserDefined = false;
+                this._requiredHzValue = 0;
+                this.notifyPropertyChanged("required_hz", prev, this.requiredHz);
+            }
+            return;
+        }
+        const prev = this.requiredHz;
+        if (this._requiredHzValue !== v || !this._requiredHzUserDefined) {
+            this._requiredHzValue = v;
+            this._requiredHzUserDefined = true;
+            this.notifyPropertyChanged("required_hz", prev, v);
+        }
+    }
+
+    @viewable("boolean") public get required_hz_user_defined(): boolean {
+        return this._requiredHzUserDefined;
+    }
+
+    private _notifyRequiredHzMayHaveChanged(): void {
+        if (this._requiredHzUserDefined && this._requiredHzValue > 0) return;
+        this.notifyPropertyChanged("required_hz", null, this.requiredHz);
+    }
 
     @cloneable private _R: number = 0.5;
     @cloneable private _L: number = 2e-3;
@@ -71,17 +129,17 @@ export class PmsmMotorDynamicNode extends FaultableNode implements IDeclaresPort
         return this._R;
     }
     public set R(v: number) {
-        this.setField("R", this._R, v, (n) => {
+        if (this.setField("R", this._R, v, (n) => {
             this._R = n;
-        });
+        })) this._notifyRequiredHzMayHaveChanged();
     }
     @editable("number") public get L(): number {
         return this._L;
     }
     public set L(v: number) {
-        this.setField("L", this._L, v, (n) => {
+        if (this.setField("L", this._L, v, (n) => {
             this._L = n;
-        });
+        })) this._notifyRequiredHzMayHaveChanged();
     }
     @editable("number") public get Ke(): number {
         return this._Ke;
@@ -95,25 +153,25 @@ export class PmsmMotorDynamicNode extends FaultableNode implements IDeclaresPort
         return this._J;
     }
     public set J(v: number) {
-        this.setField("J", this._J, v, (n) => {
+        if (this.setField("J", this._J, v, (n) => {
             this._J = n;
-        });
+        })) this._notifyRequiredHzMayHaveChanged();
     }
     @editable("number") public get b(): number {
         return this._b;
     }
     public set b(v: number) {
-        this.setField("b", this._b, v, (n) => {
+        if (this.setField("b", this._b, v, (n) => {
             this._b = n;
-        });
+        })) this._notifyRequiredHzMayHaveChanged();
     }
     @editable("number") public get P(): number {
         return this._P;
     }
     public set P(v: number) {
-        this.setField("P", this._P, v, (n) => {
+        if (this.setField("P", this._P, v, (n) => {
             this._P = n;
-        });
+        })) this._notifyRequiredHzMayHaveChanged();
     }
     @editable("number") public get ia0(): number {
         return this._ia0;

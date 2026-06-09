@@ -28,15 +28,17 @@ Most teaching textbooks model the inverter as a unity-gain block: `V = V_cmd`. T
 
 ## Sample-rate requirement
 
-To resolve the carrier without aliasing the runner must tick at
+The inverter is `IHasSampleRateRequirement` (via `IntegrableRuntimeNode`). To resolve the PWM carrier without aliasing, the runner must tick at
 
 ```
-simRate >= 20 · fPwm
+required_hz = 20 · fPwm
 ```
 
-For `fPwm = 10 kHz`, simRate must be **>= 200 kHz**. The motor's solver further shrinks its internal step adaptively around the V transitions.
+The inverter's `computeRequiredHz()` returns exactly that. For `fPwm = 10 kHz`, `required_hz = 200 kHz`. When the user edits `fPwm`, `required_hz` refreshes automatically; the user can pin a different value through the `required_hz` editable (typing 0 / negative / NaN unpins back to the computed `20 · fPwm`).
 
-> Setting simRate below this threshold is the single most common mistake: the carrier folds back as a fictional low-frequency disturbance and the MCSA spectrum becomes noise.
+The enclosing `SimGraphNode` aggregates `requiredHz` across all `IHasSampleRateRequirement` leaves in its inner graph and surfaces the max (floored at 60 Hz). The motor's own electrical-pole rate (`10 / tau_e`, typically 1–10 kHz) is dwarfed by the inverter's 200 kHz, so the runner naturally lifts the inner rate to honor the carrier whenever an inverter is wired upstream.
+
+> Setting `required_hz` below the carrier's Nyquist threshold is the single most common MCSA mistake: the carrier folds back as a fictional low-frequency disturbance and the spectrum becomes noise. The default `20 · fPwm` is conservative; do not pin below it unless you are deliberately modelling a coarse-time-step controller.
 
 ## Wiring with the motor
 

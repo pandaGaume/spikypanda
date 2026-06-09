@@ -8,10 +8,9 @@ void V1_SPECIES_ORDER;
 import {
     AtmosphereGateNode,
     createAtmosphereGateNode,
-    GATE_IN_A_MOLE_FRACTION_PREFIX,
-    GATE_IN_B_MOLE_FRACTION_PREFIX,
-    GATE_OUT_A_DELTA_PREFIX,
-    GATE_OUT_B_DELTA_PREFIX,
+    GATE_IN_ATMOSPHERE_A,
+    GATE_IN_ATMOSPHERE_B,
+    GATE_OUT_FLOW_RATE,
 } from "./atmosphere-gate.node.js";
 import {
     ATMOSPHERE_LAYER_IN_COMPOSITION,
@@ -188,45 +187,27 @@ export const sceneSubPlugin: IPlugin = {
             variadicInput: [{ prefix: ATMOSPHERE_IN_LAYER_PREFIX, type: "layer" as const }],
         });
 
-        // ── F10d: AtmosphereGateNode ──────────────────────────────
-        // Couples two AtmosphereStateNodes via per-species mass-flow
-        // computation in one of three modes (closed / open_passive /
-        // hvac_forced). The variadic descriptors below give the
-        // reconciler the schema it needs to auto-grow A_/B_ slots as
-        // the user wires successive species observables.
+        // ── F10d + #3 refactor (2026-06-09): AtmosphereGateNode ────
+        // Couples two AtmosphereStateNodes via direct config-link refs
+        // (no more per-species data channels). The gate reads each
+        // atmosphere's pressure / temperature / mole fractions through
+        // the IAtmosphereGateHandle methods and writes mass deltas via
+        // applyMassDelta. Species enumeration is the union of both
+        // bound compositions; conservation is native (the gate adds
+        // ±delta in the same fire()).
         const gateInputs = [
-            { slot: "A_pressure", optional: true, type: "float" },
-            { slot: "A_temperature", optional: true, type: "float" },
-            { slot: "B_pressure", optional: true, type: "float" },
-            { slot: "B_temperature", optional: true, type: "float" },
-            ...V1_SPECIES_ORDER.flatMap((sp) => [
-                { slot: `${GATE_IN_A_MOLE_FRACTION_PREFIX}${sp}`, optional: true, type: "float" },
-                { slot: `${GATE_IN_B_MOLE_FRACTION_PREFIX}${sp}`, optional: true, type: "float" },
-            ]),
+            { slot: GATE_IN_ATMOSPHERE_A, optional: true, type: "atmosphere" },
+            { slot: GATE_IN_ATMOSPHERE_B, optional: true, type: "atmosphere" },
         ];
-        const gateOutputs = V1_SPECIES_ORDER.flatMap((sp) => [
-            { slot: `${GATE_OUT_A_DELTA_PREFIX}${sp}`, optional: true, type: "float" },
-            { slot: `${GATE_OUT_B_DELTA_PREFIX}${sp}`, optional: true, type: "float" },
-        ]);
+        const gateOutputs = [
+            { slot: GATE_OUT_FLOW_RATE, optional: true, type: "float" },
+        ];
         ctx.nodes.register("Physics.Scene:atmosphere-gate", () => createAtmosphereGateNode() as never, {
             label: "Atmosphere Gate",
             category: "Physics.Scene",
             docPath: ctx.assetUrl("docs/physics/scene/atmosphere-gate.md"),
             inputPorts: gateInputs,
             outputPorts: gateOutputs,
-            // The four variadic groups give the editor enough hints to
-            // grow A_/B_ inputs AND outputs in lock-step as the user
-            // wires new species. P6's AtmosphereStateNode publishes
-            // one `mole_fraction_<sp>` per species; the gate consumes
-            // and re-publishes via these prefixes.
-            variadicInput: [
-                { prefix: GATE_IN_A_MOLE_FRACTION_PREFIX, type: "float" as const },
-                { prefix: GATE_IN_B_MOLE_FRACTION_PREFIX, type: "float" as const },
-            ],
-            variadicOutput: [
-                { prefix: GATE_OUT_A_DELTA_PREFIX, type: "float" as const },
-                { prefix: GATE_OUT_B_DELTA_PREFIX, type: "float" as const },
-            ],
         });
     },
 };

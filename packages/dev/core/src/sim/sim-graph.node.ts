@@ -46,7 +46,9 @@ import type { IChannel, ISession, ISolverHandle } from "../execution/execution.i
 import { RuntimeGraph } from "../execution/execution.graph";
 import { Frequency } from "../math/math.units";
 import { buildDefaultStateView } from "./scene-state-view.impl";
+import { MIN_EFFECTIVE_HZ } from "./scene-state-view.interface";
 import type { SceneStateView } from "./scene-state-view.interface";
+import { hasSampleRateRequirement } from "./sim.interfaces";
 
 /**
  * Resolver protocol the editor's session-builder hands to a
@@ -209,14 +211,26 @@ export class SimGraphNode<N extends import("../execution/execution.interfaces").
     /**
      * K = max(1, round(innerHz / parentHz)).
      *
-     * Hz lookups go through the bound SceneStateView when available,
-     * otherwise fall back to the legacy `ISession.simRate` field
-     * (the runner sets it from its fixed-step rate). If neither side
-     * exposes a usable Hz, K defaults to 1 (no sub-stepping).
+     * Hz lookups (P8, 2026-06-09): priority order
+     *   1. The session's bound SceneStateView's `effectiveHz`. When a
+     *      SceneItem is wired through the SceneBindingResolver, this
+     *      reflects either the user's `manualHz` override or the
+     *      resolver's aggregate over the scene's solver-attached
+     *      leaves.
+     *   2. Per-graph aggregation: walk this graph's nodes and take
+     *      max(requiredHz) over every IHasSampleRateRequirement
+     *      implementer, floored at MIN_EFFECTIVE_HZ. This is the
+     *      "no SceneItem wired" fallback — the runtime still figures
+     *      out a sensible rate from what's inside the sub-graph.
+     *   3. None of the above → null → K = 1 (no sub-stepping).
+     *
+     * The legacy `ISession.simRate` field is no longer consulted; the
+     * runner's fixed-step rate is now ONLY a wall-clock cadence
+     * concern, not a sim-time rate.
      */
     private _computeSubStepRatio(parentSession: ISession, inner: ISession): number {
-        const myHz = this._readHz(inner) ?? parentSession.simRate;
-        const parentHz = this._readHz(parentSession) ?? parentSession.simRate;
+        const myHz = this._readHz(inner);
+        const parentHz = this._readHz(parentSession);
         if (!myHz || !parentHz || parentHz <= 0) return 1;
         const ratio = myHz / parentHz;
         if (!Number.isFinite(ratio) || ratio <= 1) return 1;
@@ -224,10 +238,44 @@ export class SimGraphNode<N extends import("../execution/execution.interfaces").
     }
 
     private _readHz(session: ISession): number | null {
+        // 1. Bound SceneStateView wins when present.
         const view = session.sceneStateView;
-        if (!view) return null;
-        const hz = view.effectiveHz.getValue(Frequency.Units.Hz);
-        return Number.isFinite(hz) && hz > 0 ? hz : null;
+        if (view) {
+            const hz = view.effectiveHz.getValue(Frequency.Units.Hz);
+            if (Number.isFinite(hz) && hz > 0) return hz;
+        }
+        // 2. P8 fallback: aggregate from the graph's own
+        //    IHasSampleRateRequirement nodes (max + floor). Looks
+        //    THROUGH the session, not into the inner state — the inner
+        //    session's graph IS this SimGraphNode itself when reading
+        //    inner, or whatever runtime graph the runner mounted when
+        //    reading parent.
+        const agg = SimGraphNode._aggregateRequiredHzFromSession(session);
+        if (agg > 0) return agg;
+        return null;
+    }
+
+    /**
+     * Walk a session's graph nodes, take max(requiredHz) over every
+     * IHasSampleRateRequirement implementer, floor at MIN_EFFECTIVE_HZ.
+     * Returns 0 when no opt-in nodes are present (caller falls back
+     * to a different signal).
+     *
+     * Static helper so a caller without a SimGraphNode instance (e.g.
+     * the GraphRunner) can reach for the same aggregation rule.
+     */
+    public static _aggregateRequiredHzFromSession(session: ISession): number {
+        const nodes = session.graph?.nodes;
+        if (!nodes || nodes.length === 0) return 0;
+        let max = 0;
+        for (const node of nodes) {
+            if (hasSampleRateRequirement(node)) {
+                if (node.requiredHz > max) max = node.requiredHz;
+            }
+        }
+        if (max <= 0) return 0;
+        const floor = MIN_EFFECTIVE_HZ.getValue(Frequency.Units.Hz);
+        return Math.max(floor, max);
     }
 }
 

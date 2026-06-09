@@ -199,6 +199,55 @@ export function isIntegrable(node: unknown): node is IIntegrable {
 }
 
 // =====================================================================
+// Sample-rate requirement (P8 — IHasSampleRateRequirement)
+// =====================================================================
+
+/**
+ * Opt-in trait a node declares to advertise the sample rate (in Hz)
+ * it needs to be stepped at for its physics / integration to be
+ * meaningful. Read by the enclosing SimGraphNode at reset() time to
+ * compute the inner session's `effectiveHz` via max(requiredHz) over
+ * all opt-in leaves, with a floor of `MIN_EFFECTIVE_HZ` (60 Hz).
+ *
+ * Replaces the legacy global `session.simRate` dropdown: rates are
+ * now declarative and locally meaningful (motors want kHz, atmospheres
+ * want ~100 Hz, slow chemistry might want 10 Hz), and the runner just
+ * honors the union.
+ *
+ * Canonical SI: Hz. Nodes that need unit-aware code can wrap their
+ * stored value in a `Frequency` Quantity for property panels and
+ * configuration round-trips, but the interface itself trades raw
+ * numbers for cheap hot-path reads.
+ *
+ * The trait is ORTHOGONAL to IIntegrable: not every IIntegrable has
+ * to declare a requiredHz (the floor handles it), and a fast
+ * non-integrating node can also opt in if its own internal dynamics
+ * dictate a sample rate (e.g. a Nyquist-bound sensor).
+ *
+ * When the SimGraphNode wraps a sub-graph, the inner-graph aggregate
+ * becomes the SimGraphNode's own effective rate, which then bubbles
+ * up via its parent's K = innerHz / parentHz sub-stepping ratio.
+ */
+export interface IHasSampleRateRequirement {
+    /** Required sample rate in hertz. MUST be > 0 (a node that opts in
+     *  declares a positive minimum; if you want "no preference", just
+     *  don't implement the trait). */
+    readonly requiredHz: number;
+}
+
+/**
+ * Structural guard for `IHasSampleRateRequirement`. True when the
+ * object exposes a positive, finite `requiredHz` number. The
+ * SimGraphNode uses this to filter inner-graph leaves before taking
+ * the max.
+ */
+export function hasSampleRateRequirement(node: unknown): node is IHasSampleRateRequirement {
+    if (!node || typeof node !== "object") return false;
+    const n = node as Partial<IHasSampleRateRequirement>;
+    return typeof n.requiredHz === "number" && Number.isFinite(n.requiredHz) && n.requiredHz > 0;
+}
+
+// =====================================================================
 // Solver attachment (F3 — marker-node pattern)
 // =====================================================================
 

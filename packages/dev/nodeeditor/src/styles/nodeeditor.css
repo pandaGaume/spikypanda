@@ -1886,6 +1886,30 @@
 .ne-property-editor-grid-readonly input,
 .ne-property-editor-grid-readonly select,
 .ne-property-editor-grid-readonly textarea { cursor: default; }
+/* Per-row disabled state: an @editable was downgraded to read-only
+   for this render pass because its `options.disabledWhen` boolean is
+   currently true (e.g. an input port is wired and overriding the
+   static default). Visually distinct from the bulk-readonly "Live
+   state" grid: lighter dimming, plus a subtle leading bar to telegraph
+   "wired" instead of "always read-only". */
+.ne-property-editor-row-disabled {
+    opacity:        0.72;
+    position:       relative;
+    padding-left:   8px;
+}
+.ne-property-editor-row-disabled::before {
+    content:    "";
+    position:   absolute;
+    left:       0;
+    top:        14%;
+    bottom:     14%;
+    width:      2px;
+    background: var(--ne-color-cable-config, var(--ne-color-text-muted));
+    border-radius: 1px;
+}
+.ne-property-editor-row-disabled input,
+.ne-property-editor-row-disabled select,
+.ne-property-editor-row-disabled textarea { cursor: default; }
 .ne-property-editor-row {
     display:        flex;
     flex-direction: column;

@@ -1,5 +1,5 @@
-import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, RuntimeNode } from "spikypanda-core";
-import type { ICartesian, Nullable } from "spikypanda-core";
+import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IntegrableRuntimeNode, IOlink, IPortDescriptor, ISession } from "spikypanda-core";
+import type { ICartesian, Nullable, IHasSampleRateRequirement } from "spikypanda-core";
 
 /**
  * DC H-Bridge PWM Inverter — the power-stage modulator that sits
@@ -32,7 +32,15 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  * simRate ≥ 200 kHz. Le solver RK4 attaché au moteur en aval
  * shrinkera sa step adaptive de lui-même autour des transitions.
  */
-export class DcInverterNode extends RuntimeNode implements IDeclaresPorts {
+export class DcInverterNode extends IntegrableRuntimeNode implements IDeclaresPorts, IHasSampleRateRequirement {
+    /** PWM sample-rate requirement: 20 × f_PWM, per the docstring rule.
+     *  Clamped to [60, 1e7] for sanity. */
+    protected override computeRequiredHz(): number {
+        const hz = 20 * this._fPwm;
+        if (!Number.isFinite(hz) || hz <= 0) return 200_000;
+        return Math.max(60, Math.min(1e7, hz));
+    }
+
     // ── Editable parameters ───────────────────────────────────────────
     @cloneable private _Vdc: number = 12;
     @cloneable private _fPwm: number = 10000;
@@ -81,9 +89,9 @@ export class DcInverterNode extends RuntimeNode implements IDeclaresPorts {
     }
     public set fPwm(v: number) {
         const next = v > 0 ? v : 1;
-        this.setField("fPwm", this._fPwm, next, (n) => {
+        if (this.setField("fPwm", this._fPwm, next, (n) => {
             this._fPwm = n;
-        });
+        })) this.notifyComputedRequiredHzMayHaveChanged();
     }
 
     @editable("string")

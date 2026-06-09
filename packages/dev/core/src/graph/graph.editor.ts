@@ -88,9 +88,33 @@ export function editor(kind: string): ClassDecorator {
 }
 
 /**
+ * Convention key recognized by the PropertyEditor: when an @editable's
+ * `options` object contains `disabledWhen: "<propName>"`, the panel
+ * reads `model[propName]` at every render pass; if truthy, the row is
+ * displayed read-only (input.readOnly = true, leading "wired" bar via
+ * CSS class `ne-property-editor-row-disabled`). Typical use: an
+ * `is_X_wired` boolean @viewable that flips true when an upstream wire
+ * is driving the X property, so the editable default becomes
+ * temporarily inert. Example:
+ *
+ *   @viewable("boolean") get is_gravity_wired() { return ...; }
+ *   @editable("vector3", { unit: "m/s²", disabledWhen: "is_gravity_wired" })
+ *   get gravity() { return wiredOrDefault; }
+ *
+ * The convention lives purely at the panel-rendering layer; core
+ * just stores the options blob verbatim — no behavior here besides
+ * the documentation contract.
+ */
+export interface IEditableOptionsCommon {
+    readonly disabledWhen?: string;
+}
+
+/**
  * Property decorator. Marks the property as user-editable through the
  * editor of the given kind. Optional payload is preserved verbatim and
- * passed back to the factory at instantiation.
+ * passed back to the factory at instantiation. See
+ * `IEditableOptionsCommon.disabledWhen` for the panel-recognized
+ * "wired → read-only" convention.
  */
 export function editable(kind: string, options?: unknown) {
     return (target: object, propertyKey: string | symbol): void => {

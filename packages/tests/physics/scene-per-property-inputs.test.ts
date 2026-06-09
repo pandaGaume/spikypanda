@@ -16,7 +16,7 @@
  * driven.
  */
 
-import { Cartesian3, Quaternion, Temperature } from "../../dev/core/src";
+import { Cartesian3, getEditorSchema, Quaternion, Temperature } from "../../dev/core/src";
 import type { SceneSourceResolver } from "../../dev/plugins/physics/src/scene/scene.item";
 import { SceneItem } from "../../dev/plugins/physics/src/scene/scene.item";
 
@@ -209,6 +209,59 @@ describe("Scene bindPropertyProvider (live panel-side reads)", () => {
         expect(scene.is_gravity_wired).toBe(true);
         scene.bindPropertyProvider("gravity", null);
         expect(scene.is_gravity_wired).toBe(false);
+    });
+});
+
+describe("Scene editable schema declares disabledWhen for every wired field", () => {
+    /**
+     * The PropertyEditor reads `options.disabledWhen` to demote an
+     * @editable into a read-only row when the named viewable is
+     * currently truthy. SceneItem must declare this for the 7 fields
+     * that have a matching `is_X_wired` boolean. localRotation is
+     * intentionally NOT @editable (no panel row), so it is excluded
+     * even though its is_local_rotation_wired exists.
+     */
+    const EXPECTED: Record<string, string> = {
+        gravity: "is_gravity_wired",
+        temperature: "is_temperature_wired",
+        pressure: "is_pressure_wired",
+        density: "is_density_wired",
+        timeScale: "is_time_scale_wired",
+        localPosition: "is_local_position_wired",
+        localScale: "is_local_scale_wired",
+    };
+
+    it("each declared @editable has the correct disabledWhen option", () => {
+        const scene = new SceneItem();
+        const schema = getEditorSchema(scene);
+        for (const [propertyName, expectedDisabledWhen] of Object.entries(EXPECTED)) {
+            const field = schema.fields.find((f) => f.propertyName === propertyName && f.editable);
+            expect(field).toBeDefined();
+            const options = field!.options as { disabledWhen?: string } | undefined;
+            expect(options?.disabledWhen).toBe(expectedDisabledWhen);
+        }
+    });
+
+    it("the disabledWhen target points to an existing viewable on the model", () => {
+        const scene = new SceneItem();
+        for (const viewableName of Object.values(EXPECTED)) {
+            // Accessing the property must not throw and must return a
+            // boolean — the panel reads it at render time and only
+            // cares about truthiness.
+            const v = (scene as unknown as Record<string, unknown>)[viewableName];
+            expect(typeof v).toBe("boolean");
+        }
+    });
+
+    it("wiring a property flips its disabledWhen boolean true (round-trip)", () => {
+        const scene = new SceneItem();
+        expect(scene.is_gravity_wired).toBe(false);
+        scene.gravitySourceId = "g";
+        expect(scene.is_gravity_wired).toBe(true);
+        // The schema option still says is_gravity_wired (it's static
+        // metadata); the panel reads the live viewable on every render.
+        const field = getEditorSchema(scene).fields.find((f) => f.propertyName === "gravity");
+        expect((field?.options as { disabledWhen?: string } | undefined)?.disabledWhen).toBe("is_gravity_wired");
     });
 });
 

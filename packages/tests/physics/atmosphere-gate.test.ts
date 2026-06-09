@@ -1,398 +1,345 @@
 /**
- * Unit tests for `Physics.Scene:atmosphere-gate` (F10d / P7).
+ * Unit tests for `Physics.Scene:atmosphere-gate` (refactored 2026-06-09).
  *
  * Coverage:
- *   1. Three modes: closed (no flux), open_passive (linear ΔP-driven),
- *      hvac_forced (fixed volumetric flow).
- *   2. Conservation: A_delta_i + B_delta_i = 0 exactly per species.
- *   3. Sign convention: A side negative when material leaves A,
- *      B side positive when material enters B.
- *   4. Upwind selection in open_passive: high-P side donates its
- *      mole fractions; low-P side composition is irrelevant.
- *   5. bidirectional flag: false → check-valve (no back-flow).
- *   6. IIntegrable surface: stateSize = 1 only when mode === hvac_forced
- *      AND trackThroughput === true. rhs returns the volumetric flow.
- *   7. Quantity-aware accessors (areaQ, forcedFlowQ) round-trip
- *      arbitrary input units down to canonical SI.
+ *   1. Default state: no atmospheres bound → no flux, no throughput.
+ *   2. closed mode: never moves mass.
+ *   3. open_passive: pressure-driven flux A→B (positive ΔP); check-valve
+ *      semantics with `bidirectional = false`.
+ *   4. hvac_forced: fixed flow A→B; throughput accumulator updates only
+ *      when trackThroughput is true.
+ *   5. Mass conservation: per species, A.delta + B.delta ≈ 0 across
+ *      a fire().
+ *   6. Bindings: bindAtmosphereA/B/clearBindings invariants.
+ *   7. Sample-rate requirement: defaults + editable accessor.
  */
-import type { IChannel, IIntegrationInputs, IOlink, ISession } from "spikypanda-core";
-import { Area, CHEMICAL_SPECIES_V1, GAS_CONSTANT_R, V1_SPECIES_ORDER, VolumetricFlow } from "../../dev/core/src";
+
 import {
     AtmosphereGateNode,
-    GATE_IN_A_MOLE_FRACTION_PREFIX,
-    GATE_IN_A_PRESSURE,
-    GATE_IN_A_TEMPERATURE,
-    GATE_IN_B_MOLE_FRACTION_PREFIX,
-    GATE_IN_B_PRESSURE,
-    GATE_IN_B_TEMPERATURE,
-    GATE_OUT_A_DELTA_PREFIX,
-    GATE_OUT_B_DELTA_PREFIX,
+    GATE_IN_ATMOSPHERE_A,
+    GATE_IN_ATMOSPHERE_B,
+    GATE_OUT_FLOW_RATE,
 } from "../../dev/plugins/physics/src/scene/atmosphere-gate.node";
+import type { IAtmosphereGateHandle } from "../../dev/plugins/physics/src/scene/atmosphere-gate.node";
 
 // ─────────────────────────────────────────────────────────────────────
-// Test harness — feed inputs + capture outputs through a mock Session
+// Helpers
 // ─────────────────────────────────────────────────────────────────────
 
-interface InputSpec {
-    slot: string;
-    value: number;
-}
+/** A minimal mutable atmosphere stub satisfying IAtmosphereGateHandle.
+ *  We track applied deltas per species so tests can assert what the
+ *  gate did without relying on the real ideal-gas pressure model. */
+class StubAtmosphere implements IAtmosphereGateHandle {
+    public activeSpecies: string[];
+    public temperatureK: number;
+    public pressurePa: number;
+    public volume: number;
+    public massBySpecies: Map<string, number>;
+    public moleFractionBySpecies: Map<string, number>;
+    public deltaLog: Array<{ species: string; deltaKg: number }> = [];
 
-function runFire(
-    node: AtmosphereGateNode,
-    inputs: InputSpec[],
-    outputSlots: string[]
-): Map<string, number> {
-    const inLinks: IChannel[] = inputs.map(
-        (i) => ({ slot: i.slot, enabled: true } as unknown as IChannel),
-    );
-    const outLinks: IChannel[] = outputSlots.map(
-        (s) => ({ slot: s, enabled: true } as unknown as IChannel),
-    );
-    const allLinks = [...inLinks, ...outLinks];
-    const linkStates = allLinks.map((_, i) => ({ ready: i < inputs.length }));
-    const captured = new Map<string, number>();
-    const session: ISession = {
-        graph: { links: allLinks },
-        linkStates,
-        consume: (idx: number) => {
-            if (idx >= inputs.length) return undefined;
-            linkStates[idx].ready = false;
-            return inputs[idx].value;
-        },
-        publish: (idx: number, value: unknown) => {
-            captured.set(allLinks[idx].slot as string, value as number);
-        },
-        peek: () => undefined,
-        sceneStateView: null,
-    } as unknown as ISession;
-    (node as unknown as { _opsc: IOlink[] })._opsc = inLinks as unknown as IOlink[];
-    (node as unknown as { _onsc: IOlink[] })._onsc = outLinks as unknown as IOlink[];
-    node.fire(session, 0);
-    return captured;
-}
-
-/** Every per-species A/B delta slot, in the canonical order. */
-function allDeltaSlots(): string[] {
-    const slots: string[] = [];
-    for (const sp of V1_SPECIES_ORDER) {
-        slots.push(`${GATE_OUT_A_DELTA_PREFIX}${sp}`);
-        slots.push(`${GATE_OUT_B_DELTA_PREFIX}${sp}`);
+    public constructor(opts: {
+        species: string[];
+        T?: number;
+        P?: number;
+        volume?: number;
+        mass?: Record<string, number>;
+        moleFraction?: Record<string, number>;
+    }) {
+        this.activeSpecies = [...opts.species];
+        this.temperatureK = opts.T ?? 293.15;
+        this.pressurePa = opts.P ?? 101325;
+        this.volume = opts.volume ?? 100;
+        this.massBySpecies = new Map(Object.entries(opts.mass ?? {}));
+        this.moleFractionBySpecies = new Map(Object.entries(opts.moleFraction ?? {}));
     }
-    return slots;
+
+    public getMassKg(speciesId: string): number {
+        return this.massBySpecies.get(speciesId) ?? 0;
+    }
+    public getMoleFraction(speciesId: string): number {
+        return this.moleFractionBySpecies.get(speciesId) ?? 0;
+    }
+    public applyMassDelta(speciesId: string, deltaKg: number): void {
+        this.deltaLog.push({ species: speciesId, deltaKg });
+        const cur = this.massBySpecies.get(speciesId) ?? 0;
+        this.massBySpecies.set(speciesId, Math.max(0, cur + deltaKg));
+    }
 }
 
-/** Build a "physical" Earth-air mole-fraction wiring for one side. */
-function earthAir(side: "A" | "B"): InputSpec[] {
-    const prefix = side === "A" ? GATE_IN_A_MOLE_FRACTION_PREFIX : GATE_IN_B_MOLE_FRACTION_PREFIX;
-    return [
-        { slot: `${prefix}N2`, value: 0.78 },
-        { slot: `${prefix}O2`, value: 0.21 },
-        { slot: `${prefix}CO2`, value: 0.0004 },
-        { slot: `${prefix}H2O`, value: 0.0096 },
-        { slot: `${prefix}Ar`, value: 0 },
-    ];
+interface FakeChannel {
+    slot: string;
+    enabled: boolean;
+}
+
+function fakeSession(dt = 0.01, channels: FakeChannel[] = []): {
+    dt: number;
+    graph: { links: FakeChannel[] };
+    published: Map<string, number>;
+    publish(idx: number, v: unknown): void;
+    consume(): unknown;
+} {
+    const published = new Map<string, number>();
+    return {
+        dt,
+        graph: { links: channels },
+        published,
+        publish(idx: number, v: unknown) {
+            published.set(channels[idx].slot, v as number);
+        },
+        consume() {
+            return undefined;
+        },
+    };
+}
+
+// Standard 3-species setup (dry air-ish): same composition on both
+// sides at different pressures so open_passive drives a non-zero flux.
+function buildPair(): { A: StubAtmosphere; B: StubAtmosphere } {
+    const moleFraction = { N2: 0.78, O2: 0.21, Ar: 0.01 };
+    const A = new StubAtmosphere({
+        species: ["N2", "O2", "Ar"],
+        T: 293.15,
+        P: 110_000, // higher
+        volume: 100,
+        moleFraction,
+        mass: { N2: 100, O2: 25, Ar: 1 },
+    });
+    const B = new StubAtmosphere({
+        species: ["N2", "O2", "Ar"],
+        T: 293.15,
+        P: 90_000, // lower
+        volume: 100,
+        moleFraction,
+        mass: { N2: 100, O2: 25, Ar: 1 },
+    });
+    return { A, B };
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// 1. Closed mode
+// 1. Default state
 // ─────────────────────────────────────────────────────────────────────
 
-describe("AtmosphereGateNode — closed mode", () => {
-    it("publishes zero flux on every A/B delta slot when mode === closed", () => {
+describe("AtmosphereGateNode default state", () => {
+    it("declares the new config-link ports and the single flow_rate output", () => {
         const gate = new AtmosphereGateNode();
-        gate.mode = "closed";
-        const captured = runFire(
-            gate,
-            [
-                { slot: GATE_IN_A_PRESSURE, value: 101325 },
-                { slot: GATE_IN_B_PRESSURE, value: 50000 },
-                { slot: GATE_IN_A_TEMPERATURE, value: 293.15 },
-                { slot: GATE_IN_B_TEMPERATURE, value: 293.15 },
-                ...earthAir("A"),
-            ],
-            allDeltaSlots(),
-        );
-        for (const slot of allDeltaSlots()) {
-            expect(captured.get(slot)).toBeCloseTo(0, 12);
-        }
+        const inputs = gate.inputPorts.map((p) => p.slot);
+        const outputs = gate.outputPorts.map((p) => p.slot);
+        expect(inputs).toContain(GATE_IN_ATMOSPHERE_A);
+        expect(inputs).toContain(GATE_IN_ATMOSPHERE_B);
+        expect(outputs).toEqual([GATE_OUT_FLOW_RATE]);
+    });
+
+    it("does nothing when no atmospheres are bound", () => {
+        const gate = new AtmosphereGateNode();
+        const session = fakeSession();
+        gate.fire(session as never, 0);
         expect(gate.lastVolumetricFlow).toBe(0);
+        expect(gate.throughput).toBe(0);
+    });
+
+    it("defaults: mode=open_passive, requiredHz=100, bidirectional=true", () => {
+        const gate = new AtmosphereGateNode();
+        expect(gate.mode).toBe("open_passive");
+        expect(gate.requiredHz).toBe(100);
+        expect(gate.bidirectional).toBe(true);
+        expect(gate.trackThroughput).toBe(false);
     });
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// 2. open_passive mode
+// 2. closed mode
 // ─────────────────────────────────────────────────────────────────────
 
-describe("AtmosphereGateNode — open_passive mode", () => {
-    it("produces non-zero, opposite-sign A/B deltas when ΔP > 0 (A → B flow)", () => {
+describe("AtmosphereGateNode closed mode", () => {
+    it("never moves mass, never updates flow", () => {
+        const gate = new AtmosphereGateNode();
+        gate.mode = "closed";
+        const { A, B } = buildPair();
+        gate.bindAtmosphereA("A", A);
+        gate.bindAtmosphereB("B", B);
+        gate.fire(fakeSession() as never, 0);
+        expect(gate.lastVolumetricFlow).toBe(0);
+        expect(A.deltaLog).toHaveLength(0);
+        expect(B.deltaLog).toHaveLength(0);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// 3. open_passive mode
+// ─────────────────────────────────────────────────────────────────────
+
+describe("AtmosphereGateNode open_passive mode", () => {
+    it("positive ΔP (A > B) drives mass A → B", () => {
         const gate = new AtmosphereGateNode();
         gate.mode = "open_passive";
-        gate.area = 0.01;
-        gate.leakCoeff = 1e-2;
-        const captured = runFire(
-            gate,
-            [
-                { slot: GATE_IN_A_PRESSURE, value: 102000 },
-                { slot: GATE_IN_B_PRESSURE, value: 100000 },
-                { slot: GATE_IN_A_TEMPERATURE, value: 293.15 },
-                { slot: GATE_IN_B_TEMPERATURE, value: 293.15 },
-                ...earthAir("A"),
-            ],
-            allDeltaSlots(),
-        );
-        // Mass is conserved per species: A_delta + B_delta = 0.
-        for (const sp of V1_SPECIES_ORDER) {
-            const A = captured.get(`${GATE_OUT_A_DELTA_PREFIX}${sp}`)!;
-            const B = captured.get(`${GATE_OUT_B_DELTA_PREFIX}${sp}`)!;
-            expect(A + B).toBeCloseTo(0, 12);
-            // Active species (mole fraction > 0) get non-zero flux.
-            if ((CHEMICAL_SPECIES_V1 as Record<string, { molarMass: number }>)[sp]) {
-                const x = sp === "N2" ? 0.78 : sp === "O2" ? 0.21 : sp === "CO2" ? 0.0004 : sp === "H2O" ? 0.0096 : 0;
-                if (x > 0) {
-                    expect(A).toBeLessThan(0); // A loses mass
-                    expect(B).toBeGreaterThan(0); // B gains mass
-                }
-            }
-        }
-        // Volumetric flow positive (A → B).
+        gate.area = 1.0;
+        gate.leakCoeff = 1e-4;
+        const { A, B } = buildPair(); // ΔP = +20 kPa
+        gate.bindAtmosphereA("A", A);
+        gate.bindAtmosphereB("B", B);
+        gate.fire(fakeSession(0.01) as never, 0);
+
         expect(gate.lastVolumetricFlow).toBeGreaterThan(0);
+        // A is losing mass on every species (signs negative on A side).
+        for (const log of A.deltaLog) expect(log.deltaKg).toBeLessThan(0);
+        for (const log of B.deltaLog) expect(log.deltaKg).toBeGreaterThan(0);
     });
 
-    it("uses A-side mole fractions when A is upwind (high P)", () => {
-        const gate = new AtmosphereGateNode();
-        gate.mode = "open_passive";
-        gate.area = 1;
-        gate.leakCoeff = 1e-3;
-        // A is at high pressure with N2-only composition; B is irrelevant
-        // because A is upwind.
-        const captured = runFire(
-            gate,
-            [
-                { slot: GATE_IN_A_PRESSURE, value: 200000 },
-                { slot: GATE_IN_B_PRESSURE, value: 100000 },
-                { slot: GATE_IN_A_TEMPERATURE, value: 293.15 },
-                { slot: GATE_IN_B_TEMPERATURE, value: 293.15 },
-                { slot: `${GATE_IN_A_MOLE_FRACTION_PREFIX}N2`, value: 1 },
-                { slot: `${GATE_IN_B_MOLE_FRACTION_PREFIX}CO2`, value: 1 }, // irrelevant
-            ],
-            allDeltaSlots(),
-        );
-        // Only N2 flows (A-side composition); CO2 stays at zero.
-        expect(captured.get(`${GATE_OUT_B_DELTA_PREFIX}N2`)!).toBeGreaterThan(0);
-        expect(captured.get(`${GATE_OUT_B_DELTA_PREFIX}CO2`)!).toBe(0);
-    });
-
-    it("uses B-side mole fractions when B is upwind (reverse flow)", () => {
-        const gate = new AtmosphereGateNode();
-        gate.mode = "open_passive";
-        gate.area = 1;
-        gate.leakCoeff = 1e-3;
-        gate.bidirectional = true;
-        // B is at high pressure with pure CO2; A is irrelevant.
-        const captured = runFire(
-            gate,
-            [
-                { slot: GATE_IN_A_PRESSURE, value: 100000 },
-                { slot: GATE_IN_B_PRESSURE, value: 200000 },
-                { slot: GATE_IN_A_TEMPERATURE, value: 293.15 },
-                { slot: GATE_IN_B_TEMPERATURE, value: 293.15 },
-                { slot: `${GATE_IN_A_MOLE_FRACTION_PREFIX}N2`, value: 1 }, // irrelevant
-                { slot: `${GATE_IN_B_MOLE_FRACTION_PREFIX}CO2`, value: 1 },
-            ],
-            allDeltaSlots(),
-        );
-        // Reverse flow: A_delta positive (mass entering A), B_delta negative.
-        expect(captured.get(`${GATE_OUT_A_DELTA_PREFIX}CO2`)!).toBeGreaterThan(0);
-        expect(captured.get(`${GATE_OUT_B_DELTA_PREFIX}CO2`)!).toBeLessThan(0);
-        // N2 stays at zero (B-side composition only had CO2).
-        expect(captured.get(`${GATE_OUT_A_DELTA_PREFIX}N2`)!).toBe(0);
-        // Volumetric flow negative (reverse direction).
-        expect(gate.lastVolumetricFlow).toBeLessThan(0);
-    });
-
-    it("check-valve: bidirectional=false blocks back-flow when P_A < P_B", () => {
+    it("negative ΔP with bidirectional=false is a check-valve (no flow)", () => {
         const gate = new AtmosphereGateNode();
         gate.mode = "open_passive";
         gate.bidirectional = false;
-        const captured = runFire(
-            gate,
-            [
-                { slot: GATE_IN_A_PRESSURE, value: 100000 },
-                { slot: GATE_IN_B_PRESSURE, value: 200000 },
-                { slot: GATE_IN_A_TEMPERATURE, value: 293.15 },
-                { slot: GATE_IN_B_TEMPERATURE, value: 293.15 },
-                ...earthAir("A"),
-                ...earthAir("B"),
-            ],
-            allDeltaSlots(),
-        );
-        for (const slot of allDeltaSlots()) {
-            expect(captured.get(slot)).toBeCloseTo(0, 12);
-        }
+        const { A, B } = buildPair();
+        // Flip so B is higher than A → ΔP < 0 → check-valve blocks.
+        A.pressurePa = 90_000;
+        B.pressurePa = 110_000;
+        gate.bindAtmosphereA("A", A);
+        gate.bindAtmosphereB("B", B);
+        gate.fire(fakeSession() as never, 0);
         expect(gate.lastVolumetricFlow).toBe(0);
+        expect(A.deltaLog).toHaveLength(0);
+        expect(B.deltaLog).toHaveLength(0);
     });
 
-    it("zero ΔP with bidirectional=true: no flux", () => {
+    it("negative ΔP with bidirectional=true gives reverse flow (B → A)", () => {
         const gate = new AtmosphereGateNode();
         gate.mode = "open_passive";
-        const captured = runFire(
-            gate,
-            [
-                { slot: GATE_IN_A_PRESSURE, value: 100000 },
-                { slot: GATE_IN_B_PRESSURE, value: 100000 },
-                { slot: GATE_IN_A_TEMPERATURE, value: 293.15 },
-                { slot: GATE_IN_B_TEMPERATURE, value: 293.15 },
-                ...earthAir("A"),
-            ],
-            allDeltaSlots(),
-        );
-        for (const slot of allDeltaSlots()) {
-            expect(captured.get(slot)).toBeCloseTo(0, 12);
+        gate.bidirectional = true;
+        gate.area = 1.0;
+        gate.leakCoeff = 1e-4;
+        const { A, B } = buildPair();
+        A.pressurePa = 90_000;
+        B.pressurePa = 110_000;
+        gate.bindAtmosphereA("A", A);
+        gate.bindAtmosphereB("B", B);
+        gate.fire(fakeSession(0.01) as never, 0);
+        expect(gate.lastVolumetricFlow).toBeLessThan(0); // signed: B → A
+        // A is GAINING mass; B is LOSING.
+        for (const log of A.deltaLog) expect(log.deltaKg).toBeGreaterThan(0);
+        for (const log of B.deltaLog) expect(log.deltaKg).toBeLessThan(0);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// 4. hvac_forced mode + throughput
+// ─────────────────────────────────────────────────────────────────────
+
+describe("AtmosphereGateNode hvac_forced mode", () => {
+    it("forces a fixed A → B flow even when ΔP is zero or negative", () => {
+        const gate = new AtmosphereGateNode();
+        gate.mode = "hvac_forced";
+        gate.forcedFlow = 0.5;
+        const { A, B } = buildPair();
+        A.pressurePa = 90_000;
+        B.pressurePa = 110_000; // B higher
+        gate.bindAtmosphereA("A", A);
+        gate.bindAtmosphereB("B", B);
+        gate.fire(fakeSession(0.01) as never, 0);
+        expect(gate.lastVolumetricFlow).toBeCloseTo(0.5, 9);
+        for (const log of A.deltaLog) expect(log.deltaKg).toBeLessThan(0);
+        for (const log of B.deltaLog) expect(log.deltaKg).toBeGreaterThan(0);
+    });
+
+    it("trackThroughput=true accumulates volume across fires (forcedFlow × Σdt)", () => {
+        const gate = new AtmosphereGateNode();
+        gate.mode = "hvac_forced";
+        gate.forcedFlow = 0.5;
+        gate.trackThroughput = true;
+        const { A, B } = buildPair();
+        gate.bindAtmosphereA("A", A);
+        gate.bindAtmosphereB("B", B);
+        gate.fire(fakeSession(0.01) as never, 0);
+        gate.fire(fakeSession(0.01) as never, 0);
+        gate.fire(fakeSession(0.01) as never, 0);
+        expect(gate.throughput).toBeCloseTo(0.5 * 0.03, 9);
+    });
+
+    it("trackThroughput=false leaves the accumulator at 0", () => {
+        const gate = new AtmosphereGateNode();
+        gate.mode = "hvac_forced";
+        gate.forcedFlow = 0.5;
+        gate.trackThroughput = false;
+        const { A, B } = buildPair();
+        gate.bindAtmosphereA("A", A);
+        gate.bindAtmosphereB("B", B);
+        gate.fire(fakeSession(0.01) as never, 0);
+        expect(gate.throughput).toBe(0);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// 5. Mass conservation
+// ─────────────────────────────────────────────────────────────────────
+
+describe("AtmosphereGateNode mass conservation", () => {
+    it("per species, the delta applied to A equals -1× the delta applied to B", () => {
+        const gate = new AtmosphereGateNode();
+        gate.mode = "open_passive";
+        gate.area = 1.0;
+        gate.leakCoeff = 1e-4;
+        const { A, B } = buildPair();
+        gate.bindAtmosphereA("A", A);
+        gate.bindAtmosphereB("B", B);
+        gate.fire(fakeSession(0.01) as never, 0);
+        // Sum per species across the deltas:
+        const aBySpecies = new Map<string, number>();
+        const bBySpecies = new Map<string, number>();
+        for (const log of A.deltaLog) aBySpecies.set(log.species, (aBySpecies.get(log.species) ?? 0) + log.deltaKg);
+        for (const log of B.deltaLog) bBySpecies.set(log.species, (bBySpecies.get(log.species) ?? 0) + log.deltaKg);
+        for (const sp of A.activeSpecies) {
+            const da = aBySpecies.get(sp) ?? 0;
+            const db = bBySpecies.get(sp) ?? 0;
+            expect(da + db).toBeCloseTo(0, 12);
         }
     });
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// 3. hvac_forced mode
+// 6. Bindings + clearBindings
 // ─────────────────────────────────────────────────────────────────────
 
-describe("AtmosphereGateNode — hvac_forced mode", () => {
-    it("ignores ΔP — flux always A → B at forcedFlow rate", () => {
+describe("AtmosphereGateNode binding API", () => {
+    it("bindAtmosphereA/B + clearBindings invariants", () => {
         const gate = new AtmosphereGateNode();
-        gate.mode = "hvac_forced";
-        gate.forcedFlow = 1; // m³/s
-        // Even when B > A, mode forces A → B.
-        const captured = runFire(
-            gate,
-            [
-                { slot: GATE_IN_A_PRESSURE, value: 100000 },
-                { slot: GATE_IN_B_PRESSURE, value: 200000 }, // B higher
-                { slot: GATE_IN_A_TEMPERATURE, value: 293.15 },
-                { slot: GATE_IN_B_TEMPERATURE, value: 293.15 },
-                ...earthAir("A"),
-            ],
-            allDeltaSlots(),
-        );
-        // Active A species (N2, O2, CO2, H2O) move from A to B.
-        expect(captured.get(`${GATE_OUT_A_DELTA_PREFIX}N2`)!).toBeLessThan(0);
-        expect(captured.get(`${GATE_OUT_B_DELTA_PREFIX}N2`)!).toBeGreaterThan(0);
-        expect(gate.lastVolumetricFlow).toBeGreaterThan(0);
+        expect(gate.isAtmosphereAWired).toBe(false);
+        expect(gate.isAtmosphereBWired).toBe(false);
+        const { A, B } = buildPair();
+        gate.bindAtmosphereA("a", A);
+        gate.bindAtmosphereB("b", B);
+        expect(gate.isAtmosphereAWired).toBe(true);
+        expect(gate.isAtmosphereBWired).toBe(true);
+        gate.clearBindings();
+        expect(gate.isAtmosphereAWired).toBe(false);
+        expect(gate.isAtmosphereBWired).toBe(false);
     });
 
-    it("flux scales linearly with forcedFlow", () => {
-        const gate1 = new AtmosphereGateNode();
-        gate1.mode = "hvac_forced";
-        gate1.forcedFlow = 1;
-        const gate2 = new AtmosphereGateNode();
-        gate2.mode = "hvac_forced";
-        gate2.forcedFlow = 2;
-        const inputs = [
-            { slot: GATE_IN_A_PRESSURE, value: 100000 },
-            { slot: GATE_IN_B_PRESSURE, value: 90000 },
-            { slot: GATE_IN_A_TEMPERATURE, value: 293.15 },
-            { slot: GATE_IN_B_TEMPERATURE, value: 293.15 },
-            { slot: `${GATE_IN_A_MOLE_FRACTION_PREFIX}N2`, value: 1 },
-        ];
-        const cap1 = runFire(gate1, inputs, [`${GATE_OUT_B_DELTA_PREFIX}N2`]);
-        const cap2 = runFire(gate2, inputs, [`${GATE_OUT_B_DELTA_PREFIX}N2`]);
-        const f1 = cap1.get(`${GATE_OUT_B_DELTA_PREFIX}N2`)!;
-        const f2 = cap2.get(`${GATE_OUT_B_DELTA_PREFIX}N2`)!;
-        expect(f2 / f1).toBeCloseTo(2, 6);
-    });
-
-    it("matches ideal-gas formula: kg/s = V̇ × P_A × x_A × M / RT_A", () => {
+    it("unbinding one side stops all flow", () => {
         const gate = new AtmosphereGateNode();
         gate.mode = "hvac_forced";
-        gate.forcedFlow = 0.5;
-        const inputs = [
-            { slot: GATE_IN_A_PRESSURE, value: 101325 },
-            { slot: GATE_IN_A_TEMPERATURE, value: 300 },
-            { slot: `${GATE_IN_A_MOLE_FRACTION_PREFIX}N2`, value: 0.78 },
-        ];
-        const captured = runFire(gate, inputs, [`${GATE_OUT_B_DELTA_PREFIX}N2`]);
-        const expected = (0.5 * 101325 * CHEMICAL_SPECIES_V1.N2.molarMass * 0.78) / (GAS_CONSTANT_R * 300);
-        expect(captured.get(`${GATE_OUT_B_DELTA_PREFIX}N2`)!).toBeCloseTo(expected, 9);
+        gate.forcedFlow = 1.0;
+        const { A, B } = buildPair();
+        gate.bindAtmosphereA("a", A);
+        // B not bound.
+        gate.fire(fakeSession() as never, 0);
+        expect(gate.lastVolumetricFlow).toBe(0);
+        expect(A.deltaLog).toHaveLength(0);
+        expect(B.deltaLog).toHaveLength(0);
     });
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// 4. IIntegrable conditional
+// 7. P8 sample rate
 // ─────────────────────────────────────────────────────────────────────
 
-describe("AtmosphereGateNode — IIntegrable conditional", () => {
-    it("stateSize is 0 in closed and open_passive modes", () => {
+describe("AtmosphereGateNode sample rate requirement", () => {
+    it("required_hz editable clamps to positive defaults on bad input", () => {
         const gate = new AtmosphereGateNode();
-        gate.mode = "closed";
-        expect(gate.stateSize).toBe(0);
-        gate.mode = "open_passive";
-        expect(gate.stateSize).toBe(0);
-    });
-
-    it("stateSize is 0 in hvac_forced when trackThroughput is off", () => {
-        const gate = new AtmosphereGateNode();
-        gate.mode = "hvac_forced";
-        gate.trackThroughput = false;
-        expect(gate.stateSize).toBe(0);
-    });
-
-    it("stateSize is 1 in hvac_forced + trackThroughput=true (cumulative volume)", () => {
-        const gate = new AtmosphereGateNode();
-        gate.mode = "hvac_forced";
-        gate.trackThroughput = true;
-        gate.forcedFlow = 0.5;
-        expect(gate.stateSize).toBe(1);
-        expect(gate.stateNames).toEqual(["throughput_m3"]);
-        // rhs returns the volumetric flow.
-        const y = new Float64Array([0]);
-        const dydt = new Float64Array([0]);
-        const inputs: IIntegrationInputs = {
-            get: () => undefined,
-            has: () => false,
-            sumPrefix: () => 0,
-        };
-        gate.rhs(0, y, 0, inputs, dydt);
-        expect(dydt[0]).toBeCloseTo(0.5, 12);
-    });
-
-    it("gatherState / writeState round-trip the cumulative throughput", () => {
-        const gate = new AtmosphereGateNode();
-        gate.mode = "hvac_forced";
-        gate.trackThroughput = true;
-        const y = new Float64Array([123.45]);
-        gate.writeState(y, 0);
-        const y2 = new Float64Array(1);
-        gate.gatherState(y2, 0);
-        expect(y2[0]).toBeCloseTo(123.45, 9);
-    });
-});
-
-// ─────────────────────────────────────────────────────────────────────
-// 5. Quantity accessors
-// ─────────────────────────────────────────────────────────────────────
-
-describe("AtmosphereGateNode — Quantity-aware accessors", () => {
-    it("areaQ setter accepts any Area unit and stores canonical m²", () => {
-        const gate = new AtmosphereGateNode();
-        gate.areaQ = new Area(100, Area.Units.cm2); // = 0.01 m²
-        expect(gate.area).toBeCloseTo(0.01, 12);
-        gate.areaQ = new Area(1, Area.Units.ft2);
-        expect(gate.area).toBeCloseTo(0.09290304, 12);
-    });
-
-    it("forcedFlowQ setter accepts any VolumetricFlow unit (e.g. cfm, L/min)", () => {
-        const gate = new AtmosphereGateNode();
-        gate.forcedFlowQ = new VolumetricFlow(60, VolumetricFlow.Units.Lpmin); // = 1 L/s
-        expect(gate.forcedFlow).toBeCloseTo(1e-3, 12);
-        gate.forcedFlowQ = new VolumetricFlow(100, VolumetricFlow.Units.cfm);
-        expect(gate.forcedFlow).toBeCloseTo(100 * 0.02831684659 / 60, 9);
-    });
-
-    it("Quantity getters return the canonical-SI value wrapped in a fresh instance", () => {
-        const gate = new AtmosphereGateNode();
-        gate.area = 0.05;
-        expect(gate.areaQ.getValue(Area.Units.m2)).toBe(0.05);
-        gate.forcedFlow = 0.001;
-        expect(gate.forcedFlowQ.getValue(VolumetricFlow.Units.Lpmin)).toBeCloseTo(60, 6);
+        gate.required_hz = 250;
+        expect(gate.requiredHz).toBe(250);
+        gate.required_hz = -5;
+        expect(gate.requiredHz).toBe(100);
+        gate.required_hz = NaN;
+        expect(gate.requiredHz).toBe(100);
     });
 });
