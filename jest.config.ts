@@ -40,6 +40,8 @@ const config: Config = {
         "^spikypanda-applications-mpc/(.*)$": "<rootDir>/packages/dev/applications/mpc/src/$1",
         "^spikypanda-applications-cardriver$":      "<rootDir>/packages/dev/applications/privates/cardriver/src/index.ts",
         "^spikypanda-applications-cardriver/(.*)$": "<rootDir>/packages/dev/applications/privates/cardriver/src/$1",
+        "^spikypanda-applications-driverv2$":      "<rootDir>/packages/dev/applications/privates/driverv2/src/index.ts",
+        "^spikypanda-applications-driverv2/(.*)$": "<rootDir>/packages/dev/applications/privates/driverv2/src/$1",
         // Some sensors source files import the published package name
         // "@spiky-panda/core" instead of the path alias spikypanda-core. The
         // node-resolved dist/index.js ships ESM syntax and lives under

@@ -18,7 +18,9 @@
             "spikypanda-applications-mpc":      ["dev/applications/mpc/src/index.ts"],
             "spikypanda-applications-mpc/*":    ["dev/applications/mpc/src/*"],
             "spikypanda-applications-cardriver":   ["dev/applications/privates/cardriver/src/index.ts"],
-            "spikypanda-applications-cardriver/*": ["dev/applications/privates/cardriver/src/*"]
+            "spikypanda-applications-cardriver/*": ["dev/applications/privates/cardriver/src/*"],
+            "spikypanda-applications-driverv2":   ["dev/applications/privates/driverv2/src/index.ts"],
+            "spikypanda-applications-driverv2/*": ["dev/applications/privates/driverv2/src/*"]
         }
     },
     "include": ["**/*.ts"]
