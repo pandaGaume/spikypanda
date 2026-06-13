@@ -30,6 +30,7 @@
             "version":     "0.1.0",
             "standards":   [],
             "nodes": [
+                { "type": "Viz.Control:knob", "factory": "createKnobNode", "label": "Knob" },
                 { "type": "Viz.Control:knobs3", "factory": "createKnobs3Node", "label": "Knobs 3" }
             ]
         },

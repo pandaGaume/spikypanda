@@ -11,6 +11,7 @@ export const frictionSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Mechanical.Friction:coulomb", () => createCoulombFrictionNode() as never, {
             label: "Coulomb + Stribeck Friction",
             category: "Physics.Mechanical.Friction",
+            docPath: ctx.assetUrl("docs/physics/friction/coulomb.md"),
             inputPorts: [
                 { slot: "omega", ...FLOAT_IN },
                 { slot: "tau_c", ...FLOAT_IN },

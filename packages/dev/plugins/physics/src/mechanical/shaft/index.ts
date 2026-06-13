@@ -11,6 +11,7 @@ export const shaftSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Mechanical.Shaft:unbalance", () => createShaftUnbalanceNode() as never, {
             label: "Shaft Unbalance (1× rotation)",
             category: "Physics.Mechanical.Shaft",
+            docPath: ctx.assetUrl("docs/physics/shaft/unbalance.md"),
             inputPorts: [
                 { slot: "signal_in", ...FLOAT_IN },
                 { slot: "omega", ...FLOAT_IN },

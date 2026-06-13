@@ -1,7 +1,8 @@
 import type { IPlugin, IPluginContext } from "spikypanda-nodeeditor";
 import { createKnobs3Node, Knobs3Node } from "./knobs3.node.js";
+import { createKnobNode, KnobNode } from "./knob.node.js";
 
-export { Knobs3Node, createKnobs3Node };
+export { Knobs3Node, createKnobs3Node, KnobNode, createKnobNode };
 
 /**
  * `Viz.Control` — input control surfaces for the Dashboard.
@@ -27,10 +28,18 @@ export { Knobs3Node, createKnobs3Node };
  */
 export const vizControlSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
+        ctx.nodes.register("Viz.Control:knob", () => createKnobNode() as never, {
+            label: "Knob",
+            docPath: ctx.assetUrl("docs/viz/control/knob.md"),
+            category: "Viz.Control",
+            inputPorts: [],
+            outputPorts: [{ slot: "value", optional: false, type: "float" }],
+        });
         ctx.nodes.register("Viz.Control:knobs3", () => createKnobs3Node() as never, {
-            label:       "Knobs 3",
-            category:    "Viz.Control",
-            inputPorts:  [],
+            label: "Knobs 3",
+            docPath: ctx.assetUrl("docs/viz/control/knobs3.md"),
+            category: "Viz.Control",
+            inputPorts: [],
             outputPorts: [
                 // Slot names match the canonical default labels
                 // (oscillator control). If the user repurposes the
@@ -38,7 +47,7 @@ export const vizControlSubPlugin: IPlugin = {
                 // three. See knobs3.node.ts docstring for rationale.
                 { slot: "frequency", optional: false, type: "float" },
                 { slot: "amplitude", optional: false, type: "float" },
-                { slot: "phase",     optional: false, type: "float" },
+                { slot: "phase", optional: false, type: "float" },
             ],
         });
     },

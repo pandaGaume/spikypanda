@@ -1,6 +1,6 @@
 import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, inSlotOf } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
-import { FaultableNode } from "../../transform/fault.node.js";
+import { FaultableNode } from "spikypanda-core";
 
 /**
  * DC motor in steady state. Solves the coupled equations at

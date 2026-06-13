@@ -28,6 +28,7 @@ export const dspTransformSubPlugin: IPlugin = {
         ctx.nodes.register("DSP.Transform:ifft", () => createIfftNode() as never, {
             label: "IFFT",
             category: "DSP.Transform",
+            docPath: ctx.assetUrl("docs/dsp/transform/ifft.md"),
             inputPorts: [tensorIn("spectrum")],
             outputPorts: [tensorOut("signal")],
             standards: [
@@ -38,6 +39,9 @@ export const dspTransformSubPlugin: IPlugin = {
         ctx.nodes.register("DSP.Transform:magnitude", () => createMagnitudeNode() as never, {
             label: "Magnitude",
             category: "DSP.Transform",
+            // Shared family doc: Magnitude and Phase are the two unpackers
+            // of the same interleaved-complex layout.
+            docPath: ctx.assetUrl("docs/dsp/transform/complex.md"),
             inputPorts: [tensorIn("complex")],
             outputPorts: [tensorOut("magnitude")],
             standards: [{ id: "onnx", version: "1.18" }],
@@ -45,6 +49,7 @@ export const dspTransformSubPlugin: IPlugin = {
         ctx.nodes.register("DSP.Transform:phase", () => createPhaseNode() as never, {
             label: "Phase",
             category: "DSP.Transform",
+            docPath: ctx.assetUrl("docs/dsp/transform/complex.md"),
             inputPorts: [tensorIn("complex")],
             outputPorts: [tensorOut("phase")],
             standards: [{ id: "onnx", version: "1.18" }],
@@ -52,6 +57,7 @@ export const dspTransformSubPlugin: IPlugin = {
         ctx.nodes.register("DSP.Transform:dct", () => createDctNode() as never, {
             label: "DCT",
             category: "DSP.Transform",
+            docPath: ctx.assetUrl("docs/dsp/transform/dct.md"),
             inputPorts: [tensorIn("x")],
             outputPorts: [tensorOut("dct")],
             standards: [{ id: "onnx", version: "1.18" }],

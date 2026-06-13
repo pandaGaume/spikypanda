@@ -17,6 +17,7 @@ export const controlSafetySubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
         ctx.nodes.register("Control.Safety:emergency-shutdown", () => createEmergencyShutdownNode() as never, {
             label: "Emergency Shutdown",
+            docPath: ctx.assetUrl("docs/control/safety/emergency-shutdown.md"),
             category: "Control.Safety",
             inputPorts: [
                 { slot: "trigger", optional: true, type: "boolean" },

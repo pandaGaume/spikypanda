@@ -57,7 +57,13 @@ export class OnnxGraphBuilder {
         this.registry = registry;
     }
 
-    build(model: OnnxParseResult): { graph: ComputeGraph; inputNames: string[]; outputNames: string[] } {
+    build(model: OnnxParseResult): {
+        graph: ComputeGraph;
+        inputNames: string[];
+        outputNames: string[];
+        inputNodes: Map<string, IKernel>;
+        outputNodes: Map<string, IKernel>;
+    } {
         const nodes: IKernel[] = [];
         const links: DataLink[] = [];
 
@@ -82,12 +88,14 @@ export class OnnxGraphBuilder {
 
         // Create input nodes (skip initializers that share input names)
         const inputNames: string[] = [];
+        const inputNodes = new Map<string, IKernel>();
         for (const inp of model.inputs) {
             if (initMap.has(inp.name)) continue;
             const node = new InputNode(inp.name, inp.shape);
             nodes.push(node);
             tensorProducer.set(inp.name, { node, outputIndex: 0 });
             inputNames.push(inp.name);
+            inputNodes.set(inp.name, node);
         }
 
         // Create operator nodes
@@ -139,7 +147,19 @@ export class OnnxGraphBuilder {
         // Identify output tensor names
         const outputNames = model.outputs.map((o: OnnxValueInfo) => o.name);
 
+        // Boundary metadata for fractal embedding: the kernel backing
+        // each declared graph output, keyed by ONNX tensor name.
+        // Consumers (OnnxModelGraph) wire dangling port channels from
+        // these without re-deriving producers from node ids.
+        const outputNodes = new Map<string, IKernel>();
+        for (const name of outputNames) {
+            const producer = tensorProducer.get(name);
+            if (producer) {
+                outputNodes.set(name, producer.node);
+            }
+        }
+
         const graph = new ComputeGraph(nodes, links);
-        return { graph, inputNames, outputNames };
+        return { graph, inputNames, outputNames, inputNodes, outputNodes };
     }
 }

@@ -11,6 +11,7 @@ export const bearingSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Mechanical.Bearing:fault", () => createBearingFaultNode() as never, {
             label: "Bearing Fault Generator",
             category: "Physics.Mechanical.Bearing",
+            docPath: ctx.assetUrl("docs/physics/bearing/fault.md"),
             inputPorts: [
                 { slot: "signal_in", ...FLOAT_IN },
                 { slot: "omega", ...FLOAT_IN },

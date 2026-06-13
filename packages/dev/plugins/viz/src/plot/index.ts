@@ -20,26 +20,30 @@ export { UplotStemNode, createUplotStemNode };
 export const vizPlotSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
         ctx.nodes.register("Viz.Plot:line", () => createUplotLineNode() as never, {
-            label:       "Time-series Plot",
-            category:    "Viz.Plot",
-            inputPorts:  [{ slot: "value", optional: true, type: "float" }],
+            label: "Time-series Plot",
+            docPath: ctx.assetUrl("docs/viz/plot/line.md"),
+            category: "Viz.Plot",
+            inputPorts: [{ slot: "value", optional: true, type: "float" }],
             outputPorts: [],
         });
         ctx.nodes.register("Viz.Plot:waterfall", () => createPixiWaterfallNode() as never, {
-            label:       "Waterfall Spectrogram",
-            category:    "Viz.Plot",
-            inputPorts:  [{ slot: "magnitudes", optional: true, type: "any" }],
+            label: "Waterfall Spectrogram",
+            docPath: ctx.assetUrl("docs/viz/plot/waterfall.md"),
+            category: "Viz.Plot",
+            inputPorts: [{ slot: "magnitudes", optional: true, type: "any" }],
             outputPorts: [],
         });
         ctx.nodes.register("Viz.Plot:spectrum", () => createUplotSpectrumNode() as never, {
-            label:       "Frequency Spectrum",
-            category:    "Viz.Plot",
-            inputPorts:  [{ slot: "magnitudes", optional: true, type: "any" }],
+            label: "Frequency Spectrum",
+            docPath: ctx.assetUrl("docs/viz/plot/spectrum.md"),
+            category: "Viz.Plot",
+            inputPorts: [{ slot: "magnitudes", optional: true, type: "any" }],
             outputPorts: [],
         });
         ctx.nodes.register("Viz.Plot:stem", () => createUplotStemNode() as never, {
-            label:       "Stem (Oracle Spectrum)",
-            category:    "Viz.Plot",
+            label: "Stem (Oracle Spectrum)",
+            docPath: ctx.assetUrl("docs/viz/plot/stem.md"),
+            category: "Viz.Plot",
             // Seed with one pair (f_0, A_0). The variadic reconciler
             // grows BOTH groups independently as the user connects:
             // wire f_0 → f_1 appears; wire A_0 → A_1 appears. Each

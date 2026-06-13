@@ -29,19 +29,17 @@ import {
     Session,
     SOLVER_REGISTRY,
 } from "spikypanda-core";
-import {
-    createRK4SolverItem,
-    RK4_SOLVER_KIND,
-    RK4SolverItem,
-} from "../../dev/plugins/control/src/sim/rk4-solver.item";
+import { createRK4SolverItem, RK4_SOLVER_KIND, RK4SolverItem } from "../../dev/plugins/control/src/sim/rk4-solver.item";
 // Activating the control plugin registers the "rk4-adaptive" factory
 // in SOLVER_REGISTRY; we import the sub-plugin and call activate()
 // against a minimal fake context to populate the registry for these
 // tests.
 import { controlSimSubPlugin } from "../../dev/plugins/control/src/sim/index";
 
-// Activate once; idempotent on re-registration.
-controlSimSubPlugin.activate({ nodes: { register: () => {} } } as never);
+// Activate once; idempotent on re-registration. The fake context must
+// stub assetUrl because the registration meta now resolves a docPath
+// through it (same precedent as packages/tests/dsp/mux-buffer.test.ts).
+controlSimSubPlugin.activate({ nodes: { register: () => {} }, assetUrl: (p: string) => p } as never);
 
 // ─────────────────────────────────────────────────────────────────────
 // A minimal IIntegrable test fixture
@@ -206,13 +204,14 @@ describe("buildSolverAttachmentsForGraph (leaf-centric resolution)", () => {
         // get TWO separate solvers, we declare a fake kind here and
         // register a stub factory just for this test.
         SOLVER_REGISTRY.register("test-stub", {
-            factory: () => ({
-                name: "stub",
-                supportsJacobian: false,
-                initialize: () => {},
-                step: () => ({ t: 0, microSteps: 1, maxError: 0, rhsEvals: 1 }),
-                lastStep: null,
-            } as never),
+            factory: () =>
+                ({
+                    name: "stub",
+                    supportsJacobian: false,
+                    initialize: () => {},
+                    step: () => ({ t: 0, microSteps: 1, maxError: 0, rhsEvals: 1 }),
+                    lastStep: null,
+                }) as never,
             defaults: {},
         });
         try {

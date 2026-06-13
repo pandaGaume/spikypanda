@@ -1,7 +1,7 @@
 import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, inSlotOf } from "spikypanda-core";
 import type { ICartesian, Nullable, IHasSampleRateRequirement } from "spikypanda-core";
 import { PHASE_OFFSET_B, PHASE_OFFSET_C, sinusoidalBackEmf } from "./back-emf.js";
-import { FaultableNode } from "../../transform/fault.node.js";
+import { FaultableNode } from "spikypanda-core";
 
 /**
  * 3-phase permanent magnet synchronous motor (PMSM) — sinusoidal back-EMF

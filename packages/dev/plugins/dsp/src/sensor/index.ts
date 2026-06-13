@@ -21,6 +21,7 @@ export const dspSensorSubPlugin: IPlugin = {
         ctx.nodes.register("DSP.Sensor:transducer", () => createTransducerNode() as never, {
             label: "Transducer",
             category: "DSP.Sensor",
+            docPath: ctx.assetUrl("docs/dsp/sensor/transducer.md"),
             inputPorts: [
                 { slot: "value", optional: false, type: "float" },
                 { slot: "t", optional: true, type: "float" },

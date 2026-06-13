@@ -21,6 +21,7 @@ export const controlFeedbackSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
         ctx.nodes.register("Control.Feedback:channel", () => createFeedbackChannelNode() as never, {
             label: "Feedback Channel",
+            docPath: ctx.assetUrl("docs/control/feedback/channel.md"),
             category: "Control.Feedback",
             // Split-view: two visually-independent widgets sharing one
             // logical node. Anchor 0 (the "out" half) sits near the

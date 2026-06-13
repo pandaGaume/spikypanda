@@ -42,16 +42,37 @@ export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel 
         this._publishOutputs(session, outputs);
     }
 
+    /**
+     * Readiness: the default all-channels-ready gate, plus the classic
+     * external-injection path. ComputeGraph.infer() pre-loads source
+     * kernels via bag.pendingInput without publishing channel tokens,
+     * so a source kernel that gained a boundary input-port channel
+     * (a graph embedded as a model node) must stay fireable when only
+     * the pending input is present.
+     */
+    public override isReady(session: ISession): boolean {
+        if (super.isReady(session)) {
+            return true;
+        }
+        const bag = this.bag as IKernelBag | undefined;
+        return this.enabled && !!bag?.pendingInput;
+    }
+
     // ── internal ───────────────────────────────────────────────────────
 
     private _gatherInputs(session: ISession): ITensor[] {
         const incoming = this.opsc<IDataLink>();
+        const bag = this.bag as IKernelBag | undefined;
 
         if (incoming.length === 0) {
             // Source node: pull the pre-injected external tensor from
             // bag.pendingInput. ComputeGraph.run stashes it before
-            // running the session.
-            const bag = this.bag as IKernelBag | undefined;
+            // running the session. pendingInput PERSISTS here on
+            // purpose: training loops (CNN/MLP harnesses) inject a
+            // sample once and run several forward/backward passes over
+            // it, and a channel-less source cannot mix stale external
+            // data with streamed tokens anyway. The stale-mixing hazard
+            // only exists on boundary-wired kernels, handled below.
             return bag?.pendingInput ? [bag.pendingInput] : [];
         }
 
@@ -74,6 +95,19 @@ export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel 
             if (tensor) {
                 inputs.push(tensor);
             }
+        }
+        if (inputs.length === 0 && bag?.pendingInput) {
+            // Boundary-wired source node on the classic infer() path:
+            // the dangling input-port channel carries no token, so fall
+            // back to the pre-injected external tensor. Channel tokens
+            // win when both are present (the streaming path routes a
+            // fresh token in before every internal run). Consumed on
+            // read, like the source-node branch above: a pendingInput
+            // left behind by infer() must not pair with fresh channel
+            // tokens on a later partially fed run.
+            const pending = bag.pendingInput;
+            bag.pendingInput = undefined;
+            return [pending];
         }
         return inputs;
     }

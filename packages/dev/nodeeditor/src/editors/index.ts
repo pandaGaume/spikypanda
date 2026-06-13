@@ -1,11 +1,13 @@
 import { NodeEditor } from "../editor";
 import { EditorRegistry } from "../editor-registry";
 import { quaternionEditor, vector3Editor, vector4Editor } from "./vector";
+import { booleanEditor } from "./boolean";
 import { numberEditor } from "./number";
 import { sliderEditor } from "./slider";
 import { stringEditor } from "./string";
 
 export { vector3Editor, vector4Editor, quaternionEditor } from "./vector";
+export { booleanEditor } from "./boolean";
 export { numberEditor } from "./number";
 export { sliderEditor } from "./slider";
 export { stringEditor } from "./string";
@@ -16,6 +18,7 @@ export { stringEditor } from "./string";
  *   - "number" / "int" / "float"   scalar input
  *   - "string"                     text input or dropdown (enum via
  *                                  options.choices or `"a | b"` unit)
+ *   - "boolean"                    checkbox (yAuto, dbScale, ...)
  *   - "vector3"                    x/y/z triple
  *   - "vector4" / "quaternion"     x/y/z/w quadruple
  *
@@ -33,4 +36,5 @@ export function installBuiltinEditors(target: NodeEditor | EditorRegistry): void
     registry.register("float", numberEditor);
     registry.register("slider", sliderEditor);
     registry.register("string", stringEditor);
+    registry.register("boolean", booleanEditor);
 }

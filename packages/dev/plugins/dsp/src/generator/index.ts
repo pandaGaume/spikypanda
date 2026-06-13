@@ -30,6 +30,7 @@ export const dspGeneratorSubPlugin: IPlugin = {
         ctx.nodes.register("DSP.Generator:oscillator", () => createOscillatorNode() as never, {
             label: "Oscillator",
             category: "DSP.Generator",
+            docPath: ctx.assetUrl("docs/dsp/generator/oscillator.md"),
             inputPorts: [
                 { slot: "t", optional: false, type: "float" },
                 { slot: "frequency", optional: true, type: "float" },

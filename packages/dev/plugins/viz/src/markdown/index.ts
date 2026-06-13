@@ -19,9 +19,10 @@ export { MarkdownCellNode, createMarkdownCellNode };
 export const vizMarkdownSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
         ctx.nodes.register("Viz.Markdown:cell", () => createMarkdownCellNode() as never, {
-            label:       "Markdown Cell",
-            category:    "Viz.Markdown",
-            inputPorts:  [],
+            label: "Markdown Cell",
+            docPath: ctx.assetUrl("docs/viz/markdown/cell.md"),
+            category: "Viz.Markdown",
+            inputPorts: [],
             outputPorts: [],
         });
     },

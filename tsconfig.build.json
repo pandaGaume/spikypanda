@@ -50,7 +50,17 @@
             "spikypanda-applications-cardriver": ["dev/applications/privates/cardriver/src/index.ts"],
             "spikypanda-applications-cardriver/*": ["dev/applications/privates/cardriver/src/*"],
             "spikypanda-applications-driverv2": ["dev/applications/privates/driverv2/src/index.ts"],
-            "spikypanda-applications-driverv2/*": ["dev/applications/privates/driverv2/src/*"]
+            "spikypanda-applications-driverv2/*": ["dev/applications/privates/driverv2/src/*"],
+            "spikypanda-applications-motorwatch": ["dev/applications/motorwatch/src/index.ts"],
+            "spikypanda-applications-motorwatch/*": ["dev/applications/motorwatch/src/*"],
+            "spikypanda-plugin-dsp": ["dev/plugins/dsp/src/index.ts"],
+            "spikypanda-plugin-dsp/*": ["dev/plugins/dsp/src/*"],
+            "spikypanda-plugin-ml": ["dev/plugins/ml/src/index.ts"],
+            "spikypanda-plugin-ml/*": ["dev/plugins/ml/src/*"],
+            "spikypanda-plugin-onnx": ["dev/plugins/onnx/src/index.ts"],
+            "spikypanda-plugin-onnx/*": ["dev/plugins/onnx/src/*"],
+            "spikypanda-plugin-physics": ["dev/plugins/physics/src/index.ts"],
+            "spikypanda-plugin-physics/*": ["dev/plugins/physics/src/*"]
         },
 
         "types": ["reflect-metadata", "jest", "node"]

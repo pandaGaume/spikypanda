@@ -1,4 +1,13 @@
-import { buildSolverAttachmentsForGraph, RuntimeGraphBuilder, Session, type Channel, type IRuntimeGraph, type IRuntimeNode, type ISolver, type ISolverDescriptor } from "spikypanda-core";
+import {
+    buildSolverAttachmentsForGraph,
+    RuntimeGraphBuilder,
+    Session,
+    type Channel,
+    type IRuntimeGraph,
+    type IRuntimeNode,
+    type ISolver,
+    type ISolverDescriptor,
+} from "spikypanda-core";
 import type { GraphViewer } from "./components/graph-viewer";
 import type { NodeUI } from "./node-ui";
 import type { Port } from "./port";
@@ -439,11 +448,7 @@ function isCompositionNodeLike(data: unknown): data is CompositionNodeLike {
 function isParticulateMetadataLike(data: unknown): data is ParticulateMetadataLike {
     if (!data || typeof data !== "object") return false;
     const d = data as Partial<ParticulateMetadataLike>;
-    return (
-        typeof d.particulateId === "string" &&
-        d.particulateId.length > 0 &&
-        typeof d.displayName === "string"
-    );
+    return typeof d.particulateId === "string" && d.particulateId.length > 0 && typeof d.displayName === "string";
 }
 
 function isAtmosphereLayerLike(data: unknown): data is AtmosphereLayerLike {
@@ -492,11 +497,7 @@ function isAtmosphereContainerLike(data: unknown): data is AtmosphereContainerLi
 function isAtmosphereGateLike(data: unknown): data is AtmosphereGateLike {
     if (!data || typeof data !== "object") return false;
     const d = data as Partial<AtmosphereGateLike>;
-    return (
-        typeof d.bindAtmosphereA === "function" &&
-        typeof d.bindAtmosphereB === "function" &&
-        typeof d.clearBindings === "function"
-    );
+    return typeof d.bindAtmosphereA === "function" && typeof d.bindAtmosphereB === "function" && typeof d.clearBindings === "function";
 }
 
 function isAtmosphereGateHandleLike(data: unknown): data is AtmosphereGateHandleLike {
@@ -760,12 +761,23 @@ function _findRuntimeNodeByPort(viewer: GraphViewer, port: unknown, direction: "
     for (const n of list) {
         const data = n.item && (n.item as { data?: unknown }).data;
         if (!data) continue;
-        if (direction === "output" && (n.outputs.includes(port as Port) || n.controlOutputs.includes(port as Port))) {
-            return data as IRuntimeNode;
+        const owns =
+            direction === "output"
+                ? n.outputs.includes(port as Port) || n.controlOutputs.includes(port as Port)
+                : n.inputs.includes(port as Port) || n.controlInputs.includes(port as Port);
+        if (!owns) continue;
+        // Same duck-type as the step-2 node collection: a node whose
+        // data does not implement fire() is layout-only (a typeId that
+        // was missing from the registry at load, or a raw JSON blob).
+        // Wiring a channel onto it would crash the Channel constructor
+        // (`this._ofin.opsc is not a function`) and kill Play; skipping
+        // the wire keeps the rest of the graph runnable.
+        if (typeof (data as IRuntimeNode).fire !== "function") {
+            // eslint-disable-next-line no-console
+            console.warn(`[graph-session-builder] connection endpoint "${n.label}" (${n.typeId ?? "no typeId"}) is layout-only (no runtime instance); skipping its wire`);
+            return null;
         }
-        if (direction === "input" && (n.inputs.includes(port as Port) || n.controlInputs.includes(port as Port))) {
-            return data as IRuntimeNode;
-        }
+        return data as IRuntimeNode;
     }
     return null;
 }

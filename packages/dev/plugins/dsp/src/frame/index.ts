@@ -15,6 +15,7 @@ export const dspFrameSubPlugin: IPlugin = {
         ctx.nodes.register("DSP.Frame:frame", () => createFrameNode() as never, {
             label: "Frame",
             category: "DSP.Frame",
+            docPath: ctx.assetUrl("docs/dsp/frame/frame.md"),
             inputPorts: [tensorIn("signal")],
             outputPorts: [tensorOut("frames")],
             standards: [{ id: "onnx", version: "1.18" }],

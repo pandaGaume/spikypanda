@@ -11,6 +11,7 @@ export const gearSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Mechanical.Gear:mesh", () => createGearMeshNode() as never, {
             label: "Gear Mesh + Tooth Fault",
             category: "Physics.Mechanical.Gear",
+            docPath: ctx.assetUrl("docs/physics/gear/mesh.md"),
             inputPorts: [
                 { slot: "signal_in", ...FLOAT_IN },
                 { slot: "omega", ...FLOAT_IN },

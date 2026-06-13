@@ -8,6 +8,7 @@ export const logicTimeSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
         ctx.nodes.register("Logic.Time:clock", () => new ClockNode() as never, {
             label: "Clock",
+            docPath: ctx.assetUrl("docs/logic/time/clock.md"),
             category: "Logic.Time",
             inputPorts: [],
             outputPorts: [{ slot: "t", optional: false, type: "float" }],
@@ -15,6 +16,7 @@ export const logicTimeSubPlugin: IPlugin = {
         });
         ctx.nodes.register("Logic.Time:deltaTime", () => new DeltaTimeNode() as never, {
             label: "Delta Time",
+            docPath: ctx.assetUrl("docs/logic/time/deltatime.md"),
             category: "Logic.Time",
             inputPorts: [],
             outputPorts: [{ slot: "dt", optional: false, type: "float" }],
@@ -22,6 +24,7 @@ export const logicTimeSubPlugin: IPlugin = {
         });
         ctx.nodes.register("Logic.Time:timer", () => new TimerNode() as never, {
             label: "Timer",
+            docPath: ctx.assetUrl("docs/logic/time/timer.md"),
             category: "Logic.Time",
             inputPorts: [
                 { slot: "duration", optional: true, type: "float" },

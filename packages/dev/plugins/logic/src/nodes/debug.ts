@@ -6,10 +6,16 @@ import { DebugBus } from "spikypanda-nodeeditor";
  * Print + Watch nodes: emit messages on the editor's `DebugBus`, which
  * the console panel renders in the v2 editor footer.
  *
- *   PrintNode  Exec-driven: on each `in` trigger, peek `text`,
- *              forward the value to the bus, and pulse `then`.
- *              Equivalent to UE5 PrintString (minus the on-screen
- *              overlay; we only log to the console).
+ *   PrintNode  Exec-driven with a data-friendly fallback. On each `in`
+ *              trigger, print the `text` port value (or the static
+ *              `text` editable) and pulse `then`: UE5 PrintString
+ *              semantics. Two tolerances close the classic footgun of
+ *              wiring a PAYLOAD into a print and reading an empty line:
+ *                - a non-boolean token arriving on `in` (an alarm
+ *                  object, a number...) is itself printed when the
+ *                  `text` port carries nothing this tick;
+ *                - when `in` is UNWIRED, a token landing on `text`
+ *                  triggers the print by itself (pure data mode).
  *
  *   WatchNode  Value-driven: every published `value` produces one
  *              bus entry tagged with the user-supplied `label`.
@@ -18,21 +24,6 @@ import { DebugBus } from "spikypanda-nodeeditor";
  *              NOT provided — wire to another consumer if you want
  *              tee-style observation, or fan-out the source itself.
  */
-
-function consumeReady(session: ISession, node: RuntimeNode, slot: string): boolean {
-    const links = session.graph.links as ReadonlyArray<IChannel>;
-    let triggered = false;
-    for (const link of node.opsc<IChannel>()) {
-        if (inSlotOf(link) !== slot) continue;
-        if (!link.enabled) continue;
-        const idx = links.indexOf(link);
-        if (idx < 0) continue;
-        if (!session.linkStates[idx].ready) continue;
-        session.consume(idx);
-        triggered = true;
-    }
-    return triggered;
-}
 
 function readSlot<T>(session: ISession, node: RuntimeNode, slot: string, fallback: T): T {
     const links = session.graph.links as ReadonlyArray<IChannel>;
@@ -44,6 +35,30 @@ function readSlot<T>(session: ISession, node: RuntimeNode, slot: string, fallbac
         return session.consume(idx) as T;
     }
     return fallback;
+}
+
+/** Consume the last ready token on `slot`, reporting whether one arrived. */
+function consumeSlot(session: ISession, node: RuntimeNode, slot: string): { hit: boolean; value: unknown } {
+    const links = session.graph.links as ReadonlyArray<IChannel>;
+    let hit = false;
+    let value: unknown;
+    for (const link of node.opsc<IChannel>()) {
+        if (inSlotOf(link) !== slot) continue;
+        if (!link.enabled) continue;
+        const idx = links.indexOf(link);
+        if (idx < 0 || !session.linkStates[idx].ready) continue;
+        value = session.consume(idx);
+        hit = true;
+    }
+    return { hit, value };
+}
+
+/** Whether any enabled incoming link targets `slot`. */
+function slotWired(node: RuntimeNode, slot: string): boolean {
+    for (const link of node.opsc<IChannel>()) {
+        if (link.enabled && inSlotOf(link) === slot) return true;
+    }
+    return false;
 }
 
 function publishOnSlot(session: ISession, node: RuntimeNode, slot: string, value: unknown): void {
@@ -106,9 +121,17 @@ export class PrintNode extends RuntimeNode implements IDeclaresPorts {
     }
 
     public override fire(session: ISession, _t: number): void {
-        if (!consumeReady(session, this, "in")) return;
-        const text = stringify(readSlot<unknown>(session, this, "text", this._text));
-        DebugBus.instance.log("info", this._label || "Print", text);
+        const inTok = consumeSlot(session, this, "in");
+        const textTok = consumeSlot(session, this, "text");
+        // Exec mode: a token on `in` triggers. Data mode: with `in`
+        // unwired, a token on `text` triggers by itself.
+        const triggered = inTok.hit || (!slotWired(this, "in") && textTok.hit);
+        if (!triggered) return;
+        // Payload precedence: wired text token, else a non-trigger
+        // payload that arrived on `in` (alarm objects, numbers...),
+        // else the static `text` editable.
+        const payload = textTok.hit ? textTok.value : inTok.hit && typeof inTok.value !== "boolean" && inTok.value !== undefined ? inTok.value : this._text;
+        DebugBus.instance.log("info", this._label || "Print", stringify(payload));
         publishOnSlot(session, this, "then", true);
     }
 }

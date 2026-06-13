@@ -53,6 +53,7 @@ export const controlSimSubPlugin: IPlugin = {
         // and instantiates solvers.
         ctx.nodes.register("Control.Sim:rk4-solver", () => createRK4SolverItem() as never, {
             label: "RK4 Solver",
+            docPath: ctx.assetUrl("docs/control/sim/rk4-solver.md"),
             category: "Control.Sim",
             inputPorts: [],
             outputPorts: [{ slot: "solver_out", optional: true, type: "solver" }],

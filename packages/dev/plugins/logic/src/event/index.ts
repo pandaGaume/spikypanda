@@ -21,12 +21,14 @@ export const logicEventSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
         ctx.nodes.register("Logic.Event:alert-bus", () => createAlertBusNode() as never, {
             label: "Alert Bus",
+            docPath: ctx.assetUrl("docs/logic/event/alert-bus.md"),
             category: "Logic.Event",
             inputPorts: [{ slot: "publish", optional: true, type: "any" }],
             outputPorts: [{ slot: "subscribe", optional: false, type: "any" }],
         });
         ctx.nodes.register("Logic.Event:arbitrator", () => createArbitratorNode() as never, {
             label: "Arbitrator",
+            docPath: ctx.assetUrl("docs/logic/event/arbitrator.md"),
             category: "Logic.Event",
             inputPorts: [{ slot: "req_0", optional: true, type: "any" }],
             outputPorts: [

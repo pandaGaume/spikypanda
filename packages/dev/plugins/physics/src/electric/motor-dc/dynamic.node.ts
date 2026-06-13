@@ -1,6 +1,6 @@
 import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession } from "spikypanda-core";
 import type { ICartesian, Nullable, IHasSampleRateRequirement, IIntegrable, IIntegrationInputs } from "spikypanda-core";
-import { FaultableNode } from "../../transform/fault.node.js";
+import { FaultableNode } from "spikypanda-core";
 
 /**
  * Separately-excited DC motor — dynamic model expressed as an

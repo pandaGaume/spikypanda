@@ -27,9 +27,13 @@ const NUM_OUT = { slot: "result", optional: false, type: "float" } as const;
 
 export const logicMathSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
+        // One shared doc for the whole family (the gas.md pattern):
+        // an operator table inside covers all 19 variants.
+        const docPath = ctx.assetUrl("docs/logic/math/math.md");
         const binary = (id: string, label: string, factory: () => never): void => {
             ctx.nodes.register(id, factory, {
                 label,
+                docPath,
                 category: "Logic.Math",
                 inputPorts: [NUM_IN("a"), NUM_IN("b")],
                 outputPorts: [NUM_OUT],
@@ -39,6 +43,7 @@ export const logicMathSubPlugin: IPlugin = {
         const unary = (id: string, label: string, factory: () => never): void => {
             ctx.nodes.register(id, factory, {
                 label,
+                docPath,
                 category: "Logic.Math",
                 inputPorts: [NUM_IN("a")],
                 outputPorts: [NUM_OUT],
@@ -65,6 +70,7 @@ export const logicMathSubPlugin: IPlugin = {
 
         ctx.nodes.register("Logic.Math:clamp", () => new ClampNode() as never, {
             label: "Clamp",
+            docPath,
             category: "Logic.Math",
             inputPorts: [NUM_IN("value"), NUM_IN("min"), NUM_IN("max")],
             outputPorts: [NUM_OUT],
@@ -72,6 +78,7 @@ export const logicMathSubPlugin: IPlugin = {
         });
         ctx.nodes.register("Logic.Math:lerp", () => new LerpNode() as never, {
             label: "Lerp",
+            docPath,
             category: "Logic.Math",
             inputPorts: [NUM_IN("a"), NUM_IN("b"), NUM_IN("t")],
             outputPorts: [NUM_OUT],
@@ -84,6 +91,7 @@ export const logicMathSubPlugin: IPlugin = {
         // standard tag: Blueprint has no direct N-ary float Add.
         ctx.nodes.register("Logic.Math:sum", () => new SumNode() as never, {
             label: "Sum",
+            docPath,
             category: "Logic.Math",
             inputPorts: [NUM_IN("in_0")],
             outputPorts: [NUM_OUT],

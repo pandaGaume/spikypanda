@@ -7,6 +7,8 @@ export * from "./sim.session";
 export * from "./rk4-adaptive.solver";
 export * from "./scene-state-view.interface";
 export * from "./scene-state-view.impl";
+export * from "./transform.node";
+export * from "./fault.node";
 export * from "./sim-graph.node";
 export * from "./chemical.species";
 export * from "./chemistry.interfaces";

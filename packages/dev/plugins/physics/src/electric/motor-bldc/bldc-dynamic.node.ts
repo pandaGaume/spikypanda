@@ -1,7 +1,7 @@
 import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, inSlotOf } from "spikypanda-core";
 import type { ICartesian, Nullable, IHasSampleRateRequirement } from "spikypanda-core";
 import { PHASE_OFFSET_B, PHASE_OFFSET_C, trapezoidalBackEmf } from "./back-emf.js";
-import { FaultableNode } from "../../transform/fault.node.js";
+import { FaultableNode } from "spikypanda-core";
 
 /**
  * 3-phase brushless DC motor (BLDC) — trapezoidal back-EMF, surface PM

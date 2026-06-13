@@ -13,6 +13,8 @@ import "./styles/nodeeditor.css";
 
 export { NodeEditor } from "./editor";
 export { GraphViewer } from "./components/graph-viewer";
+export { enrichNodeDefFromMeta } from "./node-def";
+export { registerLifecycleNodes, LIFECYCLE_START_TYPE_ID, LIFECYCLE_STOP_TYPE_ID } from "./lifecycle-nodes";
 export { Palette, PALETTE_DRAG_MIME } from "./components/palette";
 export type { PaletteOptions } from "./components/palette";
 export { Permissions } from "./permissions";
@@ -38,7 +40,7 @@ export { UIItemBase, isInspectable, isSerializable } from "./inspectable";
 export type { Inspectable, Serializable, PropertyEntry } from "./inspectable";
 export { EditorRegistry } from "./editor-registry";
 export type { IEditor, EditorFactory } from "./editor-registry";
-export { installBuiltinEditors, vector3Editor, vector4Editor, quaternionEditor, numberEditor, sliderEditor } from "./editors";
+export { installBuiltinEditors, vector3Editor, vector4Editor, quaternionEditor, numberEditor, sliderEditor, booleanEditor } from "./editors";
 export { LiveBinder } from "./live-binder";
 export { GraphRunner } from "./graph-runner";
 export type { RunnerState, RunnerMode } from "./graph-runner";

@@ -1,0 +1,25 @@
+{
+    "name": "@spiky-panda/applications-motorwatch",
+    "version": "0.1.0",
+    "description": "Open-set regime monitoring for motor-current analysis: edge device facade (steady-state gating, ONNX embeddings, online clustering, NEW_REGIME alarms), validated runtime diagnostic-model push, central station with federated regime catalog",
+    "private": true,
+    "main": "dist/index",
+    "module": "dist/index",
+    "esnext": "dist/index",
+    "types": "dist/index",
+    "files": [
+        "dist",
+        "src"
+    ],
+    "scripts": {
+        "build": "npm run clean && npm run compile",
+        "clean": "rimraf dist bundle && rimraf tsconfig.build.tsbuildinfo",
+        "compile": "npm run compile:source",
+        "compile:source": "tsc -b tsconfig.build.json",
+        "watch:source": "tsc -b tsconfig.build.json -w"
+    },
+    "sideEffects": false,
+    "devDependencies": {
+        "rimraf": "~6.0.1"
+    }
+}

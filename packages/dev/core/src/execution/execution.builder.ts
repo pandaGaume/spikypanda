@@ -68,12 +68,17 @@ export class RuntimeGraphBuilder<N extends IRuntimeNode = IRuntimeNode, L extend
     /**
      * Register a dangling input-port channel (oini = null) at
      * `target` with the given slot name. When this graph is embedded
-     * as a node in a parent, the parent's incoming channel with that
-     * slot name is matched against this port.
+     * as a node in a parent, the parent's incoming channel whose
+     * destination slot carries that name is matched against this port.
+     *
+     * Pushed onto _links directly: the withLinks() shape sniffing
+     * relies on the isOlink guard, which requires BOTH endpoints to be
+     * nodes and therefore rejects dangling port channels.
      */
     public withInputPort(target: N, slot: string | number): this {
         const channel = this._createChannel(null, target, slot, false, undefined);
-        return this.withLinks(channel as unknown as L);
+        this._links.push(channel as unknown as L);
+        return this;
     }
 
     /**
@@ -81,10 +86,14 @@ export class RuntimeGraphBuilder<N extends IRuntimeNode = IRuntimeNode, L extend
      * `source` with the given slot name. When this graph is embedded
      * as a node, the parent's outgoing channel with that slot name
      * pulls payloads from this port.
+     *
+     * Pushed onto _links directly for the same isOlink-guard reason as
+     * withInputPort.
      */
     public withOutputPort(source: N, slot: string | number): this {
         const channel = this._createChannel(source, null, slot, false, undefined);
-        return this.withLinks(channel as unknown as L);
+        this._links.push(channel as unknown as L);
+        return this;
     }
 
     public override build(): RuntimeGraph<N, L> {

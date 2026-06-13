@@ -17,6 +17,7 @@ export const controlActuatorSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
         ctx.nodes.register("Control.Actuator:setpoint", () => createSetpointNode() as never, {
             label: "Setpoint",
+            docPath: ctx.assetUrl("docs/control/actuator/setpoint.md"),
             category: "Control.Actuator",
             inputPorts: [
                 { slot: "request", optional: false, type: "float" },

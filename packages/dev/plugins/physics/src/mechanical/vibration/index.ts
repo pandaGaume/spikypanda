@@ -11,6 +11,7 @@ export const vibrationSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Mechanical.Vibration:accelerometer", () => createAccelerometerNode() as never, {
             label: "Accelerometer",
             category: "Physics.Mechanical.Vibration",
+            docPath: ctx.assetUrl("docs/physics/vibration/accelerometer.md"),
             inputPorts: [
                 { slot: "vibration", ...FLOAT_IN },
                 { slot: "dt", ...FLOAT_IN },

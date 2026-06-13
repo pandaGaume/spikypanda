@@ -10,6 +10,7 @@ const plugin: IPlugin = {
     activate(ctx: IPluginContext): void {
         ctx.nodes.register("spk.geometry:transform", () => new Transform(), {
             label: "Transform",
+            docPath: ctx.assetUrl("docs/geometry/transform.md"),
             category: "geometry",
             inputPorts: [
                 { slot: "translation", optional: true, type: "vec3" },
@@ -21,6 +22,7 @@ const plugin: IPlugin = {
 
         ctx.nodes.register("spk.geometry:attitude", () => new Attitude(), {
             label: "Attitude",
+            docPath: ctx.assetUrl("docs/geometry/attitude.md"),
             category: "geometry",
             inputPorts: [
                 { slot: "yaw", optional: true, type: "float" },
@@ -33,6 +35,7 @@ const plugin: IPlugin = {
 
         ctx.nodes.register("spk.geometry:cartesian3", () => new Cartesian3Node(), {
             label: "Cartesian3",
+            docPath: ctx.assetUrl("docs/geometry/cartesian3.md"),
             category: "geometry",
             inputPorts: [
                 { slot: "x", optional: true, type: "float" },

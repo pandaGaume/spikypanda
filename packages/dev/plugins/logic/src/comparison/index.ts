@@ -14,9 +14,13 @@ const UE5 = ["ue5"] as const;
 
 export const logicComparisonSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
+        // One shared doc for the whole family: same shape, only the
+        // predicate differs (the gas.md pattern).
+        const docPath = ctx.assetUrl("docs/logic/comparison/comparison.md");
         for (const entry of ENTRIES) {
             ctx.nodes.register(entry.type, entry.factory as () => never, {
                 label: entry.label,
+                docPath,
                 category: "Logic.Comparison",
                 inputPorts: [
                     { slot: "a", optional: true, type: "float" },

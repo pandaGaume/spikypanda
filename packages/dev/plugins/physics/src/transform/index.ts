@@ -1,34 +1,37 @@
 import type { IPlugin, IPluginContext } from "spikypanda-nodeeditor";
-import { createTransformNode, TransformNode } from "./transform.node.js";
+import { TransformNode } from "spikypanda-core";
 
-export { TransformNode, createTransformNode, IDENTITY44, isMatrix44, mul44 } from "./transform.node.js";
+// TransformNode and FaultableNode are CORE primitives (every world object
+// across every plugin extends them). They were promoted out of this plugin
+// into `spikypanda-core`; re-exported here for the existing physics import
+// sites and the sub-plugin registration below.
+export { TransformNode, IDENTITY44, isMatrix44, mul44, FaultableNode, isFaultDescriptor } from "spikypanda-core";
+export type { IFaultDescriptor } from "spikypanda-core";
 
-export { FaultableNode, isFaultDescriptor } from "./fault.node.js";
-export type { IFaultDescriptor } from "./fault.node.js";
+/** Free-standing factory invoked by the sub-plugin's `activate`. */
+export function createTransformNode(): TransformNode {
+    return new TransformNode();
+}
 
 /**
  * `Physics.Transform` sub-plugin. Exposes a single registrable node,
  * `Physics.Transform:transform`, that composes a local pose with the
- * parent's world transform. Also acts as the runtime base class shared
- * by every physical object that needs a world-frame position (motors,
- * sensors, mechanical bodies).
+ * parent's world transform. The runtime base class it instantiates
+ * (TransformNode) now lives in core and is shared by every physical
+ * object that needs a world-frame position (motors, sensors, mechanical
+ * bodies).
  *
- * The node is registered so the user can drop a standalone Transform on
- * the canvas (intermediate frame, marker, debug attach-point) without
- * having to instantiate a motor or a sensor.
- *
- * Environmental context (gravity, T, P, atmosphere) used to be carried
- * by a `scene` input port on every TransformNode and broadcast by the
- * legacy Physics.Scene:scene RuntimeNode. It now lives on the session
- * (`ISession.sceneStateView`), populated by the enclosing Sim.Graph
- * from a wired SceneItem (see plugins/physics/src/scene). The
- * TransformNode therefore exposes only `local` + `parent_world` here.
+ * Environmental context (gravity, T, P, atmosphere) lives on the session
+ * (`ISession.sceneStateView`), populated by the enclosing Sim.Graph from a
+ * wired SceneItem (see plugins/physics/src/scene). The TransformNode
+ * exposes only `local` + `parent_world` here.
  */
 export const transformSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
         ctx.nodes.register("Physics.Transform:transform", () => createTransformNode() as never, {
             label: "Transform",
             category: "Physics.Transform",
+            docPath: ctx.assetUrl("docs/physics/transform/transform.md"),
             inputPorts: [...TransformNode.TRANSFORM_INPUT_PORTS],
             outputPorts: [...TransformNode.TRANSFORM_OUTPUT_PORTS],
         });

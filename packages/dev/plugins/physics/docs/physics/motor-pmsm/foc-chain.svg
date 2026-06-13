@@ -1,0 +1,234 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2404.324996948242" height="582" viewBox="0 0 2404.324996948242 582">
+<rect width="100%" height="100%" fill="transparent" rx="8"/>
+<path d="M 180 524 C 350 524, 350 164, 520 164" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 679.1125030517578 84 C 729.5562515258789 84, 729.5562515258789 124, 780 124" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 679.1125030517578 104 C 729.5562515258789 104, 729.5562515258789 144, 780 144" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 924.8000030517578 124 C 962.4000015258789 124, 962.4000015258789 124, 1000 124" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 924.8000030517578 144 C 962.4000015258789 144, 962.4000015258789 144, 1000 144" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 924.8000030517578 164 C 962.4000015258789 164, 962.4000015258789 164, 1000 164" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 1192.8000030517578 124 C 1216.400001525879 124, 1216.400001525879 124, 1240 124" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 1192.8000030517578 144 C 1216.400001525879 144, 1216.400001525879 144, 1240 144" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 1192.8000030517578 164 C 1216.400001525879 164, 1216.400001525879 164, 1240 164" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 1403.0749969482422 164 C 1541.537498474121 164, 1541.537498474121 104, 1680 104" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 1403.0749969482422 184 C 1541.537498474121 184, 1541.537498474121 124, 1680 124" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 1403.0749969482422 204 C 1541.537498474121 204, 1541.537498474121 144, 1680 144" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 1862.3500061035156 104 C 1921.1750030517578 104, 1921.1750030517578 184, 1980 184" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 1862.3500061035156 124 C 1921.1750030517578 124, 1921.1750030517578 204, 1980 204" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 1403.0749969482422 224 C 1691.537498474121 224, 1691.537498474121 224, 1980 224" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 2148.1625061035156 184 C 2184.081253051758 184, 2184.081253051758 184, 2220 184" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 180 124 C 350 124, 350 84, 520 84" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 2148.1625061035156 204 C 2184.081253051758 204, 2184.081253051758 304, 2220 304" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 180 224 C 350 224, 350 104, 520 104" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 1403.0749969482422 264 C 1541.537498474121 264, 1541.537498474121 444, 1680 444" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 180 324 C 350 324, 350 124, 520 124" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 1403.0749969482422 224 C 1541.537498474121 224, 1541.537498474121 324, 1680 324" stroke="#E8762D" fill="none" stroke-width="2"/>
+<path d="M 180 424 C 350 424, 350 144, 520 144" stroke="#E8762D" fill="none" stroke-width="2"/>
+<g>
+<rect x="40" y="480" width="140" height="62" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="40" y="480" width="140" height="24" rx="8" fill="#335"/>
+<rect x="40" y="496" width="140" height="8" fill="#335"/>
+<text x="50" y="496" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">Knob</text>
+<circle cx="180" cy="524" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="171" y="528" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">value</text>
+</g>
+<g>
+<rect x="520" y="40" width="159.1125030517578" height="202" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="520" y="40" width="159.1125030517578" height="24" rx="8" fill="#335"/>
+<rect x="520" y="56" width="159.1125030517578" height="8" fill="#335"/>
+<text x="530" y="56" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">PMSM FOC Controller</text>
+<circle cx="520" cy="84" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="529" y="88" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">i_d</text>
+<circle cx="520" cy="104" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="529" y="108" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">i_q</text>
+<circle cx="520" cy="124" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="529" y="128" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">omega</text>
+<circle cx="520" cy="144" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="529" y="148" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">theta_m</text>
+<circle cx="520" cy="164" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="529" y="168" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">speed_target</text>
+<circle cx="520" cy="184" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="529" y="188" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">iq_ref</text>
+<circle cx="520" cy="204" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="529" y="208" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">v_bus</text>
+<circle cx="520" cy="224" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="529" y="228" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">dt</text>
+<circle cx="679.1125030517578" cy="84" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="670.1125030517578" y="88" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">V_alpha</text>
+<circle cx="679.1125030517578" cy="104" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="670.1125030517578" y="108" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">V_beta</text>
+<circle cx="679.1125030517578" cy="124" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="670.1125030517578" y="128" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">V_a</text>
+<circle cx="679.1125030517578" cy="144" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="670.1125030517578" y="148" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">V_b</text>
+<circle cx="679.1125030517578" cy="164" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="670.1125030517578" y="168" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">V_c</text>
+</g>
+<g>
+<rect x="780" y="80" width="144.8000030517578" height="102" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="780" y="80" width="144.8000030517578" height="24" rx="8" fill="#335"/>
+<rect x="780" y="96" width="144.8000030517578" height="8" fill="#335"/>
+<text x="790" y="96" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">SVPWM Modulator</text>
+<circle cx="780" cy="124" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="789" y="128" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">V_alpha</text>
+<circle cx="780" cy="144" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="789" y="148" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">V_beta</text>
+<circle cx="780" cy="164" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="789" y="168" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">v_bus</text>
+<circle cx="924.8000030517578" cy="124" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="915.8000030517578" y="128" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">duty_a</text>
+<circle cx="924.8000030517578" cy="144" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="915.8000030517578" y="148" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">duty_b</text>
+<circle cx="924.8000030517578" cy="164" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="915.8000030517578" y="168" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">duty_c</text>
+</g>
+<g>
+<rect x="1000" y="80" width="192.8000030517578" height="122" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="1000" y="80" width="192.8000030517578" height="24" rx="8" fill="#335"/>
+<rect x="1000" y="96" width="192.8000030517578" height="8" fill="#335"/>
+<text x="1010" y="96" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">3-Phase Inverter (averaged)</text>
+<circle cx="1000" cy="124" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1009" y="128" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">duty_a</text>
+<circle cx="1000" cy="144" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1009" y="148" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">duty_b</text>
+<circle cx="1000" cy="164" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1009" y="168" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">duty_c</text>
+<circle cx="1000" cy="184" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1009" y="188" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">v_bus</text>
+<circle cx="1192.8000030517578" cy="124" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1183.8000030517578" y="128" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">V_a</text>
+<circle cx="1192.8000030517578" cy="144" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1183.8000030517578" y="148" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">V_b</text>
+<circle cx="1192.8000030517578" cy="164" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1183.8000030517578" y="168" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">V_c</text>
+</g>
+<g>
+<rect x="1240" y="80" width="163.0749969482422" height="202" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="1240" y="80" width="163.0749969482422" height="24" rx="8" fill="#335"/>
+<rect x="1240" y="96" width="163.0749969482422" height="8" fill="#335"/>
+<text x="1250" y="96" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">PMSM Machine (dq)</text>
+<circle cx="1240" cy="124" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1249" y="128" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">V_a</text>
+<circle cx="1240" cy="144" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1249" y="148" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">V_b</text>
+<circle cx="1240" cy="164" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1249" y="168" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">V_c</text>
+<circle cx="1240" cy="184" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1249" y="188" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">tau_load</text>
+<circle cx="1240" cy="204" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1249" y="208" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">flux_envelope</text>
+<circle cx="1240" cy="224" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1249" y="228" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">dt</text>
+<circle cx="1403.0749969482422" cy="124" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1394.0749969482422" y="128" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">i_d</text>
+<circle cx="1403.0749969482422" cy="144" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1394.0749969482422" y="148" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">i_q</text>
+<circle cx="1403.0749969482422" cy="164" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1394.0749969482422" y="168" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">i_a</text>
+<circle cx="1403.0749969482422" cy="184" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1394.0749969482422" y="188" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">i_b</text>
+<circle cx="1403.0749969482422" cy="204" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1394.0749969482422" y="208" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">i_c</text>
+<circle cx="1403.0749969482422" cy="224" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1394.0749969482422" y="228" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">theta_m</text>
+<circle cx="1403.0749969482422" cy="244" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1394.0749969482422" y="248" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">tau_em</text>
+<circle cx="1403.0749969482422" cy="264" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1394.0749969482422" y="268" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">omega</text>
+</g>
+<g>
+<rect x="1680" y="60" width="182.35000610351562" height="102" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="1680" y="60" width="182.35000610351562" height="24" rx="8" fill="#335"/>
+<rect x="1680" y="76" width="182.35000610351562" height="8" fill="#335"/>
+<text x="1690" y="76" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">Clarke (abc to alpha-beta)</text>
+<circle cx="1680" cy="104" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1689" y="108" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">a</text>
+<circle cx="1680" cy="124" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1689" y="128" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">b</text>
+<circle cx="1680" cy="144" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1689" y="148" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">c</text>
+<circle cx="1862.3500061035156" cy="104" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1853.3500061035156" y="108" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">alpha</text>
+<circle cx="1862.3500061035156" cy="124" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1853.3500061035156" y="128" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">beta</text>
+</g>
+<g>
+<rect x="1980" y="140" width="168.16250610351562" height="102" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="1980" y="140" width="168.16250610351562" height="24" rx="8" fill="#335"/>
+<rect x="1980" y="156" width="168.16250610351562" height="8" fill="#335"/>
+<text x="1990" y="156" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">Park (alpha-beta to dq)</text>
+<circle cx="1980" cy="184" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1989" y="188" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">alpha</text>
+<circle cx="1980" cy="204" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1989" y="208" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">beta</text>
+<circle cx="1980" cy="224" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1989" y="228" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">theta_m</text>
+<circle cx="2148.1625061035156" cy="184" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="2139.1625061035156" y="188" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">d</text>
+<circle cx="2148.1625061035156" cy="204" r="5" fill="#8cf" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="2139.1625061035156" y="208" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">q</text>
+</g>
+<g>
+<rect x="2220" y="140" width="144.3249969482422" height="62" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="2220" y="140" width="144.3249969482422" height="24" rx="8" fill="#335"/>
+<rect x="2220" y="156" width="144.3249969482422" height="8" fill="#335"/>
+<text x="2230" y="156" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">Feedback Channel</text>
+<circle cx="2220" cy="184" r="5" fill="#ccc" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="2229" y="188" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">input</text>
+</g>
+<g>
+<rect x="40" y="80" width="140" height="62" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="40" y="80" width="140" height="24" rx="8" fill="#335"/>
+<rect x="40" y="96" width="140" height="8" fill="#335"/>
+<text x="50" y="96" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">Feedback Channel</text>
+<circle cx="180" cy="124" r="5" fill="#ccc" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="171" y="128" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">output</text>
+</g>
+<g>
+<rect x="2220" y="260" width="144.3249969482422" height="62" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="2220" y="260" width="144.3249969482422" height="24" rx="8" fill="#335"/>
+<rect x="2220" y="276" width="144.3249969482422" height="8" fill="#335"/>
+<text x="2230" y="276" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">Feedback Channel</text>
+<circle cx="2220" cy="304" r="5" fill="#ccc" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="2229" y="308" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">input</text>
+</g>
+<g>
+<rect x="40" y="180" width="140" height="62" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="40" y="180" width="140" height="24" rx="8" fill="#335"/>
+<rect x="40" y="196" width="140" height="8" fill="#335"/>
+<text x="50" y="196" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">Feedback Channel</text>
+<circle cx="180" cy="224" r="5" fill="#ccc" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="171" y="228" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">output</text>
+</g>
+<g>
+<rect x="1680" y="400" width="144.3249969482422" height="62" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="1680" y="400" width="144.3249969482422" height="24" rx="8" fill="#335"/>
+<rect x="1680" y="416" width="144.3249969482422" height="8" fill="#335"/>
+<text x="1690" y="416" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">Feedback Channel</text>
+<circle cx="1680" cy="444" r="5" fill="#ccc" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1689" y="448" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">input</text>
+</g>
+<g>
+<rect x="40" y="280" width="140" height="62" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="40" y="280" width="140" height="24" rx="8" fill="#335"/>
+<rect x="40" y="296" width="140" height="8" fill="#335"/>
+<text x="50" y="296" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">Feedback Channel</text>
+<circle cx="180" cy="324" r="5" fill="#ccc" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="171" y="328" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">output</text>
+</g>
+<g>
+<rect x="1680" y="280" width="144.3249969482422" height="62" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="1680" y="280" width="144.3249969482422" height="24" rx="8" fill="#335"/>
+<rect x="1680" y="296" width="144.3249969482422" height="8" fill="#335"/>
+<text x="1690" y="296" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">Feedback Channel</text>
+<circle cx="1680" cy="324" r="5" fill="#ccc" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="1689" y="328" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9">input</text>
+</g>
+<g>
+<rect x="40" y="380" width="140" height="62" rx="8" fill="#2E2E3E" stroke="#7878A0" stroke-width="1"/>
+<rect x="40" y="380" width="140" height="24" rx="8" fill="#335"/>
+<rect x="40" y="396" width="140" height="8" fill="#335"/>
+<text x="50" y="396" fill="#FFFFFF" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600">Feedback Channel</text>
+<circle cx="180" cy="424" r="5" fill="#ccc" stroke="#9A9AC4" stroke-width="1.5"/>
+<text x="171" y="428" fill="#8A8A9A" font-family="'Segoe UI', system-ui, sans-serif" font-size="9" text-anchor="end">output</text>
+</g>
+</svg>

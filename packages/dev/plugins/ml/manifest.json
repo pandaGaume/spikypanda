@@ -1,0 +1,35 @@
+{
+    "id":          "spk.ml",
+    "version":     "0.1.0",
+    "displayName": "Machine Learning",
+    "description": "Open-set machine learning primitives. ML.Cluster: online cosine clustering with confidence-gated EMA centroid updates plus batch agglomerative re-clustering (absolute link threshold, k emerges naturally); labels are session-local and never stable identifiers. ML.Detect: per-element motion watching (freeze and jump signatures against a frozen healthy reference), detection by movement complementary to the clusterer's detection by position.",
+    "category":    "ML",
+    "entry":       "bundle/SpkPluginMl.js",
+    "nodes":       [],
+    "editors":     [],
+    "subPlugins": [
+        {
+            "id":          "ML.Cluster",
+            "displayName": "Clustering",
+            "description": "Open-set clustering. Online Clusterer assigns each embedding to the nearest cosine centroid (new profile above assign_thr, EMA update below update_thr) and raises a wire-compatible Alert Bus alarm when a new regime appears; a recluster token runs the batch agglomerative merge over the bounded history to recover from online over-segmentation.",
+            "category":    "ML.Cluster",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "ML.Cluster:online", "factory": "createOnlineClusterNode", "label": "Online Clusterer (open-set)" }
+            ]
+        },
+        {
+            "id":          "ML.Detect",
+            "displayName": "Detection",
+            "description": "Per-element detection signatures. Motion Watch freezes a healthy per-element step reference during warmup, then flags an abnormally large step (REGIME_JUMP) or a rolling-path collapse (REGIME_FREEZE) per vector component, rising-edge latched with hysteresis; alarms are wire-compatible with the Alert Bus and a _rebaseline control token re-enters warmup on demand.",
+            "category":    "ML.Detect",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "ML.Detect:motion", "factory": "createMotionWatchNode", "label": "Motion Watch (freeze/jump)" }
+            ]
+        }
+    ],
+    "manifestRefs": []
+}

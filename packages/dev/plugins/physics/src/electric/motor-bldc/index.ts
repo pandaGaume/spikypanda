@@ -100,6 +100,7 @@ export const motorBldcSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Electric.Motor.BLDC:speedPI", () => createBldcSpeedPiNode() as never, {
             label: "BLDC Speed PI",
             category: "Physics.Electric.Motor.BLDC",
+            docPath: ctx.assetUrl("docs/physics/motor-bldc/speed-pi.md"),
             inputPorts: [
                 { slot: "omega_ref", ...FLOAT_IN },
                 { slot: "omega_measured", ...FLOAT_IN },

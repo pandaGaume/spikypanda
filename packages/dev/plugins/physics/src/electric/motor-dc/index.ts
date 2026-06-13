@@ -74,6 +74,7 @@ export const motorDcSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Electric.Motor.DC:steady", () => createDcMotorSteadyNode() as never, {
             label: "DC Motor (Steady)",
             category: "Physics.Electric.Motor.DC",
+            docPath: ctx.assetUrl("docs/physics/motor-dc/steady.md"),
             inputPorts: [...BASE_IN_PORTS, { slot: "V", ...FLOAT_IN }, { slot: "tau_load", ...FLOAT_IN }],
             outputPorts: [TRANSFORM_OUT_PORT, { slot: "i", ...FLOAT_OUT }, { slot: "omega", ...FLOAT_OUT }, { slot: "tau", ...FLOAT_OUT }, { slot: "back_emf", ...FLOAT_OUT }],
         });
@@ -81,6 +82,7 @@ export const motorDcSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Electric.Motor.DC:speedPI", () => createDcMotorSpeedPiNode() as never, {
             label: "DC Motor Speed PI",
             category: "Physics.Electric.Motor.DC",
+            docPath: ctx.assetUrl("docs/physics/motor-dc/speed-pi.md"),
             // dt port dropped — the controller now reads `session.dt`,
             // which is the same value the integration phase used for
             // any IIntegrable leaves earlier in the same tick. Single
@@ -95,6 +97,7 @@ export const motorDcSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Electric.Motor.DC:tachymeter", () => createDcMotorTachymeterNode() as never, {
             label: "Tachymeter",
             category: "Physics.Electric.Motor.DC",
+            docPath: ctx.assetUrl("docs/physics/motor-dc/tachymeter.md"),
             // dt port dropped — see Speed PI above for the rationale.
             inputPorts: [{ slot: "omega", ...FLOAT_IN }],
             outputPorts: [{ slot: "omega_measured", ...FLOAT_OUT }],
@@ -121,6 +124,7 @@ export const motorDcSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Electric.Motor.DC:currentPI", () => createDcMotorCurrentPiNode() as never, {
             label: "DC Motor Current PI",
             category: "Physics.Electric.Motor.DC",
+            docPath: ctx.assetUrl("docs/physics/motor-dc/current-pi.md"),
             inputPorts: [
                 { slot: "i_ref", ...FLOAT_IN },
                 { slot: "i_measured", ...FLOAT_IN },
@@ -131,6 +135,7 @@ export const motorDcSubPlugin: IPlugin = {
         ctx.nodes.register("Physics.Electric.Motor.DC:currentSensor", () => createDcMotorCurrentSensorNode() as never, {
             label: "Current Sensor (LEM)",
             category: "Physics.Electric.Motor.DC",
+            docPath: ctx.assetUrl("docs/physics/motor-dc/current-sensor.md"),
             inputPorts: [{ slot: "i", ...FLOAT_IN }],
             outputPorts: [{ slot: "i_measured", ...FLOAT_OUT }],
         });

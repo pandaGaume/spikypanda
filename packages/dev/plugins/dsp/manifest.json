@@ -1,122 +1,142 @@
 {
-    "id":          "spk.dsp",
-    "version":     "0.2.0",
+    "id": "spk.dsp",
+    "version": "0.2.0",
     "displayName": "DSP",
-    "description": "Time-series DSP fundamentals organized as 6 sub-plugins under DSP.*: Transform, Window, Frame, Feature, Filter, Stats. Every node is an ONNX kernel; a subset also has UE5 Audio counterparts.",
-    "category":    "DSP",
-    "entry":       "bundle/SpkPluginDsp.js",
-    "nodes":       [],
-    "editors":     [],
+    "description": "Time-series DSP fundamentals organized as sub-plugins under DSP.*: Generator, Transform, Window, Frame, Feature, Filter, Stats, Stream, Detect, Tensor, Sensor, Acquire. Most nodes are ONNX kernels; a subset also has UE5 Audio counterparts. Stream, Detect, Tensor, Acquire and Generator are pure runtime nodes.",
+    "category": "DSP",
+    "entry": "bundle/SpkPluginDsp.js",
+    "nodes": [],
+    "editors": [],
     "subPlugins": [
         {
-            "id":          "DSP.Generator",
+            "id": "DSP.Generator",
             "displayName": "Generator",
             "description": "Signal sources. Oscillator emits amplitude·sin/cos(2π·f·t + φ) one sample per tick; f, A, φ available as editables AND as optional input ports (wire a slider to frequency for live sweeps). Compose multi-frequency signals with Add trees: Osc1+Osc2+Osc3 -> Buffer -> FFT.",
-            "category":    "DSP.Generator",
-            "version":     "0.1.0",
-            "standards":   [],
-            "nodes": [
-                { "type": "DSP.Generator:oscillator", "factory": "createOscillatorNode", "label": "Oscillator" }
-            ]
+            "category": "DSP.Generator",
+            "version": "0.1.0",
+            "standards": [],
+            "nodes": [{ "type": "DSP.Generator:oscillator", "factory": "createOscillatorNode", "label": "Oscillator" }]
         },
         {
-            "id":          "DSP.Transform",
+            "id": "DSP.Transform",
             "displayName": "Transforms",
             "description": "FFT (power/magnitude/complex modes), IFFT, Magnitude, Phase, DCT.",
-            "category":    "DSP.Transform",
-            "version":     "0.1.0",
-            "standards":   [{ "id": "onnx", "version": "1.18" }],
+            "category": "DSP.Transform",
+            "version": "0.1.0",
+            "standards": [{ "id": "onnx", "version": "1.18" }],
             "nodes": [
-                { "type": "DSP.Transform:fft",       "factory": "createFftNode",       "label": "FFT" },
-                { "type": "DSP.Transform:ifft",      "factory": "createIfftNode",      "label": "IFFT" },
+                { "type": "DSP.Transform:fft", "factory": "createFftNode", "label": "FFT" },
+                { "type": "DSP.Transform:ifft", "factory": "createIfftNode", "label": "IFFT" },
                 { "type": "DSP.Transform:magnitude", "factory": "createMagnitudeNode", "label": "Magnitude" },
-                { "type": "DSP.Transform:phase",     "factory": "createPhaseNode",     "label": "Phase" },
-                { "type": "DSP.Transform:dct",       "factory": "createDctNode",       "label": "DCT" }
+                { "type": "DSP.Transform:phase", "factory": "createPhaseNode", "label": "Phase" },
+                { "type": "DSP.Transform:dct", "factory": "createDctNode", "label": "DCT" }
             ]
         },
         {
-            "id":          "DSP.Window",
+            "id": "DSP.Window",
             "displayName": "Window",
             "description": "Window function (Hann, Hamming, Blackman, Bartlett, Rectangular, Tukey) selected via the window_type attribute.",
-            "category":    "DSP.Window",
-            "version":     "0.1.0",
-            "standards":   [{ "id": "onnx", "version": "1.18" }],
-            "nodes": [
-                { "type": "DSP.Window:window", "factory": "createWindowNode", "label": "Window" }
-            ]
+            "category": "DSP.Window",
+            "version": "0.1.0",
+            "standards": [{ "id": "onnx", "version": "1.18" }],
+            "nodes": [{ "type": "DSP.Window:window", "factory": "createWindowNode", "label": "Window" }]
         },
         {
-            "id":          "DSP.Frame",
+            "id": "DSP.Frame",
             "displayName": "Frame",
             "description": "Signal slicing into overlapping frames with hop_length and pad_mode.",
-            "category":    "DSP.Frame",
-            "version":     "0.1.0",
-            "standards":   [{ "id": "onnx", "version": "1.18" }],
-            "nodes": [
-                { "type": "DSP.Frame:frame", "factory": "createFrameNode", "label": "Frame" }
-            ]
+            "category": "DSP.Frame",
+            "version": "0.1.0",
+            "standards": [{ "id": "onnx", "version": "1.18" }],
+            "nodes": [{ "type": "DSP.Frame:frame", "factory": "createFrameNode", "label": "Frame" }]
         },
         {
-            "id":          "DSP.Feature",
+            "id": "DSP.Feature",
             "displayName": "Audio features",
             "description": "Audio-style feature extraction: Mel filterbank, LogScale, MFCC pipeline, DTW distance.",
-            "category":    "DSP.Feature",
-            "version":     "0.1.0",
-            "standards":   [{ "id": "onnx", "version": "1.18" }],
+            "category": "DSP.Feature",
+            "version": "0.1.0",
+            "standards": [{ "id": "onnx", "version": "1.18" }],
             "nodes": [
-                { "type": "DSP.Feature:mel",      "factory": "createMelFilterbankNode", "label": "Mel Filterbank" },
-                { "type": "DSP.Feature:logscale", "factory": "createLogScaleNode",      "label": "Log Scale" },
-                { "type": "DSP.Feature:mfcc",     "factory": "createMfccNode",          "label": "MFCC" },
-                { "type": "DSP.Feature:dtw",      "factory": "createDtwNode",           "label": "DTW" }
+                { "type": "DSP.Feature:mel", "factory": "createMelFilterbankNode", "label": "Mel Filterbank" },
+                { "type": "DSP.Feature:logscale", "factory": "createLogScaleNode", "label": "Log Scale" },
+                { "type": "DSP.Feature:mfcc", "factory": "createMfccNode", "label": "MFCC" },
+                { "type": "DSP.Feature:dtw", "factory": "createDtwNode", "label": "DTW" }
             ]
         },
         {
-            "id":          "DSP.Filter",
+            "id": "DSP.Filter",
             "displayName": "Filters",
             "description": "Biquad (LP/HP/BP/Notch via filter_type) and scalar Kalman 1D.",
-            "category":    "DSP.Filter",
-            "version":     "0.1.0",
-            "standards":   [{ "id": "onnx", "version": "1.18" }],
+            "category": "DSP.Filter",
+            "version": "0.1.0",
+            "standards": [{ "id": "onnx", "version": "1.18" }],
             "nodes": [
-                { "type": "DSP.Filter:biquad",   "factory": "createBiquadFilterNode", "label": "Biquad Filter" },
-                { "type": "DSP.Filter:kalman1d", "factory": "createKalman1DNode",     "label": "Kalman 1D" }
+                { "type": "DSP.Filter:biquad", "factory": "createBiquadFilterNode", "label": "Biquad Filter" },
+                { "type": "DSP.Filter:kalman1d", "factory": "createKalman1DNode", "label": "Kalman 1D" }
             ]
         },
         {
-            "id":          "DSP.Stats",
+            "id": "DSP.Stats",
             "displayName": "Stats",
             "description": "Output-side signal analysis: RMS, Zero-Crossing Rate, Moving Average (causal), Detrend (constant/linear).",
-            "category":    "DSP.Stats",
-            "version":     "0.1.0",
-            "standards":   [{ "id": "onnx", "version": "1.18" }],
+            "category": "DSP.Stats",
+            "version": "0.1.0",
+            "standards": [{ "id": "onnx", "version": "1.18" }],
             "nodes": [
-                { "type": "DSP.Stats:rms",     "factory": "createRmsNode",              "label": "RMS" },
-                { "type": "DSP.Stats:zcr",     "factory": "createZeroCrossingRateNode", "label": "Zero Crossing Rate" },
-                { "type": "DSP.Stats:movavg",  "factory": "createMovingAverageNode",    "label": "Moving Average" },
-                { "type": "DSP.Stats:detrend", "factory": "createDetrendNode",          "label": "Detrend" }
+                { "type": "DSP.Stats:rms", "factory": "createRmsNode", "label": "RMS" },
+                { "type": "DSP.Stats:zcr", "factory": "createZeroCrossingRateNode", "label": "Zero Crossing Rate" },
+                { "type": "DSP.Stats:movavg", "factory": "createMovingAverageNode", "label": "Moving Average" },
+                { "type": "DSP.Stats:detrend", "factory": "createDetrendNode", "label": "Detrend" }
             ]
         },
         {
-            "id":          "DSP.Stream",
+            "id": "DSP.Stream",
             "displayName": "Stream",
-            "description": "Scalar ↔ tensor adapters. Buffer collects N consecutive float samples and emits a 1D Float32Array tensor every hopLength samples — the missing piece to feed a streaming scalar source (Clock, Sin, sensor) into a tensor-consuming DSP pipeline (SpFrame, SpFFT, ...). Not ONNX-backed: pure runtime impedance matching.",
-            "category":    "DSP.Stream",
-            "version":     "0.1.0",
-            "standards":   [],
+            "description": "Scalar ↔ tensor adapters. Buffer collects N consecutive samples (floats or [C] tensors from Mux) and emits a [frameSize] or [frameSize, C] tensor every hopLength samples: the missing piece to feed a streaming scalar source (Clock, Sin, sensor) into a tensor-consuming DSP pipeline (SpFrame, SpFFT, ...). Mux (variadic in_0, in_1, ...) assembles N parallel float streams into one [N] tensor per tick. Not ONNX-backed: pure runtime impedance matching.",
+            "category": "DSP.Stream",
+            "version": "0.1.0",
+            "standards": [],
             "nodes": [
-                { "type": "DSP.Stream:buffer", "factory": "createScalarBufferNode", "label": "Scalar Buffer" }
+                { "type": "DSP.Stream:buffer", "factory": "createScalarBufferNode", "label": "Scalar Buffer" },
+                { "type": "DSP.Stream:mux", "factory": "createChannelMuxNode", "label": "Channel Mux" }
             ]
         },
         {
-            "id":          "DSP.Sensor",
+            "id": "DSP.Detect",
+            "displayName": "Detect",
+            "description": "Regime / event detection on scalar streams. Steady-State Gate forwards samples belonging to an established regime (EMA baseline, relative epsilon band, settle/breakHold hysteresis) and closes during transients; publishes the regime flag every tick and a one-shot token on each edge. Not ONNX-backed: pure runtime streaming control flow.",
+            "category": "DSP.Detect",
+            "version": "0.1.0",
+            "standards": [],
+            "nodes": [{ "type": "DSP.Detect:steadystate", "factory": "createSteadyStateGateNode", "label": "Steady-State Gate" }]
+        },
+        {
+            "id": "DSP.Tensor",
+            "displayName": "Tensor",
+            "description": "Tensor layout utilities. Transpose turns a row-major [A, B] tensor into [B, A], with an optional leading batch dimension ([1, B, A]): the canonical [T, C] -> (1, C, T) adapter in front of ONNX encoder models. Not ONNX-backed: pure runtime relayout.",
+            "category": "DSP.Tensor",
+            "version": "0.1.0",
+            "standards": [],
+            "nodes": [{ "type": "DSP.Tensor:transpose", "factory": "createTransposeNode", "label": "Transpose" }]
+        },
+        {
+            "id": "DSP.Sensor",
             "displayName": "Sensor",
             "description": "Generic signal-conditioning model. Transducer wraps a clean input with a realistic 1st-order LPF + Gaussian noise + quantization + linear drift; compose with sensor-specific defaults (thermocouple, pressure, flow, ...) as thin wrappers.",
-            "category":    "DSP.Sensor",
-            "version":     "0.1.0",
-            "standards":   [],
-            "nodes": [
-                { "type": "DSP.Sensor:transducer", "factory": "createTransducerNode", "label": "Transducer" }
-            ]
+            "category": "DSP.Sensor",
+            "version": "0.1.0",
+            "standards": [],
+            "nodes": [{ "type": "DSP.Sensor:transducer", "factory": "createTransducerNode", "label": "Transducer" }]
+        },
+        {
+            "id": "DSP.Acquire",
+            "displayName": "Acquire",
+            "description": "Block-based data acquisition with its OWN sim-time sampling clock, decoupled from the session tick rate. DAQ samples the (optionally anti-aliased, 1-pole) value line at sample_rate_hz and publishes fixed-size blocks (block tensor + block RMS, capacity 4 for free-mode bursts) every block_size / sample_rate_hz seconds of SIM time. Defaults implement the IEC 61430 / 61407 acquisition profile as specified by the project owner: 10.24 kHz, 200 ms blocks, 2048 samples (fs / N = 5 Hz). Not ONNX-backed: pure runtime acquisition front-end.",
+            "category": "DSP.Acquire",
+            "version": "0.1.0",
+            "standards": [],
+            "nodes": [{ "type": "DSP.Acquire:daq", "factory": "createDaqNode", "label": "DAQ (block acquisition)" }]
         }
     ],
     "manifestRefs": []

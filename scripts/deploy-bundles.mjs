@@ -19,6 +19,7 @@ const bundleSources = [
     join(root, "packages/dev/plugins/logic/bundle"),
     join(root, "packages/dev/plugins/onnx/bundle"),
     join(root, "packages/dev/plugins/dsp/bundle"),
+    join(root, "packages/dev/plugins/ml/bundle"),
     join(root, "packages/dev/plugins/physics/bundle"),
     join(root, "packages/dev/plugins/control/bundle"),
     join(root, "packages/dev/plugins/chemistry/bundle"),
@@ -30,16 +31,18 @@ const bundleSources = [
 // its own `docs/` tree (the plugin developer's responsibility per
 // convention). The deploy step merges every plugin's `docs/` into
 // `host/www/bundle/docs/` preserving the relative directory structure
-// the plugin chose — typically `docs/<namespace>/<category>/<node>.md`
+// the plugin chose, typically `docs/<namespace>/<category>/<node>.md`,
 // so plugin-A's `docs/foo/...` doesn't collide with plugin-B's.
 //
 // `ctx.assetUrl("docs/...")` at registration time resolves to the
 // same `bundle/docs/...` URL regardless of which plugin owns the doc.
 const docSources = [
+    join(root, "packages/dev/nodeeditor/docs"),
     join(root, "packages/dev/plugins/geometry/docs"),
     join(root, "packages/dev/plugins/logic/docs"),
     join(root, "packages/dev/plugins/onnx/docs"),
     join(root, "packages/dev/plugins/dsp/docs"),
+    join(root, "packages/dev/plugins/ml/docs"),
     join(root, "packages/dev/plugins/physics/docs"),
     join(root, "packages/dev/plugins/control/docs"),
     join(root, "packages/dev/plugins/chemistry/docs"),
@@ -60,8 +63,7 @@ for (const src of bundleSources) {
         continue;
     }
     for (const file of readdirSync(src)) {
-        if (file.endsWith(".js") || file.endsWith(".js.map") ||
-            file.endsWith(".css") || file.endsWith(".css.map")) {
+        if (file.endsWith(".js") || file.endsWith(".js.map") || file.endsWith(".css") || file.endsWith(".css.map")) {
             copyFileSync(join(src, file), join(dest, file));
             console.log(`  ${file} -> ${dest}`);
         }
@@ -71,10 +73,10 @@ for (const src of bundleSources) {
 // Step 2: merge plugin docs trees into bundle/docs/.
 //
 // Recursive walk so a plugin can author arbitrary depths
-// (`docs/<namespace>/<subnamespace>/...`). Only `.md` files are
-// copied — any sidecar PNG / SVG / video referenced by the markdown
-// would need a parallel branch here (deferred until any plugin
-// actually needs it).
+// (`docs/<namespace>/<subnamespace>/...`). Copies `.md` docs plus the
+// `.svg` / `.png` image assets they reference relatively (e.g. an
+// exported example graph). Other sidecar types (video, ...) would need
+// their extension added to the filter below.
 function mergeDocsRecursive(src, dst) {
     if (!existsSync(src)) return;
     mkdirSync(dst, { recursive: true });
@@ -84,10 +86,14 @@ function mergeDocsRecursive(src, dst) {
         const stat = statSync(srcPath);
         if (stat.isDirectory()) {
             mergeDocsRecursive(srcPath, dstPath);
-        } else if (entry.endsWith(".md")) {
+        } else if (entry.endsWith(".md") || entry.endsWith(".svg") || entry.endsWith(".png")) {
+            // .md = the doc itself; .svg / .png = image assets a doc
+            // references relatively (e.g. an exported example graph).
             copyFileSync(srcPath, dstPath);
-            const rel = relative(root, dstPath).split(/[\\/]+/).join("/");
-            console.log(`  ${rel} (doc)`);
+            const rel = relative(root, dstPath)
+                .split(/[\\/]+/)
+                .join("/");
+            console.log(`  ${rel} (${entry.endsWith(".md") ? "doc" : "asset"})`);
         }
     }
 }

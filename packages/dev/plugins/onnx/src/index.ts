@@ -15,6 +15,7 @@ const plugin: IPlugin = {
         // its origin and exportability.
         ctx.nodes.register("spk.onnx:model", () => new OnnxModelGraph(), {
             label: "ONNX Model",
+            docPath: ctx.assetUrl("docs/onnx/model/model.md"),
             category: "model",
             inputPorts: [],
             outputPorts: [],
@@ -28,6 +29,7 @@ const plugin: IPlugin = {
         // a different badge.
         ctx.nodes.register("spk.onnx:conv", () => createConvNode(), {
             label: "Conv",
+            docPath: ctx.assetUrl("docs/onnx/conv/conv.md"),
             category: "conv",
             inputPorts: [
                 { slot: 0, optional: false, type: "tensor" },
@@ -44,5 +46,7 @@ const plugin: IPlugin = {
 
 export default plugin;
 export { OnnxModelGraph } from "./graphs/model.graph";
+export type { OnnxModelLoadOptions, OnnxModelLoadReport } from "./graphs/model.graph";
+export { sha256Hex } from "./graphs/sha256.js";
 export { createConvNode } from "./nodes/conv.factory";
 export { onnxModelEditor } from "./editors/model.editor";

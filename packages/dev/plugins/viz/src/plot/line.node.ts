@@ -1,10 +1,6 @@
 import uPlot, { Options as UplotOptions } from "uplot";
 import "uplot/dist/uPlot.min.css";
-import {
-    cloneable, editable, viewable,
-    IChannel, IDeclaresPorts, IOlink, IPortDescriptor,
-    ISession, RuntimeNode, inSlotOf,
-} from "spikypanda-core";
+import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, RuntimeNode, inSlotOf } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
 import type { IRenderable } from "spikypanda-nodeeditor";
 
@@ -40,9 +36,7 @@ export class UplotLineNode extends RuntimeNode implements IDeclaresPorts, IRende
     /** IRenderable contract: matches the type id in plugin.activate. */
     public readonly renderableType = "Viz.Plot:line";
 
-    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "value", optional: true, type: "float" },
-    ];
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "value", optional: true, type: "float" }];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [];
 
     // Ring buffer of (t, value) samples; xs[i] aligns with ys[i].
@@ -61,10 +55,10 @@ export class UplotLineNode extends RuntimeNode implements IDeclaresPorts, IRende
 
     // ── Editables ──────────────────────────────────────────────────────
     @cloneable private _maxSamples: number = 500;
-    @cloneable private _title:      string = "value";
-    @cloneable private _yAuto:      boolean = true;
-    @cloneable private _yMin:       number = -1;
-    @cloneable private _yMax:       number = 1;
+    @cloneable private _title: string = "value";
+    @cloneable private _yAuto: boolean = true;
+    @cloneable private _yMin: number = -1;
+    @cloneable private _yMax: number = 1;
     // Maximum push rate into the ring buffer (Hz, in SIM time). At
     // audio / RF sim rates a 1:1 push hits the array-shift cost
     // (O(maxSamples) per fire) ~200 k times per wall second, freezing
@@ -78,30 +72,55 @@ export class UplotLineNode extends RuntimeNode implements IDeclaresPorts, IRende
     // changes (matches WatchNode's throttle semantics).
     private _lastPushT: number = -Infinity;
 
-    public constructor(
-        onsc: Nullable<IOlink[]> = null,
-        opsc: Nullable<IOlink[]> = null,
-        position?: ICartesian,
-    ) { super(onsc, opsc, position); }
+    public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
+        super(onsc, opsc, position);
+    }
 
     @editable("number", { unit: "samples" })
-    public get maxSamples(): number { return this._maxSamples; }
+    public get maxSamples(): number {
+        return this._maxSamples;
+    }
     public set maxSamples(v: number) {
         const next = Math.max(2, Math.floor(v));
         this.setField("maxSamples", this._maxSamples, next, (n) => {
             this._maxSamples = n;
             // Trim the existing buffer if the cap shrank.
-            while (this._xs.length > n) { this._xs.shift(); this._ys.shift(); }
+            while (this._xs.length > n) {
+                this._xs.shift();
+                this._ys.shift();
+            }
         });
     }
 
-    @editable("string") public get title(): string { return this._title; }
+    @editable("string") public get title(): string {
+        return this._title;
+    }
     public set title(v: string) {
-        this.setField("title", this._title, v, (n) => { this._title = n; });
+        this.setField("title", this._title, v, (n) => {
+            this._title = n;
+        });
     }
 
-    @editable("boolean") public get yAuto(): boolean { return this._yAuto; }
+    @editable("boolean") public get yAuto(): boolean {
+        return this._yAuto;
+    }
     public set yAuto(v: boolean) {
+        // Oscilloscope semantics on auto -> manual: seed yMin/yMax from
+        // the CURRENTLY VISIBLE scale so the view does not jump to the
+        // stale stored bounds (default [-1, 1] hid any signal outside
+        // it, which read as "the toggle broke the plot"). The user then
+        // fine-tunes from where the trace already is.
+        if (!v && this._yAuto && this._uplot) {
+            const scale = this._uplot.scales?.y as { min?: number | null; max?: number | null } | undefined;
+            if (scale && typeof scale.min === "number" && typeof scale.max === "number" && scale.max > scale.min) {
+                this.setField("yMin", this._yMin, scale.min, (n) => {
+                    this._yMin = n;
+                });
+                this.setField("yMax", this._yMax, scale.max, (n) => {
+                    this._yMax = n;
+                });
+            }
+        }
         // Switching auto on/off requires recreating uPlot (the scale
         // mode can't be toggled live without a stale-range glitch).
         this.setField("yAuto", this._yAuto, v, (n) => {
@@ -110,24 +129,34 @@ export class UplotLineNode extends RuntimeNode implements IDeclaresPorts, IRende
         });
     }
 
-    @editable("number") public get yMin(): number { return this._yMin; }
+    @editable("number") public get yMin(): number {
+        return this._yMin;
+    }
     public set yMin(v: number) {
         // No rebuild on bound change: the scale.range is a closure over
         // `this`, so uPlot's next setData() reads the live value. We DO
         // still auto-flip yAuto off — typing into yMin means "pin the
         // range", and leaving auto on would silently override the user.
-        this.setField("yMin", this._yMin, v, (n) => { this._yMin = n; });
+        this.setField("yMin", this._yMin, v, (n) => {
+            this._yMin = n;
+        });
         if (this._yAuto) this.yAuto = false;
     }
 
-    @editable("number") public get yMax(): number { return this._yMax; }
+    @editable("number") public get yMax(): number {
+        return this._yMax;
+    }
     public set yMax(v: number) {
-        this.setField("yMax", this._yMax, v, (n) => { this._yMax = n; });
+        this.setField("yMax", this._yMax, v, (n) => {
+            this._yMax = n;
+        });
         if (this._yAuto) this.yAuto = false;
     }
 
     @editable("number", { unit: "Hz", min: 0 })
-    public get maxPushHz(): number { return this._maxPushHz; }
+    public get maxPushHz(): number {
+        return this._maxPushHz;
+    }
     public set maxPushHz(v: number) {
         // 0 disables the throttle. Negative is clamped to 0 (same as
         // disabled) so the field is forgiving on typo.
@@ -193,7 +222,7 @@ export class UplotLineNode extends RuntimeNode implements IDeclaresPorts, IRende
 
     public mountInto(host: HTMLElement): void {
         this._host = host;
-        this._lastWidth  = host.clientWidth;
+        this._lastWidth = host.clientWidth;
         this._lastHeight = host.clientHeight;
         this._uplot = new uPlot(this._buildOptions(), this._data(), host);
     }
@@ -251,11 +280,9 @@ export class UplotLineNode extends RuntimeNode implements IDeclaresPorts, IRende
             // X axis is Clock.t in SECONDS, not Unix epoch. Disable
             // uPlot's default time formatting (which would render the
             // first ticks as "1:00 AM 1:01 AM" — bin-as-epoch-seconds).
-            scales: this._yAuto
-                ? { x: { time: false } }
-                : { x: { time: false }, y: { auto: false, range: yRange } },
+            scales: this._yAuto ? { x: { time: false } } : { x: { time: false }, y: { auto: false, range: yRange } },
             series: [
-                {},  // x axis (time)
+                {}, // x axis (time)
                 {
                     label: this._title,
                     stroke: "#E8762D",

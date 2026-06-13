@@ -2,6 +2,7 @@ import { defaultLayout, LayoutStrategy } from "../auto-layout";
 import { Camera } from "../camera";
 import { Connection, ConnectionPreview } from "../connection";
 import { NavigationStack, SIM_GRAPH_TYPE_ID, SUB_GRAPH_JSON_KEY } from "../navigation-stack";
+import { enrichNodeDefFromMeta } from "../node-def";
 import { NodeUI } from "../node-ui";
 import { Permissions } from "../permissions";
 import { Port } from "../port";
@@ -13,7 +14,7 @@ import { lightSkin } from "../styles/skins/light";
 import { transparentDarkSkin, transparentLightSkin } from "../styles/skins/transparent";
 import { arePortTypesCompatible, ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedGraph } from "../types";
 import { DebugBus } from "../debug-bus";
-import type { INodeRegistry } from "spikypanda-core";
+import type { INodeRegistry, IRuntimeNode } from "spikypanda-core";
 import type { Dashboard, ISerializedDashboard } from "../dashboard";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -582,7 +583,7 @@ export class GraphViewer {
                 }
             }
 
-            const def: NodeDef = {
+            let def: NodeDef = {
                 label,
                 typeId,
                 inputs: (sn.inputs ?? [])
@@ -594,6 +595,20 @@ export class GraphViewer {
                 color: sn.color,
                 data: runtimeData,
             };
+            // The save format only carries the port LISTS (whose order
+            // the connections index into); everything else the palette-
+            // drop path reads from the registry meta (split-view
+            // anchorCount + per-port anchor routing, authoritative port
+            // types, control ports, variadic descriptors, standards)
+            // must be re-applied here, or a loaded Feedback Channel
+            // collapses into a single box with its loop wires fully
+            // drawn and stale saved port types render as mismatches.
+            if (registry && typeId) {
+                const meta = registry.meta(typeId);
+                if (meta) {
+                    def = enrichNodeDefFromMeta(def, meta, runtimeData as IRuntimeNode | undefined);
+                }
+            }
             const node = this.addNode(def, sn.x, sn.y);
             // Restore split-view anchor positions when they were saved.
             // Anchor 0 was already placed by addNode(sn.x, sn.y) above;
@@ -796,39 +811,72 @@ export class GraphViewer {
             PORT_PAD_TOP = 10;
         const FONT = "'Segoe UI', system-ui, sans-serif";
 
-        interface NodeMeasure {
-            node: NodeUI;
+        // One drawn box PER ANCHOR, not per node. Split-view nodes (e.g.
+        // Feedback Channel, anchorCount >= 2) own several independently-
+        // positioned widgets; rendering a single box at anchor 0 collapsed
+        // them and dropped the secondary widget's position. Each port is
+        // grouped under the anchor whose DOM subtree contains it
+        // (findAnchorIndex), and drawn at that anchor's own world position.
+        // Ordinary single-anchor nodes are unchanged (one box, all ports).
+        interface AnchorBox {
+            label: string;
+            headerColor: string;
+            x: number;
+            y: number;
             w: number;
             h: number;
-            portPositions: Map<Port, { x: number; y: number }>;
+            inputs: Port[];
+            outputs: Port[];
         }
-        const measures: NodeMeasure[] = [];
+        const boxes: AnchorBox[] = [];
+        const portPositions = new Map<Port, { x: number; y: number }>();
 
         for (const n of this.nodes) {
-            const rect = n.el.getBoundingClientRect();
-            const w = Math.max(140, rect.width / this.camera.scale);
-            const maxPorts = Math.max(n.inputs.length, n.outputs.length, 1);
-            const h = HEADER_H + PORT_PAD_TOP + maxPorts * PORT_SPACING + 8;
+            const headerColor = n.anchors[0]?.headerEl?.getAttribute("style")?.match(/background:\s*([^;]+)/)?.[1] || "#335";
+            const inByAnchor: Port[][] = n.anchors.map(() => []);
+            const outByAnchor: Port[][] = n.anchors.map(() => []);
+            for (const p of n.inputs) {
+                const ai = n.findAnchorIndex(p.el);
+                inByAnchor[ai < 0 ? 0 : ai].push(p);
+            }
+            for (const p of n.outputs) {
+                const ai = n.findAnchorIndex(p.el);
+                outByAnchor[ai < 0 ? 0 : ai].push(p);
+            }
 
-            const portPositions = new Map<Port, { x: number; y: number }>();
-            for (let i = 0; i < n.inputs.length; i++) {
-                portPositions.set(n.inputs[i], { x: n.x, y: n.y + HEADER_H + PORT_PAD_TOP + i * PORT_SPACING + PORT_SPACING / 2 });
+            for (let ai = 0; ai < n.anchors.length; ai++) {
+                const anchor = n.anchors[ai];
+                const rect = anchor.el.getBoundingClientRect();
+                const w = Math.max(140, rect.width / this.camera.scale);
+                const ins = inByAnchor[ai];
+                const outs = outByAnchor[ai];
+                const maxPorts = Math.max(ins.length, outs.length, 1);
+                const h = HEADER_H + PORT_PAD_TOP + maxPorts * PORT_SPACING + 8;
+                for (let i = 0; i < ins.length; i++) {
+                    portPositions.set(ins[i], { x: anchor.x, y: anchor.y + HEADER_H + PORT_PAD_TOP + i * PORT_SPACING + PORT_SPACING / 2 });
+                }
+                for (let i = 0; i < outs.length; i++) {
+                    portPositions.set(outs[i], { x: anchor.x + w, y: anchor.y + HEADER_H + PORT_PAD_TOP + i * PORT_SPACING + PORT_SPACING / 2 });
+                }
+                boxes.push({ label: n.label, headerColor, x: anchor.x, y: anchor.y, w, h, inputs: ins, outputs: outs });
             }
-            for (let i = 0; i < n.outputs.length; i++) {
-                portPositions.set(n.outputs[i], { x: n.x + w, y: n.y + HEADER_H + PORT_PAD_TOP + i * PORT_SPACING + PORT_SPACING / 2 });
-            }
-            measures.push({ node: n, w, h, portPositions });
         }
 
         let minX = Infinity,
             minY = Infinity,
             maxX = -Infinity,
             maxY = -Infinity;
-        for (const m of measures) {
-            minX = Math.min(minX, m.node.x);
-            minY = Math.min(minY, m.node.y);
-            maxX = Math.max(maxX, m.node.x + m.w);
-            maxY = Math.max(maxY, m.node.y + m.h);
+        for (const b of boxes) {
+            minX = Math.min(minX, b.x);
+            minY = Math.min(minY, b.y);
+            maxX = Math.max(maxX, b.x + b.w);
+            maxY = Math.max(maxY, b.y + b.h);
+        }
+        if (!Number.isFinite(minX)) {
+            minX = 0;
+            minY = 0;
+            maxX = 0;
+            maxY = 0;
         }
         const svgW = maxX - minX + PADDING * 2;
         const svgH = maxY - minY + PADDING * 2;
@@ -840,7 +888,7 @@ export class GraphViewer {
         if (theme.background) parts.push(`<rect width="100%" height="100%" fill="${theme.background}" rx="8"/>`);
 
         const allPortPos = new Map<Port, { x: number; y: number }>();
-        for (const m of measures) for (const [p, pos] of m.portPositions) allPortPos.set(p, { x: pos.x + ox, y: pos.y + oy });
+        for (const [p, pos] of portPositions) allPortPos.set(p, { x: pos.x + ox, y: pos.y + oy });
 
         for (const c of this.connections) {
             const p1 = allPortPos.get(c.from);
@@ -852,29 +900,24 @@ export class GraphViewer {
             );
         }
 
-        for (const m of measures) {
-            const nx = m.node.x + ox,
-                ny = m.node.y + oy;
-            const headerColor =
-                m.node.el
-                    .querySelector(".ne-node-header")
-                    ?.getAttribute("style")
-                    ?.match(/background:\s*([^;]+)/)?.[1] || "#335";
+        for (const b of boxes) {
+            const nx = b.x + ox,
+                ny = b.y + oy;
             parts.push(`<g>`);
-            parts.push(`<rect x="${nx}" y="${ny}" width="${m.w}" height="${m.h}" rx="8" fill="${theme.nodeBody}" stroke="${theme.nodeBorder}" stroke-width="1"/>`);
-            parts.push(`<rect x="${nx}" y="${ny}" width="${m.w}" height="${HEADER_H}" rx="8" fill="${headerColor}"/>`);
-            parts.push(`<rect x="${nx}" y="${ny + HEADER_H - 8}" width="${m.w}" height="8" fill="${headerColor}"/>`);
-            parts.push(`<text x="${nx + 10}" y="${ny + 16}" fill="${theme.headerText}" font-family="${FONT}" font-size="11" font-weight="600">${m.node.label}</text>`);
+            parts.push(`<rect x="${nx}" y="${ny}" width="${b.w}" height="${b.h}" rx="8" fill="${theme.nodeBody}" stroke="${theme.nodeBorder}" stroke-width="1"/>`);
+            parts.push(`<rect x="${nx}" y="${ny}" width="${b.w}" height="${HEADER_H}" rx="8" fill="${b.headerColor}"/>`);
+            parts.push(`<rect x="${nx}" y="${ny + HEADER_H - 8}" width="${b.w}" height="8" fill="${b.headerColor}"/>`);
+            parts.push(`<text x="${nx + 10}" y="${ny + 16}" fill="${theme.headerText}" font-family="${FONT}" font-size="11" font-weight="600">${b.label}</text>`);
 
-            for (let i = 0; i < m.node.inputs.length; i++) {
-                const p = m.node.inputs[i];
+            for (let i = 0; i < b.inputs.length; i++) {
+                const p = b.inputs[i];
                 const pos = allPortPos.get(p)!;
                 const color = PORT_COLORS[p.type];
                 parts.push(`<circle cx="${pos.x}" cy="${pos.y}" r="${PORT_R}" fill="${color}" stroke="${theme.portStroke}" stroke-width="1.5"/>`);
                 parts.push(`<text x="${pos.x + PORT_R + 4}" y="${pos.y + 4}" fill="${theme.portLabel}" font-family="${FONT}" font-size="9">${p.name}</text>`);
             }
-            for (let i = 0; i < m.node.outputs.length; i++) {
-                const p = m.node.outputs[i];
+            for (let i = 0; i < b.outputs.length; i++) {
+                const p = b.outputs[i];
                 const pos = allPortPos.get(p)!;
                 const color = PORT_COLORS[p.type];
                 parts.push(`<circle cx="${pos.x}" cy="${pos.y}" r="${PORT_R}" fill="${color}" stroke="${theme.portStroke}" stroke-width="1.5"/>`);

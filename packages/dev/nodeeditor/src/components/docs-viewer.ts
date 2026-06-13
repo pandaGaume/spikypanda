@@ -138,7 +138,9 @@ export class DocsViewer {
     }
 
     /** Currently active locale preference ("" when no override is set). */
-    public get userLocale(): string | null { return this._userLocale; }
+    public get userLocale(): string | null {
+        return this._userLocale;
+    }
 
     /**
      * Programmatically pin a locale. Pass null to clear back to
@@ -172,7 +174,7 @@ export class DocsViewer {
         this._renderLoading(meta, url);
         try {
             const res = await fetch(url, { cache: "no-cache" });
-            if (token !== this._currentToken) return;   // user moved on
+            if (token !== this._currentToken) return; // user moved on
             if (!res.ok) {
                 if (res.status === 404) {
                     this._cache.set(cacheKey, { state: "missing" });
@@ -201,7 +203,26 @@ export class DocsViewer {
         const article = document.createElement("article");
         article.className = "ne-docs-viewer-article";
         article.innerHTML = html;
+        this._resolveRelativeAssets(article, url);
         this._bodyEl.appendChild(article);
+    }
+
+    // Markdown image / link targets are authored relative to the doc
+    // file (e.g. `![](foc-chain.svg)` next to the .md). Injected via
+    // innerHTML, a relative `src` would otherwise resolve against the
+    // editor page URL, not the doc, and 404. Rewrite relative `img[src]`
+    // and `a[href]` against the doc's own URL so sidecar assets load.
+    private _resolveRelativeAssets(root: HTMLElement, docUrl: string): void {
+        const base = new URL(docUrl, location.href);
+        const isRelative = (v: string | null): v is string => !!v && !/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(v);
+        for (const img of Array.from(root.querySelectorAll("img"))) {
+            const src = img.getAttribute("src");
+            if (isRelative(src)) img.setAttribute("src", new URL(src, base).href);
+        }
+        for (const a of Array.from(root.querySelectorAll("a"))) {
+            const href = a.getAttribute("href");
+            if (isRelative(href)) a.setAttribute("href", new URL(href, base).href);
+        }
     }
 
     private _renderLoading(meta: INodeMeta, url: string): void {
@@ -252,7 +273,7 @@ export class DocsViewer {
                 const opt = document.createElement("option");
                 opt.value = loc;
                 opt.textContent = loc;
-                if (currentUrl && typeof meta!.docPath === "object" && (meta!.docPath as Record<string,string>)[loc] === currentUrl) {
+                if (currentUrl && typeof meta!.docPath === "object" && (meta!.docPath as Record<string, string>)[loc] === currentUrl) {
                     opt.selected = true;
                 }
                 select.appendChild(opt);
@@ -286,14 +307,14 @@ export class DocsViewer {
         try {
             if (locale === null) window.localStorage.removeItem(this._storageKey);
             else window.localStorage.setItem(this._storageKey, locale);
-        } catch { /* private mode, quota — silent */ }
+        } catch {
+            /* private mode, quota — silent */
+        }
     }
 }
 
 function readNavigatorLocales(): ReadonlyArray<string> {
     if (typeof navigator === "undefined") return [];
-    const langs = (navigator.languages && navigator.languages.length > 0)
-        ? Array.from(navigator.languages)
-        : (navigator.language ? [navigator.language] : []);
+    const langs = navigator.languages && navigator.languages.length > 0 ? Array.from(navigator.languages) : navigator.language ? [navigator.language] : [];
     return langs;
 }

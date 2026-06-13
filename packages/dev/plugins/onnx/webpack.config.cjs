@@ -8,7 +8,13 @@ module.exports = {
         library: { name: "SpkPluginOnnx", type: "umd" },
         globalObject: "globalThis",
     },
-    resolve: { extensions: [".ts", ".js"] },
+    resolve: {
+        extensions: [".ts", ".js"],
+        // ESM-style relative imports written as "./foo.js" must
+        // resolve to "./foo.ts" at bundle time (same rationale as
+        // the physics plugin config).
+        extensionAlias: { ".js": [".ts", ".js"] },
+    },
     module: {
         rules: [{
             test: /\.ts$/,

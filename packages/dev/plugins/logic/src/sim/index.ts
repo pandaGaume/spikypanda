@@ -29,12 +29,14 @@ export const logicSimSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {
         ctx.nodes.register("Logic.Sim:rng-seed", () => createRngSeedNode() as never, {
             label: "RNG Seed",
+            docPath: ctx.assetUrl("docs/logic/sim/rng-seed.md"),
             category: "Logic.Sim",
             inputPorts: [],
             outputPorts: [{ slot: "value", optional: false, type: "float" }],
         });
         ctx.nodes.register("Logic.Sim:snapshot", () => createSnapshotNode() as never, {
             label: "Snapshot",
+            docPath: ctx.assetUrl("docs/logic/sim/snapshot.md"),
             category: "Logic.Sim",
             inputPorts: [
                 { slot: "trigger", optional: true, type: "boolean" },
@@ -44,12 +46,14 @@ export const logicSimSubPlugin: IPlugin = {
         });
         ctx.nodes.register("Logic.Sim:restore", () => createRestoreNode() as never, {
             label: "Restore",
+            docPath: ctx.assetUrl("docs/logic/sim/restore.md"),
             category: "Logic.Sim",
             inputPorts: [{ slot: "trigger", optional: true, type: "boolean" }],
             outputPorts: [{ slot: "payload", optional: false, type: "any" }],
         });
         ctx.nodes.register("Logic.Sim:rate-divider", () => createRateDividerNode() as never, {
             label: "Rate Divider",
+            docPath: ctx.assetUrl("docs/logic/sim/rate-divider.md"),
             category: "Logic.Sim",
             inputPorts: [{ slot: "value", optional: true, type: "any" }],
             outputPorts: [
@@ -59,6 +63,7 @@ export const logicSimSubPlugin: IPlugin = {
         });
         ctx.nodes.register("Logic.Sim:conservation-monitor", () => createConservationMonitorNode() as never, {
             label: "Conservation Monitor",
+            docPath: ctx.assetUrl("docs/logic/sim/conservation-monitor.md"),
             category: "Logic.Sim",
             inputPorts: [{ slot: "in_0", optional: true, type: "float" }],
             outputPorts: [

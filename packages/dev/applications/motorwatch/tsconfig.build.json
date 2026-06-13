@@ -1,0 +1,19 @@
+{
+    "extends": "../../../../tsconfig.build.json",
+    "compilerOptions": {
+        "composite": true,
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "skipLibCheck": true
+    },
+    "references": [
+        { "path": "../../core/tsconfig.build.json" },
+        { "path": "../../onnx/tsconfig.build.json" },
+        { "path": "../../plugins/dsp/tsconfig.build.json" },
+        { "path": "../../plugins/ml/tsconfig.build.json" },
+        { "path": "../../plugins/onnx/tsconfig.build.json" },
+        { "path": "../../plugins/physics/tsconfig.build.json" }
+    ],
+    "include": ["./src/**/*.ts"],
+    "exclude": ["**/node_modules", "**/dist"]
+}

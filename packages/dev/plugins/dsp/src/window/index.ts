@@ -15,6 +15,7 @@ export const dspWindowSubPlugin: IPlugin = {
         ctx.nodes.register("DSP.Window:window", () => createWindowNode() as never, {
             label: "Window",
             category: "DSP.Window",
+            docPath: ctx.assetUrl("docs/dsp/window/window.md"),
             inputPorts: [tensorIn("signal")],
             outputPorts: [tensorOut("windowed")],
             standards: [

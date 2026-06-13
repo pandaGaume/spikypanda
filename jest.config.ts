@@ -42,6 +42,16 @@ const config: Config = {
         "^spikypanda-applications-cardriver/(.*)$": "<rootDir>/packages/dev/applications/privates/cardriver/src/$1",
         "^spikypanda-applications-driverv2$":      "<rootDir>/packages/dev/applications/privates/driverv2/src/index.ts",
         "^spikypanda-applications-driverv2/(.*)$": "<rootDir>/packages/dev/applications/privates/driverv2/src/$1",
+        "^spikypanda-applications-motorwatch$":      "<rootDir>/packages/dev/applications/motorwatch/src/index.ts",
+        "^spikypanda-applications-motorwatch/(.*)$": "<rootDir>/packages/dev/applications/motorwatch/src/$1",
+        "^spikypanda-plugin-dsp$":          "<rootDir>/packages/dev/plugins/dsp/src/index.ts",
+        "^spikypanda-plugin-dsp/(.*)$":     "<rootDir>/packages/dev/plugins/dsp/src/$1",
+        "^spikypanda-plugin-ml$":           "<rootDir>/packages/dev/plugins/ml/src/index.ts",
+        "^spikypanda-plugin-ml/(.*)$":      "<rootDir>/packages/dev/plugins/ml/src/$1",
+        "^spikypanda-plugin-onnx$":         "<rootDir>/packages/dev/plugins/onnx/src/index.ts",
+        "^spikypanda-plugin-onnx/(.*)$":    "<rootDir>/packages/dev/plugins/onnx/src/$1",
+        "^spikypanda-plugin-physics$":      "<rootDir>/packages/dev/plugins/physics/src/index.ts",
+        "^spikypanda-plugin-physics/(.*)$": "<rootDir>/packages/dev/plugins/physics/src/$1",
         // Some sensors source files import the published package name
         // "@spiky-panda/core" instead of the path alias spikypanda-core. The
         // node-resolved dist/index.js ships ESM syntax and lives under

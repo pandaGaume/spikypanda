@@ -14,6 +14,7 @@ export const dspFilterSubPlugin: IPlugin = {
         ctx.nodes.register("DSP.Filter:biquad", () => createBiquadFilterNode() as never, {
             label: "Biquad Filter",
             category: "DSP.Filter",
+            docPath: ctx.assetUrl("docs/dsp/filter/biquad.md"),
             inputPorts: [tensorIn("signal")],
             outputPorts: [tensorOut("filtered")],
             standards: [
@@ -24,6 +25,7 @@ export const dspFilterSubPlugin: IPlugin = {
         ctx.nodes.register("DSP.Filter:kalman1d", () => createKalman1DNode() as never, {
             label: "Kalman 1D",
             category: "DSP.Filter",
+            docPath: ctx.assetUrl("docs/dsp/filter/kalman1d.md"),
             inputPorts: [tensorIn("signal")],
             outputPorts: [tensorOut("estimate")],
             standards: [{ id: "onnx", version: "1.18" }],
