@@ -4,6 +4,7 @@ import { motorDcSubPlugin } from "./electric/motor-dc/index.js";
 import { motorBldcSubPlugin } from "./electric/motor-bldc/index.js";
 import { motorInductionSubPlugin } from "./electric/motor-induction/index.js";
 import { motorPmsmSubPlugin } from "./electric/motor-pmsm/index.js";
+import { electricSensorSubPlugin } from "./electric/sensor/index.js";
 import { bearingSubPlugin } from "./mechanical/bearing/index.js";
 import { shaftSubPlugin } from "./mechanical/shaft/index.js";
 import { gearSubPlugin } from "./mechanical/gear/index.js";
@@ -31,6 +32,7 @@ export * from "./particulate/particulate.node.js";
 export { motorPmsmSubPlugin } from "./electric/motor-pmsm/index.js";
 export { housingSubPlugin } from "./mechanical/housing/index.js";
 export { environmentGravitySubPlugin } from "./environment/gravity/index.js";
+export { electricSensorSubPlugin, CurrentSensorNode, createCurrentSensorNode, PowerMeterNode, createPowerMeterNode } from "./electric/sensor/index.js";
 export { physicsParticulateSubPlugin } from "./particulate/index.js";
 
 /**
@@ -87,6 +89,7 @@ export default {
         "Physics.Electric.Motor.BLDC": motorBldcSubPlugin,
         "Physics.Electric.Motor.Induction": motorInductionSubPlugin,
         "Physics.Electric.Motor.PMSM": motorPmsmSubPlugin,
+        "Physics.Electric.Sensor": electricSensorSubPlugin,
         "Physics.Mechanical.Bearing": bearingSubPlugin,
         "Physics.Mechanical.Shaft": shaftSubPlugin,
         "Physics.Mechanical.Gear": gearSubPlugin,

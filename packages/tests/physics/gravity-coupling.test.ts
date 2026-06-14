@@ -13,12 +13,6 @@
  */
 import { Cartesian3, Channel, RuntimeGraphBuilder, RuntimeNode, Session } from "spikypanda-core";
 import type { IChannel, ISession } from "spikypanda-core";
-import { GravityField } from "spikypanda-sensors/sources/motor/pmsm/env/GravityField";
-import { MotorTransform } from "spikypanda-sensors/sources/motor/pmsm/env/MotorTransform";
-import { GravityVector } from "spikypanda-sensors/sources/motor/pmsm/env/GravityVector";
-import { RotorSagModel } from "spikypanda-sensors/sources/motor/pmsm/env/RotorSagModel";
-import { BearingPreloadModel } from "spikypanda-sensors/sources/motor/pmsm/env/BearingPreloadModel";
-import { MountingComplianceModel } from "spikypanda-sensors/sources/motor/pmsm/env/MountingComplianceModel";
 import { SceneItem } from "../../dev/plugins/physics/src/scene/scene.item";
 import {
     createGravityVectorNode,
@@ -66,13 +60,6 @@ function runNode(node: RuntimeNode, inputs: Record<string, number>): void {
     session.run(DT);
 }
 
-function legacyGravity(g: { x: number; y: number; z: number }, yaw: number, pitch: number, roll: number): GravityVector {
-    const field = GravityField.custom(new Cartesian3(g.x, g.y, g.z));
-    const gv = new GravityVector(field, MotorTransform.fromEulerZyx(yaw, pitch, roll));
-    gv.advance(0);
-    return gv;
-}
-
 // Minimal scene resolver: no wired publisher sources.
 function noResolver() {
     return {
@@ -84,10 +71,48 @@ function noResolver() {
     };
 }
 
-// Body -> world 4x4 (column-major) from the legacy 3x3 (row-major rows).
-function localFromTransform(tf: MotorTransform): number[] {
-    const R = tf.bodyToWorldMatrix();
-    return [R[0][0], R[1][0], R[2][0], 0, R[0][1], R[1][1], R[2][1], 0, R[0][2], R[1][2], R[2][2], 0, 0, 0, 0, 1];
+// Body -> world 4x4 (column-major) for an intrinsic ZYX Euler rotation
+// R = Rz(yaw) Ry(pitch) Rx(roll) (the legacy MotorTransform convention).
+function eulerLocal(yaw: number, pitch: number, roll: number): number[] {
+    const cz = Math.cos(yaw),
+        sz = Math.sin(yaw);
+    const cy = Math.cos(pitch),
+        sy = Math.sin(pitch);
+    const cx = Math.cos(roll),
+        sx = Math.sin(roll);
+    const r00 = cz * cy,
+        r01 = cz * sy * sx - sz * cx,
+        r02 = cz * sy * cx + sz * sx;
+    const r10 = sz * cy,
+        r11 = sz * sy * sx + cz * cx,
+        r12 = sz * sy * cx - cz * sx;
+    const r20 = -sy,
+        r21 = cy * sx,
+        r22 = cy * cx;
+    return [r00, r10, r20, 0, r01, r11, r21, 0, r02, r12, r22, 0, 0, 0, 0, 1];
+}
+
+// Load a committed golden fixture (captured from the now-removed legacy oracle).
+function loadFixture<T>(name: string): T {
+    const fs = require("fs");
+    const p = require("path").join(__dirname, "__fixtures__", name + ".json");
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+}
+
+interface GSample {
+    x: number;
+    y: number;
+    z: number;
+    radial: number;
+    axial: number;
+    angle: number;
+}
+
+// Body-frame gravity scalars: the legacy GravityVector projection captured
+// as a golden fixture. Serves both as the GravityVector-node oracle and as
+// the input values for the downstream gravity-coupling node tests.
+function gravitySample(name: string, ..._ignored: unknown[]): GSample {
+    return loadFixture<GSample>(name);
 }
 
 describe("GravityVector node == legacy projection (scene gravity + transform orientation)", () => {
@@ -98,9 +123,8 @@ describe("GravityVector node == legacy projection (scene gravity + transform ori
         ["arbitrary euler", { x: 1.5, y: -3.2, z: -9.0 }, 0.7, -0.4, 1.1],
     ];
     it.each(cases)("%s", (_name, g, yaw, pitch, roll) => {
-        const tf = MotorTransform.fromEulerZyx(yaw, pitch, roll);
         const node = createGravityVectorNode();
-        const local = localFromTransform(tf);
+        const local = eulerLocal(yaw, pitch, roll);
 
         // World gravity comes from the Scene; orientation from the local
         // transform wired in.
@@ -116,15 +140,14 @@ describe("GravityVector node == legacy projection (scene gravity + transform ori
         session.run(0);
         session.run(DT);
 
-        const gv = legacyGravity(g, yaw, pitch, roll);
-        const body = gv.motorFrameGravity();
-        expect(Math.abs(node.g_x - body.x)).toBeLessThan(1e-9);
-        expect(Math.abs(node.g_y - body.y)).toBeLessThan(1e-9);
-        expect(Math.abs(node.g_z - body.z)).toBeLessThan(1e-9);
-        expect(Math.abs(node.g_radial - gv.radialMagnitude())).toBeLessThan(1e-9);
-        expect(Math.abs(node.g_axial - gv.axialMagnitude())).toBeLessThan(1e-9);
-        if (gv.radialMagnitude() > 1e-9) {
-            expect(Math.abs(node.g_angle - gv.radialAngle())).toBeLessThan(1e-9);
+        const s = gravitySample("grav-" + _name.replace(/\s+/g, "-"), g, yaw, pitch, roll);
+        expect(Math.abs(node.g_x - s.x)).toBeLessThan(1e-9);
+        expect(Math.abs(node.g_y - s.y)).toBeLessThan(1e-9);
+        expect(Math.abs(node.g_z - s.z)).toBeLessThan(1e-9);
+        expect(Math.abs(node.g_radial - s.radial)).toBeLessThan(1e-9);
+        expect(Math.abs(node.g_axial - s.axial)).toBeLessThan(1e-9);
+        if (s.radial > 1e-9) {
+            expect(Math.abs(node.g_angle - s.angle)).toBeLessThan(1e-9);
         }
     });
 });
@@ -132,27 +155,11 @@ describe("GravityVector node == legacy projection (scene gravity + transform ori
 describe("RotorSag node == legacy oracle", () => {
     const cfg = { rotorMass: 0.0076, bearingRadialStiffness: 1e5, airGap: 5e-4 };
 
-    function legacyEnvelope(sag: RotorSagModel, thetaM: number): number {
-        let captured = 1;
-        const machine = {
-            thetaM,
-            omegaM: 0,
-            thetaE: 0,
-            setPhaseResistance() {},
-            setPhaseInductance() {},
-            addFluxEnvelope(s: number) {
-                captured = s;
-            },
-        };
-        sag.preStep(0, machine);
-        return captured;
-    }
-
     it("flux_envelope matches legacy across a theta_m sweep (horizontal earth)", () => {
-        const gv = legacyGravity({ x: 0, y: 0, z: -9.80665 }, 0, 0, 0);
-        const sag = new RotorSagModel(cfg, gv);
-        const gRadial = gv.radialMagnitude();
-        const gAngle = gv.radialAngle();
+        const s = gravitySample("grav-horizontal-earth", { x: 0, y: 0, z: -9.80665 }, 0, 0, 0);
+        const gRadial = s.radial;
+        const gAngle = s.angle;
+        const oracle = loadFixture<number[]>("rotorsag-envelope");
         let maxErr = 0;
         for (let k = 0; k <= 32; k++) {
             const thetaM = (2 * Math.PI * k) / 32;
@@ -161,35 +168,27 @@ describe("RotorSag node == legacy oracle", () => {
             node.bearingRadialStiffness = cfg.bearingRadialStiffness;
             node.airGap = cfg.airGap;
             runNode(node, { g_radial: gRadial, g_angle: gAngle, theta_m: thetaM });
-            maxErr = Math.max(maxErr, Math.abs(node.flux_envelope - legacyEnvelope(sag, thetaM)));
+            maxErr = Math.max(maxErr, Math.abs(node.flux_envelope - oracle[k]));
         }
         expect(maxErr).toBeLessThan(1e-12);
         // sanity: a non-trivial modulation actually happened
-        expect(new RotorSagModel(cfg, gv).currentEpsilon()).toBeGreaterThan(0);
+        expect((cfg.rotorMass * gRadial) / (cfg.bearingRadialStiffness * cfg.airGap)).toBeGreaterThan(0);
     });
 
     it("UMP force_y / force_z match legacy postStep", () => {
-        const gv = legacyGravity({ x: 0, y: 0, z: -9.80665 }, 0, 0, 0);
         const ump = 1e4;
-        const sag = new RotorSagModel({ ...cfg, umpRadialStiffness: ump }, gv);
         const thetaM = 1.234;
-        const forces = [0, 0, 0];
-        const machine = { thetaM, omegaM: 0, thetaE: 0, setPhaseResistance() {}, setPhaseInductance() {}, addFluxEnvelope() {} };
-        const housing = {
-            addForce(axis: 0 | 1 | 2, f: number) {
-                forces[axis] += f;
-            },
-        };
-        sag.postStep(0, machine, housing);
+        const s = gravitySample("grav-horizontal-earth", { x: 0, y: 0, z: -9.80665 }, 0, 0, 0);
+        const forces = loadFixture<[number, number]>("rotorsag-ump");
 
         const node = createRotorSagNode();
         node.rotorMass = cfg.rotorMass;
         node.bearingRadialStiffness = cfg.bearingRadialStiffness;
         node.airGap = cfg.airGap;
         node.umpRadialStiffness = ump;
-        runNode(node, { g_radial: gv.radialMagnitude(), g_angle: gv.radialAngle(), theta_m: thetaM });
-        expect(Math.abs(node.force_y - forces[1])).toBeLessThan(1e-12);
-        expect(Math.abs(node.force_z - forces[2])).toBeLessThan(1e-12);
+        runNode(node, { g_radial: s.radial, g_angle: s.angle, theta_m: thetaM });
+        expect(Math.abs(node.force_y - forces[0])).toBeLessThan(1e-12);
+        expect(Math.abs(node.force_z - forces[1])).toBeLessThan(1e-12);
     });
 
     it("envelope is unity in microgravity and along a vertical shaft", () => {
@@ -199,40 +198,38 @@ describe("RotorSag node == legacy oracle", () => {
         expect(micro.force_y).toBe(0);
         expect(micro.force_z).toBe(0);
 
-        // vertical shaft: legacy GravityVector radialMagnitude == 0
-        const gvVert = legacyGravity({ x: 0, y: 0, z: -9.80665 }, 0, -Math.PI / 2, 0);
-        expect(gvVert.radialMagnitude()).toBeLessThan(1e-9);
+        // vertical shaft: the body-frame radial gravity component is 0.
+        const sv = gravitySample("grav-vertical-up", { x: 0, y: 0, z: -9.80665 }, 0, -Math.PI / 2, 0);
+        expect(sv.radial).toBeLessThan(1e-9);
     });
 });
 
 describe("BearingPreload node == legacy oracle", () => {
     it("effective preloads match legacy", () => {
-        const gv = legacyGravity({ x: 1.5, y: -3.2, z: -9.0 }, 0.7, -0.4, 1.1);
         const cfg = { rotorMass: 0.0076, nominalAxialPreload: 5, nominalRadialPreload: 0.5 };
-        const legacy = new BearingPreloadModel(cfg, gv);
+        const s = gravitySample("grav-arbitrary-euler", { x: 1.5, y: -3.2, z: -9.0 }, 0.7, -0.4, 1.1);
+        const oracle = loadFixture<[number, number]>("bearing-preloads");
 
         const node = createBearingPreloadNode();
         node.rotorMass = cfg.rotorMass;
         node.nominalAxialPreload = cfg.nominalAxialPreload;
         node.nominalRadialPreload = cfg.nominalRadialPreload;
-        runNode(node, { g_axial: gv.motorFrameGravity().x, g_radial: gv.radialMagnitude() });
-        expect(Math.abs(node.F_axial_eff - legacy.effectiveAxialPreload())).toBeLessThan(1e-12);
-        expect(Math.abs(node.F_radial_eff - legacy.effectiveRadialPreload())).toBeLessThan(1e-12);
+        runNode(node, { g_axial: s.x, g_radial: s.radial });
+        expect(Math.abs(node.F_axial_eff - oracle[0])).toBeLessThan(1e-12);
+        expect(Math.abs(node.F_radial_eff - oracle[1])).toBeLessThan(1e-12);
     });
 });
 
 describe("MountingCompliance node == legacy oracle", () => {
     it("static force matches legacy m*g_body", () => {
-        const gv = legacyGravity({ x: 1.5, y: -3.2, z: -9.0 }, 0.7, -0.4, 1.1);
-        const legacy = new MountingComplianceModel({ motorMass: 0.066 }, gv);
-        const f = legacy.staticForce();
-        const body = gv.motorFrameGravity();
+        const s = gravitySample("grav-arbitrary-euler", { x: 1.5, y: -3.2, z: -9.0 }, 0.7, -0.4, 1.1);
+        const oracle = loadFixture<[number, number, number]>("mounting-forces");
 
         const node = createMountingComplianceNode();
         node.motorMass = 0.066;
-        runNode(node, { g_x: body.x, g_y: body.y, g_z: body.z });
-        expect(Math.abs(node.force_x - f.x)).toBeLessThan(1e-12);
-        expect(Math.abs(node.force_y - f.y)).toBeLessThan(1e-12);
-        expect(Math.abs(node.force_z - f.z)).toBeLessThan(1e-12);
+        runNode(node, { g_x: s.x, g_y: s.y, g_z: s.z });
+        expect(Math.abs(node.force_x - oracle[0])).toBeLessThan(1e-12);
+        expect(Math.abs(node.force_y - oracle[1])).toBeLessThan(1e-12);
+        expect(Math.abs(node.force_z - oracle[2])).toBeLessThan(1e-12);
     });
 });

@@ -10,10 +10,16 @@
  */
 import { Channel, RuntimeGraphBuilder, RuntimeNode, Session } from "spikypanda-core";
 import type { IChannel, ISession } from "spikypanda-core";
-import { ThreePhaseTransforms } from "spikypanda-sensors/sources/motor/pmsm/control/transforms";
 import { createClarkeNode, createParkNode, ClarkeNode, ParkNode } from "../../dev/plugins/physics/src/electric/motor-pmsm/index";
 
 const DT = 5e-5;
+
+// Load a committed golden fixture (captured from the now-removed legacy oracle).
+function loadFixture<T>(name: string): T {
+    const fs = require("fs");
+    const p = require("path").join(__dirname, "__fixtures__", name + ".json");
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+}
 
 class FuncSource extends RuntimeNode {
     public constructor(private readonly _f: (t: number) => number) {
@@ -48,11 +54,11 @@ describe("PMSM Clarke : node equals the legacy oracle", () => {
         const session = new Session(builder.build());
         node.reset(session);
 
+        const oracle = loadFixture<number[][]>("pmsm-clarke");
         let maxErr = 0;
         for (let i = 0; i <= n; i++) {
-            const t = i * DT;
-            session.run(t);
-            const [al, be] = ThreePhaseTransforms.clarke(a(t), b(t), c(t));
+            session.run(i * DT);
+            const [al, be] = oracle[i];
             maxErr = Math.max(maxErr, Math.abs(node.alpha - al), Math.abs(node.beta - be));
         }
         expect(maxErr).toBeLessThan(1e-12);
@@ -77,11 +83,11 @@ describe("PMSM Park : node equals the legacy oracle", () => {
         const session = new Session(builder.build());
         node.reset(session);
 
+        const oracle = loadFixture<number[][]>("pmsm-park");
         let maxErr = 0;
         for (let i = 0; i <= n; i++) {
-            const t = i * DT;
-            session.run(t);
-            const [d, q] = ThreePhaseTransforms.park(al(t), be(t), P * th(t));
+            session.run(i * DT);
+            const [d, q] = oracle[i];
             maxErr = Math.max(maxErr, Math.abs(node.d - d), Math.abs(node.q - q));
         }
         expect(maxErr).toBeLessThan(1e-12);
@@ -117,11 +123,11 @@ describe("PMSM Clarke -> Park chain : canonical FOC feedback path", () => {
         clarke.reset(session);
         park.reset(session);
 
+        const oracle = loadFixture<number[][]>("pmsm-clarke-park-chain");
         let maxErr = 0;
         for (let i = 0; i <= n; i++) {
-            const t = i * DT;
-            session.run(t);
-            const [d, q] = ThreePhaseTransforms.abcToDq(a(t), b(t), c(t), P * th(t));
+            session.run(i * DT);
+            const [d, q] = oracle[i];
             maxErr = Math.max(maxErr, Math.abs(park.d - d), Math.abs(park.q - q));
         }
         expect(maxErr).toBeLessThan(1e-9);

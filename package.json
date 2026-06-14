@@ -19,8 +19,6 @@
         "format:fix": "prettier --write packages/**/src/**/*.{ts,tsx,js,json,scss,css}",
         "bundle": "npm run bundle --workspace=@spiky-panda/core",
         "bundle:dev": "npm run bundle:dev --workspace=@spiky-panda/core",
-        "bundle:sensors": "npm run bundle --workspace=@spiky-panda/sensors",
-        "bundle:sensors:dev": "npm run bundle:dev --workspace=@spiky-panda/sensors",
         "bundle:stereo": "npm run bundle --workspace=@spiky-panda/applications-stereo",
         "bundle:stereo:dev": "npm run bundle:dev --workspace=@spiky-panda/applications-stereo",
         "bundle:cardriver": "npm run bundle --workspace=@spiky-panda/applications-cardriver",
@@ -30,8 +28,6 @@
         "publish:npm:core": "node scripts/publish.mjs",
         "build:all": "npm run build:dev && npm run bundle && npm run deploy:bundles",
         "build:all:dev": "npm run build:dev && npm run bundle:dev && npm run deploy:bundles",
-        "build:sensors": "npm run build:dev && npm run bundle:sensors && npm run deploy:bundles",
-        "build:sensors:dev": "npm run build:dev && npm run bundle:sensors:dev && npm run deploy:bundles",
         "server": "node packages/host/server.mjs",
         "test": "jest --passWithNoTests",
         "test:watch": "jest --watch"

@@ -5,7 +5,7 @@ import { createDcMotorSpeedPiNode, DcMotorSpeedPiNode } from "./controller-pi.no
 import { createDcMotorTachymeterNode, DcMotorTachymeterNode } from "./tachymeter.node.js";
 import { createDcInverterNode, DcInverterNode } from "./inverter.node.js";
 import { createDcMotorCurrentPiNode, DcMotorCurrentPiNode } from "./current-pi.node.js";
-import { createDcMotorCurrentSensorNode, DcMotorCurrentSensorNode } from "./current-sensor.node.js";
+import { createDcMotorCurrentSensorNode, DcMotorCurrentSensorNode } from "../sensor/current-sensor.node.js";
 
 export {
     DcMotorDynamicNode,
@@ -132,6 +132,9 @@ export const motorDcSubPlugin: IPlugin = {
             outputPorts: [{ slot: "V_cmd", ...FLOAT_OUT }],
         });
 
+        // Alias of the generic Physics.Electric.Sensor:current (same node
+        // class). Kept so graphs saved with the original DC-scoped typeId
+        // still resolve; new graphs should use Physics.Electric.Sensor:current.
         ctx.nodes.register("Physics.Electric.Motor.DC:currentSensor", () => createDcMotorCurrentSensorNode() as never, {
             label: "Current Sensor (LEM)",
             category: "Physics.Electric.Motor.DC",

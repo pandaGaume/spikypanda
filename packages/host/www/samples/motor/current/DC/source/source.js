@@ -3,17 +3,23 @@
 // Live signal preview + spectrum (FFT) on the left, motor / sensor / fault
 // edit form on the right (tabbed). The Stream panel below registers the
 // signal as a labeled stream on the SharedWorker registry so other tabs
-// (labeled-capture, live-test, ...) can subscribe to it. All the physics,
-// fault signatures and noise come from the @spiky-panda/sensors browser
-// bundle. The stream registry / fan-out lives at www/js/registry-worker.js
+// (labeled-capture, live-test, ...) can subscribe to it. The physics,
+// fault signatures and noise come from an underlying physics-plugin graph
+// built in graph-engine.js (DC steady motor -> Fault:modulator chain ->
+// current sensor), ticked locally; it replaced the removed @spiky-panda/
+// sensors bundle. The stream registry / fan-out lives at www/js/registry-worker.js
 // and is reached through www/js/stream-bus.js. Relative paths so any dev
 // server (LiveServer, http-server, ...) regardless of document root.
 import { StreamBus } from "../../../../../js/stream-bus.js";
+import { compat, createCurrentEngine } from "./graph-engine.js";
 
 (function () {
     "use strict";
 
-    var Sensors = window.SpikypandaSensors;
+    // Motor physics now comes from an underlying physics-plugin graph
+    // (see graph-engine.js), not the removed @spiky-panda/sensors lib.
+    // `Sensors` keeps the UI-utility surface (fault enum, labels, helpers).
+    var Sensors = compat;
     // SharedWorker URL is resolved relative to the PAGE (not this script),
     // so we use the same path as the import. All pages must agree on the
     // resolved absolute URL for the SharedWorker to share state.
@@ -153,7 +159,7 @@ import { StreamBus } from "../../../../../js/stream-bus.js";
             logBusConnected:  "Connected to stream registry. {0} stream(s) currently live.",
         },
         init: {
-            bundleError: "SpikypandaSensors bundle not loaded. Check that bundle/spikypanda-sensors.js is present in packages/host/www/bundle/.",
+            bundleError: "Physics plugin bundle not loaded. Check that bundle/spikypanda-core.js + bundle/SpkPluginPhysics.js are present in packages/host/www/bundle/.",
             ready:       "Ready. Pick a motor preset, optionally add faults, then publish a stream.",
         },
     };
@@ -310,18 +316,18 @@ import { StreamBus } from "../../../../../js/stream-bus.js";
             motorCfg.airGap = 0;
             motorCfg.bearingRadialStiffness = 0;
         }
-        var motor = new Sensors.MotorCurrentSource(motorCfg);
-        state.activeMotor = motor;   // track for live omega readout in stats
-        var enabled = state.faults
-            .filter(function (f) {
-                // Skip brushed-only faults when the motor is brushless: they
-                // have no physical basis and would pollute the signal.
-                if (isBrushless() && isBrushedOnlyFault(f.cfg.type)) return false;
-                return f.enabled;
-            })
-            .map(function (f) { return new Sensors.MotorFaultSource(f.cfg, motor); });
-        if (enabled.length === 0) return motor;
-        return new Sensors.CompositeSource([motor].concat(enabled));
+        // Active faults, skipping brushed-only faults on a brushless motor
+        // (they have no physical basis and would pollute the signal).
+        var enabled = state.faults.filter(function (f) {
+            if (isBrushless() && isBrushedOnlyFault(f.cfg.type)) return false;
+            return f.enabled;
+        });
+        // Build the underlying physics graph (DC steady motor -> fault
+        // modulators -> current sensor). It exposes .next(t) -> { value }
+        // and .omega, matching the old sensor-instance contract.
+        var engine = createCurrentEngine(motorCfg, state.sensor, enabled);
+        state.activeMotor = engine; // track for live omega readout in stats
+        return engine;
     }
 
     function rebuildSensor() {
@@ -337,8 +343,8 @@ import { StreamBus } from "../../../../../js/stream-bus.js";
                 });
             }
         });
-        var src = buildActiveSource();
-        state.sensorInstance = new Sensors.Sensor(src, state.sensor);
+        // The engine already includes the current sensor and exposes .next(t).
+        state.sensorInstance = buildActiveSource();
         state.live.simTime = 0;
         state.live.bufferFilled = 0;
         state.live.bufferPos = 0;
@@ -1572,7 +1578,7 @@ import { StreamBus } from "../../../../../js/stream-bus.js";
 
     // ---- Init ------------------------------------------------------------
     function init() {
-        if (typeof Sensors === "undefined" || !Sensors.MotorCurrentSource) {
+        if (!window.SpikypandaCore || !window.SpkPluginPhysics || typeof createCurrentEngine !== "function") {
             document.body.innerHTML =
                 "<div style='padding:40px; color:#f44; font-family:monospace;'>" + STRINGS.init.bundleError + "</div>";
             return;

@@ -29,7 +29,7 @@
         <div class="panel">
             <h2>What this page does</h2>
             <div class="metrics-help">
-                <p>Configure a DC motor on the right (preset or custom), stack zero or more faults, watch the resulting current signal and its spectrum live on the left. The motor physics, fault signatures and noise are computed locally with the <code>@spiky-panda/sensors</code> package, the same code that compiles to C++ for the MCU.</p>
+                <p>Configure a DC motor on the right (preset or custom), stack zero or more faults, watch the resulting current signal and its spectrum live on the left. The current is produced by an underlying <strong>physics-plugin graph</strong> (DC steady motor &rarr; fault modulators &rarr; current sensor), built with the runtime and ticked locally in the browser &mdash; the same nodes that run in node-editor-v2 and compile to C++ for the MCU.</p>
                 <p>Hit <strong>Start</strong> in the Stream panel to publish the signal as a labeled stream. Other browser tabs (the labeled-capture page, a live-test page, etc.) can subscribe to it via the shared registry. Pause stops publishing without dropping the registration; Stop unregisters the stream entirely.</p>
             </div>
         </div>
@@ -119,8 +119,8 @@
     </div>
 
     <script src="../../../../../bundle/spikypanda-core.js"></script>
-    <script src="../../../../../bundle/spikypanda-onnx.js"></script>
-    <script src="../../../../../bundle/spikypanda-sensors.js"></script>
+    <script src="../../../../../bundle/nodeeditor.js"></script>
+    <script src="../../../../../bundle/SpkPluginPhysics.js"></script>
     <script src="../../../../../js/common.js"></script>
     <script type="module" src="source.js"></script>
 </body>

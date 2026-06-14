@@ -30,8 +30,6 @@ const config: Config = {
         "^spikypanda-core/(.*)$":       "<rootDir>/packages/dev/core/src/$1",
         "^spikypanda-onnx$":         "<rootDir>/packages/dev/onnx/src/index.ts",
         "^spikypanda-onnx/(.*)$":    "<rootDir>/packages/dev/onnx/src/$1",
-        "^spikypanda-sensors$":         "<rootDir>/packages/dev/sensors/src/index.ts",
-        "^spikypanda-sensors/(.*)$":    "<rootDir>/packages/dev/sensors/src/$1",
         "^spikypanda-nodeeditor$":      "<rootDir>/packages/dev/nodeeditor/src/index.ts",
         "^spikypanda-nodeeditor/(.*)$": "<rootDir>/packages/dev/nodeeditor/src/$1",
         "^spikypanda-applications-stereo$":      "<rootDir>/packages/dev/applications/stereo/src/index.ts",
@@ -52,7 +50,7 @@ const config: Config = {
         "^spikypanda-plugin-onnx/(.*)$":    "<rootDir>/packages/dev/plugins/onnx/src/$1",
         "^spikypanda-plugin-physics$":      "<rootDir>/packages/dev/plugins/physics/src/index.ts",
         "^spikypanda-plugin-physics/(.*)$": "<rootDir>/packages/dev/plugins/physics/src/$1",
-        // Some sensors source files import the published package name
+        // Some source files import the published package name
         // "@spiky-panda/core" instead of the path alias spikypanda-core. The
         // node-resolved dist/index.js ships ESM syntax and lives under
         // node_modules, which jest does not transform by default; redirect

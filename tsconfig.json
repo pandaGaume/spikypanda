@@ -7,7 +7,6 @@
         { "path": "packages/dev/applications/motorwatch/tsconfig.build.json" },
         { "path": "packages/dev/applications/privates/cardriver/tsconfig.build.json" },
         { "path": "packages/dev/applications/privates/driverv2/tsconfig.build.json" },
-        { "path": "packages/dev/sensors/tsconfig.build.json" },
         { "path": "packages/dev/bestioles/tsconfig.build.json" },
         { "path": "packages/dev/babylonjs/tsconfig.build.json" },
         { "path": "packages/dev/nodeeditor/tsconfig.build.json" },

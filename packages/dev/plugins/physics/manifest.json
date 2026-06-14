@@ -94,6 +94,18 @@
             ]
         },
         {
+            "id":          "Physics.Electric.Sensor",
+            "displayName": "Electric Sensor",
+            "description": "Motor-agnostic electrical transducers. Current Sensor (Hall / shunt) with bandwidth, Gaussian noise and ADC quantization, usable on any current line: DC supply, PMSM stator phase (i_a/i_b/i_c) or rotor-frame (i_d/i_q). The same node is also registered as the legacy Physics.Electric.Motor.DC:currentSensor alias.",
+            "category":    "Physics.Electric.Sensor",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Physics.Electric.Sensor:current", "factory": "createCurrentSensorNode", "label": "Current Sensor" },
+                { "type": "Physics.Electric.Sensor:power",   "factory": "createPowerMeterNode",    "label": "Power / Energy Meter" }
+            ]
+        },
+        {
             "id":          "Physics.Mechanical.Bearing",
             "displayName": "Bearing",
             "description": "Rolling-element bearing fault generator: BPFO/BPFI/BSF/FTF characteristic frequencies computed from geometry and shaft speed, each with its own amplitude knob.",

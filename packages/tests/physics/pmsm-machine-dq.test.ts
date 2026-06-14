@@ -10,31 +10,19 @@
  */
 import { Channel, RuntimeGraphBuilder, RuntimeNode, Session } from "spikypanda-core";
 import type { IChannel, ISession } from "spikypanda-core";
-import { PmsmMachine } from "spikypanda-sensors/sources/motor/pmsm/machine/PmsmMachine";
 import { createPmsmMachineDqNode, PmsmMachineDqNode } from "../../dev/plugins/physics/src/electric/motor-pmsm/index";
 
 const DT = 5e-5; // 20 kHz
-// ECX PRIME 6M/16L, the node defaults.
-const R = 2.0,
-    LD = 3e-4,
-    LQ = 3e-4,
-    LAMBDA = 2e-3,
-    P = 1,
-    J = 1e-6,
-    B = 1e-7;
+// ECX PRIME 6M/16L, the node defaults (only the ones the assertions use).
+const LAMBDA = 2e-3,
+    P = 1;
 
-function legacyMachine(initialOmegaM: number, rotorInertia: number): PmsmMachine {
-    return new PmsmMachine({
-        resistance: R,
-        inductanceD: LD,
-        inductanceQ: LQ,
-        rotorFluxLinkage: LAMBDA,
-        polePairs: P,
-        rotorInertia,
-        viscousFriction: B,
-        nominalSpeedRps: 50,
-        initialOmegaM,
-    });
+// Oracle values: the committed golden fixture captured from the (now
+// removed) legacy PmsmMachine, the validation reference for the port.
+function loadMachineOracle(): { iq: number[]; id: number[]; w: number[]; ia: number[] } {
+    const fs = require("fs");
+    const p = require("path").join(__dirname, "__fixtures__", "pmsm-machine-dq.json");
+    return JSON.parse(fs.readFileSync(p, "utf8"));
 }
 
 // A source publishing F(t) on its "out" link each fire (always ready).
@@ -141,23 +129,11 @@ describe("PMSM dq machine : node equals the legacy oracle", () => {
             nIa.push(node.i_a);
         }
 
-        const leg = legacyMachine(omega0, J);
-        leg.advance(0);
-        const lIq = [leg.iQ],
-            lId = [leg.iD],
-            lW = [leg.omegaM],
-            lIa = [leg.iAbc()[0]];
-        for (let i = 1; i <= n; i++) {
-            const t = i * DT;
-            leg.setPhaseVoltages(va(t), vb(t), vc(t));
-            leg.setLoadTorque(tau(t));
-            leg.addFluxEnvelope(env(t));
-            leg.advance(t);
-            lIq.push(leg.iQ);
-            lId.push(leg.iD);
-            lW.push(leg.omegaM);
-            lIa.push(leg.iAbc()[0]);
-        }
+        const oracle = loadMachineOracle();
+        const lIq = oracle.iq,
+            lId = oracle.id,
+            lW = oracle.w,
+            lIa = oracle.ia;
 
         const maxRel = (a: number[], b: number[]): number => {
             let d = 0,

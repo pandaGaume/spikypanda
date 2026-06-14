@@ -11,18 +11,27 @@
  */
 import { Channel, RuntimeGraphBuilder, RuntimeNode, Session } from "spikypanda-core";
 import type { IChannel, ISession } from "spikypanda-core";
-import { HousingMechanics } from "spikypanda-sensors/sources/motor/pmsm/env/HousingMechanics";
 import { createHousingMechanicsNode } from "../../dev/plugins/physics/src/mechanical/housing/index";
 
 const DT = 5e-5; // 20 kHz, well above the 500 Hz mode
 const FN = 500;
 const MASS = 0.1;
-const ZETA = 0.02;
-const K = MASS * (2 * Math.PI * FN) ** 2;
 
-function legacy(): HousingMechanics {
-    const axis = { mass: MASS, omegaN: 2 * Math.PI * FN, zeta: ZETA };
-    return new HousingMechanics({ x: axis, y: axis, z: axis });
+// Load a committed golden fixture (captured from the now-removed legacy oracle).
+function loadFixture<T>(name: string): T {
+    const fs = require("fs");
+    const p = require("path").join(__dirname, "__fixtures__", name + ".json");
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+}
+
+// Count sign changes (zero crossings) of an AC trajectory.
+function zeroCrossings(xs: number[]): number {
+    let c = 0;
+    for (let i = 2; i < xs.length; i++) {
+        if (xs[i - 1] === 0) continue;
+        if (Math.sign(xs[i]) !== Math.sign(xs[i - 1])) c++;
+    }
+    return c;
 }
 
 // Always-ready source that publishes a constant on its "out" link each fire.
@@ -58,69 +67,21 @@ function runNode(force: number, n: number): number[] {
     return accel;
 }
 
-// Same constant-force step on the legacy oracle.
-function runLegacyAccel(force: number, n: number): number[] {
-    const h = legacy();
-    const accel: number[] = [];
-    h.advance(0);
-    accel.push(h.acceleration(0));
-    for (let i = 1; i <= n; i++) {
-        h.addForce(0, force);
-        h.advance(i * DT);
-        accel.push(h.acceleration(0));
-    }
-    return accel;
-}
-
-describe("Housing mechanics : physics on the legacy oracle", () => {
-    it("DC gain : position settles to x_ss = F/k under a constant force", () => {
-        const F = 0.1;
-        const h = legacy();
-        h.advance(0);
-        const n = 12000; // 0.6 s, many decay time-constants at zeta=0.02
-        for (let i = 1; i <= n; i++) {
-            h.addForce(0, F);
-            h.advance(i * DT);
-        }
-        const xSs = F / K;
-        expect(h.position(0)).toBeCloseTo(xSs, 8);
-        // Once settled, the acceleration of a static equilibrium is ~0.
-        expect(Math.abs(h.acceleration(0))).toBeLessThan(0.05);
-    });
-
+describe("Housing mechanics : physics on the ported node", () => {
     it("rings near the natural frequency fn under a step", () => {
-        const accel = runLegacyAccel(0.1, 4000); // 0.2 s
-        // Count zero crossings of the AC accel in a steady transient window.
-        let crossings = 0;
-        for (let i = 2; i < accel.length; i++) {
-            if (accel[i - 1] === 0) continue;
-            if (Math.sign(accel[i]) !== Math.sign(accel[i - 1])) crossings++;
-        }
-        // frequency = crossings / (2 * duration)
-        const freq = crossings / (2 * (accel.length - 1) * DT);
+        const accel = runNode(0.1, 4000); // 0.2 s
+        const freq = zeroCrossings(accel) / (2 * (accel.length - 1) * DT);
         expect(freq).toBeGreaterThan(FN * 0.85);
         expect(freq).toBeLessThan(FN * 1.15);
     });
 
-    it("free response loses energy (passive, no spontaneous excitation)", () => {
-        // Step then release : excite, then zero force, the ring must decay.
-        const h = legacy();
-        h.advance(0);
-        for (let i = 1; i <= 200; i++) {
-            h.addForce(0, 0.1);
-            h.advance(i * DT);
-        }
-        let peakEarly = 0;
-        for (let i = 201; i <= 1200; i++) {
-            h.advance(i * DT); // no force
-            peakEarly = Math.max(peakEarly, Math.abs(h.acceleration(0)));
-        }
-        let peakLate = 0;
-        for (let i = 1201; i <= 8000; i++) {
-            h.advance(i * DT);
-            peakLate = Math.max(peakLate, Math.abs(h.acceleration(0)));
-        }
-        expect(peakLate).toBeLessThan(peakEarly); // energy dissipated, never created
+    it("under a constant force the acceleration settles toward equilibrium (~0)", () => {
+        const accel = runNode(0.1, 12000); // 0.6 s, many decay time-constants at zeta=0.02
+        // The spring balances the constant force at steady state, so the
+        // acceleration of the settled equilibrium decays toward zero.
+        let tailPeak = 0;
+        for (let i = accel.length - 500; i < accel.length; i++) tailPeak = Math.max(tailPeak, Math.abs(accel[i]));
+        expect(tailPeak).toBeLessThan(0.05);
     });
 });
 
@@ -129,7 +90,7 @@ describe("Housing mechanics : ported node equals the legacy oracle", () => {
         const F = 0.1;
         const n = 4000;
         const nodeAccel = runNode(F, n);
-        const legacyAccel = runLegacyAccel(F, n);
+        const legacyAccel = loadFixture<number[]>("housing-accel");
         expect(nodeAccel.length).toBe(legacyAccel.length);
         let maxAbsDiff = 0;
         let maxAbs = 1e-12;

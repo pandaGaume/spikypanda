@@ -11,8 +11,6 @@
             "spikypanda-core/*":       ["dev/core/src/*"],
             "spikypanda-onnx":      ["dev/onnx/src/index.ts"],
             "spikypanda-onnx/*":    ["dev/onnx/src/*"],
-            "spikypanda-sensors":      ["dev/sensors/src/index.ts"],
-            "spikypanda-sensors/*":    ["dev/sensors/src/*"],
             "spikypanda-nodeeditor":   ["dev/nodeeditor/src/index.ts"],
             "spikypanda-nodeeditor/*": ["dev/nodeeditor/src/*"],
             "spikypanda-applications-mpc":      ["dev/applications/mpc/src/index.ts"],

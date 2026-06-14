@@ -9,10 +9,16 @@
  */
 import { Channel, RuntimeGraphBuilder, RuntimeNode, Session } from "spikypanda-core";
 import type { IChannel, ISession } from "spikypanda-core";
-import { FocController } from "spikypanda-sensors/sources/motor/pmsm/control/FocController";
 import { createPmsmFocNode, createPmsmMachineDqNode, PmsmFocNode, PmsmMachineDqNode } from "../../dev/plugins/physics/src/electric/motor-pmsm/index";
 
 const DT = 5e-5;
+
+// Load a committed golden fixture (captured from the now-removed legacy oracle).
+function loadFixture<T>(name: string): T {
+    const fs = require("fs");
+    const p = require("path").join(__dirname, "__fixtures__", name + ".json");
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+}
 
 class FuncSource extends RuntimeNode {
     public constructor(private readonly _f: (t: number) => number) {
@@ -33,7 +39,6 @@ class FuncSource extends RuntimeNode {
 
 describe("PMSM FOC : node equals the legacy oracle", () => {
     it("V_alpha / V_beta match legacy FocController under a feedback sequence", () => {
-        const P = 2;
         const iD = (t: number) => 0.1 * Math.sin(2 * Math.PI * 30 * t);
         const iQ = (t: number) => 0.3 * Math.cos(2 * Math.PI * 25 * t);
         const om = (t: number) => 50 + 40 * Math.sin(2 * Math.PI * 5 * t);
@@ -65,27 +70,9 @@ describe("PMSM FOC : node equals the legacy oracle", () => {
             nB.push(node.V_beta);
         }
 
-        const leg = new FocController({
-            speedKp: node.speedKp,
-            speedKi: node.speedKi,
-            currentKp: node.currentKp,
-            currentKi: node.currentKi,
-            iMax: node.iMax,
-            vMaxPerAxis: node.vMaxPerAxis,
-            vBusForSat: node.vBus,
-            idRef: node.idRef,
-        });
-        const lA: number[] = [],
-            lB: number[] = [];
-        for (let i = 0; i <= n; i++) {
-            const t = i * DT;
-            leg.setSpeedTarget(sp(t));
-            leg.setFeedback(iD(t), iQ(t), om(t), P * th(t));
-            leg.advance(t);
-            const [a, b] = leg.references();
-            lA.push(a);
-            lB.push(b);
-        }
+        const oracle = loadFixture<{ a: number[]; b: number[] }>("pmsm-foc");
+        const lA = oracle.a,
+            lB = oracle.b;
 
         const maxRel = (a: number[], b: number[]): number => {
             let d = 0,

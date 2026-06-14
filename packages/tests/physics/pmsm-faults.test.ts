@@ -9,11 +9,16 @@
  */
 import { Channel, RuntimeGraphBuilder, RuntimeNode, Session } from "spikypanda-core";
 import type { IChannel, ISession } from "spikypanda-core";
-import { EccentricityFault } from "spikypanda-sensors/sources/motor/pmsm/faults/EccentricityFault";
-import { ImbalanceFault } from "spikypanda-sensors/sources/motor/pmsm/faults/ImbalanceFault";
 import { createEccentricityFaultNode, createImbalanceFaultNode, EccentricityFaultNode } from "../../dev/plugins/physics/src/mechanical/fault/index";
 
 const DT = 5e-5;
+
+// Load a committed golden fixture (captured from the now-removed legacy oracle).
+function loadFixture<T>(name: string): T {
+    const fs = require("fs");
+    const p = require("path").join(__dirname, "__fixtures__", name + ".json");
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+}
 
 class FuncSource extends RuntimeNode {
     public constructor(private readonly _f: (t: number) => number) {
@@ -48,28 +53,12 @@ function runNode(node: RuntimeNode, inputs: Record<string, number>): void {
     session.run(DT);
 }
 
-// Legacy machine fault host capturing addFluxEnvelope / addForce.
-function legacyFluxEnvelope(fault: EccentricityFault, thetaM: number): number {
-    let captured = 1;
-    fault.preStep(0, {
-        thetaM,
-        omegaM: 0,
-        thetaE: 0,
-        setPhaseResistance() {},
-        setPhaseInductance() {},
-        addFluxEnvelope(s: number) {
-            captured = s;
-        },
-    });
-    return captured;
-}
-
 describe("Eccentricity fault == legacy oracle", () => {
     it("flux_envelope matches legacy preStep across a theta_m sweep", () => {
         const severity = 0.4,
             epsilonMax = 0.5,
             thetaOffset = 0.3;
-        const legacy = new EccentricityFault({ severity, epsilonMax, thetaOffset });
+        const oracle = loadFixture<number[]>("pmsm-ecc-envelope");
         let maxErr = 0;
         for (let k = 0; k <= 32; k++) {
             const thetaM = (2 * Math.PI * k) / 32;
@@ -78,7 +67,7 @@ describe("Eccentricity fault == legacy oracle", () => {
             node.epsilonMax = epsilonMax;
             node.thetaOffset = thetaOffset;
             runNode(node, { theta_m: thetaM });
-            maxErr = Math.max(maxErr, Math.abs(node.flux_envelope - legacyFluxEnvelope(legacy, thetaM)));
+            maxErr = Math.max(maxErr, Math.abs(node.flux_envelope - oracle[k]));
         }
         expect(maxErr).toBeLessThan(1e-12);
     });
@@ -92,24 +81,9 @@ describe("Eccentricity fault == legacy oracle", () => {
 });
 
 describe("Imbalance fault == legacy oracle", () => {
-    function legacyForces(fault: ImbalanceFault, omega: number, thetaM: number): [number, number] {
-        const f = [0, 0, 0];
-        fault.postStep(
-            0,
-            { thetaM, omegaM: omega, thetaE: 0, setPhaseResistance() {}, setPhaseInductance() {}, addFluxEnvelope() {} },
-            {
-                addForce(axis: 0 | 1 | 2, force: number) {
-                    f[axis] += force;
-                },
-            }
-        );
-        return [f[1], f[2]];
-    }
-
     it("force_y / force_z match legacy postStep centripetal force", () => {
         const severity = 0.6,
             kImbalanceMax = 5e-6;
-        const legacy = new ImbalanceFault({ severity, kImbalanceMax });
         const omega = 314,
             thetaM = 1.234;
 
@@ -117,7 +91,7 @@ describe("Imbalance fault == legacy oracle", () => {
         node.severity = severity;
         node.kImbalanceMax = kImbalanceMax;
         runNode(node, { omega, theta_m: thetaM });
-        const [ly, lz] = legacyForces(legacy, omega, thetaM);
+        const [ly, lz] = loadFixture<[number, number]>("pmsm-imbalance-forces");
         expect(Math.abs(node.force_y - ly)).toBeLessThan(1e-15);
         expect(Math.abs(node.force_z - lz)).toBeLessThan(1e-15);
         // axis x sees no force; the magnitude is m*r*omega^2.

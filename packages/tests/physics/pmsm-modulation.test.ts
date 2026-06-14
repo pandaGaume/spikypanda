@@ -11,8 +11,6 @@
  */
 import { Channel, RuntimeGraphBuilder, RuntimeNode, Session } from "spikypanda-core";
 import type { IChannel, ISession } from "spikypanda-core";
-import { SvpwmModulator } from "spikypanda-sensors/sources/motor/pmsm/modulator/SvpwmModulator";
-import { ThreePhaseInverter } from "spikypanda-sensors/sources/motor/pmsm/inverter/ThreePhaseInverter";
 import { createPmsmInverterNode, createPmsmSvpwmNode, PmsmInverterNode, PmsmSvpwmNode } from "../../dev/plugins/physics/src/electric/motor-pmsm/index";
 
 const DT = 5e-5;
@@ -38,6 +36,13 @@ function clarke(a: number, b: number, c: number): [number, number] {
     return [(2 / 3) * (a - 0.5 * b - 0.5 * c), (2 / 3) * (0.5 * Math.sqrt(3)) * (b - c)];
 }
 
+// Load a committed golden fixture (captured from the now-removed legacy oracle).
+function loadFixture<T>(name: string): T {
+    const fs = require("fs");
+    const p = require("path").join(__dirname, "__fixtures__", name + ".json");
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+}
+
 describe("PMSM SVPWM : node equals the legacy oracle", () => {
     it("duties match the legacy SvpwmModulator", () => {
         const vBus = 24;
@@ -54,15 +59,11 @@ describe("PMSM SVPWM : node equals the legacy oracle", () => {
         const session = new Session(builder.build());
         node.reset(session);
 
-        const leg = new SvpwmModulator({ pwmFrequencyHz: node.pwmFrequencyHz });
+        const oracle = loadFixture<number[][]>("pmsm-svpwm");
         let maxErr = 0;
         for (let i = 0; i <= n; i++) {
-            const t = i * DT;
-            session.run(t);
-            leg.setReference(va(t), vb(t));
-            leg.setVBus(vBus);
-            leg.advance(t);
-            const [da, db, dc] = leg.duties();
+            session.run(i * DT);
+            const [da, db, dc] = oracle[i];
             maxErr = Math.max(maxErr, Math.abs(node.duty_a - da), Math.abs(node.duty_b - db), Math.abs(node.duty_c - dc));
         }
         expect(maxErr).toBeLessThan(1e-12);
@@ -87,14 +88,11 @@ describe("PMSM inverter : node equals the legacy oracle", () => {
         const session = new Session(builder.build());
         node.reset(session);
 
-        const leg = new ThreePhaseInverter({ vBus });
+        const oracle = loadFixture<number[][]>("pmsm-inverter");
         let maxErr = 0;
         for (let i = 0; i <= n; i++) {
-            const t = i * DT;
-            session.run(t);
-            leg.setDuties(da(t), db(t), dc(t));
-            leg.advance(t);
-            const [a, b, c] = leg.phaseVoltages();
+            session.run(i * DT);
+            const [a, b, c] = oracle[i];
             maxErr = Math.max(maxErr, Math.abs(node.V_a - a), Math.abs(node.V_b - b), Math.abs(node.V_c - c));
         }
         expect(maxErr).toBeLessThan(1e-12);
