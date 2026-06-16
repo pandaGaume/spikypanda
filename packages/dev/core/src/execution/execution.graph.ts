@@ -203,6 +203,26 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
     }
 
     /**
+     * Adopt another graph's topology in place: copy its nodes / links /
+     * input-output partition, then invalidate the topology-derived
+     * caches so the next boundary access rebuilds against the new
+     * interior. This is the swap an embedded container performs when it
+     * is materialized from a serialized interior (the sub-graph JSON of
+     * a Sim.Graph, the model bytes of an ONNX node): build a throwaway
+     * RuntimeGraph through the builder, then graft its topology onto the
+     * live embedded instance so the IGraphNodeState held by every parent
+     * session lazily re-binds to the populated graph.
+     */
+    public adoptTopologyFrom(other: RuntimeGraph<N, L>): void {
+        this.nodes = other.nodes;
+        this.links = other.links;
+        this.inputs = other.inputs;
+        this.outputs = other.outputs;
+        this.hiddens = other.hiddens;
+        this.invalidateTopology();
+    }
+
+    /**
      * Notify the runtime that nodes/links were swapped in place (e.g.
      * a model node reloading its contents while embedded). Drops every
      * topology-derived cache: the memoized boundary-port maps, the

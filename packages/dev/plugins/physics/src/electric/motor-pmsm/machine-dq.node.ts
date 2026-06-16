@@ -22,15 +22,28 @@ import type { ICartesian, Nullable, IHasSampleRateRequirement, IFaultDescriptor 
  * bank. Two fault targets drive the gravity / MCSA study:
  *
  *   "flux" : multiplicative magnet-flux modulation. lambda_m_eff =
- *            lambda_m * (1 + sum of flux faults). A mechanical air-gap
- *            perturbation at the rotor angle (rotor sag, eccentricity)
- *            emits {target:"flux", value: epsilon*cos(theta_m - theta_grav)}
- *            from a Physics.Environment.Gravity:rotor-sag node; it rides
- *            the back-EMF term omega_e*lambda_m_eff into V_q, so the dq and
- *            phase currents carry the 1x f_mech sideband. That is how a
- *            mechanical fault becomes readable in the ELECTRICAL signal.
+ *            lambda_m * (1 + sum of flux faults + intrinsic gravity sag).
+ *            It rides the back-EMF term omega_e*lambda_m_eff into V_q, so
+ *            the dq and phase currents carry the 1x f_mech sideband: how a
+ *            mechanical air-gap perturbation becomes readable in the
+ *            ELECTRICAL signal.
  *   "tau"  : additive load-torque perturbation [Nm], same lingua franca as
  *            the other motors (imbalance, bearing, gear).
+ *
+ * Intrinsic gravity coupling (internalised, not a node you wire): the
+ * machine is a world object, so it knows its own pose (`world`) and reads
+ * its bound scene's gravity. When `gravityCoupling` is on AND a scene is
+ * bound, it computes its own rotor sag (rotor weight deflects the shaft,
+ * modulating the air gap) and folds the resulting flux delta
+ * epsilon*cos(theta_m - theta_grav) into lambda_m_eff, plus the
+ * gravity-augmented bearing preloads (F_*_eff viewables). This is the
+ * gravity -> MCSA signature, automatic: put the motor in a scene, it
+ * responds; swap Earth -> Orbital and the sideband vanishes. The
+ * standalone Physics.Environment.Gravity:rotor-sag / bearing-preload
+ * nodes remain for EXPLICIT composition (set gravityCoupling = false to
+ * avoid double-counting, then wire them into the fault bank). Coupling is
+ * gated on a BOUND scene (session.sceneStateView), not the per-node Earth
+ * fallback, so headless drive validation with no scene stays gravity-free.
  *
  * Voltages V_a/V_b/V_c are line-neutral phase voltages (from an inverter
  * or a composed 3-phase source). Decomposition-C: FOC, SVPWM and the
@@ -49,6 +62,16 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     @cloneable private _J: number = 1e-6; // rotor inertia [kg.m^2]
     @cloneable private _b: number = 1e-7; // viscous friction [N.m.s/rad]
 
+    // Intrinsic gravity-coupling parameters (rotor sag + bearing preload),
+    // internalised from the legacy RotorSagModel / BearingPreloadModel.
+    @cloneable private _gravityCoupling: boolean = true;
+    @cloneable private _rotorMass: number = 0.0076; // kg (Maxon ECX PRIME)
+    @cloneable private _bearingRadialStiffness: number = 1e5; // N/m
+    @cloneable private _airGap: number = 5e-4; // m
+    @cloneable private _nominalAxialPreload: number = 5; // N
+    @cloneable private _nominalRadialPreload: number = 0; // N
+    @cloneable private _umpRadialStiffness: number = 4000; // N/m (UMP -> housing vibration; 0 = none)
+
     @cloneable private _id0: number = 0;
     @cloneable private _iq0: number = 0;
     @cloneable private _omega0: number = 0;
@@ -64,6 +87,14 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     @cloneable private _iC: number = 0;
     @cloneable private _tauEm: number = 0;
     private _lastT: number = -1;
+
+    // Gravity-coupling runtime outputs (recomputed each fire).
+    private _gravFluxDelta: number = 0;
+    private _fAxialEff: number = 5;
+    private _fRadialEff: number = 0;
+    private _gRadial: number = 0;
+    private _fy: number = 0; // UMP vibration force, body radial Y
+    private _fz: number = 0; // UMP vibration force, body radial Z
 
     @cloneable private _requiredHzValue: number = 0;
     @cloneable private _requiredHzUserDefined: boolean = false;
@@ -86,6 +117,10 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
         { slot: "omega", optional: false, type: "float" },
         { slot: "theta_m", optional: false, type: "float" },
         { slot: "tau_em", optional: false, type: "float" },
+        // Intrinsic vibration: the rotor sag / UMP radial force the motor
+        // exerts on its housing, in the body radial plane (1x f_mech).
+        { slot: "force_y", optional: false, type: "float" },
+        { slot: "force_z", optional: false, type: "float" },
     ];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
@@ -134,6 +169,50 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     }
     public set b(v: number) {
         if (this.setField("b", this._b, v, (n) => (this._b = n))) this._notifyRequiredHzMayHaveChanged();
+    }
+
+    // ── Intrinsic gravity coupling ─────────────────────────────────────
+    @editable("boolean") public get gravityCoupling(): boolean {
+        return this._gravityCoupling;
+    }
+    public set gravityCoupling(v: boolean) {
+        this.setField("gravityCoupling", this._gravityCoupling, v, (n) => (this._gravityCoupling = n));
+    }
+    @editable("number", { unit: "kg" }) public get rotorMass(): number {
+        return this._rotorMass;
+    }
+    public set rotorMass(v: number) {
+        this.setField("rotorMass", this._rotorMass, v, (n) => (this._rotorMass = n));
+    }
+    @editable("number", { unit: "N/m" }) public get bearingRadialStiffness(): number {
+        return this._bearingRadialStiffness;
+    }
+    public set bearingRadialStiffness(v: number) {
+        this.setField("bearingRadialStiffness", this._bearingRadialStiffness, v, (n) => (this._bearingRadialStiffness = n));
+    }
+    @editable("number", { unit: "m" }) public get airGap(): number {
+        return this._airGap;
+    }
+    public set airGap(v: number) {
+        this.setField("airGap", this._airGap, v, (n) => (this._airGap = n));
+    }
+    @editable("number", { unit: "N" }) public get nominalAxialPreload(): number {
+        return this._nominalAxialPreload;
+    }
+    public set nominalAxialPreload(v: number) {
+        this.setField("nominalAxialPreload", this._nominalAxialPreload, v, (n) => (this._nominalAxialPreload = n));
+    }
+    @editable("number", { unit: "N" }) public get nominalRadialPreload(): number {
+        return this._nominalRadialPreload;
+    }
+    public set nominalRadialPreload(v: number) {
+        this.setField("nominalRadialPreload", this._nominalRadialPreload, v, (n) => (this._nominalRadialPreload = n));
+    }
+    @editable("number", { unit: "N/m" }) public get umpRadialStiffness(): number {
+        return this._umpRadialStiffness;
+    }
+    public set umpRadialStiffness(v: number) {
+        this.setField("umpRadialStiffness", this._umpRadialStiffness, v, (n) => (this._umpRadialStiffness = n));
     }
     @editable("number") public get id0(): number {
         return this._id0;
@@ -184,6 +263,33 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     }
     @viewable("number") public get tau_em(): number {
         return this._tauEm;
+    }
+
+    // ── Gravity-coupling observables ───────────────────────────────────
+    /** The intrinsic rotor-sag flux delta folded into lambda_m_eff this
+     *  tick (0 when gravityCoupling is off or no scene is bound). */
+    @viewable("number") public get gravity_flux_delta(): number {
+        return this._gravFluxDelta;
+    }
+    /** Body-frame radial gravity magnitude driving the sag. */
+    @viewable("number") public get g_radial(): number {
+        return this._gRadial;
+    }
+    /** Gravity-augmented bearing preloads (operating point for a future
+     *  bearing-race fault; metadata otherwise). */
+    @viewable("number", { unit: "N" }) public get F_axial_eff(): number {
+        return this._fAxialEff;
+    }
+    @viewable("number", { unit: "N" }) public get F_radial_eff(): number {
+        return this._fRadialEff;
+    }
+    /** UMP rotor-sag vibration force the motor exerts on its housing
+     *  (body radial plane, 1x f_mech). 0 without gravity / scene / UMP. */
+    @viewable("number", { unit: "N" }) public get force_y(): number {
+        return this._fy;
+    }
+    @viewable("number", { unit: "N" }) public get force_z(): number {
+        return this._fz;
     }
 
     // ── Sample-rate requirement (mirror of the BLDC/PMSM node) ─────────
@@ -250,6 +356,12 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
         this._iC = c;
         this._tauEm = 0;
         this._lastT = -1;
+        this._gravFluxDelta = 0;
+        this._gRadial = 0;
+        this._fAxialEff = this._nominalAxialPreload;
+        this._fRadialEff = this._nominalRadialPreload;
+        this._fy = 0;
+        this._fz = 0;
     }
 
     public override fire(session: ISession, t: number): void {
@@ -281,9 +393,11 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
             else if (slot === "dt") dtIn = value;
         }
 
-        // Gravity / MCSA flux coupling and load-torque faults arrive on the
-        // fault bank: lambda_m_eff = lambda_m * (1 + flux), tau += tau fault.
-        const fluxEnv = 1 + this.getFault("flux");
+        // Intrinsic gravity sag (from the bound scene + this machine's pose)
+        // plus any explicit flux faults modulate the magnet flux; tau faults
+        // add to the load torque: lambda_m_eff = lambda_m * (1 + sag + flux).
+        this._updateGravityCoupling(session);
+        const fluxEnv = 1 + this._gravFluxDelta + this.getFault("flux");
         const tauEffLoad = tauLoad + this.getFault("tau");
 
         if (this._lastT < 0 && dtIn < 0) {
@@ -320,6 +434,55 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
         const tauElec = Math.min(this._Ld, this._Lq) / this._R;
         const tauMech = this._b > 0 ? this._J / this._b : Number.POSITIVE_INFINITY;
         return Math.max(5e-6, Math.min(tauElec / 10, tauMech / 10));
+    }
+
+    /**
+     * Recompute the intrinsic gravity coupling for this tick from the bound
+     * scene's gravity and this machine's world pose. Gated on a BOUND scene
+     * (session.sceneStateView), NOT the per-node Earth fallback, so headless
+     * drive validation with no scene stays gravity-free and bit-exact with
+     * the legacy oracle. Faithful to RotorSagModel / BearingPreloadModel:
+     *   g_body  = R^T * g_world          (R = rotation part of `world`)
+     *   sag     = (rotorMass*g_radial / bearingRadialStiffness / airGap)
+     *             * cos(theta_m - g_angle)
+     *   F_*_eff = nominal_* + rotorMass * g_{axial,radial}
+     */
+    private _updateGravityCoupling(session: ISession): void {
+        const scene = this.boundScene(session); // per-node scene wins, then session, else null
+        if (!this._gravityCoupling || !scene) {
+            this._gravFluxDelta = 0;
+            this._gRadial = 0;
+            this._fAxialEff = this._nominalAxialPreload;
+            this._fRadialEff = this._nominalRadialPreload;
+            this._fy = 0;
+            this._fz = 0;
+            return;
+        }
+        const g = scene.gravity;
+        const W = this.world; // body -> world, column-major flat[16]
+        // g_body = R^T * g_world (R = columns 0,1,2 of W).
+        const gx = W[0] * g.x + W[1] * g.y + W[2] * g.z; // signed axial (body X)
+        const gy = W[4] * g.x + W[5] * g.y + W[6] * g.z;
+        const gz = W[8] * g.x + W[9] * g.y + W[10] * g.z;
+        const gRadial = Math.sqrt(gy * gy + gz * gz);
+        this._gRadial = gRadial;
+        if (gRadial < 1e-12) {
+            this._gravFluxDelta = 0;
+            this._fy = 0;
+            this._fz = 0;
+        } else {
+            const delta = (this._rotorMass * gRadial) / this._bearingRadialStiffness;
+            const epsilon = delta / this._airGap;
+            const gAngle = Math.atan2(gz, gy);
+            const phase = this._theta - gAngle;
+            this._gravFluxDelta = epsilon < 1e-12 ? 0 : epsilon * Math.cos(phase);
+            // UMP rotor-sag radial force on the housing (1x f_mech vibration).
+            const F = this._umpRadialStiffness * delta;
+            this._fy = F * Math.cos(phase);
+            this._fz = F * Math.sin(phase);
+        }
+        this._fAxialEff = this._nominalAxialPreload + this._rotorMass * gx;
+        this._fRadialEff = this._nominalRadialPreload + this._rotorMass * gRadial;
     }
 
     // Implicit Euler on the electrical 2x2 + implicit mechanical +
@@ -388,6 +551,12 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
                     break;
                 case "tau_em":
                     session.publish(idx, this._tauEm);
+                    break;
+                case "force_y":
+                    session.publish(idx, this._fy);
+                    break;
+                case "force_z":
+                    session.publish(idx, this._fz);
                     break;
             }
         }

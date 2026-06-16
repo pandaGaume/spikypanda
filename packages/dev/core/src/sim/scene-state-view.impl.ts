@@ -29,7 +29,10 @@
  * `SceneStateView` interface.
  */
 
+import { Cartesian3 } from "../geometry/geometry.cartesian";
 import type { ICartesian3 } from "../geometry/geometry.interfaces";
+import { Matrix4 } from "../geometry/geometry.matrix";
+import { Quaternion } from "../geometry/geometry.quarternion";
 import { Frequency, Pressure, Temperature } from "../math/math.units";
 import type { IIntegrable } from "./sim.interfaces";
 import {
@@ -40,6 +43,7 @@ import {
     DEFAULT_TEMPERATURE,
     DEFAULT_TIME_SCALE,
     IDENTITY_TRANSFORM,
+    makeTransform,
     MIN_EFFECTIVE_HZ,
     type ITransform,
     type SceneStateView,
@@ -183,6 +187,103 @@ export class SceneStateViewImpl implements SceneStateView {
 export function fieldReader<R>(host: object, key: string): () => R {
     const h = host as unknown as Record<string, R>;
     return () => h[key];
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// matrix44 ↔ ITransform conversions
+// ─────────────────────────────────────────────────────────────────────
+//
+// A `TransformNode`'s world matrix is a flat column-major `number[16]`
+// (the matrix44 port convention); a SceneStateView's transform is the
+// decomposed `ITransform`. Both back onto the SAME column-major layout
+// as `Matrix4.m`, so the conversion is a straight copy + decompose with
+// no transposition. These bridge the two worlds where a Sim.Graph
+// container projects its matrix44 pose into the scene transform chain.
+
+/** Decompose a flat column-major `number[16]` into an `ITransform`. */
+export function matrix44ToTransform(flat: ReadonlyArray<number>): ITransform {
+    const scl = new Cartesian3(1, 1, 1);
+    const rot = new Quaternion(0, 0, 0, 1);
+    const pos = new Cartesian3(0, 0, 0);
+    new Matrix4(flat).decompose(scl, rot, pos);
+    return makeTransform(pos, rot, scl);
+}
+
+/** Collapse an `ITransform` to a flat column-major `number[16]`
+ *  (`Matrix44`). `ITransform.toMatrix4()` is typed as the narrow
+ *  `IMatrix4` (buffer only), so we read `.m` directly rather than the
+ *  `Matrix4.toFlat()` convenience. */
+export function transformToMatrix44(t: ITransform): number[] {
+    return Array.from(t.toMatrix4().m);
+}
+
+/**
+ * A child view that INHERITS its enclosing scene's context LIVE.
+ *
+ * The realised contract of `SceneStateView.parent`: a sub-graph with
+ * no SceneItem of its own does not fabricate a fresh Earth default:
+ * it reads its parent's live latents (gravity, temperature, pressure,
+ * density, timeScale, atmosphere, effectiveHz) through-the-getter, and
+ * chains `worldTransform = parent.worldTransform × localTransform`.
+ * This is the scene-level mirror of how a `TransformNode` composes
+ * `parent_world × local`: scene context flows DOWN the fractal nesting.
+ *
+ * The parent is dereferenced through a `() => SceneStateView | null`
+ * thunk on EVERY access, not captured once, so a root binding
+ * established after this view is built (the editor sets
+ * `session.sceneStateView` after the constructor's first reset) is
+ * picked up with no rebuild. When the thunk yields null (no parent
+ * bound yet) every latent falls back to the same Earth-surface
+ * constants as `buildDefaultStateView`, and `worldTransform`
+ * degenerates to the local pose.
+ *
+ * `localOf` supplies the sub-graph's own pose within the parent frame
+ * (identity when the container carries no transform); with an identity
+ * local and a bound parent the view is transparently equal to the
+ * parent (pure inheritance).
+ */
+export class InheritedSceneStateView implements SceneStateView {
+    public constructor(
+        private readonly _id: string,
+        private readonly _parentOf: () => SceneStateView | null,
+        private readonly _localOf: () => ITransform = () => IDENTITY_TRANSFORM
+    ) {}
+
+    public get id(): string {
+        return this._id;
+    }
+    public get parent(): SceneStateView | null {
+        return this._parentOf();
+    }
+    public get atmosphere(): IIntegrable | null {
+        return this._parentOf()?.atmosphere ?? null;
+    }
+    public get gravity(): ICartesian3 {
+        return this._parentOf()?.gravity ?? DEFAULT_GRAVITY;
+    }
+    public get temperature(): Temperature {
+        return this._parentOf()?.temperature ?? new Temperature(DEFAULT_TEMPERATURE.getValue(Temperature.Units.k), Temperature.Units.k);
+    }
+    public get pressure(): Pressure {
+        return this._parentOf()?.pressure ?? new Pressure(DEFAULT_PRESSURE.getValue(Pressure.Units.Pa), Pressure.Units.Pa);
+    }
+    public get density(): number {
+        return this._parentOf()?.density ?? DEFAULT_DENSITY;
+    }
+    public get timeScale(): number {
+        return this._parentOf()?.timeScale ?? DEFAULT_TIME_SCALE;
+    }
+    public get effectiveHz(): Frequency {
+        return this._parentOf()?.effectiveHz ?? new Frequency(MIN_EFFECTIVE_HZ.getValue(Frequency.Units.Hz), Frequency.Units.Hz);
+    }
+    public get localTransform(): ITransform {
+        return this._localOf();
+    }
+    public get worldTransform(): ITransform {
+        const parent = this._parentOf();
+        const local = this._localOf();
+        return parent ? composeTransform(parent.worldTransform, local) : local;
+    }
 }
 
 /**

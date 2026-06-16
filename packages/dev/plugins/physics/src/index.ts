@@ -29,9 +29,17 @@ export * from "./mechanical/load/index.js";
 export * from "./mechanical/vibration/index.js";
 export * from "./mechanical/fault/index.js";
 export * from "./particulate/particulate.node.js";
-export { motorPmsmSubPlugin } from "./electric/motor-pmsm/index.js";
-export { housingSubPlugin } from "./mechanical/housing/index.js";
-export { environmentGravitySubPlugin } from "./environment/gravity/index.js";
+export {
+    motorPmsmSubPlugin,
+    createPmsmMachineDqNode,
+    PmsmMachineDqNode,
+    createPmsmFocNode,
+    PmsmFocNode,
+    createGravityCoupledPmsmGraph,
+    GravityCoupledPmsmGraph,
+} from "./electric/motor-pmsm/index.js";
+export { housingSubPlugin, createHousingMechanicsNode, HousingMechanicsNode } from "./mechanical/housing/index.js";
+export { environmentGravitySubPlugin, createGravityVectorNode, GravityVectorNode, createRotorSagNode, RotorSagNode } from "./environment/gravity/index.js";
 export { electricSensorSubPlugin, CurrentSensorNode, createCurrentSensorNode, PowerMeterNode, createPowerMeterNode } from "./electric/sensor/index.js";
 export { physicsParticulateSubPlugin } from "./particulate/index.js";
 

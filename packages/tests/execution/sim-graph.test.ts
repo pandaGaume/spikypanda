@@ -21,8 +21,11 @@
  */
 import {
     buildDefaultStateView,
+    Cartesian3,
     createSimGraphNode,
     Frequency,
+    makeTransform,
+    Quaternion,
     RuntimeGraph,
     type ISession,
     type ISolverHandle,
@@ -43,12 +46,7 @@ import {
  * + per-step timestamps without going through the full editor
  * runtime stack.
  */
-function makeHarness(opts?: {
-    sceneItemId?: string;
-    resolver?: SceneBindingResolver | null;
-    parentView?: SceneStateView | null;
-    parentSimRate?: number;
-}): {
+function makeHarness(opts?: { sceneItemId?: string; resolver?: SceneBindingResolver | null; parentView?: SceneStateView | null; parentSimRate?: number }): {
     parent: ISession;
     sim: SimGraphNode;
     innerRunCalls: number[];
@@ -293,7 +291,7 @@ describe("SimGraphNode sub-stepping", () => {
         sim.fire(parent, 0.02); // second fire: span = 0.01, K = 2 → 0.015, 0.02
         expect(innerRunCalls).toHaveLength(2);
         expect(innerRunCalls[0]).toBeCloseTo(0.015, 9);
-        expect(innerRunCalls[1]).toBeCloseTo(0.020, 9);
+        expect(innerRunCalls[1]).toBeCloseTo(0.02, 9);
     });
 
     it("falls back to ISession.simRate when no SceneStateView is bound on either side", () => {
@@ -303,5 +301,67 @@ describe("SimGraphNode sub-stepping", () => {
         // (60) for child. 60 < 1000 → K = 1.
         sim.fire(parent, 0.001);
         expect(innerRunCalls).toHaveLength(1);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// 3. Scene inheritance — "a graph is a TransformNode"
+// ─────────────────────────────────────────────────────────────────────
+
+/** A default view with gravity overridden, via a Proxy (same shim
+ *  trick as viewWithHz). */
+function viewWithGravity(id: string, g: { x: number; y: number; z: number }): SceneStateView {
+    const base = buildDefaultStateView(id);
+    return new Proxy(base, {
+        get(target, prop) {
+            if (prop === "gravity") return g;
+            return Reflect.get(target, prop);
+        },
+    });
+}
+
+describe("SimGraphNode scene inheritance (unbound)", () => {
+    it("inherits the parent session's gravity LIVE when it has no SceneItem", () => {
+        // No sceneItemId, no resolver → the inner view is an
+        // InheritedSceneStateView reading parentSession.sceneStateView.
+        const { parent, sim } = makeHarness();
+        const inner = (parent.nodeStateOf(sim) as unknown as { internalSession: ISession }).internalSession;
+
+        // Parent view set AFTER construction (the editor's ordering).
+        // The inherited view derefs live, so no rebuild is needed.
+        const orbital = viewWithGravity("orbital", { x: 0, y: 0, z: 0 });
+        parent.sceneStateView = orbital;
+        expect(inner.sceneStateView?.gravity).toEqual({ x: 0, y: 0, z: 0 });
+
+        // Swap Earth -> the inner reflects it on the next read.
+        const earth = viewWithGravity("earth", { x: 0, y: 0, z: -9.81 });
+        parent.sceneStateView = earth;
+        expect(inner.sceneStateView?.gravity).toEqual({ x: 0, y: 0, z: -9.81 });
+    });
+
+    it("degrades to Earth-surface defaults when the parent has no view", () => {
+        const { parent, sim } = makeHarness();
+        const inner = (parent.nodeStateOf(sim) as unknown as { internalSession: ISession }).internalSession;
+        // parentSession.sceneStateView is null here.
+        expect(inner.sceneStateView?.gravity).toEqual({ x: 0, y: 0, z: -9.81 });
+    });
+
+    it("chains worldTransform: inner inherits the parent's world pose with identity local", () => {
+        const { parent, sim } = makeHarness();
+        const inner = (parent.nodeStateOf(sim) as unknown as { internalSession: ISession }).internalSession;
+        // A parent scene translated by (5, 0, 0).
+        const base = buildDefaultStateView("posed");
+        const posed = new Proxy(base, {
+            get(target, prop) {
+                if (prop === "worldTransform") return makeTransform(new Cartesian3(5, 0, 0), new Quaternion(0, 0, 0, 1), new Cartesian3(1, 1, 1));
+                return Reflect.get(target, prop);
+            },
+        });
+        parent.sceneStateView = posed;
+        // sim.fire computes _localPose (identity, unwired) and the inner
+        // view chains worldTransform = parent.worldTransform x identity.
+        sim.fire(parent, 0.001);
+        const w = inner.sceneStateView?.worldTransform;
+        expect(w?.position.x).toBeCloseTo(5, 9);
     });
 });

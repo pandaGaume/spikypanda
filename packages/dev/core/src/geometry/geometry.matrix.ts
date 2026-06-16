@@ -23,7 +23,7 @@
  */
 
 import { Cartesian3 } from "./geometry.cartesian";
-import type { ICartesian3, IMatrix4, IQuaternion } from "./geometry.interfaces";
+import type { ICartesian3, IMatrix4, IQuaternion, Matrix44 } from "./geometry.interfaces";
 import { Quaternion } from "./geometry.quarternion";
 
 /** Column-major index for row `r`, column `c` in a 4×4 matrix. Inlined
@@ -311,10 +311,107 @@ export class Matrix4 implements IMatrix4 {
         return new Matrix4(this.m);
     }
 
+    /** Build a Matrix4 from its flat column-major serialized form
+     *  (`Matrix44`). Symmetric with `toFlat()`; the constructor already
+     *  accepts the same shape, this static just reads clearer at the
+     *  wire <-> math boundary. */
+    public static fromFlat(flat: Matrix44): Matrix4 {
+        return new Matrix4(flat);
+    }
+
+    /** Project to the plain column-major `number[16]` serialized form
+     *  (`Matrix44`) carried on ports / stored in `@cloneable` fields.
+     *  A fresh array each call. */
+    public toFlat(): number[] {
+        return Array.from(this.m);
+    }
+
     /** Determinant of the upper-left 3×3 block. Used by `decompose`
      *  to detect mirrored bases (negative determinant). */
     private _determinant3x3(): number {
         const m = this.m;
         return m[0] * (m[5] * m[10] - m[6] * m[9]) - m[4] * (m[1] * m[10] - m[2] * m[9]) + m[8] * (m[1] * m[6] - m[2] * m[5]);
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Matrix44 (flat serialized form) helpers
+// ─────────────────────────────────────────────────────────────────────
+//
+// These operate directly on the plain `number[16]` wire form so the hot
+// paths (TransformNode.fire and friends, called per tick) stay
+// allocation-free without round-tripping through a `Matrix4` instance.
+// `mul44` is the allocation-free in-place form of `Matrix4.multiply`;
+// geometry.test asserts the two agree so there is ONE source of truth
+// for the multiply, not two divergent implementations.
+
+/** Column-major 4×4 identity in flat form. Frozen so callers that read
+ *  it as a default cannot mutate the shared instance. */
+export const IDENTITY44: Matrix44 = Object.freeze([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+
+/** Runtime guard for the flat form: an array of exactly 16 numbers. */
+export function isMatrix44(v: unknown): v is Matrix44 {
+    return Array.isArray(v) && v.length === 16;
+}
+
+/**
+ * Column-major 4×4 multiply on the flat form: `out = a × b`. In-place
+ * into `out` (which must alias neither `a` nor `b`). Numerically equal
+ * to `new Matrix4(a).multiply(new Matrix4(b)).toFlat()` but without the
+ * two Matrix4 allocations (for per-tick scene-graph composition).
+ */
+export function mul44(out: number[], a: Matrix44, b: Matrix44): void {
+    const a00 = a[0],
+        a10 = a[1],
+        a20 = a[2],
+        a30 = a[3];
+    const a01 = a[4],
+        a11 = a[5],
+        a21 = a[6],
+        a31 = a[7];
+    const a02 = a[8],
+        a12 = a[9],
+        a22 = a[10],
+        a32 = a[11];
+    const a03 = a[12],
+        a13 = a[13],
+        a23 = a[14],
+        a33 = a[15];
+
+    const b00 = b[0],
+        b10 = b[1],
+        b20 = b[2],
+        b30 = b[3];
+    const b01 = b[4],
+        b11 = b[5],
+        b21 = b[6],
+        b31 = b[7];
+    const b02 = b[8],
+        b12 = b[9],
+        b22 = b[10],
+        b32 = b[11];
+    const b03 = b[12],
+        b13 = b[13],
+        b23 = b[14],
+        b33 = b[15];
+
+    out[0] = a00 * b00 + a01 * b10 + a02 * b20 + a03 * b30;
+    out[1] = a10 * b00 + a11 * b10 + a12 * b20 + a13 * b30;
+    out[2] = a20 * b00 + a21 * b10 + a22 * b20 + a23 * b30;
+    out[3] = a30 * b00 + a31 * b10 + a32 * b20 + a33 * b30;
+
+    out[4] = a00 * b01 + a01 * b11 + a02 * b21 + a03 * b31;
+    out[5] = a10 * b01 + a11 * b11 + a12 * b21 + a13 * b31;
+    out[6] = a20 * b01 + a21 * b11 + a22 * b21 + a23 * b31;
+    out[7] = a30 * b01 + a31 * b11 + a32 * b21 + a33 * b31;
+
+    out[8] = a00 * b02 + a01 * b12 + a02 * b22 + a03 * b32;
+    out[9] = a10 * b02 + a11 * b12 + a12 * b22 + a13 * b32;
+    out[10] = a20 * b02 + a21 * b12 + a22 * b22 + a23 * b32;
+    out[11] = a30 * b02 + a31 * b12 + a32 * b22 + a33 * b32;
+
+    out[12] = a00 * b03 + a01 * b13 + a02 * b23 + a03 * b33;
+    out[13] = a10 * b03 + a11 * b13 + a12 * b23 + a13 * b33;
+    out[14] = a20 * b03 + a21 * b13 + a22 * b23 + a23 * b33;
+    out[15] = a30 * b03 + a31 * b13 + a32 * b23 + a33 * b33;
 }

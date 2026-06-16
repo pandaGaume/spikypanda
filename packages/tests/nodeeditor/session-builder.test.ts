@@ -10,8 +10,8 @@
  * The viewer is duck-typed by the builder (nodes / connections only),
  * so a plain object stands in: no DOM required.
  */
-import { RuntimeNode } from "spikypanda-core";
-import type { IChannel, ISession } from "spikypanda-core";
+import { buildDefaultStateView, RuntimeNode } from "spikypanda-core";
+import type { IChannel, ISession, SceneStateView } from "spikypanda-core";
 import { buildSessionFromViewer } from "../../dev/nodeeditor/src/graph-session-builder";
 import type { GraphViewer } from "../../dev/nodeeditor/src/components/graph-viewer";
 
@@ -83,6 +83,87 @@ describe("buildSessionFromViewer: layout-only endpoints", () => {
             session.run(1);
             expect(consumer.received).toEqual([42, 42]);
             expect(warn.mock.calls.some((args) => String(args[0]).includes("layout-only"))).toBe(true);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+});
+
+describe("buildSessionFromViewer: root scene binding", () => {
+    function viewWithGravity(id: string, g: { x: number; y: number; z: number }): SceneStateView {
+        const base = buildDefaultStateView(id);
+        return new Proxy(base, {
+            get(target, prop) {
+                return prop === "gravity" ? g : Reflect.get(target, prop);
+            },
+        });
+    }
+
+    test("materialises the root Scene's view onto session.sceneStateView", () => {
+        const view = viewWithGravity("orbital", { x: 0, y: 0, z: 0 });
+        // A SceneItem is duck-typed by `buildStateView`; it has no fire()
+        // so it is excluded from the runtime node collection.
+        const sceneData = { buildStateView: () => view };
+        const sceneUi = fakeNode("scene", "Scene", "Physics.Scene:scene", sceneData, [], []);
+
+        const viewer = { nodes: [sceneUi], connections: [] } as unknown as GraphViewer;
+        const { session } = buildSessionFromViewer(viewer);
+
+        expect(session.sceneStateView).toBe(view);
+        expect(session.sceneStateView?.gravity).toEqual({ x: 0, y: 0, z: 0 });
+    });
+
+    test("leaves sceneStateView unset when no Scene is present (per-node Earth fallback)", () => {
+        const producer = new ProducerNode();
+        const producerUi = fakeNode("n1", "Producer", "Test:producer", producer, [], []);
+        const viewer = { nodes: [producerUi], connections: [] } as unknown as GraphViewer;
+        const { session } = buildSessionFromViewer(viewer);
+        expect(session.sceneStateView).toBeFalsy();
+    });
+
+    test("per-node override: wiring a Scene to a node's `scene` port binds that scene", () => {
+        const view = viewWithGravity("moon", { x: 0, y: 0, z: -1.62 });
+        const sceneData = { buildStateView: () => view };
+        const sceneUi = fakeNode("scene", "Scene", "Physics.Scene:scene", sceneData, [], [{ name: "scene_out", type: "scene" }]);
+
+        // A real RuntimeNode (the builder calls .build() on non-nodes) that
+        // carries the per-node-scene seam (sceneItemId + setBoundSceneView).
+        class FakeMotor extends RuntimeNode {
+            public sceneItemId = "";
+            public bound: SceneStateView | null | undefined = undefined;
+            public setBoundSceneView(v: SceneStateView | null): void {
+                this.bound = v;
+            }
+            public override fire(): void {
+                /* no-op */
+            }
+        }
+        const motor = new FakeMotor();
+        const motorUi = fakeNode("m", "Motor", "X:motor", motor, [{ name: "scene", type: "scene" }], []);
+
+        const viewer = {
+            nodes: [sceneUi, motorUi],
+            connections: [{ linkKind: "config", from: sceneUi.outputs[0], to: motorUi.inputs[0] }],
+        } as unknown as GraphViewer;
+
+        buildSessionFromViewer(viewer);
+
+        expect(motor.sceneItemId).toBe("scene");
+        expect(motor.bound).toBe(view);
+    });
+
+    test("first Scene wins and the rest are warned about", () => {
+        const a = { buildStateView: () => viewWithGravity("a", { x: 0, y: 0, z: -9.81 }) };
+        const b = { buildStateView: () => viewWithGravity("b", { x: 0, y: 0, z: -1.62 }) };
+        const aUi = fakeNode("a", "SceneA", "Physics.Scene:scene", a, [], []);
+        const bUi = fakeNode("b", "SceneB", "Physics.Scene:scene", b, [], []);
+        const viewer = { nodes: [aUi, bUi], connections: [] } as unknown as GraphViewer;
+
+        const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+        try {
+            const { session } = buildSessionFromViewer(viewer);
+            expect(session.sceneStateView?.gravity).toEqual({ x: 0, y: 0, z: -9.81 });
+            expect(warn.mock.calls.some((args) => String(args[0]).includes("root Scenes"))).toBe(true);
         } finally {
             warn.mockRestore();
         }

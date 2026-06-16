@@ -2,11 +2,13 @@ import {
     buildSolverAttachmentsForGraph,
     RuntimeGraphBuilder,
     Session,
+    SimGraphNode,
     type Channel,
     type IRuntimeGraph,
     type IRuntimeNode,
     type ISolver,
     type ISolverDescriptor,
+    type SceneStateView,
 } from "spikypanda-core";
 import type { GraphViewer } from "./components/graph-viewer";
 import type { NodeUI } from "./node-ui";
@@ -105,10 +107,105 @@ export function buildSessionFromViewer(viewer: GraphViewer): {
     // wired RK4SolverItem just lets the user tune tolerance / maxStep.
     attachRootScopedSolvers(viewer, graph, session);
 
+    // Step 5: bind the root scene view. Without this, session.sceneStateView
+    // is null and every TransformNode-derived node (motors, sensors)
+    // falls back to its per-node Earth default; the wired Scene has no
+    // runtime effect. We materialise the root SceneItem's live view and
+    // assign it; root nodes read it through getScene() each fire, and
+    // nested Sim.Graphs inherit it live (InheritedSceneStateView).
+    bindRootSceneView(viewer, session);
+
+    // Step 6: inject per-node scene overrides. A world object whose
+    // `scene` port is wired to a SceneItem reads THAT scene's gravity
+    // (overriding the session scene), so two motors on one canvas can
+    // live in different scenes without a Sim.Graph wrapper each.
+    bindPerNodeScenes(viewer, session);
+
     return {
         session,
         channels: (graph.links as Channel[]).slice(),
     };
+}
+
+/** Resolve each scene-overridable node's `sceneItemId` to a live view and
+ *  inject it. Clears the binding when unwired. No-op when no Scene is on
+ *  the canvas. */
+function bindPerNodeScenes(viewer: GraphViewer, session: Session): void {
+    const scenesById = new Map<string, SceneViewBuilderLike>();
+    for (const n of viewer.nodes) {
+        const data = n && n.item && (n.item as { data?: unknown }).data;
+        if (hasBuildStateView(data)) scenesById.set(String(n.id), data);
+    }
+    const resolver = new ViewerSceneSourceResolver(session);
+    for (const n of viewer.nodes) {
+        const data = n && n.item && (n.item as { data?: unknown }).data;
+        if (!isSceneOverridableLike(data)) continue;
+        const id = data.sceneItemId;
+        const scene = id ? scenesById.get(String(id)) : undefined;
+        data.setBoundSceneView(scene ? scene.buildStateView(resolver) : null);
+    }
+}
+
+/** Minimal structural shape of a SceneItem that can build a live view.
+ *  Duck-typed so nodeeditor keeps zero dependency on plugin-physics. */
+interface SceneViewBuilderLike {
+    buildStateView(resolver: ViewerSceneSourceResolver): SceneStateView;
+}
+function hasBuildStateView(data: unknown): data is SceneViewBuilderLike {
+    return !!data && typeof (data as SceneViewBuilderLike).buildStateView === "function";
+}
+
+/**
+ * SceneSourceResolver implementation over the editor viewer.
+ *
+ * V1 scope (matches the SceneStateView contract's own V1/V3 split):
+ *   - Dynamic publisher-driven latents (gravity_in, temperature_in, …)
+ *     resolve to null, so the SceneItem serves its STATIC editable,
+ *     which is exactly what the gravity study needs (Earth vs Orbital
+ *     is picked via the Scene's gravity editable / preset, not a wire).
+ *     Publisher-driven gravity is deferred ("V3") per the interface.
+ *   - Atmosphere resolves to null: the config-link sync pass has already
+ *     stamped the SceneItem's live `_atmosphereRef`, which buildStateView
+ *     prefers over this resolver round-trip.
+ *   - effectiveHz aggregates max(requiredHz) over the session's nodes,
+ *     reusing the same rule Sim.Graph uses for sub-stepping.
+ */
+class ViewerSceneSourceResolver {
+    public constructor(private readonly _session: Session) {}
+    public resolveNumberSource(_id: string): (() => number) | null {
+        return null;
+    }
+    public resolveCartesian3Source(_id: string): (() => never) | null {
+        return null;
+    }
+    public resolveQuaternionSource(_id: string): (() => never) | null {
+        return null;
+    }
+    public resolveAtmosphere(_id: string): null {
+        return null;
+    }
+    public aggregateEffectiveHz(): number {
+        return SimGraphNode._aggregateRequiredHzFromSession(this._session);
+    }
+}
+
+/** Find the root SceneItem on the canvas and assign its live view to the
+ *  session. No-op when no Scene is present (graphs keep the per-node
+ *  Earth fallback). When several Scenes sit at root, the first wins and
+ *  the rest are warned about; a session carries one ambient context. */
+function bindRootSceneView(viewer: GraphViewer, session: Session): void {
+    const scenes: SceneViewBuilderLike[] = [];
+    for (const n of viewer.nodes) {
+        const data = n && n.item && (n.item as { data?: unknown }).data;
+        if (hasBuildStateView(data)) scenes.push(data);
+    }
+    if (scenes.length === 0) return;
+    if (scenes.length > 1) {
+        // eslint-disable-next-line no-console
+        console.warn(`[graph-session-builder] ${scenes.length} root Scenes found; using the first for session.sceneStateView`);
+    }
+    const resolver = new ViewerSceneSourceResolver(session);
+    (session as unknown as { sceneStateView: SceneStateView }).sceneStateView = scenes[0].buildStateView(resolver);
 }
 
 /** Duck-type for a SolverItem GraphItem: anything that returns an
@@ -297,9 +394,23 @@ function isAtmosphereAggregatorLike(data: unknown): data is AtmosphereAggregator
     return !!data && typeof data === "object" && typeof (data as AtmosphereAggregatorLike).sampleAggregates === "function";
 }
 
-/** Minimal structural shape of a SimGraphNode-like model. */
+/** Minimal structural shape of a SimGraphNode-like model. Bound via the
+ *  `scene_in` config-link. Discriminated from a per-node-scene-overridable
+ *  world object (which also carries `sceneItemId`) by the ABSENCE of
+ *  `setBoundSceneView`. */
 interface SimGraphNodeLike {
     sceneItemId: string;
+}
+
+/** A TransformNode-derived world object that accepts a per-node scene
+ *  override on its `scene` port: carries `sceneItemId` AND the injection
+ *  seam `setBoundSceneView`. */
+interface SceneOverridableLike {
+    sceneItemId: string;
+    setBoundSceneView(view: SceneStateView | null): void;
+}
+function isSceneOverridableLike(data: unknown): data is SceneOverridableLike {
+    return !!data && typeof (data as SceneOverridableLike).setBoundSceneView === "function" && typeof (data as SceneOverridableLike).sceneItemId === "string";
 }
 
 /** Minimal IGasMetadata-shaped object: chemistry plugin's GasNode
@@ -416,7 +527,10 @@ function isSceneItemLike(data: unknown): data is SceneItemLike {
 function isSimGraphNodeLike(data: unknown): data is SimGraphNodeLike {
     if (!data || typeof data !== "object") return false;
     const d = data as Partial<SimGraphNodeLike>;
-    return typeof d.sceneItemId === "string";
+    // A world object that exposes setBoundSceneView is a per-node-scene
+    // overridable (binds via `scene`), NOT a Sim.Graph (binds via
+    // `scene_in`); exclude it so the two paths stay disjoint.
+    return typeof d.sceneItemId === "string" && typeof (d as Partial<SceneOverridableLike>).setBoundSceneView !== "function";
 }
 
 function isGasMetadataLike(data: unknown): data is GasMetadataLike {
@@ -542,6 +656,7 @@ export function syncConfigLinksFromCanvas(viewer: GraphViewer): void {
     // explicitly wired anything.
     const sceneItemsByNodeId = new Map<string, SceneItemLike>();
     const simGraphsByNodeId = new Map<string, SimGraphNodeLike>();
+    const sceneOverridablesByNodeId = new Map<string, SceneOverridableLike>();
     const compositionsByNodeId = new Map<string, CompositionNodeLike>();
     const gasNodesByNodeId = new Map<string, GasMetadataLike>();
     const layersByNodeId = new Map<string, AtmosphereLayerLike>();
@@ -580,6 +695,12 @@ export function syncConfigLinksFromCanvas(viewer: GraphViewer): void {
         if (isSimGraphNodeLike(data)) {
             data.sceneItemId = "";
             simGraphsByNodeId.set(String(n.id), data);
+        }
+        if (isSceneOverridableLike(data)) {
+            // Reset the per-node binding; the `scene` wire below re-applies
+            // it, and the runtime injection (bindPerNodeScenes) resolves it.
+            data.sceneItemId = "";
+            sceneOverridablesByNodeId.set(String(n.id), data);
         }
         if (isCompositionNodeLike(data)) {
             // Reset-each-sync semantic for particulates (gases are
@@ -674,6 +795,10 @@ export function syncConfigLinksFromCanvas(viewer: GraphViewer): void {
         } else if (fromType === "scene" && toSlot === "scene_in") {
             const sim = simGraphsByNodeId.get(toId);
             if (sim) sim.sceneItemId = fromId;
+        } else if (fromType === "scene" && toSlot === "scene") {
+            // Per-node scene override on a world object's `scene` port.
+            const node = sceneOverridablesByNodeId.get(toId);
+            if (node) node.sceneItemId = fromId;
         } else if (fromType === "gas" && toSlot.startsWith("gas_in_")) {
             const composition = compositionsByNodeId.get(toId);
             const gas = gasNodesByNodeId.get(fromId);

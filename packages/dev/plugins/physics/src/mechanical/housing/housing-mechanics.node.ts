@@ -1,5 +1,5 @@
-import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, RuntimeNode, inSlotOf } from "spikypanda-core";
-import type { ICartesian, Nullable, IHasSampleRateRequirement } from "spikypanda-core";
+import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IPortDescriptor, ISession, TransformNode, inSlotOf } from "spikypanda-core";
+import type { IOlink, ICartesian, Nullable, IHasSampleRateRequirement } from "spikypanda-core";
 
 /**
  * Housing mechanics: three independent 2nd-order LTI structural modes
@@ -34,7 +34,7 @@ import type { ICartesian, Nullable, IHasSampleRateRequirement } from "spikypanda
  * environment model (mounting compliance under gravity), or any force
  * source; leave unwired for a quiet bracket.
  */
-export class HousingMechanicsNode extends RuntimeNode implements IDeclaresPorts, IHasSampleRateRequirement {
+export class HousingMechanicsNode extends TransformNode implements IDeclaresPorts, IHasSampleRateRequirement {
     // Per-axis modal parameters (x, y, z).
     @cloneable private _massX: number = 0.1;
     @cloneable private _massY: number = 0.1;
@@ -63,13 +63,15 @@ export class HousingMechanicsNode extends RuntimeNode implements IDeclaresPorts,
     @cloneable private _requiredHzValue: number = 0;
     @cloneable private _requiredHzUserDefined: boolean = false;
 
-    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
+    public override readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
+        ...TransformNode.TRANSFORM_INPUT_PORTS, // local, parent_world (shared assembly placement)
         { slot: "force_x", optional: true, type: "float" },
         { slot: "force_y", optional: true, type: "float" },
         { slot: "force_z", optional: true, type: "float" },
         { slot: "dt", optional: true, type: "float" },
     ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
+    public override readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
+        ...TransformNode.TRANSFORM_OUTPUT_PORTS, // world
         { slot: "accel_x", optional: false, type: "float" },
         { slot: "accel_y", optional: false, type: "float" },
         { slot: "accel_z", optional: false, type: "float" },
@@ -213,7 +215,8 @@ export class HousingMechanicsNode extends RuntimeNode implements IDeclaresPorts,
     }
 
     // ── Runtime ────────────────────────────────────────────────────────
-    public override reset(_session: ISession): void {
+    public override reset(session: ISession): void {
+        super.reset(session); // world -> identity
         this._posX = this._posY = this._posZ = 0;
         this._velX = this._velY = this._velZ = 0;
         this.setField("accel_x", this._accelX, 0, (n) => {
@@ -229,6 +232,9 @@ export class HousingMechanicsNode extends RuntimeNode implements IDeclaresPorts,
     }
 
     public override fire(session: ISession, t: number): void {
+        // TransformNode hop: consume local / parent_world, set + publish world.
+        super.fire(session, t);
+
         const links = session.graph.links as ReadonlyArray<IChannel>;
         let fx = 0,
             fy = 0,
@@ -237,6 +243,7 @@ export class HousingMechanicsNode extends RuntimeNode implements IDeclaresPorts,
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const slot = inSlotOf(link);
+            if (TransformNode.isTransformInputSlot(String(slot))) continue; // consumed by super.fire
             const idx = links.indexOf(link);
             if (idx < 0 || !session.linkStates[idx].ready) continue;
             const value = session.consume(idx);

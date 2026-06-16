@@ -10,6 +10,7 @@ export * from "./scene-state-view.impl";
 export * from "./transform.node";
 export * from "./fault.node";
 export * from "./sim-graph.node";
+export * from "./sub-graph.materialize";
 export * from "./chemical.species";
 export * from "./chemistry.interfaces";
 export * from "./particulate.interfaces";

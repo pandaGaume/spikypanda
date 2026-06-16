@@ -94,3 +94,18 @@ export interface IMatrix4 {
     /** Column-major 4×4 entries, length 16. */
     readonly m: ArrayLike<number>;
 }
+
+/**
+ * The flat, serialized form of a 4×4 matrix: a plain column-major
+ * `number[16]` (translation in [12..14], homogeneous row at
+ * [3],[7],[11],[15]). Same layout as `Matrix4.m`.
+ *
+ * This is the WIRE form carried on `matrix44` ports and the storage
+ * form of `@cloneable` transform fields: a plain array round-trips
+ * through JSON save/load and crosses plugin boundaries without coupling
+ * consumers to the `Matrix4` class. `Matrix4` owns the MATH (compose /
+ * multiply / decompose); `Matrix44` is its serialized projection, with
+ * `Matrix4.fromFlat()` / `Matrix4.prototype.toFlat()` as the single
+ * bridge. The two are one abstraction with two faces, not two classes.
+ */
+export type Matrix44 = ReadonlyArray<number>;

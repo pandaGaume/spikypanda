@@ -57,28 +57,12 @@ export const motorBldcSubPlugin: IPlugin = {
             ],
         });
 
-        ctx.nodes.register("Physics.Electric.Motor.BLDC:pmsm", () => createPmsmMotorDynamicNode() as never, {
-            label: "PMSM Motor (Dynamic, sinusoidal)",
-            category: "Physics.Electric.Motor.BLDC",
-            docPath: ctx.assetUrl("docs/physics/motor-bldc/pmsm-dynamic.md"),
-            inputPorts: [
-                ...BASE_IN_PORTS,
-                { slot: "V_a", ...FLOAT_IN },
-                { slot: "V_b", ...FLOAT_IN },
-                { slot: "V_c", ...FLOAT_IN },
-                { slot: "tau_load", ...FLOAT_IN },
-                { slot: "dt", ...FLOAT_IN },
-            ],
-            outputPorts: [
-                TRANSFORM_OUT_PORT,
-                { slot: "i_a", ...FLOAT_OUT },
-                { slot: "i_b", ...FLOAT_OUT },
-                { slot: "i_c", ...FLOAT_OUT },
-                { slot: "omega", ...FLOAT_OUT },
-                { slot: "theta_m", ...FLOAT_OUT },
-                { slot: "tau_em", ...FLOAT_OUT },
-            ],
-        });
+        // NOTE: the sinusoidal PMSM motor (createPmsmMotorDynamicNode) is
+        // registered under the PMSM category (Physics.Electric.Motor.PMSM:dynamic)
+        // in motor-pmsm/index.ts (a PMSM belongs in the PMSM family, not
+        // under BLDC). The node CODE stays here (it shares back-emf.ts and the
+        // electrical/mechanical structure with the BLDC node); only the
+        // palette registration lives with its taxonomic peers.
 
         ctx.nodes.register("Physics.Electric.Motor.BLDC:inverter", () => createBldcInverterNode() as never, {
             label: "BLDC 6-step Inverter",

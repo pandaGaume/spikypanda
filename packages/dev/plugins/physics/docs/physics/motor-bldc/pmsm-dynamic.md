@@ -1,8 +1,10 @@
-# PMSM Motor (Dynamic, sinusoidal)
+# PMSM Motor (abc, sinusoidal)
 
-`Physics.Electric.Motor.BLDC:pmsm`
+`Physics.Electric.Motor.PMSM:dynamic`
 
-3-phase permanent-magnet synchronous motor with **sinusoidal** back-EMF. Same electrical / mechanical structure as the BLDC node, with `sin(θ_e + offset_k)` replacing the trapezoid. The current spectrum has a clean fundamental at `f_e` and minimal high-order harmonics in the ideal case, useful as a baseline counterpart to BLDC's 6f_e ripple in MCSA studies.
+3-phase permanent-magnet synchronous motor with **sinusoidal** back-EMF, in the **abc frame** (explicit Euler). Same electrical / mechanical structure as the BLDC node, with `sin(θ_e + offset_k)` replacing the trapezoid. The current spectrum has a clean fundamental at `f_e` and minimal high-order harmonics in the ideal case, useful as a baseline counterpart to BLDC's 6f_e ripple in MCSA studies.
+
+Taxonomy : ce nœud vit dans la famille **PMSM** (catégorie `Physics.Electric.Motor.PMSM`), aux côtés de [`PMSM:machine`](../motor-pmsm/machine-dq.md), le modèle dq. **Ce sont deux points de vue sur le même moteur** : `:dynamic` (abc) regarde les 3 vrais fils (3 sinusoïdes, la vue physique simple) ; `:machine` (dq) se place dans le repère tournant du rotor (2 valeurs stables, la vue « pilote » pour la commande FOC). Choisis `:dynamic` pour un brushless sinusoïdal simple et autonome (pendant du BLDC trapézoïdal) ; `:machine` pour l'entraînement FOC contrôlé et l'étude gravité/MCSA. Explication complète + tableau : voir [« dq vs abc » dans machine-dq.md](../motor-pmsm/machine-dq.md). Le code source reste dans `motor-bldc/` car il partage `back-emf.ts` et la structure du BLDC.
 
 Typically driven by an SVPWM / FOC inverter; the `V_a / V_b / V_c` inputs accept any 3-phase voltage source the user composes (e.g. three sin generators shifted by 120°, or a future SVPWM inverter node).
 

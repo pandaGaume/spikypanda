@@ -1,226 +1,212 @@
 {
-    "id":          "spk.physics",
-    "version":     "0.2.0",
+    "id": "spk.physics",
+    "version": "0.2.0",
     "displayName": "Physics",
     "description": "Physical phenomena nodes organized by domain (electric motors, mechanical faults). V1: brush DC, BLDC + PMSM, bearing/shaft/gear faults, friction, vibration sensor, generic fault modulator.",
-    "category":    "Physics",
-    "entry":       "bundle/SpkPluginPhysics.js",
-    "nodes":       [],
-    "editors":     [],
+    "category": "Physics",
+    "entry": "bundle/SpkPluginPhysics.js",
+    "nodes": [],
+    "editors": [],
     "subPlugins": [
         {
-            "id":          "Physics.Transform",
+            "id": "Physics.Transform",
             "displayName": "Transform",
             "description": "World-frame transform composer (world = parent_world × local). Acts as the base class shared by every Physics object that lives in a world reference frame: motors, sensors, mechanical bodies. Drop a standalone Transform on the canvas for intermediate frames, markers and debug attach-points. Environmental context (gravity, temperature, ...) is read from the session's SceneStateView, populated by the enclosing Sim.Graph or by the runner at root from the primary SceneItem.",
-            "category":    "Physics.Transform",
-            "version":     "0.1.0",
-            "standards":   [],
-            "nodes": [
-                { "type": "Physics.Transform:transform", "factory": "createTransformNode", "label": "Transform" }
-            ]
+            "category": "Physics.Transform",
+            "version": "0.1.0",
+            "standards": [],
+            "nodes": [{ "type": "Physics.Transform:transform", "factory": "createTransformNode", "label": "Transform" }]
         },
         {
-            "id":          "Physics.Scene",
+            "id": "Physics.Scene",
             "displayName": "Scene",
             "description": "Environment + atmospheric chemistry primitives. The Scene descriptor carries gravity / temperature / pressure / time_scale / local transform + references to wired solvers / atmosphere / shared nodes; consumed by Sim.Graph at session bind. Ships with 5 environmental presets (Earth, Moon, Mars, Orbital, ISS Cabin), an IIntegrable AtmosphereStateNode that tracks per-species mass inventory, and a 3-mode AtmosphereGate (closed / open_passive / hvac_forced) for coupling two atmospheres with native A↔B mass conservation.",
-            "category":    "Physics.Scene",
-            "version":     "0.2.0",
-            "standards":   [],
+            "category": "Physics.Scene",
+            "version": "0.2.0",
+            "standards": [],
             "nodes": [
-                { "type": "Physics.Scene:scene",             "factory": "createSceneItem",            "label": "Scene" },
-                { "type": "Physics.Scene:earth",             "factory": "createEarthSceneItem",       "label": "Earth" },
-                { "type": "Physics.Scene:moon",              "factory": "createMoonSceneItem",        "label": "Moon" },
-                { "type": "Physics.Scene:mars",              "factory": "createMarsSceneItem",        "label": "Mars" },
-                { "type": "Physics.Scene:orbital",           "factory": "createOrbitalSceneItem",     "label": "Orbital" },
-                { "type": "Physics.Scene:iss-cabin",         "factory": "createIssCabinSceneItem",    "label": "ISS Cabin" },
+                { "type": "Physics.Scene:scene", "factory": "createSceneItem", "label": "Scene" },
+                { "type": "Physics.Scene:earth", "factory": "createEarthSceneItem", "label": "Earth" },
+                { "type": "Physics.Scene:moon", "factory": "createMoonSceneItem", "label": "Moon" },
+                { "type": "Physics.Scene:mars", "factory": "createMarsSceneItem", "label": "Mars" },
+                { "type": "Physics.Scene:orbital", "factory": "createOrbitalSceneItem", "label": "Orbital" },
+                { "type": "Physics.Scene:iss-cabin", "factory": "createIssCabinSceneItem", "label": "ISS Cabin" },
                 { "type": "Physics.Scene:atmosphere-layer", "factory": "createAtmosphereLayerNode", "label": "Atmosphere Layer" },
-                { "type": "Physics.Scene:atmosphere",       "factory": "createAtmosphereNode",      "label": "Atmosphere" },
-                { "type": "Physics.Scene:atmosphere-gate",  "factory": "createAtmosphereGateNode",  "label": "Atmosphere Gate" }
+                { "type": "Physics.Scene:atmosphere", "factory": "createAtmosphereNode", "label": "Atmosphere" },
+                { "type": "Physics.Scene:atmosphere-gate", "factory": "createAtmosphereGateNode", "label": "Atmosphere Gate" }
             ]
         },
         {
-            "id":          "Physics.Electric.Motor.DC",
+            "id": "Physics.Electric.Motor.DC",
             "displayName": "DC Motor (brush)",
             "description": "Separately-excited brush DC motor: dynamic + steady-state, PI speed controller, tachymeter. Defaults tuned for MCSA pipelines (τ_e = 1 ms, stable to dt ≤ 100 µs).",
-            "category":    "Physics.Electric.Motor.DC",
-            "version":     "0.1.0",
-            "standards":   [],
+            "category": "Physics.Electric.Motor.DC",
+            "version": "0.1.0",
+            "standards": [],
             "nodes": [
-                { "type": "Physics.Electric.Motor.DC:dynamic",    "factory": "createDcMotorDynamicNode",    "label": "DC Motor (Dynamic)" },
-                { "type": "Physics.Electric.Motor.DC:steady",     "factory": "createDcMotorSteadyNode",     "label": "DC Motor (Steady)" },
-                { "type": "Physics.Electric.Motor.DC:speedPI",    "factory": "createDcMotorSpeedPiNode",    "label": "DC Motor Speed PI" },
+                { "type": "Physics.Electric.Motor.DC:dynamic", "factory": "createDcMotorDynamicNode", "label": "DC Motor (Dynamic)" },
+                { "type": "Physics.Electric.Motor.DC:steady", "factory": "createDcMotorSteadyNode", "label": "DC Motor (Steady)" },
+                { "type": "Physics.Electric.Motor.DC:speedPI", "factory": "createDcMotorSpeedPiNode", "label": "DC Motor Speed PI" },
                 { "type": "Physics.Electric.Motor.DC:tachymeter", "factory": "createDcMotorTachymeterNode", "label": "Tachymeter" }
             ]
         },
         {
-            "id":          "Physics.Electric.Motor.BLDC",
-            "displayName": "BLDC / PMSM",
-            "description": "3-phase brushless motors. BLDC dynamic (trapezoidal back-EMF) and PMSM dynamic (sinusoidal back-EMF) share the same electrical/mechanical structure but produce distinct current signatures. Includes 6-step inverter and BLDC speed PI controller.",
-            "category":    "Physics.Electric.Motor.BLDC",
-            "version":     "0.1.0",
-            "standards":   [],
+            "id": "Physics.Electric.Motor.BLDC",
+            "displayName": "BLDC",
+            "description": "3-phase brushless DC motor: trapezoidal back-EMF dynamic model with the characteristic 6f_e commutation ripple, 6-step inverter and speed PI controller. The sinusoidal-back-EMF counterpart lives in the PMSM family (Physics.Electric.Motor.PMSM:dynamic).",
+            "category": "Physics.Electric.Motor.BLDC",
+            "version": "0.1.0",
+            "standards": [],
             "nodes": [
-                { "type": "Physics.Electric.Motor.BLDC:dynamic",  "factory": "createBldcMotorDynamicNode", "label": "BLDC Motor (Dynamic)" },
-                { "type": "Physics.Electric.Motor.BLDC:pmsm",     "factory": "createPmsmMotorDynamicNode", "label": "PMSM Motor (Dynamic, sinusoidal)" },
-                { "type": "Physics.Electric.Motor.BLDC:inverter", "factory": "createBldcInverterNode",     "label": "BLDC 6-step Inverter" },
-                { "type": "Physics.Electric.Motor.BLDC:speedPI",  "factory": "createBldcSpeedPiNode",      "label": "BLDC Speed PI" }
+                { "type": "Physics.Electric.Motor.BLDC:dynamic", "factory": "createBldcMotorDynamicNode", "label": "BLDC Motor (Dynamic)" },
+                { "type": "Physics.Electric.Motor.BLDC:inverter", "factory": "createBldcInverterNode", "label": "BLDC 6-step Inverter" },
+                { "type": "Physics.Electric.Motor.BLDC:speedPI", "factory": "createBldcSpeedPiNode", "label": "BLDC Speed PI" }
             ]
         },
         {
-            "id":          "Physics.Electric.Motor.Induction",
+            "id": "Physics.Electric.Motor.Induction",
             "displayName": "Induction (Squirrel Cage)",
             "description": "3-phase squirrel-cage asynchronous motor: alpha-beta space-vector dynamic model with emergent slip. Broken rotor bars are modeled as a rotor-fixed resistance asymmetry, producing the classic MCSA stator-current sidebands at f(1 +/- 2s) whose amplitude scales with broken_bars/total_bars.",
-            "category":    "Physics.Electric.Motor.Induction",
-            "version":     "0.1.0",
-            "standards":   [],
-            "nodes": [
-                { "type": "Physics.Electric.Motor.Induction:dynamic", "factory": "createInductionMotorDynamicNode", "label": "Induction Motor (Squirrel Cage)" }
-            ]
+            "category": "Physics.Electric.Motor.Induction",
+            "version": "0.1.0",
+            "standards": [],
+            "nodes": [{ "type": "Physics.Electric.Motor.Induction:dynamic", "factory": "createInductionMotorDynamicNode", "label": "Induction Motor (Squirrel Cage)" }]
         },
         {
-            "id":          "Physics.Electric.Motor.PMSM",
-            "displayName": "PMSM (dq)",
-            "description": "Permanent-magnet synchronous machine in the rotor dq frame: implicit-Euler 2x2 electrical solve, salient L_d/L_q, trapezoidal theta. Faithful port of the legacy sensors PmsmMachine. Like the DC/BLDC motors it is a world object (extends FaultableNode -> TransformNode): local/parent_world ports + world output, reads scene gravity, and accepts perturbations on the variadic fault bank. Fault target 'flux' multiplicatively modulates the magnet flux (lambda_eff = lambda*(1+sum flux)); a mechanical air-gap perturbation (rotor sag, eccentricity) thus becomes a sideband in the dq and phase currents (MCSA coupling). Target 'tau' adds load torque. Defaults: Maxon ECX PRIME 6M/16L.",
-            "category":    "Physics.Electric.Motor.PMSM",
-            "version":     "0.1.0",
-            "standards":   [],
+            "id": "Physics.Electric.Motor.PMSM",
+            "displayName": "PMSM",
+            "description": "Permanent-magnet synchronous machines, two formulations. ':machine' = rotor dq frame, implicit-Euler 2x2 salient L_d/L_q solve, faithful port of the legacy sensors PmsmMachine, gravity-coupled (fault 'flux' + intrinsic rotor sag -> MCSA sideband), built for the FOC drive chain (FOC/SVPWM/inverter/Clarke/Park). ':dynamic' = abc frame, explicit Euler, non-salient, sinusoidal back-EMF (the sinusoidal counterpart of the trapezoidal BLDC) for a simpler standalone brushless dynamic. Both are world objects (FaultableNode -> TransformNode): local/parent_world + world, scene attach, variadic fault bank. Defaults: Maxon ECX PRIME 6M/16L.",
+            "category": "Physics.Electric.Motor.PMSM",
+            "version": "0.1.0",
+            "standards": [],
             "nodes": [
                 { "type": "Physics.Electric.Motor.PMSM:machine", "factory": "createPmsmMachineDqNode", "label": "PMSM Machine (dq)" },
+                { "type": "Physics.Electric.Motor.PMSM:dynamic", "factory": "createPmsmMotorDynamicNode", "label": "PMSM Motor (abc, sinusoidal)" },
                 { "type": "Physics.Electric.Motor.PMSM:foc", "factory": "createPmsmFocNode", "label": "PMSM FOC Controller" },
                 { "type": "Physics.Electric.Motor.PMSM:svpwm", "factory": "createPmsmSvpwmNode", "label": "SVPWM Modulator" },
                 { "type": "Physics.Electric.Motor.PMSM:inverter", "factory": "createPmsmInverterNode", "label": "3-Phase Inverter (averaged)" },
                 { "type": "Physics.Electric.Motor.PMSM:clarke", "factory": "createClarkeNode", "label": "Clarke (abc to alpha-beta)" },
-                { "type": "Physics.Electric.Motor.PMSM:park", "factory": "createParkNode", "label": "Park (alpha-beta to dq)" }
+                { "type": "Physics.Electric.Motor.PMSM:park", "factory": "createParkNode", "label": "Park (alpha-beta to dq)" },
+                { "type": "Physics.Electric.Motor.PMSM:gravity-coupled", "factory": "createGravityCoupledPmsmGraph", "label": "PMSM (gravity-coupled)" }
             ]
         },
         {
-            "id":          "Physics.Electric.Sensor",
+            "id": "Physics.Electric.Sensor",
             "displayName": "Electric Sensor",
             "description": "Motor-agnostic electrical transducers. Current Sensor (Hall / shunt) with bandwidth, Gaussian noise and ADC quantization, usable on any current line: DC supply, PMSM stator phase (i_a/i_b/i_c) or rotor-frame (i_d/i_q). The same node is also registered as the legacy Physics.Electric.Motor.DC:currentSensor alias.",
-            "category":    "Physics.Electric.Sensor",
-            "version":     "0.1.0",
-            "standards":   [],
+            "category": "Physics.Electric.Sensor",
+            "version": "0.1.0",
+            "standards": [],
             "nodes": [
                 { "type": "Physics.Electric.Sensor:current", "factory": "createCurrentSensorNode", "label": "Current Sensor" },
-                { "type": "Physics.Electric.Sensor:power",   "factory": "createPowerMeterNode",    "label": "Power / Energy Meter" }
+                { "type": "Physics.Electric.Sensor:power", "factory": "createPowerMeterNode", "label": "Power / Energy Meter" }
             ]
         },
         {
-            "id":          "Physics.Mechanical.Bearing",
+            "id": "Physics.Mechanical.Bearing",
             "displayName": "Bearing",
             "description": "Rolling-element bearing fault generator: BPFO/BPFI/BSF/FTF characteristic frequencies computed from geometry and shaft speed, each with its own amplitude knob.",
-            "category":    "Physics.Mechanical.Bearing",
-            "version":     "0.1.0",
-            "standards":   [],
-            "nodes": [
-                { "type": "Physics.Mechanical.Bearing:fault", "factory": "createBearingFaultNode", "label": "Bearing Fault Generator" }
-            ]
+            "category": "Physics.Mechanical.Bearing",
+            "version": "0.1.0",
+            "standards": [],
+            "nodes": [{ "type": "Physics.Mechanical.Bearing:fault", "factory": "createBearingFaultNode", "label": "Bearing Fault Generator" }]
         },
         {
-            "id":          "Physics.Mechanical.Shaft",
+            "id": "Physics.Mechanical.Shaft",
             "displayName": "Shaft",
             "description": "Shaft unbalance modulator (1× rotation frequency). Integrates shaft angle from omega input.",
-            "category":    "Physics.Mechanical.Shaft",
-            "version":     "0.1.0",
-            "standards":   [],
-            "nodes": [
-                { "type": "Physics.Mechanical.Shaft:unbalance", "factory": "createShaftUnbalanceNode", "label": "Shaft Unbalance (1× rotation)" }
-            ]
+            "category": "Physics.Mechanical.Shaft",
+            "version": "0.1.0",
+            "standards": [],
+            "nodes": [{ "type": "Physics.Mechanical.Shaft:unbalance", "factory": "createShaftUnbalanceNode", "label": "Shaft Unbalance (1× rotation)" }]
         },
         {
-            "id":          "Physics.Mechanical.Gear",
+            "id": "Physics.Mechanical.Gear",
             "displayName": "Gear",
             "description": "Gear mesh harmonic (n_teeth × shaft frequency) plus optional once-per-revolution Gaussian pulse for broken-tooth signatures.",
-            "category":    "Physics.Mechanical.Gear",
-            "version":     "0.1.0",
-            "standards":   [],
-            "nodes": [
-                { "type": "Physics.Mechanical.Gear:mesh", "factory": "createGearMeshNode", "label": "Gear Mesh + Tooth Fault" }
-            ]
+            "category": "Physics.Mechanical.Gear",
+            "version": "0.1.0",
+            "standards": [],
+            "nodes": [{ "type": "Physics.Mechanical.Gear:mesh", "factory": "createGearMeshNode", "label": "Gear Mesh + Tooth Fault" }]
         },
         {
-            "id":          "Physics.Mechanical.Friction",
+            "id": "Physics.Mechanical.Friction",
             "displayName": "Friction",
             "description": "Combined Coulomb + Stribeck + viscous friction torque. Editables can be driven over time to model wear.",
-            "category":    "Physics.Mechanical.Friction",
-            "version":     "0.1.0",
-            "standards":   [],
-            "nodes": [
-                { "type": "Physics.Mechanical.Friction:coulomb", "factory": "createCoulombFrictionNode", "label": "Coulomb + Stribeck Friction" }
-            ]
+            "category": "Physics.Mechanical.Friction",
+            "version": "0.1.0",
+            "standards": [],
+            "nodes": [{ "type": "Physics.Mechanical.Friction:coulomb", "factory": "createCoulombFrictionNode", "label": "Coulomb + Stribeck Friction" }]
         },
         {
-            "id":          "Physics.Mechanical.Load",
+            "id": "Physics.Mechanical.Load",
             "displayName": "Load",
-            "description": "Load-torque source with selectable profiles (constant, step, ramp, quadratic K*omega^2, periodic). Wire its tau_load output to any motor's tau_load input; profiles model operating-regime changes (step = new regime, quadratic = fan/pump load, periodic = mechanical modulation).",
-            "category":    "Physics.Mechanical.Load",
-            "version":     "0.1.0",
-            "standards":   [],
+            "description": "Mechanical load sources. ':torque' = prescribed profiles (constant, step, ramp, quadratic K*omega^2, periodic) wired to a motor's tau_load. ':gravity-payload' = a crank payload whose weight m*g, projected through the motor orientation (wire a GravityVector's g_radial/g_angle/g_axial in), produces a 1x f_mech torque ripple (the dominant gravity -> i_q signature mechanism) plus axial/radial bearing loads; it scales with gravity (zero in microgravity) and shaft tilt.",
+            "category": "Physics.Mechanical.Load",
+            "version": "0.1.0",
+            "standards": [],
             "nodes": [
-                { "type": "Physics.Mechanical.Load:torque", "factory": "createLoadTorqueNode", "label": "Load Torque" }
+                { "type": "Physics.Mechanical.Load:torque", "factory": "createLoadTorqueNode", "label": "Load Torque" },
+                { "type": "Physics.Mechanical.Load:gravity-payload", "factory": "createGravityPayloadLoadNode", "label": "Gravity Payload Load" }
             ]
         },
         {
-            "id":          "Physics.Mechanical.Vibration",
+            "id": "Physics.Mechanical.Vibration",
             "displayName": "Vibration",
             "description": "Accelerometer transducer (1st-order LPF + Gaussian noise + quantization). Mechanical-domain counterpart to the Motor.DC tachymeter.",
-            "category":    "Physics.Mechanical.Vibration",
-            "version":     "0.1.0",
-            "standards":   [],
-            "nodes": [
-                { "type": "Physics.Mechanical.Vibration:accelerometer", "factory": "createAccelerometerNode", "label": "Accelerometer" }
-            ]
+            "category": "Physics.Mechanical.Vibration",
+            "version": "0.1.0",
+            "standards": [],
+            "nodes": [{ "type": "Physics.Mechanical.Vibration:accelerometer", "factory": "createAccelerometerNode", "label": "Accelerometer" }]
         },
         {
-            "id":          "Physics.Mechanical.Fault",
+            "id": "Physics.Mechanical.Fault",
             "displayName": "Fault (generic)",
             "description": "Generic sinusoidal fault modulator. Composable building block used to inject ad-hoc signatures into any signal stream.",
-            "category":    "Physics.Mechanical.Fault",
-            "version":     "0.1.0",
-            "standards":   [],
+            "category": "Physics.Mechanical.Fault",
+            "version": "0.1.0",
+            "standards": [],
             "nodes": [
-                { "type": "Physics.Mechanical.Fault:modulator",    "factory": "createFaultModulatorNode",   "label": "Fault Modulator" },
+                { "type": "Physics.Mechanical.Fault:modulator", "factory": "createFaultModulatorNode", "label": "Fault Modulator" },
                 { "type": "Physics.Mechanical.Fault:eccentricity", "factory": "createEccentricityFaultNode", "label": "Eccentricity Fault (D4)" },
-                { "type": "Physics.Mechanical.Fault:imbalance",    "factory": "createImbalanceFaultNode",    "label": "Imbalance Fault (D1)" }
+                { "type": "Physics.Mechanical.Fault:imbalance", "factory": "createImbalanceFaultNode", "label": "Imbalance Fault (D1)" }
             ]
         },
         {
-            "id":          "Physics.Mechanical.Housing",
+            "id": "Physics.Mechanical.Housing",
             "displayName": "Housing",
             "description": "Three independent 2nd-order LTI structural modes (one per body axis), the motor bracket that turns fault and environment forces into the acceleration an accelerometer reads. Parametrized by per-axis mass, natural frequency and damping ratio; implicit-Euler substepped, ported from the legacy sensors HousingMechanics with identical numerics. The vibration channel of the gravity-signature study.",
-            "category":    "Physics.Mechanical.Housing",
-            "version":     "0.1.0",
-            "standards":   [],
-            "nodes": [
-                { "type": "Physics.Mechanical.Housing:mechanics", "factory": "createHousingMechanicsNode", "label": "Housing Mechanics" }
-            ]
+            "category": "Physics.Mechanical.Housing",
+            "version": "0.1.0",
+            "standards": [],
+            "nodes": [{ "type": "Physics.Mechanical.Housing:mechanics", "factory": "createHousingMechanicsNode", "label": "Housing Mechanics" }]
         },
         {
-            "id":          "Physics.Environment.Gravity",
+            "id": "Physics.Environment.Gravity",
             "displayName": "Gravity Coupling",
             "description": "Gravity-orientation coupling models for rotating machines (the gravity-signature study). GravityVector projects world gravity into the motor body frame; RotorSag turns the perpendicular gravity component into a 'flux' fault descriptor for the machine fault bank (MCSA 1x f_mech sideband) plus optional rotating UMP force; BearingPreload exposes gravity-augmented effective preloads for a bearing fault; MountingCompliance injects the static m*g bracket load into the housing. Faithful port of the legacy sensors env tree.",
-            "category":    "Physics.Environment.Gravity",
-            "version":     "0.1.0",
-            "standards":   [],
+            "category": "Physics.Environment.Gravity",
+            "version": "0.1.0",
+            "standards": [],
             "nodes": [
-                { "type": "Physics.Environment.Gravity:vector",              "factory": "createGravityVectorNode",       "label": "Gravity Vector (body frame)" },
-                { "type": "Physics.Environment.Gravity:rotor-sag",           "factory": "createRotorSagNode",            "label": "Rotor Sag (gravity)" },
-                { "type": "Physics.Environment.Gravity:bearing-preload",     "factory": "createBearingPreloadNode",      "label": "Bearing Preload (gravity)" },
-                { "type": "Physics.Environment.Gravity:mounting-compliance", "factory": "createMountingComplianceNode",  "label": "Mounting Compliance (gravity)" }
+                { "type": "Physics.Environment.Gravity:vector", "factory": "createGravityVectorNode", "label": "Gravity Vector (body frame)" },
+                { "type": "Physics.Environment.Gravity:rotor-sag", "factory": "createRotorSagNode", "label": "Rotor Sag (gravity)" },
+                { "type": "Physics.Environment.Gravity:bearing-preload", "factory": "createBearingPreloadNode", "label": "Bearing Preload (gravity)" },
+                { "type": "Physics.Environment.Gravity:mounting-compliance", "factory": "createMountingComplianceNode", "label": "Mounting Compliance (gravity)" }
             ]
         },
         {
-            "id":          "Physics.Particulate",
+            "id": "Physics.Particulate",
             "displayName": "Particulates",
             "description": "Solid-phase particulate-matter descriptors (PM2.5, PM10, dust, lunar regolith). Wired to Physics.Scene:atmosphere-state through its variadic particulate_in_<k> config-link slot pool. V1 records the descriptor (id, characteristic diameter, material density, PM class) as binding metadata only; V2 will add a mass-loading state segment plus gravity-driven settling, drag, re-suspension, and filtration dynamics. Lives under Physics (not Chemistry) because particulates are solid matter governed by physics, not chemical species.",
-            "category":    "Physics.Particulate",
-            "version":     "0.1.0",
-            "standards":   [],
+            "category": "Physics.Particulate",
+            "version": "0.1.0",
+            "standards": [],
             "nodes": [
-                { "type": "Physics.Particulate:particulate",   "factory": "createParticulateNode",          "label": "Particulate" },
-                { "type": "Physics.Particulate:pm2_5",         "factory": "createPM2_5ParticulateNode",     "label": "PM2.5" },
-                { "type": "Physics.Particulate:pm10",          "factory": "createPM10ParticulateNode",      "label": "PM10" },
-                { "type": "Physics.Particulate:lunar_dust",    "factory": "createLunarDustParticulateNode", "label": "Lunar dust" }
+                { "type": "Physics.Particulate:particulate", "factory": "createParticulateNode", "label": "Particulate" },
+                { "type": "Physics.Particulate:pm2_5", "factory": "createPM2_5ParticulateNode", "label": "PM2.5" },
+                { "type": "Physics.Particulate:pm10", "factory": "createPM10ParticulateNode", "label": "PM10" },
+                { "type": "Physics.Particulate:lunar_dust", "factory": "createLunarDustParticulateNode", "label": "Lunar dust" }
             ]
         }
     ],

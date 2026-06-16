@@ -43,11 +43,13 @@
 
 import { cloneable } from "../graph/graph.interfaces";
 import type { IChannel, ISession, ISolverHandle } from "../execution/execution.interfaces";
+import { inSlotOf } from "../execution/execution.interfaces";
 import { RuntimeGraph } from "../execution/execution.graph";
 import { Frequency } from "../math/math.units";
-import { buildDefaultStateView } from "./scene-state-view.impl";
-import { MIN_EFFECTIVE_HZ } from "./scene-state-view.interface";
-import type { SceneStateView } from "./scene-state-view.interface";
+import { InheritedSceneStateView, matrix44ToTransform, transformToMatrix44 } from "./scene-state-view.impl";
+import { IDENTITY_TRANSFORM, MIN_EFFECTIVE_HZ } from "./scene-state-view.interface";
+import type { ITransform, SceneStateView } from "./scene-state-view.interface";
+import { IDENTITY44, isMatrix44, mul44 } from "../geometry/geometry.matrix";
 import { hasSampleRateRequirement } from "./sim.interfaces";
 
 /**
@@ -83,12 +85,24 @@ export interface SceneBindingResolver {
     buildSolverAttachments(sceneItemId: string, innerSession: ISession): ReadonlyArray<ISolverHandle>;
 }
 
-export class SimGraphNode<N extends import("../execution/execution.interfaces").IRuntimeNode = import("../execution/execution.interfaces").IRuntimeNode, L extends IChannel = IChannel> extends RuntimeGraph<N, L> {
+export class SimGraphNode<
+    N extends import("../execution/execution.interfaces").IRuntimeNode = import("../execution/execution.interfaces").IRuntimeNode,
+    L extends IChannel = IChannel,
+> extends RuntimeGraph<N, L> {
     /** Identifier of the SceneItem this sub-graph belongs to. Set by
      *  the editor when the user wires a SceneItem to this Sim.Graph
      *  via a config-link (P5). Empty string means "no scene wired"
      *  → falls back to a default Earth-surface view. */
     @cloneable public sceneItemId: string = "";
+
+    /** Serialized interior of this container (a version-3 sub-graph
+     *  document: model nodes + name-addressed connections + boundary
+     *  ports). Seeded by a palette factory that ships a pre-built
+     *  assembly, or written by the editor's drill-down on leaveSubGraph.
+     *  `materializeSubGraphInto` parses it at session build to populate
+     *  this node's interior; empty string means "interior built another
+     *  way" (the builder API, or a still-empty fresh container). */
+    @cloneable public subGraphJson: string = "";
 
     /** Editor-injected resolver; null means the SimGraphNode is being
      *  used outside an editor session-build (unit tests, headless
@@ -106,6 +120,28 @@ export class SimGraphNode<N extends import("../execution/execution.interfaces").
      *  very first fire treats `t` as both endpoints (no time has
      *  elapsed yet). */
     private _lastFiredAt: number = -Infinity;
+
+    // ── Transform participation (the "graph is a TransformNode" seam) ──
+    //
+    // A Sim.Graph is itself a world object: it accepts a `local` pose
+    // (matrix44) within its enclosing scene and exposes its composed
+    // `world` (matrix44). It carries no `parent_world` port of its own:
+    // the parent frame IS the enclosing scene, inherited through the
+    // fractal nesting (see _bindInnerSceneView), so chaining is done by
+    // nesting Sim.Graphs rather than by wiring a parallel transform tree
+    // (which would double-count the scene origin).
+
+    public static readonly INPUT_LOCAL = "local";
+    public static readonly OUTPUT_WORLD = "world";
+
+    /** This sub-graph's local pose within the enclosing scene, refreshed
+     *  from the `local` port each fire. Read live by the inner scene
+     *  view so the inner world objects re-frame when the container moves. */
+    @cloneable private _localPose: ITransform = IDENTITY_TRANSFORM;
+
+    /** Composed world matrix (column-major flat[16]) published on the
+     *  `world` output: enclosingSceneWorld × local. */
+    @cloneable private _world: number[] = (IDENTITY44 as number[]).slice();
 
     /**
      * Inject the scene binding resolver. The editor's session-builder
@@ -143,10 +179,20 @@ export class SimGraphNode<N extends import("../execution/execution.interfaces").
             view = this._bindingResolver.buildView(this.sceneItemId, inner);
         }
         if (!view) {
-            // No scene wired (or resolver unavailable / item missing):
-            // bind a default Earth-surface view so consumers inside
-            // the sub-graph still get sane gravity / temperature.
-            view = buildDefaultStateView(`__sim_graph_${this.sceneItemId || "unbound"}`);
+            // No SceneItem of its own: INHERIT the enclosing scene rather
+            // than fabricating a fresh Earth default. The inner view reads
+            // the parent session's live sceneStateView through a thunk
+            // (so a root binding established after this reset is picked up
+            // with no rebuild) and composes this sub-graph's local pose
+            // into the chained worldTransform. Scene context thus flows
+            // DOWN the fractal hierarchy, exactly as a TransformNode
+            // composes parent_world × local. When the parent has no view
+            // yet, the inherited view degrades to Earth-surface defaults.
+            view = new InheritedSceneStateView(
+                `__sim_graph_${this.sceneItemId || "unbound"}`,
+                () => parentSession.sceneStateView,
+                () => this._localPose
+            );
         }
         inner.sceneStateView = view;
 
@@ -164,6 +210,8 @@ export class SimGraphNode<N extends import("../execution/execution.interfaces").
         }
 
         this._lastFiredAt = -Infinity;
+        this._localPose = IDENTITY_TRANSFORM;
+        this._world = (IDENTITY44 as number[]).slice();
     }
 
     /**
@@ -186,26 +234,75 @@ export class SimGraphNode<N extends import("../execution/execution.interfaces").
      * discrete ticks).
      */
     public override fire(parentSession: ISession, t: number): void {
+        // 1) Consume the `local` pose and compose this sub-graph's world
+        //    from the enclosing scene BEFORE routing, so `local` is not
+        //    mistaken for a boundary input destined for the inner graph.
+        this._updateTransform(parentSession);
+
         const inner = this._routeInputsFromParent(parentSession);
-        if (!inner) return;
+        if (inner) {
+            const K = this._computeSubStepRatio(parentSession, inner);
+            // First fire after reset() has no recorded "previous t"; we
+            // anchor the span at 0 (start-of-sim convention). Sub-steps
+            // therefore spread evenly from 0 to t on the first call,
+            // matching what the user sees when a fixed-rate runner kicks
+            // off a fresh play (`GraphRunner.play()` resets t = 0 then
+            // immediately calls run(dt) for the first frame).
+            const lastT = this._lastFiredAt === -Infinity ? 0 : this._lastFiredAt;
+            const span = t - lastT;
+            const dt = K > 0 ? span / K : span;
 
-        const K = this._computeSubStepRatio(parentSession, inner);
-        // First fire after reset() has no recorded "previous t"; we
-        // anchor the span at 0 (start-of-sim convention). Sub-steps
-        // therefore spread evenly from 0 to t on the first call,
-        // matching what the user sees when a fixed-rate runner kicks
-        // off a fresh play (`GraphRunner.play()` resets t = 0 then
-        // immediately calls run(dt) for the first frame).
-        const lastT = this._lastFiredAt === -Infinity ? 0 : this._lastFiredAt;
-        const span = t - lastT;
-        const dt = K > 0 ? span / K : span;
+            for (let k = 1; k <= K; k++) {
+                inner.run(lastT + k * dt);
+            }
+            this._lastFiredAt = t;
 
-        for (let k = 1; k <= K; k++) {
-            inner.run(lastT + k * dt);
+            this._routeOutputsToParent(parentSession, inner);
         }
-        this._lastFiredAt = t;
 
-        this._routeOutputsToParent(parentSession, inner);
+        // 2) Publish the composed world for OUTER consumers (siblings,
+        //    visualisation) regardless of whether the inner ran this tick.
+        this._publishWorld(parentSession);
+    }
+
+    /**
+     * Read the `local` pose port (if wired) and compose this sub-graph's
+     * world from the enclosing scene. Refreshes `_localPose` (read live
+     * by the inner scene view to re-frame inner world objects) and
+     * `_world` (published on the `world` output). `local` is consumed
+     * here so `_routeInputsFromParent` does not see it as a ready
+     * boundary token.
+     */
+    private _updateTransform(parentSession: ISession): void {
+        const links = parentSession.graph.links as ReadonlyArray<IChannel>;
+        let local: ReadonlyArray<number> = IDENTITY44;
+        for (const link of this.opsc<IChannel>()) {
+            if (!link.enabled) continue;
+            if (String(inSlotOf(link)) !== SimGraphNode.INPUT_LOCAL) continue;
+            const idx = links.indexOf(link);
+            if (idx < 0 || !parentSession.linkStates[idx]?.ready) continue;
+            const value = parentSession.consume(idx);
+            if (isMatrix44(value)) local = value;
+        }
+        // Fast path: unwired local stays the shared IDENTITY44 ref, so we
+        // reuse the frozen IDENTITY_TRANSFORM and skip the decompose.
+        this._localPose = local === IDENTITY44 ? IDENTITY_TRANSFORM : matrix44ToTransform(local);
+        const parentScene = parentSession.sceneStateView;
+        const parentWorld: ReadonlyArray<number> = parentScene ? transformToMatrix44(parentScene.worldTransform) : IDENTITY44;
+        const w = new Array<number>(16);
+        mul44(w, parentWorld, local);
+        this._world = w;
+    }
+
+    /** Publish the composed `world` matrix on the outgoing `world` port. */
+    private _publishWorld(parentSession: ISession): void {
+        const links = parentSession.graph.links as ReadonlyArray<IChannel>;
+        for (const link of this.onsc<IChannel>()) {
+            if (!link.enabled || link.slot !== SimGraphNode.OUTPUT_WORLD) continue;
+            const idx = links.indexOf(link);
+            if (idx < 0) continue;
+            parentSession.publish(idx, this._world);
+        }
     }
 
     /**

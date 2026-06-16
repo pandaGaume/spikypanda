@@ -36,8 +36,17 @@ export const simGraphSubPlugin: IPlugin = {
             // solvers. The remaining variadic data-side I/O is grown
             // by the user INSIDE the sub-graph canvas (drill-down via
             // double-click on the node).
-            inputPorts: [{ slot: "scene_in", optional: true, type: "scene" }],
-            outputPorts: [],
+            // scene_in: the SceneItem this sub-graph binds to (config
+            // link). local: the sub-graph's pose within its enclosing
+            // scene (matrix44); a Sim.Graph is itself a world object.
+            // The parent frame is the enclosing scene, inherited through
+            // the fractal nesting, so there is no `parent_world` port.
+            // world: the composed pose, for outer consumers / nesting.
+            inputPorts: [
+                { slot: "scene_in", optional: true, type: "scene" },
+                { slot: "local", optional: true, type: "matrix44" },
+            ],
+            outputPorts: [{ slot: "world", optional: false, type: "matrix44" }],
         });
     },
 };

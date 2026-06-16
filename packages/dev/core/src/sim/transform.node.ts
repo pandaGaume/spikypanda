@@ -1,81 +1,15 @@
 import { cloneable, IOlink } from "../graph/graph.interfaces";
 import { IChannel, IDeclaresPorts, IPortDescriptor, ISession, inSlotOf } from "../execution/execution.interfaces";
 import { RuntimeNode } from "../execution/execution.node";
-import { buildDefaultStateView } from "./scene-state-view.impl";
+import { buildDefaultStateView, transformToMatrix44 } from "./scene-state-view.impl";
+import { IDENTITY44, isMatrix44, mul44 } from "../geometry/geometry.matrix";
 import type { ICartesian } from "../geometry/geometry.interfaces";
 import type { Nullable } from "../types";
 import type { SceneStateView } from "./scene-state-view.interface";
 
-/**
- * Column-major 4×4 identity. Frozen so subclasses that read it cannot
- * accidentally mutate the shared fallback.
- */
-export const IDENTITY44: ReadonlyArray<number> = Object.freeze([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-
-/** Lightweight runtime guard: matrix44 is a flat array of 16 numbers. */
-export function isMatrix44(v: unknown): v is ReadonlyArray<number> {
-    return Array.isArray(v) && v.length === 16;
-}
-
-/**
- * Column-major 4×4 multiplication: `out = a × b`. `out` may alias neither
- * `a` nor `b` (caller passes a fresh array).
- */
-export function mul44(out: number[], a: ReadonlyArray<number>, b: ReadonlyArray<number>): void {
-    const a00 = a[0],
-        a10 = a[1],
-        a20 = a[2],
-        a30 = a[3];
-    const a01 = a[4],
-        a11 = a[5],
-        a21 = a[6],
-        a31 = a[7];
-    const a02 = a[8],
-        a12 = a[9],
-        a22 = a[10],
-        a32 = a[11];
-    const a03 = a[12],
-        a13 = a[13],
-        a23 = a[14],
-        a33 = a[15];
-
-    const b00 = b[0],
-        b10 = b[1],
-        b20 = b[2],
-        b30 = b[3];
-    const b01 = b[4],
-        b11 = b[5],
-        b21 = b[6],
-        b31 = b[7];
-    const b02 = b[8],
-        b12 = b[9],
-        b22 = b[10],
-        b32 = b[11];
-    const b03 = b[12],
-        b13 = b[13],
-        b23 = b[14],
-        b33 = b[15];
-
-    out[0] = a00 * b00 + a01 * b10 + a02 * b20 + a03 * b30;
-    out[1] = a10 * b00 + a11 * b10 + a12 * b20 + a13 * b30;
-    out[2] = a20 * b00 + a21 * b10 + a22 * b20 + a23 * b30;
-    out[3] = a30 * b00 + a31 * b10 + a32 * b20 + a33 * b30;
-
-    out[4] = a00 * b01 + a01 * b11 + a02 * b21 + a03 * b31;
-    out[5] = a10 * b01 + a11 * b11 + a12 * b21 + a13 * b31;
-    out[6] = a20 * b01 + a21 * b11 + a22 * b21 + a23 * b31;
-    out[7] = a30 * b01 + a31 * b11 + a32 * b21 + a33 * b31;
-
-    out[8] = a00 * b02 + a01 * b12 + a02 * b22 + a03 * b32;
-    out[9] = a10 * b02 + a11 * b12 + a12 * b22 + a13 * b32;
-    out[10] = a20 * b02 + a21 * b12 + a22 * b22 + a23 * b32;
-    out[11] = a30 * b02 + a31 * b12 + a32 * b22 + a33 * b32;
-
-    out[12] = a00 * b03 + a01 * b13 + a02 * b23 + a03 * b33;
-    out[13] = a10 * b03 + a11 * b13 + a12 * b23 + a13 * b33;
-    out[14] = a20 * b03 + a21 * b13 + a22 * b23 + a23 * b33;
-    out[15] = a30 * b03 + a31 * b13 + a32 * b23 + a33 * b33;
-}
+// IDENTITY44 / isMatrix44 / mul44 are the Matrix44 (flat serialized form)
+// helpers, owned by geometry alongside the Matrix4 class — one home for
+// the 4x4 matrix, no duplicated multiply. Imported here, not redefined.
 
 /** Equality test with a small absolute tolerance; both flat arrays of 16. */
 function matrices44Equal(a: ReadonlyArray<number>, b: ReadonlyArray<number>): boolean {
@@ -105,6 +39,15 @@ function matrices44Equal(a: ReadonlyArray<number>, b: ReadonlyArray<number>): bo
  * binding established at session bind by the enclosing Sim.Graph or by
  * the GraphRunner). Subclasses read it through `getScene()`, which falls
  * back to a sane Earth-surface default when no scene has been bound.
+ *
+ * Parent-frame inheritance: when the `parent_world` port is NOT wired,
+ * the node inherits the enclosing scene's `worldTransform` as its
+ * parent frame (rather than the bare identity). The scene IS the
+ * default parent of every world object: a Sim.Graph that nests a scene
+ * with a non-identity pose re-frames every TransformNode inside it
+ * automatically. Backward compatible: a root scene's worldTransform is
+ * identity unless the user gives the scene a pose, so graphs that never
+ * set a scene transform see the same identity parent as before.
  *
  * This is a CORE primitive (it was previously vendored inside the physics
  * plugin): any plugin's world object (motor, sensor, mechanical body,
@@ -144,6 +87,25 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
      *  no `sceneStateView`. Constructed lazily on first `getScene()`. */
     private _fallbackSceneView: SceneStateView | null = null;
 
+    /** Optional per-node SceneItem binding (the `scene` config-link
+     *  target). When the editor wires a SceneItem's `scene_out` to this
+     *  node's `scene` port, the session-builder records the SceneItem's
+     *  id here and injects the resolved live view via `setBoundSceneView`.
+     *  Lets two motors on the same canvas live in DIFFERENT scenes
+     *  (Earth vs Moon side by side) without wrapping each in a Sim.Graph.
+     *  Empty string = no per-node binding (use the session scene). */
+    @cloneable public sceneItemId: string = "";
+
+    /** Editor-injected live view for `sceneItemId` (null when unbound).
+     *  Runtime metadata, not @cloneable: re-resolved each session build. */
+    private _boundSceneView: SceneStateView | null = null;
+
+    /** Inject (or clear) the per-node scene view. Called by the editor's
+     *  session-builder after resolving `sceneItemId` against the canvas. */
+    public setBoundSceneView(view: SceneStateView | null): void {
+        this._boundSceneView = view;
+    }
+
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = TransformNode.TRANSFORM_INPUT_PORTS;
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = TransformNode.TRANSFORM_OUTPUT_PORTS;
 
@@ -166,12 +128,23 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
      *     const T = this.getScene(session).temperature; // K
      */
     protected getScene(session: ISession): SceneStateView {
-        const bound = session.sceneStateView;
-        if (bound) return bound;
+        const scene = this.boundScene(session);
+        if (scene) return scene;
         if (!this._fallbackSceneView) {
             this._fallbackSceneView = buildDefaultStateView("__transform_fallback__");
         }
         return this._fallbackSceneView;
+    }
+
+    /**
+     * The effective scene for this node WITHOUT the Earth fallback:
+     * per-node binding wins, then the session scene, else null. Callers
+     * that must distinguish "a real scene is bound" from "nothing"
+     * (e.g. gravity coupling that should stay inert with no scene) use
+     * this rather than `getScene()`.
+     */
+    protected boundScene(session: ISession): SceneStateView | null {
+        return this._boundSceneView ?? session.sceneStateView ?? null;
     }
 
     public override reset(_session: ISession): void {
@@ -185,6 +158,7 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
         const links = session.graph.links as ReadonlyArray<IChannel>;
         let local: ReadonlyArray<number> = IDENTITY44;
         let parentWorld: ReadonlyArray<number> = IDENTITY44;
+        let parentWorldWired = false;
 
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
@@ -195,7 +169,18 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
             const value = session.consume(idx);
             if (!isMatrix44(value)) continue;
             if (slot === TransformNode.INPUT_LOCAL) local = value;
-            else if (slot === TransformNode.INPUT_PARENT_WORLD) parentWorld = value;
+            else if (slot === TransformNode.INPUT_PARENT_WORLD) {
+                parentWorld = value;
+                parentWorldWired = true;
+            }
+        }
+
+        // No explicit parent wired: inherit the enclosing scene's world
+        // pose. A root scene with no transform yields identity (the
+        // historical default); a Sim.Graph that nests a posed scene
+        // re-frames this node automatically.
+        if (!parentWorldWired) {
+            parentWorld = transformToMatrix44(this.getScene(session).worldTransform);
         }
 
         const newWorld: number[] = new Array(16);
