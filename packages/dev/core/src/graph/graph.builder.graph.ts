@@ -2,7 +2,7 @@ import { ICartesian } from "../geometry";
 import { Nullable } from "../types";
 import { GraphNodeBuilder } from "./graph.builder.node";
 import { Graph } from "./graph.graph";
-import { INode, IOlink, isNode, isOlink } from "./graph.interfaces";
+import { IGraph, INode, IOlink, isNode, isOlink } from "./graph.interfaces";
 import { IGraphBuilder, ILinkBuilder, INodeBuilder } from "./graph.interfaces.builder";
 
 /**
@@ -119,11 +119,13 @@ export class GraphBuilder<N extends INode, L extends IOlink> implements IGraphBu
     }
 
     /**
-     * Build and return a Graph<N, L>. Subclass builders override
-     * _createGraph() to swap the concrete graph type without rewriting
-     * this assembly logic.
+     * Build and return an `IGraph<N, L>`. Typed against the INTERFACE, not
+     * the concrete `Graph<N, L>`, so a subclass factory can return any
+     * IGraph implementation (e.g. `RuntimeGraph`, which is an `IRuntimeGraph`
+     * but no longer extends the `Graph` class) without relying on structural
+     * assignability to that class.
      */
-    public build(): Graph<N, L> {
+    public build(): IGraph<N, L> {
         return this._createGraph(
             this._nodes,
             this._links,
@@ -139,8 +141,11 @@ export class GraphBuilder<N extends INode, L extends IOlink> implements IGraphBu
     // ── Concrete-class factories (override in subclasses) ─────────────
 
     /**
-     * Factory for the concrete graph class. Subclass builders override
-     * to instantiate their richer graph type.
+     * Factory for the graph instance. The base builds the concrete
+     * `Graph<N, L>` but the RETURN TYPE is the `IGraph<N, L>` interface, so
+     * subclass overrides can instantiate a richer implementation (e.g.
+     * `RuntimeGraph`) that satisfies the contract without sharing the
+     * concrete class's prototype.
      */
     protected _createGraph(
         nodes: N[],
@@ -151,7 +156,7 @@ export class GraphBuilder<N extends INode, L extends IOlink> implements IGraphBu
         onsc: Nullable<L[]>,
         opsc: Nullable<L[]>,
         position?: ICartesian
-    ): Graph<N, L> {
+    ): IGraph<N, L> {
         return new Graph<N, L>(nodes, links, inputs, outputs, hiddens, onsc, opsc, position);
     }
 

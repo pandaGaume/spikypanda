@@ -49,7 +49,7 @@ import { Frequency } from "../math/math.units";
 import { InheritedSceneStateView, matrix44ToTransform, transformToMatrix44 } from "./scene-state-view.impl";
 import { IDENTITY_TRANSFORM, MIN_EFFECTIVE_HZ } from "./scene-state-view.interface";
 import type { ITransform, SceneStateView } from "./scene-state-view.interface";
-import { IDENTITY44, isMatrix44, mul44 } from "../geometry/geometry.matrix";
+import { IDENTITY44, isMatrix44, Matrix4 } from "../geometry/geometry.matrix";
 import { hasSampleRateRequirement } from "./sim.interfaces";
 
 /**
@@ -142,6 +142,12 @@ export class SimGraphNode<
     /** Composed world matrix (column-major flat[16]) published on the
      *  `world` output: enclosingSceneWorld × local. */
     @cloneable private _world: number[] = (IDENTITY44 as number[]).slice();
+
+    /** Reusable Matrix4 instances for the world composition (math on the
+     *  Matrix4 class, no flat free function, no per-tick allocation). */
+    private readonly _m4Parent: Matrix4 = new Matrix4();
+    private readonly _m4Local: Matrix4 = new Matrix4();
+    private readonly _m4World: Matrix4 = new Matrix4();
 
     /**
      * Inject the scene binding resolver. The editor's session-builder
@@ -289,9 +295,11 @@ export class SimGraphNode<
         this._localPose = local === IDENTITY44 ? IDENTITY_TRANSFORM : matrix44ToTransform(local);
         const parentScene = parentSession.sceneStateView;
         const parentWorld: ReadonlyArray<number> = parentScene ? transformToMatrix44(parentScene.worldTransform) : IDENTITY44;
-        const w = new Array<number>(16);
-        mul44(w, parentWorld, local);
-        this._world = w;
+        // world = parent_world × local, through the Matrix4 class.
+        this._m4Parent.setFromArray(parentWorld);
+        this._m4Local.setFromArray(local);
+        this._m4Parent.multiplyToRef(this._m4Local, this._m4World);
+        this._world = this._m4World.toArrayRef(new Array<number>(16));
     }
 
     /** Publish the composed `world` matrix on the outgoing `world` port. */

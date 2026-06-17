@@ -182,6 +182,8 @@ export interface INode<B = unknown> extends IGraphItem<B> {
     position?: ICartesian;
     onsc<L extends IOlink>(): Array<L>;
     opsc<L extends IOlink>(): Array<L>;
+    add<L extends IOlink>(...links: Array<L>): void;
+    remove<L extends IOlink>(...links: Array<L>): void;
 }
 
 // we define the INodeSet and ILinkSet interfaces to be able to use them to group nodes and links

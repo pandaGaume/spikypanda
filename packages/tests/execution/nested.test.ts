@@ -1,4 +1,4 @@
-import { Channel, RuntimeGraph, RuntimeNode, SchedulingMode, Session } from "spikypanda-core";
+import { Channel, IRuntimeNode, RuntimeGraph, SchedulingMode, Session } from "spikypanda-core";
 import { AddNode, ConsumerNode, ProducerNode } from "./poc-nodes";
 
 /**
@@ -7,12 +7,12 @@ import { AddNode, ConsumerNode, ProducerNode } from "./poc-nodes";
  * ofin = undefined for outputs). The embedding mechanism matches them
  * to parent channels by slot name automatically.
  */
-function buildAddSubgraph(mode: SchedulingMode): RuntimeGraph<RuntimeNode, Channel> {
+function buildAddSubgraph(mode: SchedulingMode): RuntimeGraph<IRuntimeNode, Channel> {
     const add = new AddNode();
     const inA = new Channel<number>(undefined, add, "a");
     const inB = new Channel<number>(undefined, add, "b");
     const out = new Channel<number>(add, undefined, "sum");
-    return new RuntimeGraph<RuntimeNode, Channel>([add], [inA, inB, out], mode);
+    return new RuntimeGraph<IRuntimeNode, Channel>([add], [inA, inB, out], mode);
 }
 
 describe("Nested sub-graph (fractal composition)", () => {
@@ -24,7 +24,7 @@ describe("Nested sub-graph (fractal composition)", () => {
         const lAtoSub = new Channel(pa, sub, "a");
         const lBtoSub = new Channel(pb, sub, "b");
         const lSubtoC = new Channel(sub, c, "sum");
-        const parent = new RuntimeGraph<RuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "dynamic");
+        const parent = new RuntimeGraph<IRuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "dynamic");
         const s = new Session(parent);
 
         s.run(0);
@@ -40,7 +40,7 @@ describe("Nested sub-graph (fractal composition)", () => {
         const lAtoSub = new Channel(pa, sub, "a");
         const lBtoSub = new Channel(pb, sub, "b");
         const lSubtoC = new Channel(sub, c, "sum");
-        const parent = new RuntimeGraph<RuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "static");
+        const parent = new RuntimeGraph<IRuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "static");
         const s = new Session(parent);
 
         s.run(0);
@@ -56,7 +56,7 @@ describe("Nested sub-graph (fractal composition)", () => {
         const lAtoSub = new Channel(pa, sub, "a");
         const lBtoSub = new Channel(pb, sub, "b");
         const lSubtoC = new Channel(sub, c, "sum");
-        const parent = new RuntimeGraph<RuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "dynamic");
+        const parent = new RuntimeGraph<IRuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "dynamic");
         const s = new Session(parent);
 
         s.run(0);
@@ -73,7 +73,7 @@ describe("Nested sub-graph (fractal composition)", () => {
         const lAtoSub = new Channel(pa, sub, "a");
         const lBtoSub = new Channel(pb, sub, "b");
         const lSubtoC = new Channel(sub, c, "sum");
-        const parent = new RuntimeGraph<RuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "dynamic");
+        const parent = new RuntimeGraph<IRuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "dynamic");
         const s = new Session(parent);
 
         s.run(0);
@@ -89,7 +89,7 @@ describe("Nested sub-graph (fractal composition)", () => {
         const lAtoSub = new Channel(pa, sub, "a");
         const lBtoSub = new Channel(pb, sub, "b");
         const lSubtoC = new Channel(sub, c, "sum");
-        const parent = new RuntimeGraph<RuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "static");
+        const parent = new RuntimeGraph<IRuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "static");
         const s = new Session(parent);
 
         s.run(0);
@@ -105,7 +105,7 @@ describe("Nested sub-graph (fractal composition)", () => {
         const lAtoSub = new Channel(pa, sub, "a");
         const lBtoSub = new Channel(pb, sub, "b");
         const lSubtoC = new Channel(sub, c, "sum");
-        const parent = new RuntimeGraph<RuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "dynamic");
+        const parent = new RuntimeGraph<IRuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "dynamic");
         const s = new Session(parent);
 
         sub.enabled = false;
@@ -122,7 +122,7 @@ describe("Nested sub-graph (fractal composition)", () => {
         const lAtoSub = new Channel(pa, sub, "a");
         const lBtoSub = new Channel(pb, sub, "b");
         const lSubtoC = new Channel(sub, c, "sum");
-        const parent = new RuntimeGraph<RuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "dynamic");
+        const parent = new RuntimeGraph<IRuntimeNode, Channel>([pa, pb, sub, c], [lAtoSub, lBtoSub, lSubtoC], "dynamic");
         const s = new Session(parent);
 
         s.run(0);
@@ -144,7 +144,7 @@ describe("Nested sub-graph (fractal composition)", () => {
         const pa1 = new ProducerNode(10);
         const pb1 = new ProducerNode(20);
         const c1 = new ConsumerNode();
-        const parent1 = new RuntimeGraph<RuntimeNode, Channel>(
+        const parent1 = new RuntimeGraph<IRuntimeNode, Channel>(
             [pa1, pb1, sub, c1],
             [new Channel(pa1, sub, "a"), new Channel(pb1, sub, "b"), new Channel(sub, c1, "sum")],
             "dynamic"
@@ -154,7 +154,7 @@ describe("Nested sub-graph (fractal composition)", () => {
         const pa2 = new ProducerNode(100);
         const pb2 = new ProducerNode(200);
         const c2 = new ConsumerNode();
-        const parent2 = new RuntimeGraph<RuntimeNode, Channel>(
+        const parent2 = new RuntimeGraph<IRuntimeNode, Channel>(
             [pa2, pb2, sub, c2],
             [new Channel(pa2, sub, "a"), new Channel(pb2, sub, "b"), new Channel(sub, c2, "sum")],
             "dynamic"

@@ -3,19 +3,13 @@ import { GraphItem } from "./graph.graphItem";
 import { INode, IOlink } from "./graph.interfaces";
 
 export class GraphOLink<B = unknown> extends GraphItem<B> implements IOlink<B> {
-    private _oini: Nullable<INode>;
-    public _ofin: Nullable<INode>;
+    private _oini: Nullable<INode> = null;
+    public _ofin: Nullable<INode> = null;
 
     public constructor(oini?: INode, ofin?: INode) {
         super();
-        this._oini = oini ?? null;
-        if (this._oini) {
-            this._oini.onsc().push(this);
-        }
-        this._ofin = ofin ?? null;
-        if (this._ofin) {
-            this._ofin.opsc().push(this);
-        }
+        this.oini = oini ?? null;
+        this.ofin = ofin ?? null;
     }
 
     public get oini(): Nullable<INode> {
@@ -24,14 +18,9 @@ export class GraphOLink<B = unknown> extends GraphItem<B> implements IOlink<B> {
 
     public set oini(n: Nullable<INode>) {
         if (this._oini !== n) {
-            if (this._oini) {
-                const a = this._oini.onsc();
-                a.splice(a.indexOf(this));
-            }
+            this._oini?.remove(this);
             this._oini = n;
-            if (this._oini) {
-                this._oini.onsc().push(this);
-            }
+            this._oini?.add(this);
         }
     }
 
@@ -41,26 +30,15 @@ export class GraphOLink<B = unknown> extends GraphItem<B> implements IOlink<B> {
 
     public set ofin(n: Nullable<INode>) {
         if (this._ofin !== n) {
-            if (this._ofin) {
-                const a = this._ofin.opsc();
-                a.splice(a.indexOf(this));
-            }
+            this._ofin?.remove(this);
             this._ofin = n;
-            if (this._ofin) {
-                this._ofin.opsc().push(this);
-            }
+            this._ofin?.add(this);
         }
     }
 
     public dispose(): void {
-        if (this._oini) {
-            const tmp = this._oini.onsc();
-            tmp.splice(tmp.indexOf(this));
-        }
-        if (this._ofin) {
-            const tmp = this._ofin.opsc();
-            tmp.splice(tmp.indexOf(this));
-        }
+        this._oini?.remove(this);
+        this._ofin?.remove(this);
         super.dispose();
     }
 }

@@ -14,9 +14,8 @@
  * and the structural inheritance contract.
  */
 import type { IChannel, ISession } from "spikypanda-core";
-import {
-    TransformNode, IDENTITY44, mul44, isMatrix44,
-} from "../../dev/plugins/physics/src/transform/index";
+import { Matrix4, RK4AdaptiveSolver } from "spikypanda-core";
+import { TransformNode, IDENTITY44, isMatrix44 } from "../../dev/plugins/physics/src/transform/index";
 import { DcMotorDynamicNode } from "../../dev/plugins/physics/src/electric/motor-dc/index";
 import { BldcMotorDynamicNode } from "../../dev/plugins/physics/src/electric/motor-bldc/index";
 
@@ -25,7 +24,10 @@ import { BldcMotorDynamicNode } from "../../dev/plugins/physics/src/electric/mot
 // we can assert that the world output gets a non-empty 16-number array.
 // ---------------------------------------------------------------------------
 
-interface IPublishedRecord { idx: number; value: unknown }
+interface IPublishedRecord {
+    idx: number;
+    value: unknown;
+}
 
 function makeSession(opts?: { links?: ReadonlyArray<IChannel>; published?: IPublishedRecord[] }): ISession {
     const links = opts?.links ?? [];
@@ -34,7 +36,9 @@ function makeSession(opts?: { links?: ReadonlyArray<IChannel>; published?: IPubl
         graph: { links },
         linkStates: links.map(() => ({ ready: false })),
         consume: () => undefined,
-        publish: (idx: number, value: unknown) => { published?.push({ idx, value }); },
+        publish: (idx: number, value: unknown) => {
+            published?.push({ idx, value });
+        },
         peek: () => undefined,
     } as unknown as ISession;
 }
@@ -53,40 +57,38 @@ describe("matrix44 helpers", () => {
         expect(isMatrix44("not a matrix")).toBe(false);
     });
 
-    it("mul44 with identity on either side returns the other matrix", () => {
+    it("Matrix4.multiply with identity on either side returns the other matrix", () => {
         // Column-major: translation (tx, ty, tz) sits at indices 12, 13, 14.
+        // prettier-ignore
         const T: number[] = [
             1, 0, 0, 0,
             0, 1, 0, 0,
             0, 0, 1, 0,
             10, 20, 30, 1,
         ];
-        const out: number[] = new Array(16);
-        mul44(out, IDENTITY44, T);
-        expect(out).toEqual(T);
-
-        const out2: number[] = new Array(16);
-        mul44(out2, T, IDENTITY44);
-        expect(out2).toEqual(T);
+        const id = Matrix4.fromFlat(IDENTITY44 as number[]);
+        expect(id.multiply(Matrix4.fromFlat(T)).toFlat()).toEqual(T);
+        expect(Matrix4.fromFlat(T).multiply(id).toFlat()).toEqual(T);
     });
 
-    it("mul44 composes a translation parent with a translation local correctly", () => {
+    it("Matrix4.multiply composes a translation parent with a translation local correctly", () => {
         // parent translates by (1, 0, 0), local translates by (0, 2, 0).
         // Expected world translates by (1, 2, 0).
+        // prettier-ignore
         const parent: number[] = [
             1, 0, 0, 0,
             0, 1, 0, 0,
             0, 0, 1, 0,
             1, 0, 0, 1,
         ];
+        // prettier-ignore
         const local: number[] = [
             1, 0, 0, 0,
             0, 1, 0, 0,
             0, 0, 1, 0,
             0, 2, 0, 1,
         ];
-        const out: number[] = new Array(16);
-        mul44(out, parent, local);
+        const out = Matrix4.fromFlat(parent).multiply(Matrix4.fromFlat(local)).toFlat();
         // Last column = translation of result.
         expect(out[12]).toBeCloseTo(1, 12);
         expect(out[13]).toBeCloseTo(2, 12);
@@ -137,7 +139,7 @@ describe("TransformNode", () => {
 describe("Motor TransformNode inheritance", () => {
     it("DcMotorDynamicNode exposes transform + fault ports alongside its own (scene moved to session)", () => {
         const node = new DcMotorDynamicNode();
-        const inSlots  = node.inputPorts.map((p) => p.slot);
+        const inSlots = node.inputPorts.map((p) => p.slot);
         const outSlots = node.outputPorts.map((p) => p.slot);
         // Base-class ports first (transform, fault), then own.
         // `dt` port was dropped in F3 — the motor is now IIntegrable
@@ -151,7 +153,7 @@ describe("Motor TransformNode inheritance", () => {
 
     it("BldcMotorDynamicNode exposes transform + fault ports alongside its own (scene moved to session)", () => {
         const node = new BldcMotorDynamicNode();
-        const inSlots  = node.inputPorts.map((p) => p.slot);
+        const inSlots = node.inputPorts.map((p) => p.slot);
         const outSlots = node.outputPorts.map((p) => p.slot);
         expect(inSlots).toEqual(["local", "parent_world", "fault_0", "V_a", "V_b", "V_c", "tau_load", "dt"]);
         expect(outSlots).toEqual(["world", "i_a", "i_b", "i_c", "omega", "theta_m", "tau_em"]);
@@ -172,7 +174,6 @@ describe("Motor TransformNode inheritance", () => {
         // attached RK4 solver owns state advancement, so we set one up
         // here and call solver.step directly to exercise the IIntegrable
         // contract end-to-end (gatherState → rhs → writeState).
-        const { RK4AdaptiveSolver } = require("spikypanda-core");
         const node = new DcMotorDynamicNode();
         node.i0 = 5;
         node.omega0 = 200;

@@ -1,24 +1,12 @@
 import { cloneable, IOlink } from "../graph/graph.interfaces";
-import { IChannel, IDeclaresPorts, IPortDescriptor, ISession, inSlotOf } from "../execution/execution.interfaces";
+import { IDeclaresPorts, IPortDescriptor, ISession } from "../execution/execution.interfaces";
 import { RuntimeNode } from "../execution/execution.node";
 import { buildDefaultStateView, transformToMatrix44 } from "./scene-state-view.impl";
-import { IDENTITY44, isMatrix44, mul44 } from "../geometry/geometry.matrix";
-import type { ICartesian } from "../geometry/geometry.interfaces";
+import { IDENTITY44, isMatrix44, Matrix4 } from "../geometry/geometry.matrix";
+import { Cartesian3 } from "../geometry/geometry.cartesian";
+import type { ICartesian, ICartesian3 } from "../geometry/geometry.interfaces";
 import type { Nullable } from "../types";
 import type { SceneStateView } from "./scene-state-view.interface";
-
-// IDENTITY44 / isMatrix44 / mul44 are the Matrix44 (flat serialized form)
-// helpers, owned by geometry alongside the Matrix4 class — one home for
-// the 4x4 matrix, no duplicated multiply. Imported here, not redefined.
-
-/** Equality test with a small absolute tolerance; both flat arrays of 16. */
-function matrices44Equal(a: ReadonlyArray<number>, b: ReadonlyArray<number>): boolean {
-    if (a.length !== 16 || b.length !== 16) return false;
-    for (let i = 0; i < 16; ++i) {
-        if (Math.abs(a[i] - b[i]) > 1e-12) return false;
-    }
-    return true;
-}
 
 /**
  * Base class for every runtime object that lives in a world reference
@@ -61,9 +49,6 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
     public static readonly INPUT_PARENT_WORLD = "parent_world";
     public static readonly OUTPUT_WORLD = "world";
 
-    /** The set of input slot names owned by this base class. */
-    private static readonly TRANSFORM_INPUT_SLOTS: ReadonlySet<string> = new Set([TransformNode.INPUT_LOCAL, TransformNode.INPUT_PARENT_WORLD]);
-
     /** Reusable port descriptor blocks so subclasses can spread them. */
     public static readonly TRANSFORM_INPUT_PORTS: ReadonlyArray<IPortDescriptor> = [
         { slot: TransformNode.INPUT_LOCAL, optional: true, type: "matrix44" },
@@ -77,11 +62,25 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
      * already consumed by `super.fire()`.
      */
     protected static isTransformInputSlot(slot: string): boolean {
-        return TransformNode.TRANSFORM_INPUT_SLOTS.has(slot);
+        return slot === TransformNode.INPUT_LOCAL || slot === TransformNode.INPUT_PARENT_WORLD;
     }
 
     /** Internal world transform; cloneable so editor save/restore preserves it. */
     @cloneable private _world: number[] = (IDENTITY44 as number[]).slice();
+
+    /** Reusable Matrix4 instances so the per-tick composition + body-frame
+     *  gravity projection go through the Matrix4 class with no per-tick
+     *  allocation. `_m4World` holds the current world after `fire()`; the
+     *  flat `_world` is its serialized copy (ports / @cloneable). */
+    private readonly _m4Parent: Matrix4 = new Matrix4();
+    private readonly _m4Local: Matrix4 = new Matrix4();
+    private readonly _m4World: Matrix4 = new Matrix4();
+
+    /** World's inverse rotation, reused to express world-frame gravity in the
+     *  body frame. The world is a rigid body->world transform, so its inverse
+     *  rotation is its transpose; that rigid-body equivalence is a DOMAIN
+     *  choice made here, not a property of the pure-math Matrix4. */
+    private readonly _m4WorldRotInv: Matrix4 = new Matrix4();
 
     /** Per-process fallback scene view used when the bound session has
      *  no `sceneStateView`. Constructed lazily on first `getScene()`. */
@@ -104,6 +103,73 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
      *  session-builder after resolving `sceneItemId` against the canvas. */
     public setBoundSceneView(view: SceneStateView | null): void {
         this._boundSceneView = view;
+    }
+
+    // ── Body-frame gravity (cached, dirty-checked) ────────────────────
+    //
+    // The scene's gravity is a LATENT, world-fixed vector; the world
+    // matrix is only this object's POSE and does NOT change the gravity.
+    // What a world object needs for gravity coupling is that same gravity
+    // expressed in its OWN body frame: g_body = R^T * g_world (R = the
+    // rotation block of `world`). That projection depends solely on the
+    // gravity (effectively constant) and this object's orientation (rarely
+    // changing), so it is computed ONCE and cached, recomputed only when
+    // the gravity value changes or the world transform changes. Reused
+    // instance: no per-tick allocation.
+
+    /** Cached body-frame gravity (R^-1 * g_world). PRESENCE is the binding
+     *  signal: `undefined` means no scene is bound (inert / gravity-free),
+     *  a vector means it holds the current projection. A subclass reads it
+     *  after calling `super._updateGravityCoupling` and branches on
+     *  undefined for its gravity-free path. The instance is reused while
+     *  bound (no per-tick allocation); only a (re)bind allocates one. */
+    protected _bodyGravity?: ICartesian3;
+
+    /** Set by `fire()` whenever `_world` changes; consumed (cleared) by
+     *  `_updateGravityCoupling` the next time it recomputes the body
+     *  gravity. The orientation is what makes the projection stale. */
+    private _worldChangedForGravity: boolean = true;
+
+    /**
+     * Refresh the cached body-frame gravity from the bound scene and this
+     * object's current world pose, but only when it can have changed: the
+     * orientation moved (`_worldChangedForGravity`) or there is no cache yet.
+     * Gravity itself is a CONSTANT scene latent (a scene / binding swap goes
+     * through `reset()`, which drops this cache), so it needs no value
+     * compare. Returns `true` when it recomputed `_bodyGravity` this call (so
+     * a subclass can recompute its own gravity-derived constants in
+     * lock-step), `false` on a cache hit or when no scene is bound.
+     *
+     * Resident here (not in a plugin) so every world object shares one
+     * dirty-checked projection; OVERRIDABLE so a subclass (e.g. the PMSM
+     * machine) can call `super._updateGravityCoupling(session)` and then
+     * fold the body gravity into its own coupling. Gated on a BOUND scene
+     * (not the Earth fallback) so a headless drive with no scene stays
+     * gravity-free and deterministic.
+     */
+    protected _updateGravityCoupling(session: ISession): boolean {
+        const scene = this.boundScene(session);
+        if (!scene) {
+            if (this._bodyGravity !== undefined) {
+                this._bodyGravity = undefined; // transitioned to no-gravity
+                return true;
+            }
+            return false;
+        }
+        // Cache hit: a scene is bound AND the orientation has not moved.
+        if (this._bodyGravity !== undefined && !this._worldChangedForGravity) {
+            return false;
+        }
+        // g_body = R^-1 · g_world, composed from PURE Matrix4 primitives
+        // (no inline indexing, no domain method on the matrix). The world is
+        // a rigid body->world transform, so R^-1 = R^T: transpose, then apply
+        // to the direction. That rigid-body equivalence is the domain choice.
+        // Allocate the body-gravity vector lazily on (re)bind; reuse while bound.
+        const out = (this._bodyGravity ??= new Cartesian3());
+        this._m4World.transposeToRef(this._m4WorldRotInv);
+        this._m4WorldRotInv.transformDirectionToRef(scene.gravity, out);
+        this._worldChangedForGravity = false;
+        return true;
     }
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = TransformNode.TRANSFORM_INPUT_PORTS;
@@ -152,51 +218,44 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
         this.setField("world", this._world, id, (n) => {
             this._world = n;
         });
+        // Drop the body-gravity cache so the first fire after a reset
+        // recomputes it against the freshly bound scene + pose.
+        this._m4World.setIdentity();
+        this._bodyGravity = undefined;
+        this._worldChangedForGravity = true;
     }
 
     public override fire(session: ISession, _t: number): void {
-        const links = session.graph.links as ReadonlyArray<IChannel>;
-        let local: ReadonlyArray<number> = IDENTITY44;
-        let parentWorld: ReadonlyArray<number> = IDENTITY44;
-        let parentWorldWired = false;
-
-        for (const link of this.opsc<IChannel>()) {
-            if (!link.enabled) continue;
-            const slot = String(inSlotOf(link));
-            if (!TransformNode.isTransformInputSlot(slot)) continue;
-            const idx = links.indexOf(link);
-            if (idx < 0 || !session.linkStates[idx].ready) continue;
-            const value = session.consume(idx);
-            if (!isMatrix44(value)) continue;
-            if (slot === TransformNode.INPUT_LOCAL) local = value;
-            else if (slot === TransformNode.INPUT_PARENT_WORLD) {
-                parentWorld = value;
-                parentWorldWired = true;
-            }
-        }
+        // Inputs by slot via the routing-cache helpers (O(1), no opsc()
+        // scan, no string-match, no linear indexOf). consumeLatest = last
+        // ready value wins, matching the legacy opsc-iteration semantics.
+        const localV = this.consumeLatest(session, TransformNode.INPUT_LOCAL);
+        const local: ReadonlyArray<number> = isMatrix44(localV) ? localV : IDENTITY44;
 
         // No explicit parent wired: inherit the enclosing scene's world
         // pose. A root scene with no transform yields identity (the
         // historical default); a Sim.Graph that nests a posed scene
         // re-frames this node automatically.
-        if (!parentWorldWired) {
-            parentWorld = transformToMatrix44(this.getScene(session).worldTransform);
-        }
+        const parentV = this.consumeLatest(session, TransformNode.INPUT_PARENT_WORLD);
+        const parentWorld: ReadonlyArray<number> = isMatrix44(parentV) ? parentV : transformToMatrix44(this.getScene(session).worldTransform);
 
-        const newWorld: number[] = new Array(16);
-        mul44(newWorld, parentWorld, local);
+        // world = parent_world × local, through the Matrix4 class (the one
+        // home for 4x4 math). _m4World holds the live result every tick; the
+        // flat _world is re-serialized only when the pose actually changes.
+        this._m4Parent.setFromArray(parentWorld);
+        this._m4Local.setFromArray(local);
+        this._m4Parent.multiplyToRef(this._m4Local, this._m4World);
 
-        if (!matrices44Equal(this._world, newWorld)) {
+        if (!this._m4World.equalsArray(this._world)) {
+            const newWorld = this._m4World.toArrayRef(new Array<number>(16));
             this.setField("world", this._world, newWorld, (n) => {
                 this._world = n;
             });
+            // Orientation moved: the cached body-frame gravity projection
+            // is stale (see _updateGravityCoupling).
+            this._worldChangedForGravity = true;
         }
 
-        for (const link of this.onsc<IChannel>()) {
-            if (link.slot !== TransformNode.OUTPUT_WORLD || !link.enabled) continue;
-            const idx = links.indexOf(link);
-            if (idx < 0) continue;
-            session.publish(idx, this._world);
-        }
+        this.publishAll(session, TransformNode.OUTPUT_WORLD, this._world);
     }
 }

@@ -5,7 +5,7 @@ import { TransformNode } from "spikypanda-core";
 // across every plugin extends them). They were promoted out of this plugin
 // into `spikypanda-core`; re-exported here for the existing physics import
 // sites and the sub-plugin registration below.
-export { TransformNode, IDENTITY44, isMatrix44, mul44, FaultableNode, isFaultDescriptor } from "spikypanda-core";
+export { TransformNode, IDENTITY44, isMatrix44, FaultableNode, isFaultDescriptor } from "spikypanda-core";
 export type { IFaultDescriptor } from "spikypanda-core";
 
 /** Free-standing factory invoked by the sub-plugin's `activate`. */

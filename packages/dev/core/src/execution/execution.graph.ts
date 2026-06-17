@@ -1,12 +1,11 @@
 import type { ICartesian } from "../geometry";
 import { cloneable } from "../graph/graph.interfaces";
-import { Graph } from "../graph/graph.graph";
+import { RuntimeNode } from "./execution.node";
 import { Nullable } from "../types";
-import { CONTROL_PORT_ENABLE, CONTROL_PORT_ENABLED, ENABLE_INPUT_PORT, ENABLED_OUTPUT_PORT, isControlSlot, publishControlOutput } from "./control-ports";
+import { CONTROL_PORT_ENABLE, CONTROL_PORT_ENABLED, isControlSlot, publishControlOutput } from "./control-ports";
 import { inSlotOf } from "./execution.interfaces";
 import type {
     IChannel,
-    IDeclaresControlPorts,
     IDeclaresPorts,
     IGraphNodeState,
     ILinkRef,
@@ -109,17 +108,17 @@ interface IVersionedGraphNodeState extends IGraphNodeState {
  * IRuntimeGraph instance can be embedded by N concurrent parent
  * sessions without sharing state.
  */
-export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChannel = IChannel>
-    extends Graph<N, L>
-    implements IRuntimeGraph<N, L>, IDeclaresPorts, IDeclaresControlPorts
-{
-    /** Default control plane mirrors RuntimeNode so an embedded graph
-     *  satisfies the same IEnabled wiring as a leaf node. */
-    public readonly controlInputPorts: ReadonlyArray<IPortDescriptor> = [ENABLE_INPUT_PORT];
-    public readonly controlOutputPorts: ReadonlyArray<IPortDescriptor> = [ENABLED_OUTPUT_PORT];
-
-    /** A composite graph is enable-able by default like a leaf node. */
-    public readonly supportsEnabling: boolean = true;
+export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChannel = IChannel> extends RuntimeNode implements IRuntimeGraph<N, L>, IDeclaresPorts {
+    // Topology container. Formerly inherited from Graph<N, L>; folded in
+    // here (Graph is trivial) so RuntimeGraph IS-A RuntimeNode and inherits
+    // the IEnabled control plane + the per-slot routing cache instead of
+    // re-declaring them. Graph<N, L> stays the base for the non-runtime
+    // graphs (neural-network MlpGraph / CnnGraph).
+    public nodes: N[];
+    public links: L[];
+    public inputs: N[];
+    public outputs: N[];
+    public hiddens: N[];
 
     /**
      * Public port descriptors of the embedded graph.
@@ -153,7 +152,6 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
     }
 
     @cloneable public mode: SchedulingMode;
-    @cloneable public enabled: boolean;
 
     /**
      * Lazy default Session for autonomous run() / runAsync() calls.
@@ -173,9 +171,34 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
         position?: ICartesian,
         enabled: boolean = true
     ) {
-        super(nodes, links, inputs, outputs, hiddens, null, null, position);
+        super(null, null, position, enabled); // RuntimeNode: empty onsc/opsc, sets enabled
         this.mode = mode;
-        this.enabled = enabled;
+        this.nodes = nodes;
+        this.links = links;
+        this.inputs = inputs ?? this.nodes.filter((n) => n.opsc().length === 0);
+        this.outputs = outputs ?? this.nodes.filter((n) => n.onsc().length === 0);
+        this.hiddens = hiddens ?? this.nodes.filter((n) => !this.inputs.includes(n) && !this.outputs.includes(n));
+    }
+
+    /** Deep topology clone (preserved from Graph): copy nodes + re-bind the
+     *  cloned links onto the cloned nodes, then re-derive the in/out/hidden
+     *  partition. The @cloneable scalars (mode, enabled, ...) come from
+     *  super.clone(). */
+    public override clone(): this {
+        const copy = super.clone() as this;
+        copy.nodes = this.nodes.map((n) => n.clone() as N);
+        copy.links = this.links.map((l) => {
+            const cloned = l.clone() as L;
+            const oi = this.nodes.indexOf(l.oini as N);
+            const fi = this.nodes.indexOf(l.ofin as N);
+            cloned.oini = oi >= 0 ? copy.nodes[oi] : null;
+            cloned.ofin = fi >= 0 ? copy.nodes[fi] : null;
+            return cloned;
+        });
+        copy.inputs = copy.nodes.filter((n) => n.opsc().length === 0);
+        copy.outputs = copy.nodes.filter((n) => n.onsc().length === 0);
+        copy.hiddens = copy.nodes.filter((n) => !copy.inputs.includes(n) && !copy.outputs.includes(n));
+        return copy;
     }
 
     /**

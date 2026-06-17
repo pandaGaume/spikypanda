@@ -96,6 +96,15 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     private _fy: number = 0; // UMP vibration force, body radial Y
     private _fz: number = 0; // UMP vibration force, body radial Z
 
+    // Rotor-frame coupling constants derived from the (cached, dirty-checked)
+    // body-frame gravity. Recomputed only when that gravity changes or a
+    // coupling editable changes; the theta-dependent modulation each tick
+    // reads them. (gravity is a constant latent, so this is computed ~once.)
+    private _gAngle: number = 0; // gravity angle in the body radial (Y-Z) plane
+    private _sagEpsilon: number = 0; // delta / airGap (flux modulation depth)
+    private _sagForce: number = 0; // umpRadialStiffness * delta (UMP force magnitude)
+    private _sagConstantsDirty: boolean = true;
+
     @cloneable private _requiredHzValue: number = 0;
     @cloneable private _requiredHzUserDefined: boolean = false;
 
@@ -182,37 +191,55 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
         return this._rotorMass;
     }
     public set rotorMass(v: number) {
-        this.setField("rotorMass", this._rotorMass, v, (n) => (this._rotorMass = n));
+        this.setField("rotorMass", this._rotorMass, v, (n) => {
+            this._rotorMass = n;
+            this._sagConstantsDirty = true;
+        });
     }
     @editable("number", { unit: "N/m" }) public get bearingRadialStiffness(): number {
         return this._bearingRadialStiffness;
     }
     public set bearingRadialStiffness(v: number) {
-        this.setField("bearingRadialStiffness", this._bearingRadialStiffness, v, (n) => (this._bearingRadialStiffness = n));
+        this.setField("bearingRadialStiffness", this._bearingRadialStiffness, v, (n) => {
+            this._bearingRadialStiffness = n;
+            this._sagConstantsDirty = true;
+        });
     }
     @editable("number", { unit: "m" }) public get airGap(): number {
         return this._airGap;
     }
     public set airGap(v: number) {
-        this.setField("airGap", this._airGap, v, (n) => (this._airGap = n));
+        this.setField("airGap", this._airGap, v, (n) => {
+            this._airGap = n;
+            this._sagConstantsDirty = true;
+        });
     }
     @editable("number", { unit: "N" }) public get nominalAxialPreload(): number {
         return this._nominalAxialPreload;
     }
     public set nominalAxialPreload(v: number) {
-        this.setField("nominalAxialPreload", this._nominalAxialPreload, v, (n) => (this._nominalAxialPreload = n));
+        this.setField("nominalAxialPreload", this._nominalAxialPreload, v, (n) => {
+            this._nominalAxialPreload = n;
+            this._sagConstantsDirty = true;
+        });
     }
     @editable("number", { unit: "N" }) public get nominalRadialPreload(): number {
         return this._nominalRadialPreload;
     }
     public set nominalRadialPreload(v: number) {
-        this.setField("nominalRadialPreload", this._nominalRadialPreload, v, (n) => (this._nominalRadialPreload = n));
+        this.setField("nominalRadialPreload", this._nominalRadialPreload, v, (n) => {
+            this._nominalRadialPreload = n;
+            this._sagConstantsDirty = true;
+        });
     }
     @editable("number", { unit: "N/m" }) public get umpRadialStiffness(): number {
         return this._umpRadialStiffness;
     }
     public set umpRadialStiffness(v: number) {
-        this.setField("umpRadialStiffness", this._umpRadialStiffness, v, (n) => (this._umpRadialStiffness = n));
+        this.setField("umpRadialStiffness", this._umpRadialStiffness, v, (n) => {
+            this._umpRadialStiffness = n;
+            this._sagConstantsDirty = true;
+        });
     }
     @editable("number") public get id0(): number {
         return this._id0;
@@ -362,6 +389,10 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
         this._fRadialEff = this._nominalRadialPreload;
         this._fy = 0;
         this._fz = 0;
+        this._gAngle = 0;
+        this._sagEpsilon = 0;
+        this._sagForce = 0;
+        this._sagConstantsDirty = true; // recompute on the first fire after reset
     }
 
     public override fire(session: ISession, t: number): void {
@@ -437,52 +468,69 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     }
 
     /**
-     * Recompute the intrinsic gravity coupling for this tick from the bound
-     * scene's gravity and this machine's world pose. Gated on a BOUND scene
-     * (session.sceneStateView), NOT the per-node Earth fallback, so headless
-     * drive validation with no scene stays gravity-free and bit-exact with
-     * the legacy oracle. Faithful to RotorSagModel / BearingPreloadModel:
-     *   g_body  = R^T * g_world          (R = rotation part of `world`)
+     * Fold the bound scene's gravity into this machine's coupling. The
+     * body-frame gravity (g_body = R^T * g_world) is cached + dirty-checked
+     * by the TransformNode base (recomputed only when the gravity value or
+     * this machine's orientation changes); from it we recompute the rotor-
+     * frame constants in lock-step, then apply the theta-dependent air-gap
+     * modulation EVERY tick (the rotor sweeps past the gravity direction
+     * once per rev, the 1x f_mech sideband). Gravity is a world-fixed scene
+     * latent, never mutated: `world` only orients HOW the machine sees it.
+     * Gated on a BOUND scene + gravityCoupling, NOT the Earth fallback, so a
+     * headless drive with no scene stays gravity-free and bit-exact with the
+     * legacy oracle. Faithful to RotorSagModel / BearingPreloadModel:
      *   sag     = (rotorMass*g_radial / bearingRadialStiffness / airGap)
      *             * cos(theta_m - g_angle)
      *   F_*_eff = nominal_* + rotorMass * g_{axial,radial}
      */
-    private _updateGravityCoupling(session: ISession): void {
-        const scene = this.boundScene(session); // per-node scene wins, then session, else null
-        if (!this._gravityCoupling || !scene) {
-            this._gravFluxDelta = 0;
-            this._gRadial = 0;
-            this._fAxialEff = this._nominalAxialPreload;
-            this._fRadialEff = this._nominalRadialPreload;
-            this._fy = 0;
-            this._fz = 0;
-            return;
+    protected override _updateGravityCoupling(session: ISession): boolean {
+        if (!this._gravityCoupling) {
+            this._clearGravityCoupling();
+            this._sagConstantsDirty = true; // recompute when re-enabled
+            return false;
         }
-        const g = scene.gravity;
-        const W = this.world; // body -> world, column-major flat[16]
-        // g_body = R^T * g_world (R = columns 0,1,2 of W).
-        const gx = W[0] * g.x + W[1] * g.y + W[2] * g.z; // signed axial (body X)
-        const gy = W[4] * g.x + W[5] * g.y + W[6] * g.z;
-        const gz = W[8] * g.x + W[9] * g.y + W[10] * g.z;
-        const gRadial = Math.sqrt(gy * gy + gz * gz);
-        this._gRadial = gRadial;
-        if (gRadial < 1e-12) {
+        const changed = super._updateGravityCoupling(session); // refresh cached body gravity
+        const gb = this._bodyGravity;
+        if (!gb) {
+            // No scene bound: inert (bit-exact with the legacy oracle).
+            this._clearGravityCoupling();
+            this._sagConstantsDirty = true;
+            return changed;
+        }
+        if (changed || this._sagConstantsDirty) {
+            // Rotor-frame decomposition: body X = axial, the Y-Z plane = radial.
+            this._gRadial = Math.hypot(gb.y, gb.z);
+            this._gAngle = Math.atan2(gb.z, gb.y);
+            const delta = (this._rotorMass * this._gRadial) / this._bearingRadialStiffness;
+            this._sagEpsilon = delta / this._airGap;
+            this._sagForce = this._umpRadialStiffness * delta; // UMP radial force magnitude
+            this._fAxialEff = this._nominalAxialPreload + this._rotorMass * gb.x;
+            this._fRadialEff = this._nominalRadialPreload + this._rotorMass * this._gRadial;
+            this._sagConstantsDirty = false;
+        }
+        // Per-tick: the sag rotates with the rotor (1x f_mech).
+        if (this._gRadial < 1e-12) {
             this._gravFluxDelta = 0;
             this._fy = 0;
             this._fz = 0;
         } else {
-            const delta = (this._rotorMass * gRadial) / this._bearingRadialStiffness;
-            const epsilon = delta / this._airGap;
-            const gAngle = Math.atan2(gz, gy);
-            const phase = this._theta - gAngle;
-            this._gravFluxDelta = epsilon < 1e-12 ? 0 : epsilon * Math.cos(phase);
-            // UMP rotor-sag radial force on the housing (1x f_mech vibration).
-            const F = this._umpRadialStiffness * delta;
-            this._fy = F * Math.cos(phase);
-            this._fz = F * Math.sin(phase);
+            const phase = this._theta - this._gAngle;
+            this._gravFluxDelta = this._sagEpsilon < 1e-12 ? 0 : this._sagEpsilon * Math.cos(phase);
+            this._fy = this._sagForce * Math.cos(phase);
+            this._fz = this._sagForce * Math.sin(phase);
         }
-        this._fAxialEff = this._nominalAxialPreload + this._rotorMass * gx;
-        this._fRadialEff = this._nominalRadialPreload + this._rotorMass * gRadial;
+        return changed;
+    }
+
+    /** Zero the coupling outputs and restore the bare nominal preloads
+     *  (the inert state when coupling is off or no scene is bound). */
+    private _clearGravityCoupling(): void {
+        this._gravFluxDelta = 0;
+        this._gRadial = 0;
+        this._fAxialEff = this._nominalAxialPreload;
+        this._fRadialEff = this._nominalRadialPreload;
+        this._fy = 0;
+        this._fz = 0;
     }
 
     // Implicit Euler on the electrical 2x2 + implicit mechanical +

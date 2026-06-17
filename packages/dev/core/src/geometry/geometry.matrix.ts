@@ -306,6 +306,45 @@ export class Matrix4 implements IMatrix4 {
         return this;
     }
 
+    /** Load 16 column-major entries from a flat array (the `Matrix44` wire
+     *  form carried on ports / `@cloneable` fields) into this matrix in
+     *  place. Allocation-free counterpart of `fromFlat` for hot paths that
+     *  reuse a single `Matrix4`. Returns `this` for chaining. */
+    public setFromArray(flat: ArrayLike<number>): this {
+        if (flat.length !== 16) {
+            throw new Error(`Matrix4.setFromArray expects 16 entries, got ${flat.length}`);
+        }
+        for (let i = 0; i < 16; i++) this.m[i] = flat[i];
+        return this;
+    }
+
+    /** Write this matrix's 16 column-major entries into a flat array (the
+     *  `Matrix44` wire form) in place. Allocation-free counterpart of
+     *  `toFlat` for hot paths that own the destination buffer. Returns
+     *  `out`. */
+    public toArrayRef(out: number[]): number[] {
+        for (let i = 0; i < 16; i++) out[i] = this.m[i];
+        return out;
+    }
+
+    /** Approximate element-wise equality against a flat (`Matrix44`) form,
+     *  within an absolute per-entry `tolerance`. Returns false on a
+     *  wrong-length operand. Pure math. */
+    public equalsArray(other: ArrayLike<number>, tolerance: number = 1e-12): boolean {
+        if (other.length !== 16) return false;
+        const m = this.m;
+        for (let i = 0; i < 16; i++) {
+            if (Math.abs(m[i] - other[i]) > tolerance) return false;
+        }
+        return true;
+    }
+
+    /** Approximate equality against another matrix, within an absolute
+     *  per-entry `tolerance`. Pure math. */
+    public equals(other: IMatrix4, tolerance: number = 1e-12): boolean {
+        return this.equalsArray(other.m, tolerance);
+    }
+
     /** Fresh copy. */
     public clone(): Matrix4 {
         return new Matrix4(this.m);
@@ -326,6 +365,70 @@ export class Matrix4 implements IMatrix4 {
         return Array.from(this.m);
     }
 
+    /**
+     * Apply this matrix's linear part to a DIRECTION: `out = R · v`, where R
+     * is the upper-left 3×3 (column-major). Translation is ignored (a
+     * direction has no origin, i.e. the homogeneous w = 0 case). Pure linear
+     * algebra: no assumption about R (rotation, scale or shear all valid).
+     * Writes into `out` (which may alias `v`) and returns it.
+     */
+    public transformDirectionToRef(v: ICartesian3, out: ICartesian3): ICartesian3 {
+        const m = this.m;
+        const vx = v.x,
+            vy = v.y,
+            vz = v.z;
+        out.x = m[0] * vx + m[4] * vy + m[8] * vz;
+        out.y = m[1] * vx + m[5] * vy + m[9] * vz;
+        out.z = m[2] * vx + m[6] * vy + m[10] * vz;
+        return out;
+    }
+
+    /**
+     * Write the transpose of this matrix into `out` (`out = thisᵀ`) and
+     * return it. Pure linear algebra; reads all entries first so `out` may
+     * alias `this`. Composing `a.transposeToRef(t)` with
+     * `t.transformDirectionToRef(v)` yields `Rᵀ · v` — the caller decides
+     * whether that transpose is meaningful (e.g. the inverse rotation of a
+     * rigid transform), which is a domain choice, not the matrix's.
+     */
+    public transposeToRef(out: Matrix4): Matrix4 {
+        const m = this.m;
+        const m0 = m[0],
+            m1 = m[1],
+            m2 = m[2],
+            m3 = m[3],
+            m4 = m[4],
+            m5 = m[5],
+            m6 = m[6],
+            m7 = m[7],
+            m8 = m[8],
+            m9 = m[9],
+            m10 = m[10],
+            m11 = m[11],
+            m12 = m[12],
+            m13 = m[13],
+            m14 = m[14],
+            m15 = m[15];
+        const o = out.m;
+        o[0] = m0;
+        o[1] = m4;
+        o[2] = m8;
+        o[3] = m12;
+        o[4] = m1;
+        o[5] = m5;
+        o[6] = m9;
+        o[7] = m13;
+        o[8] = m2;
+        o[9] = m6;
+        o[10] = m10;
+        o[11] = m14;
+        o[12] = m3;
+        o[13] = m7;
+        o[14] = m11;
+        o[15] = m15;
+        return out;
+    }
+
     /** Determinant of the upper-left 3×3 block. Used by `decompose`
      *  to detect mirrored bases (negative determinant). */
     private _determinant3x3(): number {
@@ -338,12 +441,12 @@ export class Matrix4 implements IMatrix4 {
 // Matrix44 (flat serialized form) helpers
 // ─────────────────────────────────────────────────────────────────────
 //
-// These operate directly on the plain `number[16]` wire form so the hot
-// paths (TransformNode.fire and friends, called per tick) stay
-// allocation-free without round-tripping through a `Matrix4` instance.
-// `mul44` is the allocation-free in-place form of `Matrix4.multiply`;
-// geometry.test asserts the two agree so there is ONE source of truth
-// for the multiply, not two divergent implementations.
+// `Matrix44` is ONLY the flat serialized projection of `Matrix4` (the wire
+// form carried on ports / `@cloneable` fields). It carries NO math: all 4x4
+// arithmetic lives on the `Matrix4` class (the single source of truth), and
+// hot paths reuse a `Matrix4` instance via `setFromArray` / `toArrayRef` to
+// stay allocation-free rather than re-implementing the math on flat arrays.
+// Only the identity constant and the type guard live here.
 
 /** Column-major 4×4 identity in flat form. Frozen so callers that read
  *  it as a default cannot mutate the shared instance. */
@@ -352,66 +455,4 @@ export const IDENTITY44: Matrix44 = Object.freeze([1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
 /** Runtime guard for the flat form: an array of exactly 16 numbers. */
 export function isMatrix44(v: unknown): v is Matrix44 {
     return Array.isArray(v) && v.length === 16;
-}
-
-/**
- * Column-major 4×4 multiply on the flat form: `out = a × b`. In-place
- * into `out` (which must alias neither `a` nor `b`). Numerically equal
- * to `new Matrix4(a).multiply(new Matrix4(b)).toFlat()` but without the
- * two Matrix4 allocations (for per-tick scene-graph composition).
- */
-export function mul44(out: number[], a: Matrix44, b: Matrix44): void {
-    const a00 = a[0],
-        a10 = a[1],
-        a20 = a[2],
-        a30 = a[3];
-    const a01 = a[4],
-        a11 = a[5],
-        a21 = a[6],
-        a31 = a[7];
-    const a02 = a[8],
-        a12 = a[9],
-        a22 = a[10],
-        a32 = a[11];
-    const a03 = a[12],
-        a13 = a[13],
-        a23 = a[14],
-        a33 = a[15];
-
-    const b00 = b[0],
-        b10 = b[1],
-        b20 = b[2],
-        b30 = b[3];
-    const b01 = b[4],
-        b11 = b[5],
-        b21 = b[6],
-        b31 = b[7];
-    const b02 = b[8],
-        b12 = b[9],
-        b22 = b[10],
-        b32 = b[11];
-    const b03 = b[12],
-        b13 = b[13],
-        b23 = b[14],
-        b33 = b[15];
-
-    out[0] = a00 * b00 + a01 * b10 + a02 * b20 + a03 * b30;
-    out[1] = a10 * b00 + a11 * b10 + a12 * b20 + a13 * b30;
-    out[2] = a20 * b00 + a21 * b10 + a22 * b20 + a23 * b30;
-    out[3] = a30 * b00 + a31 * b10 + a32 * b20 + a33 * b30;
-
-    out[4] = a00 * b01 + a01 * b11 + a02 * b21 + a03 * b31;
-    out[5] = a10 * b01 + a11 * b11 + a12 * b21 + a13 * b31;
-    out[6] = a20 * b01 + a21 * b11 + a22 * b21 + a23 * b31;
-    out[7] = a30 * b01 + a31 * b11 + a32 * b21 + a33 * b31;
-
-    out[8] = a00 * b02 + a01 * b12 + a02 * b22 + a03 * b32;
-    out[9] = a10 * b02 + a11 * b12 + a12 * b22 + a13 * b32;
-    out[10] = a20 * b02 + a21 * b12 + a22 * b22 + a23 * b32;
-    out[11] = a30 * b02 + a31 * b12 + a32 * b22 + a33 * b32;
-
-    out[12] = a00 * b03 + a01 * b13 + a02 * b23 + a03 * b33;
-    out[13] = a10 * b03 + a11 * b13 + a12 * b23 + a13 * b33;
-    out[14] = a20 * b03 + a21 * b13 + a22 * b23 + a23 * b33;
-    out[15] = a30 * b03 + a31 * b13 + a32 * b23 + a33 * b33;
 }
