@@ -4,7 +4,7 @@ import { RuntimeNode } from "../execution/execution.node";
 import { buildDefaultStateView, transformToMatrix44 } from "./scene-state-view.impl";
 import { IDENTITY44, isMatrix44, Matrix4 } from "../geometry/geometry.matrix";
 import { Cartesian3 } from "../geometry/geometry.cartesian";
-import type { ICartesian, ICartesian3 } from "../geometry/geometry.interfaces";
+import type { ICartesian, ICartesian3, IMatrix4 } from "../geometry/geometry.interfaces";
 import type { Nullable } from "../types";
 import type { SceneStateView } from "./scene-state-view.interface";
 
@@ -65,21 +65,47 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
         return slot === TransformNode.INPUT_LOCAL || slot === TransformNode.INPUT_PARENT_WORLD;
     }
 
-    /** Internal world transform; cloneable so editor save/restore preserves it. */
-    @cloneable private _world: number[] = (IDENTITY44 as number[]).slice();
+    // ── World-pose composition (via the node's own IHasTransform) ─────
+    //
+    // The MATH lives once in the base `GraphNode` (position/orientation →
+    // local → parent × local, via `composeWorldInto`). This node only layers
+    // the SIM concerns the base must not know about: the wired `local` /
+    // `parent_world` port OVERRIDES and the enclosing scene as the default
+    // parent frame. They are captured each `fire()` as fields so the pull
+    // methods (`localTransform` / `worldTransform`, overridden below) report
+    // the SAME pose the `world` port publishes. The world is recomposed every
+    // fire (ports/scene change), so it goes into a REUSED buffer rather than
+    // the base's null-invalidated cache.
 
-    /** Reusable Matrix4 instances so the per-tick composition + body-frame
-     *  gravity projection go through the Matrix4 class with no per-tick
-     *  allocation. `_m4World` holds the current world after `fire()`; the
-     *  flat `_world` is its serialized copy (ports / @cloneable). */
-    private readonly _m4Parent: Matrix4 = new Matrix4();
-    private readonly _m4Local: Matrix4 = new Matrix4();
-    private readonly _m4World: Matrix4 = new Matrix4();
+    /** Wired `local` port override (reused buffer); `_localOverrideActive`
+     *  gates whether it wins over the node's (position, orientation) pose. */
+    private _localOverride?: Matrix4;
+    private _localOverrideActive: boolean = false;
+
+    /** Wired `parent_world` port override (reused buffer); when active it
+     *  wins over the structural `parent` and the scene. */
+    private _parentWorldOverride?: Matrix4;
+    private _parentWorldActive: boolean = false;
+
+    /** Snapshot of the enclosing scene's world, the default parent frame
+     *  when no `parent_world` port is wired and no structural `parent` is
+     *  set. Refreshed each fire only when actually needed (reused buffer). */
+    private _sceneWorld?: Matrix4;
+
+    /** Reused world buffer for the per-fire `parentWorld × local` compose
+     *  (lazily allocated), so the runtime push path allocates no 4×4 per tick. */
+    private _worldMatrix?: Matrix4;
+
+    /** Composed world in flat (`Matrix44`) form, the value published on the
+     *  `world` port and read by the gravity projection. A fresh array is
+     *  allocated only when the world changes (consumers may hold the
+     *  reference); unchanged ticks republish the same array. */
+    private _worldFlat: number[] = (IDENTITY44 as number[]).slice();
 
     /** World's inverse rotation, reused to express world-frame gravity in the
-     *  body frame. The world is a rigid body->world transform, so its inverse
-     *  rotation is its transpose; that rigid-body equivalence is a DOMAIN
-     *  choice made here, not a property of the pure-math Matrix4. */
+     *  body frame (loaded from `_worldFlat` on demand). The world is a rigid
+     *  body->world transform, so its inverse rotation is its transpose; that
+     *  rigid-body equivalence is a DOMAIN choice made here. */
     private readonly _m4WorldRotInv: Matrix4 = new Matrix4();
 
     /** Per-process fallback scene view used when the bound session has
@@ -166,7 +192,10 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
         // to the direction. That rigid-body equivalence is the domain choice.
         // Allocate the body-gravity vector lazily on (re)bind; reuse while bound.
         const out = (this._bodyGravity ??= new Cartesian3());
-        this._m4World.transposeToRef(this._m4WorldRotInv);
+        // Load the current world, transpose it (= inverse rotation for the
+        // rigid body->world transform), apply to world-frame gravity -> body.
+        this._m4WorldRotInv.setFromArray(this._worldFlat);
+        this._m4WorldRotInv.transposeToRef(this._m4WorldRotInv);
         this._m4WorldRotInv.transformDirectionToRef(scene.gravity, out);
         this._worldChangedForGravity = false;
         return true;
@@ -179,10 +208,38 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
         super(onsc, opsc, position);
     }
 
-    /** Current world transform: equals parent_world × local after the
-     *  last fire() consumed inputs. */
+    /** Current world transform in flat (`Matrix44`) form: equals
+     *  parent_world × local after the last fire() consumed inputs. */
     public get world(): ReadonlyArray<number> {
-        return this._world;
+        return this._worldFlat;
+    }
+
+    /** Local pose (see IHasTransform): the wired `local` port override when
+     *  active, else the node's (position, orientation) pose. */
+    public override localTransform(): Matrix4 {
+        return this._localOverrideActive && this._localOverride ? this._localOverride : super.localTransform();
+    }
+
+    /** World pose (see IHasTransform): `parentWorld × local`, where
+     *  parentWorld follows the SIM precedence wired `parent_world` >
+     *  structural `parent` > enclosing scene. Before the first fire (no
+     *  scene captured) it degrades to the bare local pose. */
+    public override worldTransform(): Matrix4 {
+        const local = this.localTransform();
+        let parentWorld: IMatrix4 | undefined;
+        if (this._parentWorldActive && this._parentWorldOverride) {
+            parentWorld = this._parentWorldOverride;
+        } else if (this.parent) {
+            parentWorld = this.parent.worldTransform();
+        } else {
+            parentWorld = this._sceneWorld;
+        }
+        if (parentWorld === undefined) {
+            return local;
+        }
+        const world = this.composeWorldInto(local, parentWorld, (this._worldMatrix ??= new Matrix4()));
+        this._worldVersion++; // recomposed every fire (ports/scene change) -> advance for any child observing transformVersion
+        return world;
     }
 
     /**
@@ -214,48 +271,57 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
     }
 
     public override reset(_session: ISession): void {
-        const id = (IDENTITY44 as number[]).slice();
-        this.setField("world", this._world, id, (n) => {
-            this._world = n;
-        });
+        // Drop the composed world + the port overrides; the next fire
+        // recomposes from the freshly bound scene + pose.
+        this._worldFlat = (IDENTITY44 as number[]).slice();
+        this._localOverrideActive = false;
+        this._parentWorldActive = false;
         // Drop the body-gravity cache so the first fire after a reset
         // recomputes it against the freshly bound scene + pose.
-        this._m4World.setIdentity();
         this._bodyGravity = undefined;
         this._worldChangedForGravity = true;
     }
 
     public override fire(session: ISession, _t: number): void {
-        // Inputs by slot via the routing-cache helpers (O(1), no opsc()
-        // scan, no string-match, no linear indexOf). consumeLatest = last
-        // ready value wins, matching the legacy opsc-iteration semantics.
+        // Capture this tick's transform inputs (ports + scene) as fields so
+        // the pull methods report the same pose the `world` port publishes.
+        // Reads by slot via the routing-cache helpers (O(1), no opsc() scan,
+        // no string-match, no linear indexOf); consumeLatest = last ready wins.
+
+        // `local` port override (else the node's (position, orientation) pose).
         const localV = this.consumeLatest(session, TransformNode.INPUT_LOCAL);
-        const local: ReadonlyArray<number> = isMatrix44(localV) ? localV : IDENTITY44;
-
-        // No explicit parent wired: inherit the enclosing scene's world
-        // pose. A root scene with no transform yields identity (the
-        // historical default); a Sim.Graph that nests a posed scene
-        // re-frames this node automatically.
-        const parentV = this.consumeLatest(session, TransformNode.INPUT_PARENT_WORLD);
-        const parentWorld: ReadonlyArray<number> = isMatrix44(parentV) ? parentV : transformToMatrix44(this.getScene(session).worldTransform);
-
-        // world = parent_world × local, through the Matrix4 class (the one
-        // home for 4x4 math). _m4World holds the live result every tick; the
-        // flat _world is re-serialized only when the pose actually changes.
-        this._m4Parent.setFromArray(parentWorld);
-        this._m4Local.setFromArray(local);
-        this._m4Parent.multiplyToRef(this._m4Local, this._m4World);
-
-        if (!this._m4World.equalsArray(this._world)) {
-            const newWorld = this._m4World.toArrayRef(new Array<number>(16));
-            this.setField("world", this._world, newWorld, (n) => {
-                this._world = n;
-            });
-            // Orientation moved: the cached body-frame gravity projection
-            // is stale (see _updateGravityCoupling).
-            this._worldChangedForGravity = true;
+        if (isMatrix44(localV)) {
+            (this._localOverride ??= new Matrix4()).setFromArray(localV);
+            this._localOverrideActive = true;
+        } else {
+            this._localOverrideActive = false;
         }
 
-        this.publishAll(session, TransformNode.OUTPUT_WORLD, this._world);
+        // `parent_world` port override (wins over the scene parent below).
+        const parentV = this.consumeLatest(session, TransformNode.INPUT_PARENT_WORLD);
+        if (isMatrix44(parentV)) {
+            (this._parentWorldOverride ??= new Matrix4()).setFromArray(parentV);
+            this._parentWorldActive = true;
+        } else {
+            this._parentWorldActive = false;
+        }
+
+        // Scene world is the default parent frame only when no port and no
+        // structural parent supply one (a Sim.Graph nesting a posed scene
+        // re-frames this node automatically). Snapshot it just-in-time.
+        if (!this._parentWorldActive && this.parent === undefined) {
+            (this._sceneWorld ??= new Matrix4()).setFromArray(transformToMatrix44(this.getScene(session).worldTransform));
+        }
+
+        // world = parentWorld × local, composed through the node's own
+        // transform (override-aware). Flag the body-gravity projection stale
+        // only when the world actually moved (see _updateGravityCoupling);
+        // a fresh flat array is published only on change.
+        const world = this.worldTransform();
+        if (!world.equalsArray(this._worldFlat)) {
+            this._worldFlat = world.toArrayRef(new Array<number>(16));
+            this._worldChangedForGravity = true;
+        }
+        this.publishAll(session, TransformNode.OUTPUT_WORLD, this._worldFlat);
     }
 }

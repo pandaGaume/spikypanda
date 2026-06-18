@@ -109,3 +109,69 @@ export interface IMatrix4 {
  * bridge. The two are one abstraction with two faces, not two classes.
  */
 export type Matrix44 = ReadonlyArray<number>;
+
+/**
+ * A thing that carries a geometric pose and reports its local and world
+ * 4×4 transforms. This is the founding spatial contract of a node: its
+ * `position` (the quadtree / octree coordinate that influences weights
+ * and synapses by proximity) plus an optional `orientation`, composed
+ * on demand into a local matrix, chained through a `parent` to yield the
+ * world matrix `parent.worldTransform() × localTransform()`.
+ *
+ * Pure geometry: no runtime, session, port, or `fire` concept appears
+ * here. Every data member is optional, so a non-spatial node (most
+ * neurons) carries nothing and pays nothing; the matrices are cached on
+ * the node and produced lazily, only when `localTransform()` /
+ * `worldTransform()` are actually called. A port-fed `local` override or a
+ * scene-parent fallback is the SIM layer's concern, layered on top by
+ * overriding these methods — it never leaks into this contract.
+ *
+ * READ-ONLY RETURN CONTRACT: `localTransform()` / `worldTransform()` return
+ * BORROWED, reused buffers, valid only until this node's next transform
+ * call (the implementation reuses them to stay allocation-free). Callers
+ * MUST NOT mutate the result; copy it (`toFlat` / `copyFrom`) to retain or
+ * modify. In particular a root node's `worldTransform()` may return the very
+ * SAME instance as its `localTransform()`, so mutating one would corrupt the
+ * other.
+ *
+ * `transformVersion` is a monotonic counter that advances whenever this
+ * node's WORLD transform changes (its own pose, or an ancestor's). A child
+ * caches its parent's version to detect a moved parent in O(1) instead of a
+ * per-call matrix compare.
+ */
+export interface IHasTransform {
+    /** The founding spatial coordinate of the node: indexed in the
+     *  quadtree / octree, influences weights / synapses by proximity. 2D
+     *  or 3D (`ICartesian`); a missing `z` (a 2D position) is taken as 0
+     *  by transform composition. Distinct from the editor canvas x,y,
+     *  which lives in the view layer (NodeUI), not here. */
+    position?: ICartesian;
+    /** Orientation completing the local pose alongside `position`. Named
+     *  `orientation` (not `rotation`) to avoid clashing with domain nodes
+     *  that already expose a computed `rotation` accessor (Attitude,
+     *  Transform). Optional: undefined = identity. */
+    orientation?: IQuaternion;
+    /** Parent frame in the transform tree; `worldTransform()` chains
+     *  through it. Undefined = this node's world equals its local. A
+     *  structural reference, established by the enclosing container, not
+     *  part of the node's serialized identity. */
+    parent?: IHasTransform;
+    /** This node's local pose as a column-major 4×4, composed on demand
+     *  from `position` / `orientation` (identity when both are unset). */
+    localTransform(): IMatrix4;
+    /** This node's world pose as a column-major 4×4:
+     *  `parent ? parent.worldTransform() × localTransform() : localTransform()`. */
+    worldTransform(): IMatrix4;
+    /** Monotonic version of this node's WORLD transform: advances whenever
+     *  the world changes (this node's own pose, or any ancestor's). A child
+     *  caches its parent's `transformVersion` to detect a moved parent in
+     *  O(1), avoiding a per-call matrix value compare. Reading it brings the
+     *  world up to date first (so the value reflects the current pose). */
+    readonly transformVersion: number;
+    /** Force the cached local + world matrices to recompose on the next
+     *  `localTransform()` / `worldTransform()`, and advance `transformVersion`.
+     *  The pose setters (`position` / `orientation`) invalidate automatically;
+     *  call this explicitly after mutating a pose value IN PLACE
+     *  (`node.position.x = ...`), which the setters cannot observe. */
+    invalidateTransform(): void;
+}

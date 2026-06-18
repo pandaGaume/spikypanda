@@ -43,14 +43,22 @@
 
 import { cloneable } from "../graph/graph.interfaces";
 import type { IChannel, ISession, ISolverHandle } from "../execution/execution.interfaces";
-import { inSlotOf } from "../execution/execution.interfaces";
 import { RuntimeGraph } from "../execution/execution.graph";
 import { Frequency } from "../math/math.units";
 import { InheritedSceneStateView, matrix44ToTransform, transformToMatrix44 } from "./scene-state-view.impl";
-import { IDENTITY_TRANSFORM, MIN_EFFECTIVE_HZ } from "./scene-state-view.interface";
+import { IDENTITY_TRANSFORM, makeTransform, MIN_EFFECTIVE_HZ } from "./scene-state-view.interface";
 import type { ITransform, SceneStateView } from "./scene-state-view.interface";
 import { IDENTITY44, isMatrix44, Matrix4 } from "../geometry/geometry.matrix";
+import { Cartesian3 } from "../geometry/geometry.cartesian";
+import { Quaternion } from "../geometry/geometry.quarternion";
+import type { ICartesian3 } from "../geometry/geometry.interfaces";
 import { hasSampleRateRequirement } from "./sim.interfaces";
+
+/** Reused pose defaults for this sub-graph's local-pose (the sim-side
+ *  `ITransform` read by its inner scene view). Frozen, never mutated. */
+const ORIGIN: ICartesian3 = Object.freeze(new Cartesian3(0, 0, 0));
+const IDENTITY_QUAT = Object.freeze(new Quaternion(0, 0, 0, 1));
+const UNIT_SCALE: ICartesian3 = Object.freeze(new Cartesian3(1, 1, 1));
 
 /**
  * Resolver protocol the editor's session-builder hands to a
@@ -134,20 +142,40 @@ export class SimGraphNode<
     public static readonly INPUT_LOCAL = "local";
     public static readonly OUTPUT_WORLD = "world";
 
-    /** This sub-graph's local pose within the enclosing scene, refreshed
-     *  from the `local` port each fire. Read live by the inner scene
-     *  view so the inner world objects re-frame when the container moves. */
-    @cloneable private _localPose: ITransform = IDENTITY_TRANSFORM;
+    // ── World-pose composition (via the node's own IHasTransform) ─────
+    //
+    // world = enclosingSceneWorld × local. The MATH lives once in the base
+    // `GraphNode` (pose → local → parent × local, via `composeWorldInto`);
+    // this node layers the SIM concerns: the wired `local` port OVERRIDE and
+    // the enclosing scene as
+    // the (only) parent frame. A Sim.Graph has NO parent_world port — the
+    // parent frame IS the enclosing scene, inherited through the fractal
+    // nesting, so chaining is done by nesting Sim.Graphs rather than wiring
+    // a parallel transform tree (which would double-count the scene origin).
 
-    /** Composed world matrix (column-major flat[16]) published on the
-     *  `world` output: enclosingSceneWorld × local. */
-    @cloneable private _world: number[] = (IDENTITY44 as number[]).slice();
+    /** Wired `local` port override (reused buffer); `_localOverrideActive`
+     *  gates whether it wins over this sub-graph's (position, orientation). */
+    private _localOverride?: Matrix4;
+    private _localOverrideActive: boolean = false;
 
-    /** Reusable Matrix4 instances for the world composition (math on the
-     *  Matrix4 class, no flat free function, no per-tick allocation). */
-    private readonly _m4Parent: Matrix4 = new Matrix4();
-    private readonly _m4Local: Matrix4 = new Matrix4();
-    private readonly _m4World: Matrix4 = new Matrix4();
+    /** Snapshot of the enclosing scene's world, this sub-graph's parent
+     *  frame. Reused buffer, refreshed each `_updateTransform`. */
+    private _sceneWorld?: Matrix4;
+
+    /** Reused world buffer for the per-fire `sceneWorld × local` compose
+     *  (lazily allocated), so the runtime push path allocates no 4×4 per tick. */
+    private _worldMatrix?: Matrix4;
+
+    /** This sub-graph's local pose as an `ITransform`, read LIVE by the inner
+     *  scene view (`InheritedSceneStateView`) so inner world objects re-frame
+     *  when the container moves. The sim-side projection of the local matrix:
+     *  decomposed from the `local` override, or built from (position,
+     *  orientation), and kept here (not in the pure geometry layer). */
+    private _localPose: ITransform = IDENTITY_TRANSFORM;
+
+    /** Composed world in flat (`Matrix44`) form, published on the `world`
+     *  port. Fresh array only on change (consumers may hold the reference). */
+    private _worldFlat: number[] = (IDENTITY44 as number[]).slice();
 
     /**
      * Inject the scene binding resolver. The editor's session-builder
@@ -216,8 +244,9 @@ export class SimGraphNode<
         }
 
         this._lastFiredAt = -Infinity;
+        this._worldFlat = (IDENTITY44 as number[]).slice();
+        this._localOverrideActive = false;
         this._localPose = IDENTITY_TRANSFORM;
-        this._world = (IDENTITY44 as number[]).slice();
     }
 
     /**
@@ -280,37 +309,54 @@ export class SimGraphNode<
      * boundary token.
      */
     private _updateTransform(parentSession: ISession): void {
-        const links = parentSession.graph.links as ReadonlyArray<IChannel>;
-        let local: ReadonlyArray<number> = IDENTITY44;
-        for (const link of this.opsc<IChannel>()) {
-            if (!link.enabled) continue;
-            if (String(inSlotOf(link)) !== SimGraphNode.INPUT_LOCAL) continue;
-            const idx = links.indexOf(link);
-            if (idx < 0 || !parentSession.linkStates[idx]?.ready) continue;
-            const value = parentSession.consume(idx);
-            if (isMatrix44(value)) local = value;
+        // Consume the `local` port override via the routing cache (this also
+        // keeps _routeInputsFromParent from re-seeing it as a boundary token).
+        // Capture it + the sim-side `_localPose` (read live by the inner scene
+        // view to re-frame inner world objects). A Sim.Graph has NO parent_world
+        // port: the parent frame IS the enclosing scene.
+        const localV = this.consumeLatest(parentSession, SimGraphNode.INPUT_LOCAL);
+        if (isMatrix44(localV)) {
+            (this._localOverride ??= new Matrix4()).setFromArray(localV);
+            this._localOverrideActive = true;
+            this._localPose = localV === IDENTITY44 ? IDENTITY_TRANSFORM : matrix44ToTransform(localV);
+        } else {
+            this._localOverrideActive = false;
+            this._localPose = makeTransform((this.position as ICartesian3 | undefined) ?? ORIGIN, this.orientation ?? IDENTITY_QUAT, UNIT_SCALE);
         }
-        // Fast path: unwired local stays the shared IDENTITY44 ref, so we
-        // reuse the frozen IDENTITY_TRANSFORM and skip the decompose.
-        this._localPose = local === IDENTITY44 ? IDENTITY_TRANSFORM : matrix44ToTransform(local);
+
+        // Snapshot the enclosing scene as the parent frame, then compose
+        // world = sceneWorld × local through the node's own transform.
         const parentScene = parentSession.sceneStateView;
-        const parentWorld: ReadonlyArray<number> = parentScene ? transformToMatrix44(parentScene.worldTransform) : IDENTITY44;
-        // world = parent_world × local, through the Matrix4 class.
-        this._m4Parent.setFromArray(parentWorld);
-        this._m4Local.setFromArray(local);
-        this._m4Parent.multiplyToRef(this._m4Local, this._m4World);
-        this._world = this._m4World.toArrayRef(new Array<number>(16));
+        (this._sceneWorld ??= new Matrix4()).setFromArray(parentScene ? transformToMatrix44(parentScene.worldTransform) : IDENTITY44);
+        const world = this.worldTransform();
+        if (!world.equalsArray(this._worldFlat)) {
+            this._worldFlat = world.toArrayRef(new Array<number>(16));
+        }
+    }
+
+    /** Local pose (see IHasTransform): the wired `local` port override when
+     *  active, else this sub-graph's (position, orientation) pose. */
+    public override localTransform(): Matrix4 {
+        return this._localOverrideActive && this._localOverride ? this._localOverride : super.localTransform();
+    }
+
+    /** World pose (see IHasTransform): `enclosingSceneWorld × local`. A
+     *  Sim.Graph's parent frame is its enclosing scene only (no parent_world
+     *  port, no structural parent chaining). Before the first compose it
+     *  degrades to the bare local pose. */
+    public override worldTransform(): Matrix4 {
+        const local = this.localTransform();
+        if (this._sceneWorld === undefined) {
+            return local;
+        }
+        const world = this.composeWorldInto(local, this._sceneWorld, (this._worldMatrix ??= new Matrix4()));
+        this._worldVersion++; // recomposed every fire (scene/local change) -> advance for any child observing transformVersion
+        return world;
     }
 
     /** Publish the composed `world` matrix on the outgoing `world` port. */
     private _publishWorld(parentSession: ISession): void {
-        const links = parentSession.graph.links as ReadonlyArray<IChannel>;
-        for (const link of this.onsc<IChannel>()) {
-            if (!link.enabled || link.slot !== SimGraphNode.OUTPUT_WORLD) continue;
-            const idx = links.indexOf(link);
-            if (idx < 0) continue;
-            parentSession.publish(idx, this._world);
-        }
+        this.publishAll(parentSession, SimGraphNode.OUTPUT_WORLD, this._worldFlat);
     }
 
     /**

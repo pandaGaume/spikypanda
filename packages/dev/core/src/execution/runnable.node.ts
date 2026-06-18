@@ -16,7 +16,6 @@
 // to the subclass's fire() implementation (or a future generic helper).
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { IRunnable, RunStatus } from "../graph/graph.interfaces";
 import {
     CONTROL_PORT_START,
     CONTROL_PORT_STARTED,
@@ -30,7 +29,7 @@ import {
     STOPPED_OUTPUT_PORT,
     STOP_INPUT_PORT,
 } from "./control-ports";
-import { IChannel, IPortDescriptor, ISession, inSlotOf } from "./execution.interfaces";
+import { IChannel, IPortDescriptor, IRunnable, ISession, inSlotOf, RunStatus } from "./execution.interfaces";
 import { RuntimeNode } from "./execution.node";
 
 export abstract class RunnableNode<B = unknown> extends RuntimeNode<B> implements IRunnable {
