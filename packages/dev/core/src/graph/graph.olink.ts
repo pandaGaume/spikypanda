@@ -42,3 +42,29 @@ export class GraphOLink<B = unknown> extends GraphItem<B> implements IOlink<B> {
         super.dispose();
     }
 }
+
+/**
+ * `Child` relation: a STRUCTURAL link (not a dataflow channel) expressing the
+ * generic 1/N parent -> child hierarchy. Directed parent (`oini`) -> child
+ * (`ofin`), so the SAME link surfaces both directions through the node
+ * adjacency: a node's `onsc` filtered to `Child` gives its children (N), its
+ * `opsc` filtered to `Child` gives its parent (1).
+ *
+ * It carries no port / payload; its `type` is the ontology id "child"
+ * (`isBindingRelation: false`, so it never renders as a config cable and is
+ * skipped by the per-slot routing cache). `IHasTransform.parent` is DERIVED
+ * (lazily cached) from the incoming `Child` link: the 3D transform tree is one
+ * consumer of this generic graph relation, scene-context resolution another.
+ * Idiomatic alongside the typed link subclasses already in the codebase
+ * (CnnSynapse / RnnSynapse / VitSynapse all extend GraphOLink).
+ */
+export class Child<B = unknown> extends GraphOLink<B> {
+    public constructor(parent?: INode, child?: INode) {
+        // oini = parent, ofin = child. super() wires both ends, registering this
+        // link on each node's onsc/opsc; the child side invalidates its derived
+        // parent cache. `type` is set after (the routing cache + the parent-cache
+        // invalidation key off `instanceof Child`, robust during construction).
+        super(parent, child);
+        this.type = "child";
+    }
+}

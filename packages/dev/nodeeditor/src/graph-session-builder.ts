@@ -1,9 +1,11 @@
 import {
     buildSolverAttachmentsForGraph,
+    isSceneResident,
     RuntimeGraphBuilder,
     Session,
     SimGraphNode,
     type Channel,
+    type IHasTransform,
     type IRuntimeGraph,
     type IRuntimeNode,
     type ISolver,
@@ -121,6 +123,12 @@ export function buildSessionFromViewer(viewer: GraphViewer): {
     // live in different scenes without a Sim.Graph wrapper each.
     bindPerNodeScenes(viewer, session);
 
+    // Step 7: single-truth transform — wire each scene-resident node's
+    // structural `parent` to its scene node, so `worldTransform()` chains
+    // object -> scene -> ... -> root via `parent.worldTransform()` (no
+    // scene-view transform). Per-node `sceneItemId` wins, else the root scene.
+    bindSceneParents(viewer, graph);
+
     return {
         session,
         channels: (graph.links as Channel[]).slice(),
@@ -143,6 +151,35 @@ function bindPerNodeScenes(viewer: GraphViewer, session: Session): void {
         const id = data.sceneItemId;
         const scene = id ? scenesById.get(String(id)) : undefined;
         data.setBoundSceneView(scene ? scene.buildStateView(resolver) : null);
+    }
+}
+
+/** Single-truth transform: wire each scene-resident runtime node's structural
+ *  `parent` to its scene node (per-node `sceneItemId` override, else the root
+ *  SceneItem), so `worldTransform()` chains object -> scene -> ... -> root via
+ *  `parent.worldTransform()`. The SceneItem is a GraphNode (IHasTransform), so
+ *  the parent ref is structural geometry, not the runtime dispatch graph
+ *  (SceneItems have no fire() and never enter `graph.nodes`). No-op when no
+ *  Scene is on the canvas: residents stay parentless and their world is their
+ *  bare local pose. */
+function bindSceneParents(viewer: GraphViewer, graph: IRuntimeGraph): void {
+    const scenesById = new Map<string, IHasTransform>();
+    let rootScene: IHasTransform | undefined;
+    for (const n of viewer.nodes) {
+        const data = n && n.item && (n.item as { data?: unknown }).data;
+        if (hasBuildStateView(data)) {
+            scenesById.set(String(n.id), data as unknown as IHasTransform);
+            if (rootScene === undefined) rootScene = data as unknown as IHasTransform;
+        }
+    }
+    if (!rootScene) return;
+    for (const node of graph.nodes) {
+        if (!isSceneResident(node)) continue;
+        const perNodeId = (node as { sceneItemId?: string }).sceneItemId;
+        const scene = (perNodeId && scenesById.get(String(perNodeId))) || rootScene;
+        // ILiveInScene is orthogonal to IHasTransform; a runtime resident is a
+        // GraphNode, so it carries the geometry `parent` the scene chain needs.
+        (node as unknown as IHasTransform).parent = scene;
     }
 }
 

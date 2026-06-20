@@ -88,10 +88,7 @@ export interface INodeMeta {
  * Bare-string `docPath` always resolves to itself regardless of
  * preferences (it's the no-i18n case).
  */
-export function resolveDocPath(
-    docPath: string | Readonly<Record<string, string>> | undefined,
-    preferred: ReadonlyArray<string>
-): string | null {
+export function resolveDocPath(docPath: string | Readonly<Record<string, string>> | undefined, preferred: ReadonlyArray<string>): string | null {
     if (!docPath) return null;
     if (typeof docPath === "string") return docPath;
     const entries = Object.keys(docPath);
@@ -109,8 +106,10 @@ export function resolveDocPath(
             if (keyLower.startsWith(head + "-")) return docPath[keyOriginal];
         }
     }
-    const enUs = lower.get("en-us"); if (enUs) return docPath[enUs];
-    const en   = lower.get("en");    if (en)   return docPath[en];
+    const enUs = lower.get("en-us");
+    if (enUs) return docPath[enUs];
+    const en = lower.get("en");
+    if (en) return docPath[en];
     return docPath[entries[0]];
 }
 

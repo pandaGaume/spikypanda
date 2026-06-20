@@ -22,10 +22,11 @@
  * `local` / `world` ports).
  *
  * Placement (no Transform fan-out): the inner machine / payload / housing
- * leave `parent_world` UNWIRED and inherit this container's `world`
- * through the inherited Scene (TransformNode reads getScene().worldTransform
- * when parent_world is unwired). The body orientation that matters for
- * the gravity study (motor yaw vs gravity) enters through the container's
+ * leave `parent_world` UNWIRED and inherit this container's `world` via the
+ * single-truth transform chain (at session bind each inner world object's
+ * structural `parent` is set to this container, so `worldTransform()` =
+ * `container.worldTransform() × local`). The body orientation that matters
+ * for the gravity study (motor yaw vs gravity) enters through the container's
  * own `local` port, fed by a single external attitude->transform. There
  * is therefore no inner transform broadcasting one matrix to three ports
  * (the geometry Transform publishes to its first output only).

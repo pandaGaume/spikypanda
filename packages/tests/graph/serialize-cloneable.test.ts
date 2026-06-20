@@ -5,7 +5,7 @@
  * piece was a serialize implementation that walks the @cloneable
  * metadata (clone() was the only consumer until now).
  */
-import { cloneable, GraphItem, Cartesian3 } from "spikypanda-core";
+import { cloneable, GraphItem, Cartesian3, ONTOLOGY } from "spikypanda-core";
 
 class Knob extends GraphItem {
     @cloneable public nfft: number = 512;
@@ -45,7 +45,7 @@ describe("GraphItem.serialize / deserialize", () => {
         const ref = b.gravity;
         b.deserialize(json);
 
-        expect(b.gravity).toBe(ref);                  // same reference
+        expect(b.gravity).toBe(ref); // same reference
         expect(b.gravity).toBeInstanceOf(Cartesian3); // prototype intact
         expect(b.gravity.x).toBe(1);
         expect(b.gravity.y).toBe(2);
@@ -78,8 +78,8 @@ describe("GraphItem.serialize / deserialize", () => {
         b.deserialize(partial);
 
         expect(b.nfft).toBe(4096);
-        expect(b.title).toBe("default");       // untouched
-        expect(b.enabled).toBe(true);          // untouched
+        expect(b.title).toBe("default"); // untouched
+        expect(b.enabled).toBe(true); // untouched
         expect(b.gravity.z).toBeCloseTo(-9.81); // untouched
     });
 
@@ -95,5 +95,70 @@ describe("GraphItem.serialize / deserialize", () => {
         expect(json).toHaveProperty("title", "default");
         expect(json).toHaveProperty("enabled", true);
         expect(json).toHaveProperty("gravity");
+    });
+});
+
+// ---------------------------------------------------------------------------
+// IGraphItem.type — the ontology tag carried by EVERY graph item (node + link)
+// ---------------------------------------------------------------------------
+
+describe("IGraphItem.type (ontology tag on the base)", () => {
+    test("round-trips through serialize / deserialize", () => {
+        const a = new Knob();
+        a.type = "scene";
+        const json = JSON.parse(JSON.stringify(a.serialize()));
+        expect(json).toHaveProperty("type", "scene");
+
+        const b = new Knob();
+        b.deserialize(json);
+        expect(b.type).toBe("scene");
+    });
+
+    test("is undefined by default and omitted from the saved JSON", () => {
+        const a = new Knob();
+        expect(a.type).toBeUndefined();
+        // serialize() sets `type: undefined`; JSON.stringify drops undefined
+        // keys, so an untyped item carries nothing in the saved blob (the
+        // common case: data links, uncategorised nodes).
+        const json = JSON.parse(JSON.stringify(a.serialize()));
+        expect(json).not.toHaveProperty("type");
+    });
+
+    test("clone() copies the type", () => {
+        const a = new Knob();
+        a.type = "part";
+        const b = a.clone();
+        expect(b.type).toBe("part");
+    });
+});
+
+// ---------------------------------------------------------------------------
+// ONTOLOGY — the core, editor-independent vocabulary behind IGraphItem.type
+// ---------------------------------------------------------------------------
+
+describe("ONTOLOGY registry", () => {
+    test("seeds the core binding-relation types (config-link family)", () => {
+        for (const id of ["scene", "solver", "atmosphere", "shared"]) {
+            expect(ONTOLOGY.isBindingRelation(id)).toBe(true);
+        }
+    });
+
+    test("isBindingRelation is false for data / unknown / undefined ids", () => {
+        expect(ONTOLOGY.isBindingRelation("float")).toBe(false);
+        expect(ONTOLOGY.isBindingRelation("not-registered")).toBe(false);
+        expect(ONTOLOGY.isBindingRelation(undefined)).toBe(false);
+    });
+
+    test("register + isA walks the superType chain; structural relations are NOT binding", () => {
+        ONTOLOGY.register({ id: "structural" });
+        ONTOLOGY.register({ id: "part", superType: "structural" });
+        ONTOLOGY.register({ id: "child", superType: "structural" });
+        expect(ONTOLOGY.isA("part", "structural")).toBe(true);
+        expect(ONTOLOGY.isA("child", "structural")).toBe(true);
+        expect(ONTOLOGY.isA("part", "scene")).toBe(false);
+        // A structural relation (part/child) is a separate category from the
+        // binding-relation (config-link) family: it must NOT render as a config
+        // cable, so isBindingRelation stays false.
+        expect(ONTOLOGY.isBindingRelation("part")).toBe(false);
     });
 });

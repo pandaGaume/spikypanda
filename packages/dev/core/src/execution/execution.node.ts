@@ -142,6 +142,7 @@ export class RuntimeNode<B = unknown> extends GraphNode<B> implements IRuntimeNo
         for (const link of links) {
             const ch = link as unknown as IChannel;
             const key = inSlotOf(ch);
+            if ((key as unknown) === undefined) continue; // structural relation (no slot), not a channel
             const map = (this._inBySlot ??= new Map());
             const arr = map.get(key);
             if (arr) arr.push(ch);
@@ -155,6 +156,7 @@ export class RuntimeNode<B = unknown> extends GraphNode<B> implements IRuntimeNo
         for (const link of links) {
             const ch = link as unknown as IChannel;
             const key = inSlotOf(ch);
+            if ((key as unknown) === undefined) continue; // structural relation (no slot)
             const arr = map.get(key);
             if (!arr) continue;
             const i = arr.indexOf(ch);
@@ -166,6 +168,7 @@ export class RuntimeNode<B = unknown> extends GraphNode<B> implements IRuntimeNo
     protected override nscAdded<L extends IOlink>(...links: Array<L>): void {
         for (const link of links) {
             const ch = link as unknown as IChannel;
+            if ((ch.slot as unknown) === undefined) continue; // structural relation (no slot)
             const map = (this._outBySlot ??= new Map());
             const arr = map.get(ch.slot);
             if (arr) arr.push(ch);
@@ -178,6 +181,7 @@ export class RuntimeNode<B = unknown> extends GraphNode<B> implements IRuntimeNo
         if (!map) return;
         for (const link of links) {
             const ch = link as unknown as IChannel;
+            if ((ch.slot as unknown) === undefined) continue; // structural relation (no slot)
             const arr = map.get(ch.slot);
             if (!arr) continue;
             const i = arr.indexOf(ch);

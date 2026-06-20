@@ -40,7 +40,7 @@ These anchors render as **dashed cables** in the canvas to distinguish them from
 | `temperature` / `temperatureQ` | Temperature (K) | 293.15 K (20 °C) | Ambient temperature consumed by motors, atmospheres, and gates. Static for V1; dynamic temperature source via wired publisher deferred. |
 | `pressure` / `pressureQ` | Pressure (Pa) | 101325 Pa (1 atm) | Ambient pressure. Used by gates' ideal-gas conversions and by future thermodynamic nodes. |
 | `timeScale` | number | 1.0 | Sim-to-wall-time multiplier. |
-| `localPosition` / `localRotation` / `localScale` | ICartesian3 / Quaternion / ICartesian3 | identity | Local 3D transform relative to parent in the scene tree. `worldTransform` chains automatically through enclosing Sim.Graph wiring. |
+| `localPosition` / `localRotation` / `localScale` | ICartesian3 / Quaternion / ICartesian3 | identity | The scene's local 3D pose (`T·R·S`), composed by its `IHasTransform.localTransform()`. Its world chains via the geometry `parent.worldTransform()` (the scene is itself a GraphNode wired into the enclosing scene at bind). |
 | `manualHz` / `manualHzQ` | Frequency (Hz) | 0 | When > 0, pins the effective sample rate. When 0, the rate is derived from owned `IIntegrable` leaves' `requiredHz` (P8 — currently V1 floor 60 Hz). |
 | `isPrimary` | bool | false | At root canvas: marks the scene the GraphRunner uses when several Scenes coexist. Auto-elected when only one Scene is present. |
 
@@ -77,16 +77,20 @@ The Atmosphere binding follows the same precedence rule at the value-resolution 
 ## Consumer reading pattern
 
 ```ts
-// Inside any TransformNode-derived RuntimeNode:
-const scene = this.getScene(session);        // SceneStateView
+// Inside any TransformNode-derived RuntimeNode (an ILiveInScene world object):
+const scene = this.getScene(session);        // SceneStateView (latents only)
 const g     = scene.gravity;                  // ICartesian3
 const T_K   = scene.temperature.getValue(Temperature.Units.k);
 const T_C   = scene.temperature.getValue(Temperature.Units.c);
 const P_atm = scene.pressure.getValue(Pressure.Units.atm);
-const myWorld = composeTransform(scene.worldTransform, this.localTransform);
+// The world pose is NOT read from the view: it is the single-truth geometry
+// chain. The scene is wired as this node's `parent` at bind, so:
+const myWorld = this.worldTransform();        // = parent.worldTransform() × local
 ```
 
-When no scene is bound to the session (sample graphs without a Scene, unit tests), `getScene` falls back to a default Earth-surface view via `buildDefaultStateView` — gravity = -9.81 z, temperature = 293.15 K, identity transform, no atmosphere.
+The `SceneStateView` carries only environmental LATENTS (gravity, temperature, pressure, density, time scale, atmosphere, effectiveHz). A world object's POSE is the geometry node chain `parent.worldTransform() × local`, with the scene wired as its structural `parent` at session bind (the node implements `ILiveInScene`). There is no scene-view transform and no parallel decomposed transform type.
+
+When no scene is bound to the session (sample graphs without a Scene, unit tests), `getScene` falls back to a default Earth-surface view via `buildDefaultStateView` — gravity = -9.81 z, temperature = 293.15 K, no atmosphere; a world object with no `parent` has an identity world (its bare local pose).
 
 ## Pitfalls
 

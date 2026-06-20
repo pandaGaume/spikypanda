@@ -24,11 +24,10 @@
  * V1 scope:
  *   - gravity, temperature, pressure, timeScale: scalars, optionally
  *     pilot-driven via a source node ref.
- *   - localTransform / worldTransform: 3D transform of the scene
- *     origin, decomposed into position / rotation / scale (UE5-style
- *     FTransform). `worldTransform = parent.worldTransform × local`.
- *     Both expose `toMatrix4()` for consumers that need the column-
- *     major form (GPU upload, downstream physics engine bridges).
+ *   - (transform is NOT carried here: a world object's pose is the
+ *     geometry node chain `parent.worldTransform() × local`, with the
+ *     scene wired as the resident's `parent` at bind. The view holds
+ *     only world-fixed latents.)
  *   - atmosphere: direct reference to an AtmosphereStateNode (or
  *     null). Consumers read its observables via standard runtime
  *     cables; this ref serves identification + metadata lookup.
@@ -40,9 +39,7 @@
  */
 
 import { Cartesian3 } from "../geometry/geometry.cartesian";
-import type { ICartesian3, IMatrix4, IQuaternion } from "../geometry/geometry.interfaces";
-import { Matrix4 } from "../geometry/geometry.matrix";
-import { Quaternion } from "../geometry/geometry.quarternion";
+import type { ICartesian3 } from "../geometry/geometry.interfaces";
 import { Frequency, Pressure, Temperature } from "../math/math.units";
 import type { IIntegrable } from "./sim.interfaces";
 
@@ -90,40 +87,6 @@ export interface IAtmosphereAggregator {
 export function isAtmosphereAggregator(v: unknown): v is IAtmosphereAggregator {
     return !!v && typeof v === "object" && typeof (v as IAtmosphereAggregator).sampleAggregates === "function";
 }
-
-/**
- * Local-or-world 3D transform carried by a scene. Decomposed into
- * translation + quaternion rotation + non-uniform scale (UE5
- * `FTransform`, Babylon.js `TransformNode` style), with `toMatrix4()`
- * to collapse to the column-major matrix form when needed.
- *
- * The decomposed view is canonical for storage / editing / blending;
- * the matrix form is canonical for GPU upload and for chaining
- * heavyweight scene-graph multiplications. Implementations are free
- * to cache the matrix internally — V1 just recomputes on demand,
- * which is fine because each consumer reads it at most once per
- * `fire()` and the compose is ~50 multiply-adds.
- *
- * Scale is per-axis (`ICartesian3`) for parity with UE5 / BJS, not
- * uniform.
- */
-export interface ITransform {
-    readonly position: ICartesian3;
-    readonly rotation: IQuaternion;
-    readonly scale: ICartesian3;
-    /** Compute the column-major 4×4 matrix `T(position) · R(rotation) · S(scale)`.
-     *  Allocates a fresh `Matrix4` on each call in V1; callers that
-     *  need to retain it across ticks should `clone()` and cache. */
-    toMatrix4(): IMatrix4;
-}
-
-/** Identity transform constant. Used as the fallback "world" of a root scene. */
-export const IDENTITY_TRANSFORM: ITransform = Object.freeze({
-    position: Object.freeze(new Cartesian3(0, 0, 0)),
-    rotation: Object.freeze(new Quaternion(0, 0, 0, 1)),
-    scale: Object.freeze(new Cartesian3(1, 1, 1)),
-    toMatrix4: () => new Matrix4(),
-});
 
 /** Earth-surface sane default for an unconfigured scene's gravity,
  *  in m/s². Vector quantities are not Quantity-wrapped (V1 scope);
@@ -251,84 +214,12 @@ export interface SceneStateView {
      *  sub-stepping ratio K = childHz / parentHz. */
     readonly effectiveHz: Frequency;
 
-    // ── 3D transform (live, world chained from parent) ────────────────
-
-    /** This scene's local transform relative to its parent in the 3D
-     *  tree. Live if any of the local source IDs are wired, else the
-     *  SceneItem's static `@cloneable local*` fields. */
-    readonly localTransform: ITransform;
-
-    /** Cumulative transform to world. `parent ? parent.worldTransform · localTransform : localTransform`.
-     *  Recomputed on each access from live components — for V1 this is
-     *  a fresh allocation per call, which is fine because consumers
-     *  read it at most once per fire() and the matrix-multiply is
-     *  cheap. A future optimization may cache when nothing changed. */
-    readonly worldTransform: ITransform;
-}
-
-/**
- * Build an `ITransform` value object from decomposed parts. Allocates
- * `Cartesian3` / `Quaternion` instances so the returned object's
- * fields satisfy `ICartesian3` / `IQuaternion` structurally (with
- * methods, not just `{x, y, z}` literals). The `toMatrix4()` accessor
- * delegates to `Matrix4.compose` each call.
- *
- * Used internally by `composeTransform`, by `SceneItem` for its local
- * transform reader, and by `SceneStateViewImpl` for the chained
- * worldTransform. Externally useful when a node (gate, sensor)
- * wants to publish an `ITransform`-typed value through a standard
- * runtime cable.
- */
-export function makeTransform(position: ICartesian3, rotation: IQuaternion, scale: ICartesian3): ITransform {
-    const p = position instanceof Cartesian3 ? position : new Cartesian3(position.x, position.y, position.z);
-    const r = rotation instanceof Quaternion ? rotation : new Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
-    const s = scale instanceof Cartesian3 ? scale : new Cartesian3(scale.x, scale.y, scale.z);
-    return {
-        position: p,
-        rotation: r,
-        scale: s,
-        // Babylon-aligned arg order: Compose(scale, rotation, translation).
-        toMatrix4: () => Matrix4.Compose(s, r, p),
-    };
-}
-
-/**
- * Compose two transforms: `result = parent × child`, the standard
- * scene-graph parent-then-child concatenation. Done at the matrix
- * level (more correct under non-uniform scale than per-channel
- * composition, and simpler to maintain), then decomposed back to a
- * canonical `ITransform`.
- *
- * The matrix-then-decompose path costs one Matrix4 allocation and
- * one Shepperd quaternion extraction per call — acceptable for V1.
- * If hot-loop perf becomes an issue, the canonical fast path is to
- * skip decomposition: have consumers read `worldTransform.toMatrix4()`
- * directly and never touch the decomposed fields. We keep the
- * decomposed accessors on the result so the rest of the API stays
- * uniform (editable layer, gates, sensors all read .position/.scale).
- */
-export function composeTransform(parent: ITransform, child: ITransform): ITransform {
-    // parent · child via matrix product. The allocating form keeps
-    // the function pure (no aliasing surprises for callers that hold
-    // references to either input).
-    const pm = parent.toMatrix4();
-    const cm = child.toMatrix4();
-    const composed = new Matrix4(pm.m).multiply(cm);
-
-    const outScl = new Cartesian3(1, 1, 1);
-    const outRot = new Quaternion();
-    const outPos = new Cartesian3();
-    // Babylon-aligned arg order: decompose(scale, rotation, translation).
-    composed.decompose(outScl, outRot, outPos);
-    return {
-        position: outPos,
-        rotation: outRot,
-        scale: outScl,
-        // Return the SAME matrix we already built — avoids
-        // re-composing the decomposed parts in the trivial case
-        // where a caller chains `composeTransform(...).toMatrix4()`.
-        toMatrix4: () => composed,
-    };
+    // NOTE: the 3D transform is NOT carried here. The single source of
+    // truth for a world object's pose is the geometry node chain
+    // (`IHasTransform.worldTransform()` = `parent.worldTransform() x local`),
+    // with the scene node wired as the resident's `parent` at session bind.
+    // The SceneStateView carries only environmental LATENTS (gravity,
+    // temperature, ...), which are world-fixed and orthogonal to pose.
 }
 
 /**
@@ -340,10 +231,9 @@ export function composeTransform(parent: ITransform, child: ITransform): ITransf
  * The scalar latents (temperature / pressure / effectiveHz) are
  * Quantity instances on a real view, so we check `instanceof` against
  * their concrete classes. `timeScale` stays dimensionless and number-
- * typed. Transform fields are plain object-shapes; gravity is an
- * ICartesian3 with `{x, y, z}` axes (Cartesian3 instances satisfy
- * the shape structurally, as do any literals returned by a dynamic
- * source resolver).
+ * typed. Gravity is an ICartesian3 with `{x, y, z}` axes (Cartesian3
+ * instances satisfy the shape structurally, as do any literals
+ * returned by a dynamic source resolver).
  */
 export function isSceneStateView(v: unknown): v is SceneStateView {
     if (!v || typeof v !== "object") return false;
@@ -358,8 +248,6 @@ export function isSceneStateView(v: unknown): v is SceneStateView {
     if (typeof (c.gravity as ICartesian3).x !== "number") return false;
     if (typeof (c.gravity as ICartesian3).y !== "number") return false;
     if (typeof (c.gravity as ICartesian3).z !== "number") return false;
-    if (!c.localTransform || typeof c.localTransform !== "object") return false;
-    if (!c.worldTransform || typeof c.worldTransform !== "object") return false;
     return true;
 }
 

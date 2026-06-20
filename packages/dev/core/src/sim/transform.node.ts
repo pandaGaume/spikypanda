@@ -1,12 +1,13 @@
 import { cloneable, IOlink } from "../graph/graph.interfaces";
 import { IDeclaresPorts, IPortDescriptor, ISession } from "../execution/execution.interfaces";
 import { RuntimeNode } from "../execution/execution.node";
-import { buildDefaultStateView, transformToMatrix44 } from "./scene-state-view.impl";
+import { buildDefaultStateView } from "./scene-state-view.impl";
 import { IDENTITY44, isMatrix44, Matrix4 } from "../geometry/geometry.matrix";
 import { Cartesian3 } from "../geometry/geometry.cartesian";
 import type { ICartesian, ICartesian3, IMatrix4 } from "../geometry/geometry.interfaces";
 import type { Nullable } from "../types";
 import type { SceneStateView } from "./scene-state-view.interface";
+import type { ILiveInScene } from "./sim.interfaces";
 
 /**
  * Base class for every runtime object that lives in a world reference
@@ -28,14 +29,14 @@ import type { SceneStateView } from "./scene-state-view.interface";
  * the GraphRunner). Subclasses read it through `getScene()`, which falls
  * back to a sane Earth-surface default when no scene has been bound.
  *
- * Parent-frame inheritance: when the `parent_world` port is NOT wired,
- * the node inherits the enclosing scene's `worldTransform` as its
- * parent frame (rather than the bare identity). The scene IS the
- * default parent of every world object: a Sim.Graph that nests a scene
- * with a non-identity pose re-frames every TransformNode inside it
- * automatically. Backward compatible: a root scene's worldTransform is
- * identity unless the user gives the scene a pose, so graphs that never
- * set a scene transform see the same identity parent as before.
+ * Parent-frame inheritance: the enclosing scene IS the structural
+ * `parent` of every world object, wired at session bind (the node
+ * implements `ILiveInScene`). So `worldTransform()` chains object ->
+ * scene -> ... -> root through the single `parent.worldTransform()`
+ * mechanism, with NO separate scene-view transform. A wired
+ * `parent_world` port is an explicit override that wins over the
+ * structural parent. A root scene's world is identity unless given a
+ * pose, so graphs that never pose a scene see an identity parent.
  *
  * This is a CORE primitive (it was previously vendored inside the physics
  * plugin): any plugin's world object (motor, sensor, mechanical body,
@@ -43,7 +44,12 @@ import type { SceneStateView } from "./scene-state-view.interface";
  * `super.fire()` it calls before its own physics. The matrix is a flat
  * array of 16 numbers in column-major layout.
  */
-export class TransformNode extends RuntimeNode implements IDeclaresPorts {
+export class TransformNode extends RuntimeNode implements IDeclaresPorts, ILiveInScene {
+    /** ILiveInScene brand: every world object lives in a scene. Its transform
+     *  `parent` is wired to the enclosing scene node at session bind, so
+     *  `worldTransform()` chains object -> scene -> ... -> root (single truth). */
+    public readonly livesInScene = true as const;
+
     /** Slot names exposed as static so subclasses can reference them. */
     public static readonly INPUT_LOCAL = "local";
     public static readonly INPUT_PARENT_WORLD = "parent_world";
@@ -86,11 +92,6 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
      *  wins over the structural `parent` and the scene. */
     private _parentWorldOverride?: Matrix4;
     private _parentWorldActive: boolean = false;
-
-    /** Snapshot of the enclosing scene's world, the default parent frame
-     *  when no `parent_world` port is wired and no structural `parent` is
-     *  set. Refreshed each fire only when actually needed (reused buffer). */
-    private _sceneWorld?: Matrix4;
 
     /** Reused world buffer for the per-fire `parentWorld × local` compose
      *  (lazily allocated), so the runtime push path allocates no 4×4 per tick. */
@@ -221,9 +222,9 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
     }
 
     /** World pose (see IHasTransform): `parentWorld × local`, where
-     *  parentWorld follows the SIM precedence wired `parent_world` >
-     *  structural `parent` > enclosing scene. Before the first fire (no
-     *  scene captured) it degrades to the bare local pose. */
+     *  parentWorld follows the precedence wired `parent_world` override >
+     *  structural `parent` (the enclosing scene, wired at bind). With
+     *  neither, it degrades to the bare local pose. */
     public override worldTransform(): Matrix4 {
         const local = this.localTransform();
         let parentWorld: IMatrix4 | undefined;
@@ -231,14 +232,11 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
             parentWorld = this._parentWorldOverride;
         } else if (this.parent) {
             parentWorld = this.parent.worldTransform();
-        } else {
-            parentWorld = this._sceneWorld;
         }
         if (parentWorld === undefined) {
             return local;
         }
         const world = this.composeWorldInto(local, parentWorld, (this._worldMatrix ??= new Matrix4()));
-        this._worldVersion++; // recomposed every fire (ports/scene change) -> advance for any child observing transformVersion
         return world;
     }
 
@@ -304,13 +302,6 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts {
             this._parentWorldActive = true;
         } else {
             this._parentWorldActive = false;
-        }
-
-        // Scene world is the default parent frame only when no port and no
-        // structural parent supply one (a Sim.Graph nesting a posed scene
-        // re-frames this node automatically). Snapshot it just-in-time.
-        if (!this._parentWorldActive && this.parent === undefined) {
-            (this._sceneWorld ??= new Matrix4()).setFromArray(transformToMatrix44(this.getScene(session).worldTransform));
         }
 
         // world = parentWorld × local, composed through the node's own

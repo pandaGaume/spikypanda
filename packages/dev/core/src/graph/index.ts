@@ -1,4 +1,5 @@
 export * from "./graph.interfaces";
+export * from "./graph.ontology";
 export * from "./graph.interfaces.builder";
 export * from "./graph.editor";
 export * from "./graph.graphItem";

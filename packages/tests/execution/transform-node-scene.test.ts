@@ -1,68 +1,63 @@
 /**
- * TransformNode parent-frame inheritance.
+ * TransformNode parent-frame inheritance (single-truth transform).
  *
- * When the `parent_world` port is unwired, a TransformNode inherits the
- * enclosing scene's worldTransform as its parent frame (the unifying
- * "the scene is the default parent of every world object" rule), rather
- * than the bare identity. Backward compatible: a session with no scene
- * (or a scene with an identity pose) yields an identity parent.
+ * A world object's world pose is `parent.worldTransform() × local`, the one
+ * geometry chain. The enclosing scene is wired as the node's structural
+ * `parent` at session bind (the node is `ILiveInScene`); there is no separate
+ * scene-view transform and no `_sceneWorld` snapshot. A session with no parent
+ * (or an identity-posed parent) yields an identity parent frame.
  *
  * world matrices are column-major flat[16]; the translation lives in
- * m[12..14].
+ * m[12..14]. Here a bare posed `GraphNode` stands in for the scene parent
+ * (any IHasTransform works as a structural parent).
  */
-import { buildDefaultStateView, Cartesian3, makeTransform, Quaternion, RuntimeGraph, Session, TransformNode, type SceneStateView } from "spikypanda-core";
+import { Cartesian3, GraphNode, RuntimeGraph, Session, TransformNode, type IHasTransform } from "spikypanda-core";
 
-function viewTranslatedBy(id: string, x: number, y: number, z: number): SceneStateView {
-    const base = buildDefaultStateView(id);
-    return new Proxy(base, {
-        get(target, prop) {
-            if (prop === "worldTransform") return makeTransform(new Cartesian3(x, y, z), new Quaternion(0, 0, 0, 1), new Cartesian3(1, 1, 1));
-            return Reflect.get(target, prop);
-        },
-    });
+/** A bare posed node standing in for a scene (any IHasTransform is a valid
+ *  structural parent). */
+function posedParent(x: number, y: number, z: number): IHasTransform {
+    const gn = new GraphNode();
+    gn.position = new Cartesian3(x, y, z);
+    return gn;
 }
 
-function worldOf(scene: SceneStateView | null): ReadonlyArray<number> {
+function worldOfParented(parent: IHasTransform | null): ReadonlyArray<number> {
     const tn = new TransformNode();
+    if (parent) tn.parent = parent;
     const session = new Session(new RuntimeGraph([tn]));
-    if (scene) session.sceneStateView = scene;
     session.run(0);
     return tn.world;
 }
 
-describe("TransformNode inherits the scene world as parent_world", () => {
-    it("identity parent when no scene is bound (historical default)", () => {
-        const w = worldOf(null);
+describe("TransformNode world chains via its structural parent (single truth)", () => {
+    it("identity parent when no parent is set (historical default)", () => {
+        const w = worldOfParented(null);
         expect(w[12]).toBeCloseTo(0, 9);
         expect(w[13]).toBeCloseTo(0, 9);
         expect(w[14]).toBeCloseTo(0, 9);
     });
 
-    it("inherits the scene's world translation when parent_world is unwired", () => {
-        const w = worldOf(viewTranslatedBy("posed", 5, -2, 3));
+    it("inherits the parent's world translation via parent.worldTransform()", () => {
+        const w = worldOfParented(posedParent(5, -2, 3));
         expect(w[12]).toBeCloseTo(5, 6);
         expect(w[13]).toBeCloseTo(-2, 6);
         expect(w[14]).toBeCloseTo(3, 6);
     });
 
-    it("a per-node bound scene overrides the session scene", () => {
-        const tn = new TransformNode();
-        const session = new Session(new RuntimeGraph([tn]));
-        session.sceneStateView = viewTranslatedBy("session", 1, 1, 1);
-        tn.setBoundSceneView(viewTranslatedBy("per-node", 9, 0, 0));
-        session.run(0);
-        // world = (per-node scene world) x identity -> translation (9,0,0).
-        expect(tn.world[12]).toBeCloseTo(9, 6);
-        expect(tn.world[13]).toBeCloseTo(0, 6);
-    });
+    it("chains a multi-level parent tree (grandparent -> parent -> child)", () => {
+        const grandparent = posedParent(10, 0, 0);
+        const parent = new GraphNode();
+        parent.position = new Cartesian3(0, 4, 0);
+        parent.parent = grandparent;
 
-    it("clearing the per-node binding falls back to the session scene", () => {
         const tn = new TransformNode();
+        tn.parent = parent;
         const session = new Session(new RuntimeGraph([tn]));
-        session.sceneStateView = viewTranslatedBy("session", 1, 1, 1);
-        tn.setBoundSceneView(viewTranslatedBy("per-node", 9, 0, 0));
-        tn.setBoundSceneView(null);
         session.run(0);
-        expect(tn.world[12]).toBeCloseTo(1, 6);
+
+        // world = grandparent (10,0,0) ∘ parent (0,4,0) ∘ local (identity).
+        expect(tn.world[12]).toBeCloseTo(10, 6);
+        expect(tn.world[13]).toBeCloseTo(4, 6);
+        expect(tn.world[14]).toBeCloseTo(0, 6);
     });
 });

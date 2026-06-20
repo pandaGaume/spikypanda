@@ -2,6 +2,7 @@ import type { ICartesian, ICartesian3, IHasTransform, IMatrix4, IQuaternion } fr
 import { Cartesian3, Matrix4, Quaternion } from "../geometry";
 import { Nullable } from "../types";
 import { GraphItem } from "./graph.graphItem";
+import { Child } from "./graph.olink";
 import { cloneable, INode, IOlink } from "./graph.interfaces";
 
 /** Reused pose defaults + transient scratch for the node transform compose.
@@ -13,23 +14,38 @@ import { cloneable, INode, IOlink } from "./graph.interfaces";
 const IDENTITY_QUAT: IQuaternion = Object.freeze(new Quaternion(0, 0, 0, 1));
 const UNIT_SCALE: ICartesian3 = Object.freeze(new Cartesian3(1, 1, 1));
 const POSE_TRANSLATION: Cartesian3 = new Cartesian3();
+const POSE_SCALE: Cartesian3 = new Cartesian3(1, 1, 1);
 const SCRATCH_PARENT: Matrix4 = new Matrix4();
 
-/** Compose a fresh local matrix `T(position) · R(orientation)` [scale = 1].
+/** Compose a fresh local matrix `T(position) · R(orientation) · S(scale)`.
  *  `position` is read through `ICartesian3` (a missing axis = 0, so a 2D
- *  quadtree position still works); an empty pose yields identity. The 4×4
+ *  quadtree position still works); `scale` likewise (a missing axis = 1, so an
+ *  unset scale stays the identity). An empty pose yields identity. The 4×4
  *  arithmetic is delegated to `Matrix4` (the single source of matrix math);
  *  this only feeds it the pose with sane defaults. */
-function composeLocalMatrix(position: ICartesian | undefined, orientation: IQuaternion | undefined): Matrix4 {
-    if (position === undefined && orientation === undefined) {
+function composeLocalMatrix(position: ICartesian | undefined, orientation: IQuaternion | undefined, scale: ICartesian | undefined): Matrix4 {
+    if (position === undefined && orientation === undefined && scale === undefined) {
         return new Matrix4(); // the constructor defaults to identity
     }
     const p = position as ICartesian3 | undefined;
     POSE_TRANSLATION.x = p?.x ?? 0;
     POSE_TRANSLATION.y = p?.y ?? 0;
     POSE_TRANSLATION.z = p?.z ?? 0;
-    return new Matrix4().composeInPlace(UNIT_SCALE, orientation ?? IDENTITY_QUAT, POSE_TRANSLATION);
+    let scaleVec: ICartesian3 = UNIT_SCALE;
+    if (scale !== undefined) {
+        const s = scale as ICartesian3;
+        POSE_SCALE.x = s.x ?? 1;
+        POSE_SCALE.y = s.y ?? 1;
+        POSE_SCALE.z = s.z ?? 1;
+        scaleVec = POSE_SCALE;
+    }
+    return new Matrix4().composeInPlace(scaleVec, orientation ?? IDENTITY_QUAT, POSE_TRANSLATION);
 }
+
+/** Predicate for the `onsc` / `opsc` filter: a structural `Child` relation link
+ *  (the generic parent/child hierarchy). Module-level so the closure is shared,
+ *  not re-allocated per call. */
+const isChildLink = (link: IOlink): boolean => link instanceof Child;
 
 export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
     protected _onsc: IOlink[];
@@ -41,7 +57,15 @@ export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
     // keys stay "position" / "orientation" (save-file compatible).
     private _positionValue?: ICartesian;
     private _orientationValue?: IQuaternion;
-    private _parent?: IHasTransform;
+    private _scaleValue?: ICartesian;
+
+    /** Lazy cache of the transform parent, DERIVED from the incoming `Child`
+     *  relation (`opsc` filtered to `Child` -> its `oini`). Three states:
+     *  `undefined` = not computed yet; `null` = computed, no parent; an `INode`
+     *  = the parent. Invalidated by `add`/`remove` whenever a `Child` link on
+     *  this node's `opsc` changes. The parent is a GENERIC graph relation, not a
+     *  field owned by IHasTransform; the transform tree just consumes it. */
+    private _parentCache?: Nullable<INode>;
 
     /** Cached local pose matrix; `undefined` = invalidated (recomposed on the
      *  next `localTransform()`). The cache IS the matrix-or-undefined: a pose
@@ -49,27 +73,12 @@ export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
      *  undefined for a node that never asks for its transform, so a
      *  non-spatial node (most neurons) holds no 4×4. */
     private _local?: Matrix4;
-    /** Cached world pose matrix. Recomposed IN PLACE (the buffer is reused
-     *  across recomputes — a moving parent overwrites it, never reallocates);
-     *  nulled only by a pose / parent change so the rare structural change
-     *  reallocates once. */
+    /** Cached world pose matrix; `undefined` = invalidated. Nulled (push) by a
+     *  pose / parent change on THIS node or any ancestor (see
+     *  `_invalidateWorldAndChildren`); recomposed on the next read. No version
+     *  counter: the `child` relation lets invalidation propagate down the tree
+     *  directly, so a node never has to poll a parent's version. */
     private _world?: Matrix4;
-
-    /** Monotonic pose version: the position / orientation setters bump it.
-     *  `worldTransform()` compares it to `_cachedLocalVersion` to know the
-     *  local moved (O(1), no matrix compare). */
-    private _localVersion: number = 0;
-    /** Monotonic WORLD version (see IHasTransform.transformVersion): advances
-     *  whenever this node's world is (re)composed to a new value. A child
-     *  reads it to detect a moved parent in O(1). Protected so a world-object
-     *  subclass that recomposes its own world (the sim push path) keeps it
-     *  advancing for any child observing it. */
-    protected _worldVersion: number = 0;
-    /** The (parent world version, local version) this node last composed its
-     *  world against; a mismatch on either means the cached world is stale.
-     *  `-1` = never composed / no parent. */
-    private _cachedParentWorldVersion: number = -1;
-    private _cachedLocalVersion: number = -1;
 
     /** The node's founding spatial coordinate (see IHasTransform.position).
      *  Reassigning it invalidates the cached local + world transforms;
@@ -85,9 +94,8 @@ export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
             return;
         }
         this._positionValue = v;
-        this._local = undefined; // invalidate the cached matrices themselves
-        this._world = undefined;
-        this._localVersion++; // signal worldTransform (here + on any child) to recompose
+        this._local = undefined; // local pose changed -> recompose on next read
+        this._invalidateWorldAndChildren(); // push: this world + every descendant's
     }
 
     /** The node's orientation (see IHasTransform.orientation). Reassigning it
@@ -102,27 +110,99 @@ export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
             return;
         }
         this._orientationValue = v;
-        this._local = undefined; // invalidate the cached matrices themselves
-        this._world = undefined;
-        this._localVersion++; // signal worldTransform (here + on any child) to recompose
+        this._local = undefined; // local pose changed -> recompose on next read
+        this._invalidateWorldAndChildren(); // push: this world + every descendant's
     }
 
-    /** Parent frame in the transform tree (see IHasTransform). Structural,
-     *  re-established by the enclosing container on placement, so NOT
-     *  @cloneable: a clone starts parent-less until it is placed.
-     *  Reassigning it invalidates the cached world transform. */
-    public get parent(): IHasTransform | undefined {
-        return this._parent;
+    /** The node's non-uniform scale (see IHasTransform.scale). Completes the
+     *  local pose `T·R·S`; undefined = unit scale. Reassigning it invalidates
+     *  the cached local + world transforms. */
+    @cloneable
+    public get scale(): ICartesian | undefined {
+        return this._scaleValue;
     }
 
-    public set parent(v: IHasTransform | undefined) {
-        if (v === this._parent) {
+    public set scale(v: ICartesian | undefined) {
+        if (v === this._scaleValue) {
             return;
         }
-        this._parent = v;
-        this._world = undefined; // a new (or removed) parent invalidates the cached world
-        this._cachedParentWorldVersion = -1; // force a recompose vs the new parent (even if its version coincides)
-        this._worldVersion++; // a parent identity change alters the world -> children observe it
+        this._scaleValue = v;
+        this._local = undefined; // local pose changed -> recompose on next read
+        this._invalidateWorldAndChildren(); // push: this world + every descendant's
+    }
+
+    /** Parent frame in the transform tree (see IHasTransform), DERIVED from the
+     *  generic `Child` relation: the `oini` of the incoming `Child` link on this
+     *  node's `opsc`. Lazily computed + cached; the cache is invalidated when a
+     *  `Child` link changes (add/remove). The transform tree is one consumer of
+     *  this generic graph relation (scene-context resolution is another). */
+    public get parent(): IHasTransform | undefined {
+        if (this._parentCache === undefined) {
+            // 1 parent: the `oini` of the first incoming `Child` link (null = none).
+            this._parentCache = this.opsc<Child>(isChildLink)[0]?.oini ?? null;
+        }
+        return this._parentCache ?? undefined;
+    }
+
+    /** Convenience over the generic relation: removes any existing incoming
+     *  `Child` link, then (re)establishes `v -> this` as a `Child` relation.
+     *  `node.parent = x` stays a one-liner, but the TRUTH is the `Child` link.
+     *  Relation endpoints are nodes (a transform parent is always a node), so
+     *  `v` is taken as an INode. */
+    public set parent(v: IHasTransform | undefined) {
+        if (v === this.parent) {
+            return;
+        }
+        if (v === undefined) {
+            // Detach: drop the incoming Child relation(s). opsc(filter) returns a
+            // fresh copy, so disposing (which mutates _opsc) while iterating is
+            // safe; dispose unwires both ends -> remove() clears the cache.
+            for (const link of this.opsc<Child>(isChildLink)) {
+                link.dispose();
+            }
+        } else {
+            // Re-parent: creating the Child link wires it via add(), which
+            // enforces the single-parent invariant (drops the old incoming Child
+            // first) and clears the parent cache.
+            // eslint-disable-next-line no-new
+            new Child(v as unknown as INode, this);
+        }
+    }
+
+    /** Invalidate the derived parent cache + the world cache when a `Child`
+     *  relation on this node changes. Mirrors the old direct `parent` setter:
+     *  drop the cached world, force a recompose vs the (new) parent even if its
+     *  version coincides, and bump the world version so children observe it. */
+    private _invalidateParentRelation(): void {
+        this._parentCache = undefined;
+        this._invalidateWorldAndChildren(); // parent frame changed -> this world + descendants
+    }
+
+    /** Push-invalidate this node's cached world AND every descendant's, walking
+     *  the `child` relation (`onsc` Child links -> their `ofin`). Replaces the
+     *  old version-counter scheme: a pose / parent change nulls the world here
+     *  and propagates DOWN the child tree so each descendant recomposes on its
+     *  next read. The `child` relation is a single-parent forest (1 parent via
+     *  `opsc`, N children via `onsc`), so the walk is acyclic and terminates. */
+    protected _invalidateWorldAndChildren(): void {
+        this._world = undefined;
+        for (const link of this.onsc<Child>(isChildLink)) {
+            if (link.ofin) {
+                (link.ofin as unknown as GraphNode)._invalidateWorldAndChildren();
+            }
+        }
+    }
+
+    /** This node's children via the generic `Child` relation: the `ofin` of each
+     *  outgoing `Child` link on `onsc` (1/N: one parent, N children). */
+    public get children(): INode[] {
+        const out: INode[] = [];
+        for (const link of this.onsc<Child>(isChildLink)) {
+            if (link.ofin) {
+                out.push(link.ofin);
+            }
+        }
+        return out;
     }
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
@@ -138,12 +218,12 @@ export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
         }
     }
 
-    public onsc<L extends IOlink>(): Array<L> {
-        return this._onsc as Array<L>;
+    public onsc<L extends IOlink>(filter?: (link: IOlink) => boolean): Array<L> {
+        return (filter ? this._onsc.filter(filter) : this._onsc) as Array<L>;
     }
 
-    public opsc<L extends IOlink>(): Array<L> {
-        return this._opsc as Array<L>;
+    public opsc<L extends IOlink>(filter?: (link: IOlink) => boolean): Array<L> {
+        return (filter ? this._opsc.filter(filter) : this._opsc) as Array<L>;
     }
 
     public add<L extends IOlink>(...links: Array<L>): void {
@@ -164,6 +244,20 @@ export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
                 const i = a.indexOf(link);
                 if (i >= 0) {
                     continue;
+                }
+                if (link instanceof Child) {
+                    // Single-parent invariant: a node has at most ONE incoming
+                    // Child link. Drop any existing parent relation before wiring
+                    // the new one (dispose unwires it from both ends). The new
+                    // link is not in _opsc yet, so the filter sees only the old.
+                    const existings = this.opsc<Child>(isChildLink);
+                    if (existings.length > 0) {
+                        for (const link of existings) {
+                            link.dispose();
+                        }
+                    } else {
+                        this._invalidateParentRelation();
+                    }
                 }
                 this._opsc.push(link);
                 this.pscAdded(link);
@@ -189,6 +283,9 @@ export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
                 if (i >= 0) {
                     a.splice(i, 1);
                     this.pscRemoved(link);
+                    if (link instanceof Child) {
+                        this._invalidateParentRelation();
+                    }
                 }
             }
         }
@@ -207,7 +304,7 @@ export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
     // or a scene-parent fallback; the default below is the founding pose.
 
     /** Local pose as a 4×4 (see IHasTransform): composed from
-     *  `position` / `orientation`, identity when both are unset. CACHED — the
+     *  `position` / `orientation` / `scale`, identity when all are unset. CACHED — the
      *  matrix is held until a pose change nulls it (the setters); repeated
      *  reads return the same instance. BORROWED / read-only (see IHasTransform):
      *  callers must not mutate it. Returns the concrete `Matrix4` (the contract
@@ -215,58 +312,38 @@ export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
     public localTransform(): Matrix4 {
         let local = this._local;
         if (local === undefined) {
-            local = this._local = composeLocalMatrix(this._positionValue, this._orientationValue);
+            local = this._local = composeLocalMatrix(this._positionValue, this._orientationValue, this._scaleValue);
         }
         return local;
     }
 
     /** World pose as a 4×4 (see IHasTransform): `parent.worldTransform() × local`,
-     *  or the local pose when there is no parent. CACHED — recomposed only
-     *  when the local moved or the parent's world moved, detected in O(1) via
-     *  `transformVersion` counters (no per-call matrix value compare). The
-     *  world buffer is REUSED across recomputes. BORROWED / read-only result
-     *  (see IHasTransform): a root node returns its `localTransform()`
-     *  instance, so mutating the result would corrupt the local. */
+     *  or the local pose when there is no parent. CACHED via a null-based scheme:
+     *  a pose / parent change on this node OR an ancestor push-invalidates
+     *  `_world` (see `_invalidateWorldAndChildren`); the next read recomposes
+     *  (a fresh buffer). BORROWED / read-only result (see IHasTransform): a root
+     *  node returns its `localTransform()` instance, so mutating the result
+     *  would corrupt the local. */
     public worldTransform(): Matrix4 {
         const local = this.localTransform();
-        const parent = this._parent;
+        const parent = this.parent;
         if (parent === undefined) {
-            // world == local; still advance the world version when the local
-            // moved so a child parented to this (root) node detects the change.
-            if (this._cachedLocalVersion !== this._localVersion) {
-                this._cachedLocalVersion = this._localVersion;
-                this._worldVersion++;
-            }
-            return local;
+            return local; // root: world IS local
         }
-        const parentWorld = parent.worldTransform();
-        const parentVersion = parent.transformVersion;
-        if (this._world === undefined || this._cachedParentWorldVersion !== parentVersion || this._cachedLocalVersion !== this._localVersion) {
-            const world = (this._world ??= new Matrix4()); // reuse the buffer; only a null (pose/parent change) reallocates
-            this.composeWorldInto(local, parentWorld, world);
-            this._cachedParentWorldVersion = parentVersion;
-            this._cachedLocalVersion = this._localVersion;
-            this._worldVersion++;
+        if (this._world === undefined) {
+            this._world = this.composeWorldInto(local, parent.worldTransform(), new Matrix4());
         }
         return this._world;
     }
 
-    /** Monotonic version of this node's WORLD transform (see IHasTransform).
-     *  Reading it brings the world up to date first, so the value reflects the
-     *  current pose / ancestry. */
-    public get transformVersion(): number {
-        this.worldTransform();
-        return this._worldVersion;
-    }
-
     /** Invalidate the cached local + world matrices (see IHasTransform). Same
      *  effect as a pose setter: the next `localTransform()` / `worldTransform()`
-     *  recomposes and `transformVersion` advances. The escape hatch for an
-     *  in-place pose mutation (`node.position.x = ...`) the setters can't see. */
+     *  recomposes, and the world invalidation pushes down to every descendant.
+     *  The escape hatch for an in-place pose mutation (`node.position.x = ...`)
+     *  the setters cannot see. */
     public invalidateTransform(): void {
         this._local = undefined;
-        this._world = undefined;
-        this._localVersion++;
+        this._invalidateWorldAndChildren();
     }
 
     /** Compose `out = parentWorld · local` into the caller's `out` and return

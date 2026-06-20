@@ -41,6 +41,22 @@ export interface IIDentifiable {
     id?: any;
 }
 
+/**
+ * Ontology type tag on a graph item. A CONTROLLED semantic / ontology
+ * category drawn from the core `ONTOLOGY` registry (see graph.ontology.ts) —
+ * distinct from the free-form `tag`:
+ *   - on an `IOlink` it names the RELATION kind (e.g. a binding relation:
+ *     "scene" / "solver" / "atmosphere" / ... ; later "child" / "part");
+ *   - on a node it names its ontological category.
+ * Optional: `undefined` = untyped (the default; a plain data link or an
+ * uncategorised node carries nothing). Editor-independent (lives in core),
+ * and serialized by `GraphItem.serialize()` so it round-trips without the
+ * node-editor's port-type inference.
+ */
+export interface ITyped {
+    type?: string;
+}
+
 export interface IHasBag<T = unknown> {
     /**
      * Runtime-only container for execution context.
@@ -88,7 +104,7 @@ export function supportsEnabling(target: object): boolean {
     return (target as Partial<IEnabled>).supportsEnabling !== false;
 }
 
-export interface IGraphItem<B = unknown> extends IDisposable, ICloneable, ITaggable, IIDentifiable, IHasBag<B> {}
+export interface IGraphItem<B = unknown> extends IDisposable, ICloneable, ITaggable, IIDentifiable, IHasBag<B>, ITyped {}
 
 /**
  * A graph node. Extends `IHasTransform`, so every node carries the
@@ -97,8 +113,8 @@ export interface IGraphItem<B = unknown> extends IDisposable, ICloneable, ITagga
  * pose members are all optional, so a non-spatial node pays nothing.
  */
 export interface INode<B = unknown> extends IGraphItem<B>, IHasTransform {
-    onsc<L extends IOlink>(): Array<L>;
-    opsc<L extends IOlink>(): Array<L>;
+    onsc<L extends IOlink>(filter?: (link: IOlink) => boolean): Array<L>;
+    opsc<L extends IOlink>(filter?: (link: IOlink) => boolean): Array<L>;
     add<L extends IOlink>(...links: Array<L>): void;
     remove<L extends IOlink>(...links: Array<L>): void;
 }

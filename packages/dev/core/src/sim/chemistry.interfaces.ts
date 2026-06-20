@@ -98,9 +98,3 @@ export function isGasMetadata(v: unknown): v is IGasMetadata {
         c.molarMass > 0
     );
 }
-
-// IParticulateMetadata lives in `particulate.interfaces.ts` now.
-// Particulate matter is solid-phase, not a chemical species: keeping
-// it in chemistry.interfaces.ts was a category error fixed alongside
-// the move of ParticulateNode from the chemistry plugin to
-// `Physics.Particulate` (2026-06-08).

@@ -134,10 +134,10 @@ export type Matrix44 = ReadonlyArray<number>;
  * SAME instance as its `localTransform()`, so mutating one would corrupt the
  * other.
  *
- * `transformVersion` is a monotonic counter that advances whenever this
- * node's WORLD transform changes (its own pose, or an ancestor's). A child
- * caches its parent's version to detect a moved parent in O(1) instead of a
- * per-call matrix compare.
+ * Cache invalidation is PUSH-based: a pose change (or a parent/child relation
+ * change) nulls this node's cached world AND, walking the `child` relations,
+ * the cached world of every descendant, so each recomposes on its next read.
+ * There is no version counter; the cache is simply the matrix-or-undefined.
  */
 export interface IHasTransform {
     /** The founding spatial coordinate of the node: indexed in the
@@ -151,27 +151,28 @@ export interface IHasTransform {
      *  that already expose a computed `rotation` accessor (Attitude,
      *  Transform). Optional: undefined = identity. */
     orientation?: IQuaternion;
+    /** Non-uniform scale completing the local pose `T(position)·R(orientation)·S(scale)`.
+     *  Optional: undefined = unit scale; a missing axis is taken as 1 (mirror
+     *  of how a missing `position` axis is taken as 0). Carried on the founding
+     *  contract so the full affine pose is expressible without a parallel
+     *  transform type. */
+    scale?: ICartesian;
     /** Parent frame in the transform tree; `worldTransform()` chains
      *  through it. Undefined = this node's world equals its local. A
      *  structural reference, established by the enclosing container, not
      *  part of the node's serialized identity. */
     parent?: IHasTransform;
     /** This node's local pose as a column-major 4×4, composed on demand
-     *  from `position` / `orientation` (identity when both are unset). */
+     *  from `position` / `orientation` / `scale` (identity when all are unset). */
     localTransform(): IMatrix4;
     /** This node's world pose as a column-major 4×4:
      *  `parent ? parent.worldTransform() × localTransform() : localTransform()`. */
     worldTransform(): IMatrix4;
-    /** Monotonic version of this node's WORLD transform: advances whenever
-     *  the world changes (this node's own pose, or any ancestor's). A child
-     *  caches its parent's `transformVersion` to detect a moved parent in
-     *  O(1), avoiding a per-call matrix value compare. Reading it brings the
-     *  world up to date first (so the value reflects the current pose). */
-    readonly transformVersion: number;
     /** Force the cached local + world matrices to recompose on the next
-     *  `localTransform()` / `worldTransform()`, and advance `transformVersion`.
-     *  The pose setters (`position` / `orientation`) invalidate automatically;
-     *  call this explicitly after mutating a pose value IN PLACE
+     *  `localTransform()` / `worldTransform()`, AND push-invalidate every
+     *  descendant's cached world (down the `child` relations). The pose setters
+     *  (`position` / `orientation` / `scale`) invalidate automatically; call
+     *  this explicitly after mutating a pose value IN PLACE
      *  (`node.position.x = ...`), which the setters cannot observe. */
     invalidateTransform(): void;
 }

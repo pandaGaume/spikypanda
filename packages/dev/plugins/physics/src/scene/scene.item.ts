@@ -48,8 +48,8 @@
  * scene wired on that Sim.Graph's `scene_in` anchor as its parent.
  */
 
-import { Cartesian3, cloneable, editable, Frequency, GraphItem, Pressure, Quaternion, Temperature, viewable } from "spikypanda-core";
-import type { IAtmosphereAggregator, ICartesian3, IIntegrable, IQuaternion, ITransform, SceneStateView, SceneStateViewSources } from "spikypanda-core";
+import { Cartesian3, cloneable, editable, Frequency, GraphNode, Matrix4, Pressure, Quaternion, Temperature, viewable } from "spikypanda-core";
+import type { IAtmosphereAggregator, ICartesian3, IIntegrable, ILiveInScene, IQuaternion, SceneStateView, SceneStateViewSources } from "spikypanda-core";
 import {
     ATMOSPHERE_ANCHOR_IN,
     DEFAULT_GRAVITY,
@@ -58,7 +58,6 @@ import {
     DEFAULT_TIME_SCALE,
     fieldReader,
     isAtmosphereAggregator,
-    makeTransform,
     MIN_EFFECTIVE_HZ,
     SceneStateViewImpl,
     SCENE_ANCHOR_OUT,
@@ -111,7 +110,13 @@ export interface SceneSourceResolver {
  * read at session bind to feed a `SceneStateView` consumers will use
  * each tick.
  */
-export class SceneItem extends GraphItem {
+export class SceneItem extends GraphNode implements ILiveInScene {
+    /** ILiveInScene brand: a scene is a world object (a frame in the scene
+     *  tree). Its transform `parent` is wired to the enclosing scene at
+     *  session bind, so `worldTransform()` chains scene -> ... -> root; a
+     *  root scene has no parent and its world equals its local pose. */
+    public readonly livesInScene = true as const;
+
     // ── Scalar latents ────────────────────────────────────────────────
     //
     // Storage is the canonical SI scalar (K for temperature, Pa for
@@ -385,9 +390,15 @@ export class SceneItem extends GraphItem {
         return this._localPosition;
     }
     public set localPosition(v: Cartesian3) {
-        this.setField("localPosition", this._localPosition, v, (n) => {
-            this._localPosition = n;
-        });
+        if (
+            this.setField("localPosition", this._localPosition, v, (n) => {
+                this._localPosition = n;
+            })
+        ) {
+            // Invalidate the IHasTransform cache so residents parented to this
+            // scene recompose their world (localTransform() reads these fields).
+            this.invalidateTransform();
+        }
     }
 
     public get localRotation(): Quaternion {
@@ -396,9 +407,13 @@ export class SceneItem extends GraphItem {
         return this._localRotation;
     }
     public set localRotation(v: Quaternion) {
-        this.setField("localRotation", this._localRotation, v, (n) => {
-            this._localRotation = n;
-        });
+        if (
+            this.setField("localRotation", this._localRotation, v, (n) => {
+                this._localRotation = n;
+            })
+        ) {
+            this.invalidateTransform();
+        }
     }
 
     @editable("vector3", { layout: "block", alignement: "horizontal", unit: "×", disabledWhen: "is_local_scale_wired" })
@@ -408,9 +423,25 @@ export class SceneItem extends GraphItem {
         return this._localScale;
     }
     public set localScale(v: Cartesian3) {
-        this.setField("localScale", this._localScale, v, (n) => {
-            this._localScale = n;
-        });
+        if (
+            this.setField("localScale", this._localScale, v, (n) => {
+                this._localScale = n;
+            })
+        ) {
+            this.invalidateTransform();
+        }
+    }
+
+    /** Local pose (IHasTransform), composed from the scene's own
+     *  localPosition / localRotation / localScale editables as `T·R·S`.
+     *  Read live (uncached) on each access so a property-panel edit shows up
+     *  immediately, matching the SceneStateView read-through semantics.
+     *  The WORLD pose is the inherited `GraphNode.worldTransform()` =
+     *  `parent.worldTransform() × this`, with the enclosing scene wired as
+     *  `parent` at session bind (root scene has no parent => world = local). */
+    public override localTransform(): Matrix4 {
+        // Babylon-aligned arg order: Compose(scale, rotation, translation).
+        return Matrix4.Compose(this._localScale, this._localRotation, this._localPosition);
     }
 
     /** Manual sample-rate override in hertz (canonical storage). 0
@@ -695,9 +726,10 @@ export class SceneItem extends GraphItem {
         const pressSource = this._pressureSourceId ? resolver.resolveNumberSource(this._pressureSourceId) : null;
         const densSource = this._densitySourceId ? resolver.resolveNumberSource(this._densitySourceId) : null;
         const tsSource = this._timeScaleSourceId ? resolver.resolveNumberSource(this._timeScaleSourceId) : null;
-        const posSource = this._localPositionSourceId ? resolver.resolveCartesian3Source(this._localPositionSourceId) : null;
-        const rotSource = this._localRotationSourceId ? resolver.resolveQuaternionSource(this._localRotationSourceId) : null;
-        const sclSource = this._localScaleSourceId ? resolver.resolveCartesian3Source(this._localScaleSourceId) : null;
+        // NOTE: the local transform is NOT carried by the view anymore. The
+        // scene's pose is its IHasTransform localTransform() (composed from
+        // localPosition/localRotation/localScale); its world chains via the
+        // `parent` wired at bind. So no pos/rot/scl source thunks here.
 
         // Effective-Hz aggregation: ask the resolver, which has the
         // graph-level visibility we lack from inside the SceneItem.
@@ -715,8 +747,7 @@ export class SceneItem extends GraphItem {
         // because the concrete AtmosphereNode implements both
         // IAtmosphereAggregator AND IIntegrable; SceneStateView's
         // readAtmosphere consumer is typed as `IIntegrable | null`.
-        const atmosphere: IIntegrable | null = (this._atmosphereRef as IIntegrable | null)
-            ?? (this._atmosphereItemId ? resolver.resolveAtmosphere(this._atmosphereItemId) : null);
+        const atmosphere: IIntegrable | null = (this._atmosphereRef as IIntegrable | null) ?? (this._atmosphereItemId ? resolver.resolveAtmosphere(this._atmosphereItemId) : null);
 
         // Wire the atmosphere aggregate path on the readers. When a
         // bound Atmosphere also implements `IAtmosphereAggregator`
@@ -729,17 +760,11 @@ export class SceneItem extends GraphItem {
         // still wins over the atmosphere — the user can override the
         // atmosphere binding with a per-tick data wire if they need to.
         const atmoAggregator = isAtmosphereAggregator(atmosphere) ? atmosphere : null;
-        const readTempK: () => number = tempSource ?? (atmoAggregator
-            ? () => atmoAggregator.sampleAggregates().temperatureK
-            : fieldReader<number>(this, "_temperatureK"));
-        const readPressPa: () => number = pressSource ?? (atmoAggregator
-            ? () => atmoAggregator.sampleAggregates().pressure
-            : fieldReader<number>(this, "_pressurePa"));
+        const readTempK: () => number = tempSource ?? (atmoAggregator ? () => atmoAggregator.sampleAggregates().temperatureK : fieldReader<number>(this, "_temperatureK"));
+        const readPressPa: () => number = pressSource ?? (atmoAggregator ? () => atmoAggregator.sampleAggregates().pressure : fieldReader<number>(this, "_pressurePa"));
         // Density: explicit publisher wire wins, then atmosphere, then
         // SceneItem's _densityKgPerM3 editable.
-        const readDensity: () => number = densSource ?? (atmoAggregator
-            ? () => atmoAggregator.sampleAggregates().density
-            : fieldReader<number>(this, "_densityKgPerM3"));
+        const readDensity: () => number = densSource ?? (atmoAggregator ? () => atmoAggregator.sampleAggregates().density : fieldReader<number>(this, "_densityKgPerM3"));
 
         const sources: SceneStateViewSources = {
             id: idStr,
@@ -750,33 +775,11 @@ export class SceneItem extends GraphItem {
             readPressurePa: readPressPa,
             readDensity,
             readTimeScale: tsSource ?? fieldReader<number>(this, "_timeScale"),
-            readLocalTransform: this._buildLocalTransformReader(posSource, rotSource, sclSource),
             readEffectiveHz: () => effectiveHz,
             readAtmosphere: () => atmosphere,
         };
 
         return new SceneStateViewImpl(sources);
-    }
-
-    /**
-     * Compose the live local-transform reader from the per-axis source
-     * thunks (or static field readers when no source is wired).
-     * Returns a fresh `ITransform` (full methodful instances backing
-     * its position/rotation/scale) each call — three small allocations
-     * plus the matrix-on-demand. The freshness is what makes the
-     * `worldTransform` chain safe to compose without aliasing the
-     * SceneItem's own `Cartesian3` / `Quaternion` storage (which the
-     * property panel mutates).
-     */
-    private _buildLocalTransformReader(
-        posSource: (() => ICartesian3) | null,
-        rotSource: (() => IQuaternion) | null,
-        sclSource: (() => ICartesian3) | null,
-    ): () => ITransform {
-        const readPos = posSource ?? fieldReader<ICartesian3>(this, "_localPosition");
-        const readRot = rotSource ?? fieldReader<IQuaternion>(this, "_localRotation");
-        const readScl = sclSource ?? fieldReader<ICartesian3>(this, "_localScale");
-        return () => makeTransform(readPos(), readRot(), readScl());
     }
 }
 

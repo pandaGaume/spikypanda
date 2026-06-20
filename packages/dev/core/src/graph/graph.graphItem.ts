@@ -1,10 +1,11 @@
 import { PropertyChangedEventArgs } from "../events/events.args";
 import { Observable } from "../events/events.observable";
-import { CloneMetadataKey, IGraphItem, IsCloneable, ITaggable } from "./graph.interfaces";
+import { cloneable, CloneMetadataKey, IGraphItem, IsCloneable, ITaggable } from "./graph.interfaces";
 
 export class GraphItem<B = unknown> implements IGraphItem<B> {
     private _id?: any;
     private _tag?: string;
+    private _typeValue?: string;
     private _bag?: B;
     private _onPropertyChanged?: Observable<PropertyChangedEventArgs<unknown, unknown>>;
 
@@ -37,6 +38,20 @@ export class GraphItem<B = unknown> implements IGraphItem<B> {
         const old = this._bag;
         this._bag = v;
         this.notifyPropertyChanged("bag", old, v);
+    }
+
+    /** Ontology type tag (see ITyped). Controlled category drawn from the core
+     *  `ONTOLOGY` registry; `@cloneable` so it round-trips through
+     *  serialize()/clone() uniformly for every node AND link. `undefined` =
+     *  untyped (serializeField drops it, so untyped items carry nothing). */
+    @cloneable
+    public get type(): string | undefined {
+        return this._typeValue;
+    }
+    public set type(v: string | undefined) {
+        this.setField("type", this._typeValue, v, (n) => {
+            this._typeValue = n;
+        });
     }
 
     public withTag(tag: string): ITaggable {

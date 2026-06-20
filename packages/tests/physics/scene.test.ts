@@ -9,8 +9,8 @@
  *      via buildStateView() with the right closures.
  *   2. SceneStateView getters reflect live SceneItem edits without
  *      rebuild (mutate temperature, view sees it next read).
- *   3. SceneStateView.worldTransform chains the parent's world via
- *      composeTransform / Matrix4 — non-trivial chain validated.
+ *   3. The scene node's world transform chains via the geometry
+ *      `parent.worldTransform()` (single truth) — non-trivial chain validated.
  *   4. TransformNode.getScene(session) returns the session's bound
  *      view when set; falls back to a default Earth-surface view
  *      when not set.
@@ -18,20 +18,7 @@
  *      port anymore).
  */
 import type { ISession } from "spikypanda-core";
-import {
-    buildDefaultStateView,
-    Cartesian3,
-    composeTransform,
-    DEFAULT_GRAVITY,
-    DEFAULT_TEMPERATURE,
-    Frequency,
-    isSceneStateView,
-    makeTransform,
-    MIN_EFFECTIVE_HZ,
-    Pressure,
-    Quaternion,
-    Temperature,
-} from "spikypanda-core";
+import { buildDefaultStateView, Cartesian3, DEFAULT_GRAVITY, DEFAULT_TEMPERATURE, Frequency, isSceneStateView, MIN_EFFECTIVE_HZ, Pressure, Temperature } from "spikypanda-core";
 import type { SceneStateView } from "spikypanda-core";
 import { SceneItem, TransformNode } from "../../dev/plugins/physics/src/index";
 import type { SceneSourceResolver } from "../../dev/plugins/physics/src/index";
@@ -143,49 +130,43 @@ describe("SceneItem defaults + buildStateView", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Transform chain (composeTransform + worldTransform)
+// Transform chain (the scene node's IHasTransform; world via parent.worldTransform)
 // ---------------------------------------------------------------------------
 
-describe("SceneStateView 3D-tree chain", () => {
-    it("composeTransform produces world = parent · child for a pure translation", () => {
-        const parent = makeTransform(new Cartesian3(10, 0, 0), Quaternion.identity(), new Cartesian3(1, 1, 1));
-        const child = makeTransform(new Cartesian3(0, 5, 0), Quaternion.identity(), new Cartesian3(1, 1, 1));
-        const world = composeTransform(parent, child);
-        expect(world.position.x).toBeCloseTo(10, 9);
-        expect(world.position.y).toBeCloseTo(5, 9);
-        expect(world.position.z).toBeCloseTo(0, 9);
-    });
-
-    it("composeTransform produces world = parent · child for a uniform scale", () => {
-        const parent = makeTransform(new Cartesian3(0, 0, 0), Quaternion.identity(), new Cartesian3(2, 2, 2));
-        const child = makeTransform(new Cartesian3(3, 0, 0), Quaternion.identity(), new Cartesian3(1, 1, 1));
-        const world = composeTransform(parent, child);
-        // Child position 3 in X gets scaled by parent's 2× → 6.
-        expect(world.position.x).toBeCloseTo(6, 9);
-        expect(world.scale.x).toBeCloseTo(2, 9);
-    });
-
-    it("a SceneStateView with setParent(parent) chains worldTransform automatically", () => {
+describe("SceneItem 3D-tree chain (IHasTransform)", () => {
+    it("a child SceneItem parented to a parent chains world = parent.world × local", () => {
         const parentItem = new SceneItem();
         parentItem.localPosition = new Cartesian3(10, 0, 0);
-        const parentView = parentItem.buildStateView(noopResolver());
 
         const childItem = new SceneItem();
         childItem.localPosition = new Cartesian3(0, 5, 0);
-        const childView = childItem.buildStateView(noopResolver());
+        childItem.parent = parentItem; // single truth: structural geometry parent
 
-        // SceneStateViewImpl.setParent is the public seam.
-        (childView as { setParent(p: SceneStateView | null): void }).setParent(parentView);
-        const w = childView.worldTransform;
-        expect(w.position.x).toBeCloseTo(10, 9);
-        expect(w.position.y).toBeCloseTo(5, 9);
+        const w = childItem.worldTransform().m;
+        // Translation in column 3: parent (10,0,0) ∘ child (0,5,0) = (10,5,0).
+        expect(w[12]).toBeCloseTo(10, 9);
+        expect(w[13]).toBeCloseTo(5, 9);
+        expect(w[14]).toBeCloseTo(0, 9);
     });
 
-    it("worldTransform.toMatrix4 returns a 16-entry column-major Float64Array", () => {
+    it("a parent scale composes into the child's world (T·R·S via the chain)", () => {
+        const parentItem = new SceneItem();
+        parentItem.localScale = new Cartesian3(2, 2, 2);
+
+        const childItem = new SceneItem();
+        childItem.localPosition = new Cartesian3(3, 0, 0);
+        childItem.parent = parentItem;
+
+        const w = childItem.worldTransform().m;
+        // Child X position 3 scaled by parent's 2× → 6.
+        expect(w[12]).toBeCloseTo(6, 9);
+        expect(w[0]).toBeCloseTo(2, 9); // parent scale rides the diagonal
+    });
+
+    it("a root SceneItem worldTransform equals its local pose (no parent)", () => {
         const item = new SceneItem();
         item.localPosition = new Cartesian3(1, 2, 3);
-        const view = item.buildStateView(noopResolver());
-        const m = view.worldTransform.toMatrix4().m;
+        const m = item.worldTransform().m;
         expect(m.length).toBe(16);
         // Translation in column 3.
         expect(m[12]).toBeCloseTo(1, 9);
@@ -224,28 +205,32 @@ describe("buildDefaultStateView + isSceneStateView", () => {
         expect(isSceneStateView({})).toBe(false);
         expect(isSceneStateView(42)).toBe(false);
         // The legacy shape with bare-number scalars no longer passes.
-        expect(isSceneStateView({
-            id: "x",
-            gravity: { x: 0, y: 0, z: -9.81 },
-            temperature: 293.15,
-            pressure: 101325,
-            timeScale: 1,
-            effectiveHz: 60,
-            localTransform: {},
-            worldTransform: {},
-        })).toBe(false);
+        expect(
+            isSceneStateView({
+                id: "x",
+                gravity: { x: 0, y: 0, z: -9.81 },
+                temperature: 293.15,
+                pressure: 101325,
+                timeScale: 1,
+                effectiveHz: 60,
+                localTransform: {},
+                worldTransform: {},
+            })
+        ).toBe(false);
         // Same payload with Quantity-wrapped scalars passes.
-        expect(isSceneStateView({
-            id: "x",
-            gravity: { x: 0, y: 0, z: -9.81 },
-            temperature: new Temperature(293.15, Temperature.Units.k),
-            pressure: new Pressure(101325, Pressure.Units.Pa),
-            density: 1.225,
-            timeScale: 1,
-            effectiveHz: new Frequency(60, Frequency.Units.Hz),
-            localTransform: {},
-            worldTransform: {},
-        })).toBe(true);
+        expect(
+            isSceneStateView({
+                id: "x",
+                gravity: { x: 0, y: 0, z: -9.81 },
+                temperature: new Temperature(293.15, Temperature.Units.k),
+                pressure: new Pressure(101325, Pressure.Units.Pa),
+                density: 1.225,
+                timeScale: 1,
+                effectiveHz: new Frequency(60, Frequency.Units.Hz),
+                localTransform: {},
+                worldTransform: {},
+            })
+        ).toBe(true);
     });
 });
 

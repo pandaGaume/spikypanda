@@ -24,8 +24,7 @@ import {
     Cartesian3,
     createSimGraphNode,
     Frequency,
-    makeTransform,
-    Quaternion,
+    GraphNode,
     RuntimeGraph,
     type ISession,
     type ISolverHandle,
@@ -346,22 +345,20 @@ describe("SimGraphNode scene inheritance (unbound)", () => {
         expect(inner.sceneStateView?.gravity).toEqual({ x: 0, y: 0, z: -9.81 });
     });
 
-    it("chains worldTransform: inner inherits the parent's world pose with identity local", () => {
+    it("chains its OWN world via the structural parent (single truth)", () => {
         const { parent, sim } = makeHarness();
-        const inner = (parent.nodeStateOf(sim) as unknown as { internalSession: ISession }).internalSession;
-        // A parent scene translated by (5, 0, 0).
-        const base = buildDefaultStateView("posed");
-        const posed = new Proxy(base, {
-            get(target, prop) {
-                if (prop === "worldTransform") return makeTransform(new Cartesian3(5, 0, 0), new Quaternion(0, 0, 0, 1), new Cartesian3(1, 1, 1));
-                return Reflect.get(target, prop);
-            },
-        });
-        parent.sceneStateView = posed;
-        // sim.fire computes _localPose (identity, unwired) and the inner
-        // view chains worldTransform = parent.worldTransform x identity.
+        // The enclosing scene, posed: translated by (5, 0, 0). Any
+        // IHasTransform is a valid structural parent.
+        const posed = new GraphNode();
+        posed.position = new Cartesian3(5, 0, 0);
+        sim.parent = posed;
+        // _updateTransform composes world = parent.worldTransform() × local
+        // (identity, unwired); inner residents (none in this harness) would
+        // parent to `sim` and chain through it.
         sim.fire(parent, 0.001);
-        const w = inner.sceneStateView?.worldTransform;
-        expect(w?.position.x).toBeCloseTo(5, 9);
+        const w = sim.worldTransform().m;
+        expect(w[12]).toBeCloseTo(5, 9);
+        expect(w[13]).toBeCloseTo(0, 9);
+        expect(w[14]).toBeCloseTo(0, 9);
     });
 });

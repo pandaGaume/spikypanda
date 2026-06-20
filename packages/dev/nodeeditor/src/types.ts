@@ -1,3 +1,5 @@
+import { ONTOLOGY } from "spikypanda-core";
+
 export type PortDirection = "input" | "output";
 
 /**
@@ -73,22 +75,16 @@ export type PortType =
  * runtime layer (core/sim anchors) and the rendering layer share a
  * single source of truth.
  */
-export const CONFIG_LINK_TYPES: ReadonlySet<PortType> = new Set<PortType>([
-    "scene",
-    "solver",
-    "atmosphere",
-    "shared",
-    "gas",
-    "composition",
-    "particulate",
-    "layer",
-]);
+export const CONFIG_LINK_TYPES: ReadonlySet<PortType> = new Set<PortType>(["scene", "solver", "atmosphere", "shared", "gas", "composition", "particulate", "layer"]);
 
-/** True when the given port type belongs to the config-link family
- *  (scene / solver / atmosphere / shared). Used by `Connection` to
- *  pick the dashed style. */
+/** True when the given port type belongs to the config-link (binding-relation)
+ *  family. The authoritative vocabulary lives in the core `ONTOLOGY`
+ *  (editor-independent); `CONFIG_LINK_TYPES` is the editor's fallback set for
+ *  relation types not yet migrated to a plugin's `ONTOLOGY.register()`
+ *  (gas / composition / particulate / layer). Used by `Connection` to pick the
+ *  dashed style. */
 export function isConfigLinkType(t: PortType): boolean {
-    return CONFIG_LINK_TYPES.has(t);
+    return ONTOLOGY.isBindingRelation(t) || CONFIG_LINK_TYPES.has(t);
 }
 
 /**

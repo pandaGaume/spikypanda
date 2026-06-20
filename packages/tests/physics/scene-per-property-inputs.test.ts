@@ -24,16 +24,18 @@ import { SceneItem } from "../../dev/plugins/physics/src/scene/scene.item";
 // Resolver helpers
 // ─────────────────────────────────────────────────────────────────────
 
-function makeResolver(opts: {
-    gravity?: () => Cartesian3;
-    temperatureK?: () => number;
-    pressurePa?: () => number;
-    density?: () => number;
-    timeScale?: () => number;
-    localPosition?: () => Cartesian3;
-    localRotation?: () => Quaternion;
-    localScale?: () => Cartesian3;
-} = {}): SceneSourceResolver {
+function makeResolver(
+    opts: {
+        gravity?: () => Cartesian3;
+        temperatureK?: () => number;
+        pressurePa?: () => number;
+        density?: () => number;
+        timeScale?: () => number;
+        localPosition?: () => Cartesian3;
+        localRotation?: () => Quaternion;
+        localScale?: () => Cartesian3;
+    } = {}
+): SceneSourceResolver {
     return {
         resolveNumberSource: (id: string) => {
             // The SceneItem's *SourceId is a publisher node UUID — we
@@ -80,9 +82,7 @@ describe("Scene gravity_in", () => {
         scene.gravity = new Cartesian3(0, 0, -9.81);
         scene.gravitySourceId = "grav-pub";
         let g = new Cartesian3(1.62, 0, 0); // Moon gravity (radial)
-        const view = scene.buildStateView(
-            makeResolver({ gravity: () => g }),
-        );
+        const view = scene.buildStateView(makeResolver({ gravity: () => g }));
         expect(view.gravity.x).toBeCloseTo(1.62, 6);
         // Live read: mutating the published value reflects on next access.
         g = new Cartesian3(3.71, 0, 0); // Mars
@@ -286,14 +286,17 @@ describe("Scene buildStateView with all per-property publishers wired", () => {
                 localPosition: () => new Cartesian3(10, 20, 30),
                 localRotation: () => new Quaternion(0, 0, 0, 1),
                 localScale: () => new Cartesian3(2, 2, 2),
-            }),
+            })
         );
         expect(view.gravity.z).toBeCloseTo(-1.62, 6);
         expect(view.temperature.getValue("K" as never)).toBe(310);
         expect(view.pressure.getValue("Pa" as never)).toBe(50000);
         expect(view.density).toBe(0.5);
         expect(view.timeScale).toBe(0.5);
-        expect(view.localTransform.position.x).toBe(10);
-        expect(view.localTransform.scale.x).toBe(2);
+        // NOTE: the local transform is no longer a SceneStateView concern. A
+        // scene's pose is its IHasTransform localTransform() (composed from
+        // localPosition/localRotation/localScale), and its world chains via the
+        // `parent` wired at bind. So the local*SourceId resolver path is not
+        // surfaced on the view; only the environmental latents above are.
     });
 });

@@ -63,6 +63,46 @@ export function supportsPhasing(n: IRuntimeNode): n is IRuntimeNode & ISupportsP
     return Array.isArray(candidate.phases);
 }
 
+// =====================================================================
+// Scene residency (scene-context membership; ORTHOGONAL to pose)
+// =====================================================================
+
+/**
+ * Opt-in marker: this node PARTICIPATES IN A SCENE — it consumes the scene
+ * context (gravity, atmosphere, temperature, ...) via `getScene()`.
+ *
+ * INTENTIONALLY NOT `extends IHasTransform`. Living in a scene and carrying a
+ * geometric pose are ORTHOGONAL concerns:
+ *   - An air / atmosphere analyzer MUST read the ambient scene (atmosphere,
+ *     gravity) yet has no meaningful geometric placement — it is `ILiveInScene`
+ *     but its pose is irrelevant.
+ *   - A neuron carries an NN quadtree/octree `position` (`IHasTransform`) but
+ *     does NOT live in a scene — purely conceptual.
+ *   - A world object (motor, sensor, sub-graph container, SceneItem) is BOTH:
+ *     `ILiveInScene` AND `IHasTransform`.
+ *
+ * The scene a resident sees is resolved by `getScene()`: a direct per-node
+ * binding (the `scene` config-link) wins; otherwise it inherits the enclosing
+ * scene through the geometry parent hierarchy up to the root scene (the scene
+ * sits at the root of that hierarchy, surfaced via the session scene view and
+ * the fractal `InheritedSceneStateView`). A world object additionally uses that
+ * same parent chain for its `worldTransform()` (the single-truth pose); a
+ * non-geometric resident uses it only to LOCATE its scene.
+ *
+ * `livesInScene` is a constant brand (mirrors how `ISupportsPhasing` is
+ * discriminated by its `phases` array) so the marker is discriminable at
+ * runtime without coupling the type to `IHasTransform`.
+ */
+export interface ILiveInScene {
+    readonly livesInScene: true;
+}
+
+/** Structural guard for `ILiveInScene`. True when the node carries the
+ *  `livesInScene === true` brand. */
+export function isSceneResident(n: unknown): n is ILiveInScene {
+    return !!n && typeof n === "object" && (n as { livesInScene?: unknown }).livesInScene === true;
+}
+
 /**
  * Type guard for ISimSession on a generic ISession. True when the
  * session carries the sim-specific currentPhase + phases fields, which
