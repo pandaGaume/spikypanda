@@ -28,10 +28,10 @@ Câbler `force_y` / `force_z` sur le noeud [Housing Mechanics](../housing/mechan
 
 ## Éditables
 
-| Champ           | Défaut | Sens                                       |
-| --------------- | ------ | ------------------------------------------ |
-| `severity`      | 0      | sévérité dans [0, 1] (bornée)              |
-| `kImbalanceMax` | 5e-6 kg.m | produit m*r à sévérité 1 (5 mg @ 1 mm)  |
+| Champ           | Défaut    | Sens                                    |
+| --------------- | --------- | --------------------------------------- |
+| `severity`      | 0         | sévérité dans [0, 1] (bornée)           |
+| `kImbalanceMax` | 5e-6 kg.m | produit m\*r à sévérité 1 (5 mg @ 1 mm) |
 
 ## Physique vérifiée
 
@@ -40,4 +40,4 @@ Validée (`packages/tests/physics/pmsm-faults.test.ts`) : `force_y/z` égalent l
 ## Pièges
 
 - Phase 1 injecte seulement la force housing (pas de couplage côté courant) ; un couplage Phase 2 modulerait en plus `tau` / `flux` à 1x f_mech.
-- `force_y/z` et les autres sources de force (UMP de rotor-sag, mounting-compliance) ciblent les mêmes axes du housing : les sommer avant l'entrée housing, qui n'a qu'un port force par axe.
+- `force_y/z` et toute autre source de force radiale ciblent les mêmes axes du housing : les sommer avant l'entrée housing, qui n'a qu'un port force par axe.

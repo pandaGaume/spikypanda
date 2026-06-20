@@ -15,10 +15,9 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  * delta }` for the PMSM machine's variadic fault bank (wire flux ->
  * machine fault_N). The machine forms lambda_m_eff = lambda_m * (1 + sum
  * of flux faults), so the 1x f_mech envelope variation produces sidebands
- * at f_e +/- f_mech in i_d / i_q after the controller reacts. Same coupling
- * path as Physics.Environment.Gravity:rotor-sag (gravity sag is the
- * environmental cousin of this fault); the two compose additively in the
- * machine's flux accumulator.
+ * at f_e +/- f_mech in i_d / i_q after the controller reacts. Any other flux
+ * fault feeding the same bank composes additively in the machine's flux
+ * accumulator.
  *
  * Source node (RuntimeNode): reads only the rotor angle theta_m from the
  * machine. Stateless, no allocation in the hot path.

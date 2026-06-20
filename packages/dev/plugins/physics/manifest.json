@@ -141,7 +141,7 @@
         {
             "id": "Physics.Mechanical.Load",
             "displayName": "Load",
-            "description": "Mechanical load sources. ':torque' = prescribed profiles (constant, step, ramp, quadratic K*omega^2, periodic) wired to a motor's tau_load. ':gravity-payload' = a crank payload whose weight m*g, projected through the motor orientation (wire a GravityVector's g_radial/g_angle/g_axial in), produces a 1x f_mech torque ripple (the dominant gravity -> i_q signature mechanism) plus axial/radial bearing loads; it scales with gravity (zero in microgravity) and shaft tilt.",
+            "description": "Mechanical load sources. ':torque' = prescribed profiles (constant, step, ramp, quadratic K*omega^2, periodic) wired to a motor's tau_load. ':gravity-payload' = a crank payload whose weight m*g, projected through the motor orientation from the scene gravity latent, produces a 1x f_mech torque ripple (the dominant gravity -> i_q signature mechanism) plus axial/radial bearing loads; it scales with gravity (zero in microgravity) and shaft tilt.",
             "category": "Physics.Mechanical.Load",
             "version": "0.1.0",
             "standards": [],
@@ -180,20 +180,6 @@
             "version": "0.1.0",
             "standards": [],
             "nodes": [{ "type": "Physics.Mechanical.Housing:mechanics", "factory": "createHousingMechanicsNode", "label": "Housing Mechanics" }]
-        },
-        {
-            "id": "Physics.Environment.Gravity",
-            "displayName": "Gravity Coupling",
-            "description": "Gravity-orientation coupling models for rotating machines (the gravity-signature study). GravityVector projects world gravity into the motor body frame; RotorSag turns the perpendicular gravity component into a 'flux' fault descriptor for the machine fault bank (MCSA 1x f_mech sideband) plus optional rotating UMP force; BearingPreload exposes gravity-augmented effective preloads for a bearing fault; MountingCompliance injects the static m*g bracket load into the housing. Faithful port of the legacy sensors env tree.",
-            "category": "Physics.Environment.Gravity",
-            "version": "0.1.0",
-            "standards": [],
-            "nodes": [
-                { "type": "Physics.Environment.Gravity:vector", "factory": "createGravityVectorNode", "label": "Gravity Vector (body frame)" },
-                { "type": "Physics.Environment.Gravity:rotor-sag", "factory": "createRotorSagNode", "label": "Rotor Sag (gravity)" },
-                { "type": "Physics.Environment.Gravity:bearing-preload", "factory": "createBearingPreloadNode", "label": "Bearing Preload (gravity)" },
-                { "type": "Physics.Environment.Gravity:mounting-compliance", "factory": "createMountingComplianceNode", "label": "Mounting Compliance (gravity)" }
-            ]
         },
         {
             "id": "Physics.Particulate",

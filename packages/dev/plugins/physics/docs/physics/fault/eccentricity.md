@@ -13,7 +13,7 @@ epsilon = severity * epsilonMax                  (modulation fractionnaire d'ent
 flux delta(theta_m) = epsilon * cos(theta_m - thetaOffset)
 ```
 
-La sortie `flux` émet un descripteur `{ target: "flux", value: delta }` pour la banque de fautes de la machine PMSM (câbler `flux` -> machine `fault_N`). La machine forme `lambda_m_eff = lambda_m * (1 + somme des fautes flux)` : la variation d'enveloppe à 1x f_mech produit des bandes latérales à `f_e +/- f_mech` sur `i_d` / `i_q` après réaction du contrôleur. C'est le **même canal de couplage** que [`Physics.Environment.Gravity:rotor-sag`](../environment-gravity/rotor-sag.md) (l'affaissement gravitaire est le cousin environnemental de cette faute) ; les deux se composent additivement dans l'accumulateur de flux de la machine.
+La sortie `flux` émet un descripteur `{ target: "flux", value: delta }` pour la banque de fautes de la machine PMSM (câbler `flux` -> machine `fault_N`). La machine forme `lambda_m_eff = lambda_m * (1 + somme des fautes flux)` : la variation d'enveloppe à 1x f_mech produit des bandes latérales à `f_e +/- f_mech` sur `i_d` / `i_q` après réaction du contrôleur. Toute autre faute flux alimentant la même banque se compose additivement dans l'accumulateur de flux de la machine.
 
 ## Entrées / sorties
 
@@ -22,11 +22,11 @@ La sortie `flux` émet un descripteur `{ target: "flux", value: delta }` pour la
 
 ## Éditables
 
-| Champ         | Défaut | Sens                                                         |
-| ------------- | ------ | ------------------------------------------------------------ |
-| `severity`    | 0      | sévérité dans [0, 1] (bornée)                                |
+| Champ         | Défaut | Sens                                                            |
+| ------------- | ------ | --------------------------------------------------------------- |
+| `severity`    | 0      | sévérité dans [0, 1] (bornée)                                   |
 | `epsilonMax`  | 0.5    | modulation fractionnaire max à sévérité 1 (0.5 = demi-entrefer) |
-| `thetaOffset` | 0 rad  | azimut de l'excentricité dans le repère rotor                |
+| `thetaOffset` | 0 rad  | azimut de l'excentricité dans le repère rotor                   |
 
 ## Physique vérifiée
 

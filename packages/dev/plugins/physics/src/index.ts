@@ -13,7 +13,6 @@ import { loadSubPlugin } from "./mechanical/load/index.js";
 import { vibrationSubPlugin } from "./mechanical/vibration/index.js";
 import { faultSubPlugin } from "./mechanical/fault/index.js";
 import { housingSubPlugin } from "./mechanical/housing/index.js";
-import { environmentGravitySubPlugin } from "./environment/gravity/index.js";
 import { physicsParticulateSubPlugin } from "./particulate/index.js";
 
 export * from "./transform/index.js";
@@ -39,7 +38,6 @@ export {
     GravityCoupledPmsmGraph,
 } from "./electric/motor-pmsm/index.js";
 export { housingSubPlugin, createHousingMechanicsNode, HousingMechanicsNode } from "./mechanical/housing/index.js";
-export { environmentGravitySubPlugin, createGravityVectorNode, GravityVectorNode, createRotorSagNode, RotorSagNode } from "./environment/gravity/index.js";
 export { electricSensorSubPlugin, CurrentSensorNode, createCurrentSensorNode, PowerMeterNode, createPowerMeterNode } from "./electric/sensor/index.js";
 export { physicsParticulateSubPlugin } from "./particulate/index.js";
 
@@ -106,7 +104,6 @@ export default {
         "Physics.Mechanical.Vibration": vibrationSubPlugin,
         "Physics.Mechanical.Fault": faultSubPlugin,
         "Physics.Mechanical.Housing": housingSubPlugin,
-        "Physics.Environment.Gravity": environmentGravitySubPlugin,
         "Physics.Particulate": physicsParticulateSubPlugin,
     },
 };
