@@ -67,7 +67,8 @@ export type PortType =
     | "gas"
     | "composition"
     | "particulate"
-    | "layer";
+    | "layer"
+    | "fault";
 
 /**
  * The four config-link types — referenced from `Connection` to decide
@@ -136,6 +137,11 @@ export const PORT_COLORS: Record<PortType, string> = {
     composition: "#e08a6a", // peach: gas mixture aggregator (P9.2)
     particulate: "#6a6a8c", // slate: particulate matter, stub for V2 (P9.5)
     layer: "#5cb8b0", // aqua: atmosphere layer (state carrier in a multi-layer atmosphere container)
+    // STRUCTURAL link (not a config binding, not a data cable): a fault OPERATOR's
+    // apply point, drawn onto a model's variadic `fault_N` input. The wire is an
+    // `ApplyTo` relation (the fault reads the model's properties and applies its
+    // physics), rendered as a distinct structural cable.
+    fault: "#e8694a", // ember: a fault operator's apply point
 };
 
 export interface PortDef {

@@ -956,7 +956,7 @@ export class GraphViewer {
     pickAndLoad(registry?: INodeRegistry, opts?: { onError?: (e: unknown) => void; accept?: string }): void {
         const input = document.createElement("input");
         input.type = "file";
-        input.accept = opts?.accept ?? "application/json,.json";
+        input.accept = opts?.accept ?? ".spikypanda,application/json,.json";
         input.style.display = "none";
         input.addEventListener("change", () => {
             const file = input.files?.[0];

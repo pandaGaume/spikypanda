@@ -1,4 +1,5 @@
 import {
+    ApplyTo,
     buildSolverAttachmentsForGraph,
     isSceneResident,
     RuntimeGraphBuilder,
@@ -70,12 +71,20 @@ export function buildSessionFromViewer(viewer: GraphViewer): {
 
     const builder = new RuntimeGraphBuilder<IRuntimeNode, Channel>().withMode("dynamic").withNodes(...nodes);
 
-    // Step 3: wire runtime channels for non-config Connections.
+    // Step 3: wire runtime channels for data Connections; for STRUCTURAL
+    // (ApplyTo) Connections, create the typed core link instead of a channel —
+    // a fault operator (`from`) applies its physics to a model (`to`), read by
+    // the model's fire() via opsc(ApplyTo), never as a port payload.
+    const structuralLinks: ApplyTo[] = [];
     for (const conn of viewer.connections) {
         if (conn.linkKind === "config") continue;
         const fromNode = _findRuntimeNodeByPort(viewer, conn.from, "output");
         const toNode = _findRuntimeNodeByPort(viewer, conn.to, "input");
         if (!fromNode || !toNode) continue;
+        if (conn.linkKind === "structural") {
+            structuralLinks.push(new ApplyTo(fromNode, toNode));
+            continue;
+        }
         const fromSlot = (conn.from as Port).name;
         const toSlot = (conn.to as Port).name;
         builder.withChannel(fromNode, toNode, fromSlot, toSlot);
@@ -129,9 +138,13 @@ export function buildSessionFromViewer(viewer: GraphViewer): {
     // scene-view transform). Per-node `sceneItemId` wins, else the root scene.
     bindSceneParents(viewer, graph);
 
+    // Return the data channels AND the structural ApplyTo links for disposal:
+    // both are GraphOLinks, so disposeChannels tears them off the nodes on the
+    // next build — without this, repeated Play/Stop would accumulate duplicate
+    // ApplyTo links and the model would apply each fault N times.
     return {
         session,
-        channels: (graph.links as Channel[]).slice(),
+        channels: [...(graph.links as Channel[]), ...(structuralLinks as unknown as Channel[])],
     };
 }
 

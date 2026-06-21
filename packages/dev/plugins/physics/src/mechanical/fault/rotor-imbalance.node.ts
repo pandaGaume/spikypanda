@@ -1,5 +1,9 @@
-import { cloneable, editable, viewable, IFault, IFaultContext, IOlink, ISession, RuntimeNode } from "spikypanda-core";
+import { cloneable, editable, viewable, IDeclaresPorts, IFault, IFaultContext, IOlink, IPortDescriptor, ISession, RuntimeNode } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
+
+/** A fault operator's apply point (see RotorSag): a `fault`-typed output the
+ *  editor + loader turn into an `ApplyTo` structural link onto a model's fault_N. */
+const APPLY_TO_OUTPUT_PORTS: ReadonlyArray<IPortDescriptor> = [{ slot: "applyTo", optional: false, type: "fault" }];
 
 /**
  * Rotor imbalance: a mechanical CAUSE (FMEA: cause -> state -> consequence ->
@@ -39,9 +43,13 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  *   angle          = motor.rotorAngle + phaseOffset            (1x, the heavy spot)
  *   radialForceY/Z = F · cos/sin(angle)
  */
-export class RotorImbalanceFaultNode extends RuntimeNode implements IFault {
+export class RotorImbalanceFaultNode extends RuntimeNode implements IFault, IDeclaresPorts {
     /** Ontology type, consulted by the target model's `acceptsFault`. */
     public readonly faultType: string = "imbalance";
+
+    /** No data inputs; one `fault`-typed apply output (the ApplyTo source). */
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = APPLY_TO_OUTPUT_PORTS;
 
     @cloneable private _severity: number = 1; // scales the residual unbalance product
     @cloneable private _phaseOffset: number = 0; // heavy-spot phase vs the rotor angle [rad]

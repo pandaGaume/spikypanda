@@ -59,27 +59,29 @@ export const faultSubPlugin: IPlugin = {
             ],
         });
 
-        // Apply-to CAUSE faults (FMEA cause -> eccentricity state). They carry no
-        // data ports: they are linked to a motor by a structural `ApplyTo` link
-        // and read the motor MODEL's properties in `applyTo`. (Drawing the
-        // ApplyTo link in the editor is pending; usable programmatically today.)
+        // Apply-to CAUSE faults (FMEA cause -> eccentricity state). They carry NO
+        // data ports: a single `fault`-typed apply output is drawn onto a motor's
+        // variadic `fault_N` input, which the editor + loader turn into a
+        // structural `ApplyTo` link (the fault reads the motor MODEL's properties
+        // in `applyTo`, not a port payload).
+        const APPLY_TO_OUT = [{ slot: "applyTo", optional: false, type: "fault" }];
         ctx.nodes.register("Physics.Mechanical.Fault:rotor-sag", () => createRotorSagFaultNode() as never, {
             label: "Rotor Sag (gravity cause)",
             category: "Physics.Mechanical.Fault",
             inputPorts: [],
-            outputPorts: [],
+            outputPorts: APPLY_TO_OUT,
         });
         ctx.nodes.register("Physics.Mechanical.Fault:rotor-eccentricity", () => createRotorEccentricityFaultNode() as never, {
             label: "Rotor Eccentricity (static cause)",
             category: "Physics.Mechanical.Fault",
             inputPorts: [],
-            outputPorts: [],
+            outputPorts: APPLY_TO_OUT,
         });
         ctx.nodes.register("Physics.Mechanical.Fault:rotor-imbalance", () => createRotorImbalanceFaultNode() as never, {
             label: "Rotor Imbalance (mechanical cause)",
             category: "Physics.Mechanical.Fault",
             inputPorts: [],
-            outputPorts: [],
+            outputPorts: APPLY_TO_OUT,
         });
     },
 };

@@ -10,3 +10,4 @@ export * from "./control-ports";
 export * from "./runnable.node";
 export * from "./start.node";
 export * from "./stop.node";
+export * from "./execution.source.func";

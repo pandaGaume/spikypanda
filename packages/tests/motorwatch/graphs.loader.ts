@@ -19,8 +19,8 @@
  * headless) but importing the viz plugin would drag uplot / pixi.js
  * into jest for no behavioral gain.
  */
-import { buildSolverAttachmentsForGraph, Channel, NodeRegistry, RuntimeGraph, RuntimeGraphBuilder, RuntimeNode, Session } from "spikypanda-core";
-import type { IChannel, IRuntimeNode, ISession, ISolver } from "spikypanda-core";
+import { ApplyTo, buildSolverAttachmentsForGraph, Channel, NodeRegistry, RuntimeGraph, RuntimeGraphBuilder, RuntimeNode, Session } from "spikypanda-core";
+import type { IChannel, IDeclaresPorts, IRuntimeNode, ISession, ISolver } from "spikypanda-core";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -153,6 +153,8 @@ export function loadGraphHeadless(fileName: string, registry: NodeRegistry): ILo
 
     const builder = new RuntimeGraphBuilder<IRuntimeNode, Channel>().withMode("dynamic").withNodes(...runtimeNodes);
     const skippedConnections: string[] = [];
+    const applyToLinks: ApplyTo[] = [];
+    const outputPortType = (node: IRuntimeNode, slot: string): string | undefined => (node as Partial<IDeclaresPorts>).outputPorts?.find((p) => p.slot === slot)?.type;
     for (const conn of doc.model.connections) {
         const from = instances.get(conn.from.node);
         const to = instances.get(conn.to.node);
@@ -160,8 +162,16 @@ export function loadGraphHeadless(fileName: string, registry: NodeRegistry): ILo
             skippedConnections.push(conn.id);
             continue;
         }
+        // A `fault`-typed source port is an ApplyTo structural relation (fault
+        // operator -> model), NOT a data channel: build the typed core link so
+        // the model's fire() drives it via opsc(ApplyTo).
+        if (outputPortType(from, conn.from.port) === "fault") {
+            applyToLinks.push(new ApplyTo(from, to));
+            continue;
+        }
         builder.withChannel(from, to, conn.from.port, conn.to.port);
     }
+    void applyToLinks; // held alive on the nodes' onsc/opsc; kept for clarity
 
     const graph = builder.build() as RuntimeGraph<IRuntimeNode, Channel>;
     const session = new Session(graph);

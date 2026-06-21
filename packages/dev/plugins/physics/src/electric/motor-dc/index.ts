@@ -73,6 +73,11 @@ export const motorDcSubPlugin: IPlugin = {
                 { slot: "armatureCurrent", ...FLOAT_OUT },
                 { slot: "angularVelocity", ...FLOAT_OUT },
                 { slot: "electromagneticTorque", ...FLOAT_OUT },
+                // Total radial force (UMP from air-gap eccentricity + direct fault
+                // forces) -> wire to a Housing's forceY/forceZ for the vibration
+                // channel. The model computes these in fire() from its fault state.
+                { slot: "forceY", ...FLOAT_OUT },
+                { slot: "forceZ", ...FLOAT_OUT },
             ],
         });
 

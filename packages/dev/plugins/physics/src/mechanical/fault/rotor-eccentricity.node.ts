@@ -1,5 +1,9 @@
-import { cloneable, editable, viewable, IFault, IFaultContext, IOlink, ISession, RuntimeNode } from "spikypanda-core";
+import { cloneable, editable, viewable, IDeclaresPorts, IFault, IFaultContext, IOlink, IPortDescriptor, ISession, RuntimeNode } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
+
+/** A fault operator's apply point (see RotorSag): a `fault`-typed output the
+ *  editor + loader turn into an `ApplyTo` structural link onto a model's fault_N. */
+const APPLY_TO_OUTPUT_PORTS: ReadonlyArray<IPortDescriptor> = [{ slot: "applyTo", optional: false, type: "fault" }];
 
 /**
  * Static air-gap eccentricity: a CAUSE of eccentricity (FMEA: cause -> state ->
@@ -19,9 +23,13 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  * consequences of the AGGREGATED eccentricity. Gravity-independent -- unlike
  * rotor sag, it does NOT vanish in micro-gravity.
  */
-export class RotorEccentricityFaultNode extends RuntimeNode implements IFault {
+export class RotorEccentricityFaultNode extends RuntimeNode implements IFault, IDeclaresPorts {
     /** Ontology type, consulted by the target model's `acceptsFault`. */
     public readonly faultType: string = "eccentricity";
+
+    /** No data inputs; one `fault`-typed apply output (the ApplyTo source). */
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = APPLY_TO_OUTPUT_PORTS;
 
     @cloneable private _severity: number = 0; // [0, 1] fractional gap eccentricity
     @cloneable private _eccentricityPhase: number = 0; // spatial direction [rad]

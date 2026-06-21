@@ -14,15 +14,20 @@ const SVG_NS = "http://www.w3.org/2000/svg";
  *              ↔ SceneItem, etc.) and never carries a runtime payload
  *              during fire(). The dash makes "this is not a normal
  *              wire — it's a binding" visible at a glance.
+ *   "structural" — a typed STRUCTURAL relation (not a data cable, not a
+ *              config binding): an `ApplyTo` link from a fault OPERATOR's
+ *              apply point (a `fault`-typed output) onto a model's variadic
+ *              `fault_N` input. The model reads the fault's physics, never a
+ *              port payload. Rendered as a distinct sparse-dashed cable.
  *
  * The kind is normally DERIVED from the connected ports' types via
- * `deriveLinkKind` rather than passed explicitly: any wire between two
- * config-link-typed ports (scene / solver / atmosphere / shared)
- * renders as a config-link, everything else stays a data cable.
- * Callers that want to override can pass the kind directly to the
- * Connection constructor.
+ * `deriveLinkKind` rather than passed explicitly: a wire from a `fault`
+ * port is structural, a wire between two config-link-typed ports
+ * (scene / solver / atmosphere / shared) is a config-link, everything
+ * else stays a data cable. Callers that want to override can pass the
+ * kind directly to the Connection constructor.
  */
-export type LinkKind = "data" | "config";
+export type LinkKind = "data" | "config" | "structural";
 
 /**
  * Decide a cable's render style purely from its endpoint types. Used
@@ -37,6 +42,9 @@ export type LinkKind = "data" | "config";
  * equivalent to "both" here in practice.
  */
 export function deriveLinkKind(from: PortType, to: PortType): LinkKind {
+    // A `fault` endpoint marks an ApplyTo structural relation (a fault operator
+    // applied to a model's fault_N input), distinct from a config binding.
+    if (from === "fault" || to === "fault") return "structural";
     return isConfigLinkType(from) || isConfigLinkType(to) ? "config" : "data";
 }
 
@@ -101,6 +109,12 @@ export class Connection {
             this.path.classList.add("ne-connection-config");
             this.path.setAttribute("stroke-dasharray", "8,5");
             this.path.setAttribute("stroke-opacity", "0.85");
+        } else if (this.linkKind === "structural") {
+            // ApplyTo: a sparse dash distinct from the config dash, so a
+            // fault->model relation reads as neither a data cable nor a binding.
+            this.path.classList.add("ne-connection-structural");
+            this.path.setAttribute("stroke-dasharray", "2,6");
+            this.path.setAttribute("stroke-opacity", "0.8");
         } else {
             this.path.classList.add("ne-connection-data");
         }

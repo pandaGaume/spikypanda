@@ -277,8 +277,8 @@ export class PropertyEditor {
         const copyBtn = makeIconButton(ICON_COPY, "Copy properties (JSON to clipboard)", async () => {
             try {
                 const payload = this._buildPreset(node, schema, data);
-                await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-                flashIcon(copyBtn, "ok");
+                const ok = await writeClipboard(JSON.stringify(payload, null, 2));
+                flashIcon(copyBtn, ok ? "ok" : "err");
             } catch (e) {
                 console.warn("[ne] copy properties failed:", e);
                 flashIcon(copyBtn, "err");
@@ -289,7 +289,8 @@ export class PropertyEditor {
         if (this.permissions.write) {
             const pasteBtn = makeIconButton(ICON_PASTE, "Paste properties (JSON from clipboard)", async () => {
                 try {
-                    const text = await navigator.clipboard.readText();
+                    const text = await readClipboard();
+                    if (text === null) return; // user cancelled the fallback prompt
                     const obj = JSON.parse(text);
                     const n = this._applyPreset(schema, data, obj);
                     if (n > 0) {
@@ -399,7 +400,11 @@ export class PropertyEditor {
 
     private _dispose(): void {
         if (this._activeClassEditor && typeof this._activeClassEditor.dispose === "function") {
-            try { this._activeClassEditor.dispose(); } catch (e) { console.warn("[ne] class editor dispose threw:", e); }
+            try {
+                this._activeClassEditor.dispose();
+            } catch (e) {
+                console.warn("[ne] class editor dispose threw:", e);
+            }
         }
         this._activeClassEditor = null;
         if (this._activeClassEditorHost && this._activeClassEditorHost.parentNode) {
@@ -409,7 +414,11 @@ export class PropertyEditor {
         while (this._activeFieldEditors.length) {
             const ed = this._activeFieldEditors.pop();
             if (ed && typeof ed.dispose === "function") {
-                try { ed.dispose(); } catch (e) { console.warn("[ne] field editor dispose threw:", e); }
+                try {
+                    ed.dispose();
+                } catch (e) {
+                    console.warn("[ne] field editor dispose threw:", e);
+                }
             }
         }
     }
@@ -420,16 +429,16 @@ export class PropertyEditor {
 // Compact outline icons. currentColor inherits the surrounding text so
 // the icons follow the active skin without per-skin overrides.
 const ICON_COPY =
-    '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">'
-  + '<rect x="5" y="5" width="9" height="9" rx="1"/>'
-  + '<path d="M3 11V3a1 1 0 0 1 1-1h7"/>'
-  + '</svg>';
+    '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">' +
+    '<rect x="5" y="5" width="9" height="9" rx="1"/>' +
+    '<path d="M3 11V3a1 1 0 0 1 1-1h7"/>' +
+    "</svg>";
 
 const ICON_PASTE =
-    '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">'
-  + '<rect x="3" y="4" width="10" height="11" rx="1"/>'
-  + '<rect x="5.5" y="2" width="5" height="2.5" rx="0.5" fill="currentColor"/>'
-  + '</svg>';
+    '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">' +
+    '<rect x="3" y="4" width="10" height="11" rx="1"/>' +
+    '<rect x="5.5" y="2" width="5" height="2.5" rx="0.5" fill="currentColor"/>' +
+    "</svg>";
 
 function makeIconButton(svgMarkup: string, title: string, onClick: () => void): HTMLButtonElement {
     const b = document.createElement("button");
@@ -486,9 +495,9 @@ function unwrapPresetProperties(obj: unknown): Record<string, unknown> | null {
 function coerceForAssignment(current: unknown, incoming: unknown): unknown {
     if (current === null || current === undefined) return incoming;
     const t = typeof current;
-    if (t === "number")  return Number(incoming);
+    if (t === "number") return Number(incoming);
     if (t === "boolean") return Boolean(incoming);
-    if (t === "string")  return String(incoming);
+    if (t === "string") return String(incoming);
     if (t === "object" && incoming && typeof incoming === "object") {
         // Reconstruct via constructor so the model's setter fires
         // (same pattern as vector.ts). Detect ordered x/y/z[/w] for the
@@ -497,7 +506,11 @@ function coerceForAssignment(current: unknown, incoming: unknown): unknown {
         const ordered = ["x", "y", "z", "w"].filter((k) => k in (current as Record<string, unknown>));
         if (Ctor && ordered.length >= 2) {
             const args = ordered.map((k) => Number((incoming as Record<string, unknown>)[k] ?? (current as Record<string, unknown>)[k]));
-            try { return new Ctor(...args); } catch { /* fall through */ }
+            try {
+                return new Ctor(...args);
+            } catch {
+                /* fall through */
+            }
         }
         try {
             const fresh = Ctor ? new (Ctor as unknown as new () => object)() : {};
@@ -513,4 +526,53 @@ function coerceForAssignment(current: unknown, incoming: unknown): unknown {
 // Public reference kept for callers that want to feed a preset
 // programmatically (e.g. unit tests, paste handlers in hosts).
 export { serializeValue, unwrapPresetProperties, coerceForAssignment };
+
+/**
+ * Robust clipboard write. The async Clipboard API (`navigator.clipboard`) only
+ * exists in a SECURE CONTEXT (https or localhost); over plain http on a LAN IP
+ * it is `undefined`, which is why the property-panel copy "did nothing". Fall
+ * back to a hidden-textarea `execCommand("copy")` so it works everywhere.
+ */
+async function writeClipboard(text: string): Promise<boolean> {
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        }
+    } catch {
+        // secure-context API present but blocked (permission / focus) — fall through
+    }
+    try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.top = "-1000px";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        return ok;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Robust clipboard read. `Clipboard.readText` needs a secure context + a
+ * read permission grant; when unavailable, prompt the user to paste the JSON
+ * manually (Ctrl+V into the dialog works in any context). Returns null when the
+ * user cancels.
+ */
+async function readClipboard(): Promise<string | null> {
+    try {
+        if (navigator.clipboard?.readText) {
+            return await navigator.clipboard.readText();
+        }
+    } catch {
+        // not permitted / not secure context — fall through to the manual prompt
+    }
+    return window.prompt("Paste the preset JSON here (Ctrl+V):") ?? null;
+}
 export type { IEditableField };

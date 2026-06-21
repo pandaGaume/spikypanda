@@ -1,5 +1,10 @@
-import { viewable, IFault, IFaultContext, IOlink, ISession, RuntimeNode } from "spikypanda-core";
+import { viewable, IDeclaresPorts, IFault, IFaultContext, IOlink, IPortDescriptor, ISession, RuntimeNode } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
+
+/** A fault operator's apply point: drawn onto a model's `fault_N` input, the
+ *  editor + loader turn this `fault`-typed output into an `ApplyTo` structural
+ *  link (NOT a data channel). Shared by the applyTo cause nodes. */
+const APPLY_TO_OUTPUT_PORTS: ReadonlyArray<IPortDescriptor> = [{ slot: "applyTo", optional: false, type: "fault" }];
 
 /**
  * Rotor sag: a CAUSE of air-gap eccentricity (FMEA: cause -> state ->
@@ -19,9 +24,13 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  * wear, thermal bow) that feed the same eccentricity state; eccentricity ↛ sag
  * (a rigid rotor can be eccentric with no sag at all).
  */
-export class RotorSagFaultNode extends RuntimeNode implements IFault {
+export class RotorSagFaultNode extends RuntimeNode implements IFault, IDeclaresPorts {
     /** Ontology type, consulted by the target model's `acceptsFault`. */
     public readonly faultType: string = "rotorSag";
+
+    /** No data inputs; one `fault`-typed apply output (the ApplyTo source). */
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = APPLY_TO_OUTPUT_PORTS;
 
     private _eccentricityY: number = 0; // contributed rotor displacement, body Y [m]
     private _eccentricityZ: number = 0; // contributed rotor displacement, body Z [m]
