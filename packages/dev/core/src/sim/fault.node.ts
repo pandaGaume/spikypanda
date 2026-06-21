@@ -1,6 +1,7 @@
 import { IOlink } from "../graph/graph.interfaces";
+import { ApplyTo } from "../graph/graph.olink";
 import { IChannel, IDeclaresPorts, IPortDescriptor, ISession, inSlotOf } from "../execution/execution.interfaces";
-import type { ICartesian } from "../geometry/geometry.interfaces";
+import type { ICartesian, ICartesian3 } from "../geometry/geometry.interfaces";
 import type { Nullable } from "../types";
 import { TransformNode } from "./transform.node";
 
@@ -38,6 +39,33 @@ export function isFaultDescriptor(v: unknown): v is IFaultDescriptor {
     if (!v || typeof v !== "object") return false;
     const o = v as Partial<IFaultDescriptor>;
     return typeof o.target === "string" && typeof o.value === "number";
+}
+
+/**
+ * Runtime context handed to a fault operator's `applyTo`: the integration
+ * timestep, the latent body-frame gravity of the target's scene (undefined when
+ * none is bound), and an accumulator the fault writes its effect into (target
+ * -> summed value, read back by the target model via `getFault`).
+ */
+export interface IFaultContext {
+    readonly dt: number;
+    readonly bodyGravity?: ICartesian3;
+    accumulate(target: string, value: number): void;
+}
+
+/**
+ * A fault OPERATOR. Instead of publishing an opaque `{ target, value }`
+ * descriptor on a port, it APPLIES its physics to a target MODEL:
+ * `applyTo(target, ctx)` reads the target's PROPERTIES directly (e.g.
+ * `motor.rotorMass`, `motor.airGap`) plus its own tuning editables plus the
+ * runtime `ctx`, and accumulates its effect via `ctx.accumulate`. Linked to its
+ * target by an `ApplyTo` relation; the target drives `link.oini.applyTo(this,
+ * ctx)`. A property is read from the model, never published as a port.
+ */
+export interface IFault {
+    applyTo(target: unknown, ctx: IFaultContext): void;
+    /** Ontology type of the fault, consulted by the target's `acceptsFault`. */
+    readonly faultType?: string;
 }
 
 /** Slot prefix that identifies a variadic fault input. */
@@ -114,6 +142,15 @@ export class FaultableNode extends TransformNode implements IDeclaresPorts {
     }
 
     /**
+     * Validate that THIS model accepts a fault OPERATOR (by its `faultType`),
+     * before driving its `applyTo`. Default accepts any; subclasses narrow to
+     * the fault kinds their physics actually models.
+     */
+    protected acceptsFault(_fault: IFault): boolean {
+        return true;
+    }
+
+    /**
      * Returns the accumulated, accepted fault value for `target` this tick
      * (0 when none). Safe to call before fire() in a tick (returns 0).
      */
@@ -160,6 +197,29 @@ export class FaultableNode extends TransformNode implements IDeclaresPorts {
 
             const prev = this._faultSum.get(fault.target) ?? 0;
             this._faultSum.set(fault.target, prev + fault.value);
+        }
+
+        // 3) Drive ApplyTo faults: each linked fault OPERATOR applies its
+        //    physics to THIS model, reading the model's PROPERTIES + its own
+        //    tuning + the runtime ctx, accumulating its effect into the same
+        //    per-tick sum the legacy descriptor path fills.
+        const applyLinks = this.opsc<ApplyTo>((l) => l instanceof ApplyTo);
+        if (applyLinks.length > 0) {
+            this._updateGravityCoupling(session);
+            const sum = this._faultSum;
+            const ctx: IFaultContext = {
+                dt: session.dt,
+                bodyGravity: this._bodyGravity,
+                accumulate(target: string, value: number): void {
+                    sum.set(target, (sum.get(target) ?? 0) + value);
+                },
+            };
+            for (const link of applyLinks) {
+                const fault = link.oini as unknown as Partial<IFault> | null;
+                if (fault && typeof fault.applyTo === "function" && this.acceptsFault(fault as IFault)) {
+                    (fault as IFault).applyTo(this, ctx);
+                }
+            }
         }
     }
 }

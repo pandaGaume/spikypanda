@@ -106,3 +106,8 @@ for (const id of ["scene", "solver", "atmosphere", "shared"]) {
 // the `Child` link class; `IHasTransform.parent` and scene-context resolution
 // both consume it. `part` reserved for composition (registered when used).
 if (!ONTOLOGY.has("child")) ONTOLOGY.register({ id: "child" });
+
+// `applyTo`: a fault / operator (oini) APPLIES its physics to a target model
+// (ofin), reading the target's PROPERTIES directly. Backs the `ApplyTo` link
+// class. Structural, not a binding relation, not a data channel.
+if (!ONTOLOGY.has("applyTo")) ONTOLOGY.register({ id: "applyTo" });

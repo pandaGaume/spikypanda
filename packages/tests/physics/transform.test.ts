@@ -148,7 +148,7 @@ describe("Motor TransformNode inheritance", () => {
         // read from `session.sceneStateView`, not from a cable.
         expect(inSlots.slice(0, 3)).toEqual(["local", "parentWorld", "fault_0"]);
         expect(inSlots).toEqual(["local", "parentWorld", "fault_0", "armatureVoltage", "loadTorque"]);
-        expect(outSlots).toEqual(["world", "armatureCurrent", "angularVelocity", "electromagneticTorque"]);
+        expect(outSlots).toEqual(["world", "armatureCurrent", "angularVelocity", "electromagneticTorque", "forceY", "forceZ"]);
     });
 
     it("BldcMotorDynamicNode exposes transform + fault ports alongside its own (scene moved to session)", () => {

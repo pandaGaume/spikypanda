@@ -1,4 +1,4 @@
-import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession } from "spikypanda-core";
+import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IFaultDescriptor, IOlink, IPortDescriptor, ISession } from "spikypanda-core";
 import type { ICartesian, Nullable, IHasSampleRateRequirement, IIntegrable, IIntegrationInputs } from "spikypanda-core";
 import { FaultableNode } from "spikypanda-core";
 
@@ -144,6 +144,7 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
     @cloneable private _viscousFriction: number = 1e-4; // viscous friction     [Nm·s/rad]
     @cloneable private _initialArmatureCurrent: number = 0;
     @cloneable private _initialAngularVelocity: number = 0;
+    @cloneable private _initialRotorAngle: number = 0; // rotor angle at reset [rad]
 
     // ── Mass / inertia block ────────────────────────────────────────────
     // Single source of truth for the motor's mass, read by the gravity-
@@ -155,12 +156,34 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
     @cloneable private _comOffset: number = 3.85e-4; // residual CoM eccentricity e [m]; unbalance = rotorMass·e
     @cloneable private _comPhase: number = 0; // angular phase of the CoM offset [rad]
 
+    // ── Geometry block ──────────────────────────────────────────────────
+    // Motor PROPERTIES (not ports) read by the faults LINKED to this motor:
+    // a sag/eccentricity fault reads airGap + bearingRadialStiffness to turn a
+    // rotor radial displacement into an air-gap modulation (-> flux -> current)
+    // and a UMP force. RS-385PH-15125-class small-motor defaults.
+    @cloneable private _airGap: number = 5e-4; // nominal radial air gap [m]
+    @cloneable private _bearingRadialStiffness: number = 1e5; // shaft/bearing radial stiffness [N/m]
+    @cloneable private _umpRadialStiffness: number = 0; // unbalanced-magnetic-pull stiffness [N/m] (0 = no UMP force)
+
     // ── Internal state (cloneable so editor save/restore captures it) ──
     // _lastT removed — Session.dt is the single source of truth now;
     // the solver in the integration phase reads it directly.
     @cloneable private _i: number = 0;
     @cloneable private _omega: number = 0;
     @cloneable private _tauEm: number = 0;
+
+    // Air-gap eccentricity STATE -> EM consequences. The linked cause-faults
+    // (sag, static/dynamic eccentricity) contribute a rotor radial displacement
+    // (the "eccentricityY/Z" fault targets); THIS model turns the aggregated
+    // displacement into its two electromagnetic consequences, recomputed each
+    // fire(): a flux modulation (-> current) and a UMP radial force
+    // (-> housing -> vibration). Transient (not @cloneable): recomputed, not state.
+    private _rotorAngle: number = 0; // integrated rotor angle [rad] (flux phase)
+    private _fluxModulation: number = 0; // flux delta from the air-gap eccentricity
+    private _umpForceY: number = 0; // UMP radial force, body Y [N]
+    private _umpForceZ: number = 0; // UMP radial force, body Z [N]
+    private _forceY: number = 0; // TOTAL radial force to the housing (UMP + direct) [N]
+    private _forceZ: number = 0; // TOTAL radial force to the housing (UMP + direct) [N]
 
     public override readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
         ...FaultableNode.BASE_INPUT_PORTS,
@@ -182,6 +205,10 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         { slot: "armatureCurrent", optional: false, type: "float", kind: "signal" },
         { slot: "angularVelocity", optional: false, type: "float", kind: "signal" },
         { slot: "electromagneticTorque", optional: false, type: "float", kind: "signal" },
+        // Unbalanced-magnetic-pull radial force: the EM consequence of the
+        // air-gap eccentricity state -> wire to a Housing's forceY/forceZ.
+        { slot: "forceY", optional: false, type: "float", kind: "signal" },
+        { slot: "forceZ", optional: false, type: "float", kind: "signal" },
     ];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
@@ -273,6 +300,15 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         });
     }
 
+    @editable("number", { unit: "rad" }) public get initialRotorAngle(): number {
+        return this._initialRotorAngle;
+    }
+    public set initialRotorAngle(v: number) {
+        this.setField("initialRotorAngle", this._initialRotorAngle, v, (n) => {
+            this._initialRotorAngle = n;
+        });
+    }
+
     // ── Mass / inertia editables ───────────────────────────────────────
     @editable("number", { unit: "kg" }) public get motorMass(): number {
         return this._motorMass;
@@ -319,6 +355,34 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         });
     }
 
+    // ── Geometry editables ─────────────────────────────────────────────
+    @editable("number", { unit: "m" }) public get airGap(): number {
+        return this._airGap;
+    }
+    public set airGap(v: number) {
+        this.setField("airGap", this._airGap, v, (n) => {
+            this._airGap = n;
+        });
+    }
+
+    @editable("number", { unit: "N/m" }) public get bearingRadialStiffness(): number {
+        return this._bearingRadialStiffness;
+    }
+    public set bearingRadialStiffness(v: number) {
+        this.setField("bearingRadialStiffness", this._bearingRadialStiffness, v, (n) => {
+            this._bearingRadialStiffness = n;
+        });
+    }
+
+    @editable("number", { unit: "N/m" }) public get umpRadialStiffness(): number {
+        return this._umpRadialStiffness;
+    }
+    public set umpRadialStiffness(v: number) {
+        this.setField("umpRadialStiffness", this._umpRadialStiffness, v, (n) => {
+            this._umpRadialStiffness = n;
+        });
+    }
+
     // ── Viewables (mirrors of state into the property panel) ───────────
     @viewable("number") public get armatureCurrent(): number {
         return this._i;
@@ -330,6 +394,27 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         return this._tauEm;
     }
 
+    // EM consequences of the air-gap eccentricity state (recomputed each fire).
+    @viewable("number") public get rotorAngle(): number {
+        return this._rotorAngle;
+    }
+    @viewable("number") public get fluxModulation(): number {
+        return this._fluxModulation;
+    }
+    @viewable("number") public get umpForceY(): number {
+        return this._umpForceY;
+    }
+    @viewable("number") public get umpForceZ(): number {
+        return this._umpForceZ;
+    }
+    /** Total radial force sent to the housing (UMP + direct fault forces). */
+    @viewable("number") public get forceY(): number {
+        return this._forceY;
+    }
+    @viewable("number") public get forceZ(): number {
+        return this._forceZ;
+    }
+
     /** Rotor inertia implied by the mass block: rotorMass · rotorGyrationRadius².
      *  Cross-check against the editable rotorInertia — they should agree (RS-385: both
      *  ≈ 6.0e-7). A divergence means the mass block and rotorInertia describe different
@@ -337,6 +422,16 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
      *  instead of carrying both rotorInertia and the mass block. */
     @viewable("number") public get inertiaFromMass(): number {
         return this._rotorMass * this._rotorGyrationRadius * this._rotorGyrationRadius;
+    }
+
+    /** Physically meaningful fault contributions for a brushed DC motor: "tau"
+     *  (additive load torque) and the air-gap ECCENTRICITY state
+     *  "eccentricityY" / "eccentricityZ" (a rotor radial displacement [m] in the
+     *  body radial plane, contributed by the linked cause-faults). The motor
+     *  turns the aggregated eccentricity into its EM consequences (flux + UMP)
+     *  in `fire`/`rhs`. Other targets (e.g. a cage "broken_bar") are dropped. */
+    protected override acceptFault(fault: IFaultDescriptor): boolean {
+        return fault.target === "tau" || fault.target === "eccentricityY" || fault.target === "eccentricityZ" || fault.target === "radialForceY" || fault.target === "radialForceZ";
     }
 
     // ── IIntegrable implementation ─────────────────────────────────────
@@ -381,8 +476,18 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         // torque once per rhs call. This is the same per-macro-step
         // snapshot the v2 plan calls for (Q1.2).
         const tauEff = tauLoad + this.getFault("tau");
-        dydt[offset + 0] = (armatureVoltage - this._armatureResistance * armatureCurrent - this._backEmfConstant * angularVelocity) / Math.max(this._armatureInductance, 1e-12);
-        dydt[offset + 1] = (this._torqueConstant * armatureCurrent - this._viscousFriction * angularVelocity - tauEff) / Math.max(this._rotorInertia, 1e-12);
+        // Air-gap -> flux -> current coupling (the explicit MCSA stage): in a
+        // brushed DC motor BOTH the torque constant and the back-emf constant
+        // are proportional to the air-gap FLUX. The air-gap ECCENTRICITY state
+        // (aggregated from the cause-faults) modulates the flux; this model
+        // computes that modulation in fire() and folds `1 + fluxModulation` into
+        // the two constants IDENTICALLY -> an armature-current ripple at the
+        // rotation frequency (the current signature). No eccentricity ->
+        // fluxModulation = 0 -> fluxEnv exactly 1.0 -> bit-exact.
+        const fluxEnv = 1 + this._fluxModulation;
+        dydt[offset + 0] =
+            (armatureVoltage - this._armatureResistance * armatureCurrent - this._backEmfConstant * fluxEnv * angularVelocity) / Math.max(this._armatureInductance, 1e-12);
+        dydt[offset + 1] = (this._torqueConstant * fluxEnv * armatureCurrent - this._viscousFriction * angularVelocity - tauEff) / Math.max(this._rotorInertia, 1e-12);
     }
 
     // ── Lifecycle ──────────────────────────────────────────────────────
@@ -397,6 +502,10 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         this.setField("electromagneticTorque", this._tauEm, this._torqueConstant * this._initialArmatureCurrent, (n) => {
             this._tauEm = n;
         });
+        this._rotorAngle = this._initialRotorAngle;
+        this._fluxModulation = 0;
+        this._umpForceY = 0;
+        this._umpForceZ = 0;
     }
 
     public override fire(session: ISession, t: number): void {
@@ -412,6 +521,39 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         // and publishes the freshly-integrated state.
         super.fire(session, t);
 
+        // Air-gap eccentricity STATE -> its two electromagnetic consequences.
+        // The linked cause-faults accumulated a rotor radial displacement
+        // (eccentricityY/Z, body radial plane); aggregate it and compute:
+        //   (a) the flux modulation -> current (read by rhs on the next step),
+        //   (b) the UMP radial force -> housing -> vibration.
+        const dt = session.dt;
+        if (Number.isFinite(dt)) this._rotorAngle += this._omega * dt;
+        const eccentricityY = this.getFault("eccentricityY");
+        const eccentricityZ = this.getFault("eccentricityZ");
+        const eccentricity = Math.hypot(eccentricityY, eccentricityZ);
+        if (eccentricity > 0 && this._airGap > 0) {
+            // A winding sweeping past the fixed gap minimum sees a 1x f_mech flux
+            // ripple; epsilon = |displacement| / air gap, phase = rotorAngle vs
+            // the eccentricity direction.
+            const eccAngle = Math.atan2(eccentricityZ, eccentricityY);
+            this._fluxModulation = (eccentricity / this._airGap) * Math.cos(this._rotorAngle - eccAngle);
+        } else {
+            this._fluxModulation = 0;
+        }
+        // UMP pulls the rotor toward the smaller gap = the displacement
+        // direction: a radial force along (eccY, eccZ) scaled by the stiffness.
+        this._umpForceY = this._umpRadialStiffness * eccentricityY;
+        this._umpForceZ = this._umpRadialStiffness * eccentricityZ;
+        // Total radial force on the housing = the UMP (from the air-gap
+        // eccentricity) PLUS direct radial forces from mechanical faults (e.g.
+        // imbalance, a force rotating at 1x). The VIBRATION is their VECTOR SUM,
+        // so two faults can MASK each other in amplitude (a rotating imbalance
+        // opposing the eccentricity UMP cancels the 1x vibration). The flux,
+        // hence the CURRENT, comes from the eccentricity ALONE -> MCSA still
+        // reveals an eccentricity that the vibration hides.
+        this._forceY = this._umpForceY + this.getFault("radialForceY");
+        this._forceZ = this._umpForceZ + this.getFault("radialForceZ");
+
         const links = session.graph.links as ReadonlyArray<IChannel>;
         const broadcast = (slot: string, val: unknown): void => {
             for (const link of this.onsc<IChannel>()) {
@@ -424,6 +566,8 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         broadcast("armatureCurrent", this._i);
         broadcast("angularVelocity", this._omega);
         broadcast("electromagneticTorque", this._tauEm);
+        broadcast("forceY", this._forceY);
+        broadcast("forceZ", this._forceZ);
     }
 }
 

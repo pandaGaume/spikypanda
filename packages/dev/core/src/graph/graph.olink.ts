@@ -68,3 +68,26 @@ export class Child<B = unknown> extends GraphOLink<B> {
         this.type = "child";
     }
 }
+
+/**
+ * `ApplyTo` relation: a STRUCTURAL link (not a dataflow channel) by which a
+ * FAULT (or any operator node, `oini`) APPLIES its physics to a TARGET model
+ * (`ofin`). Directed source -> target; the target surfaces its incoming
+ * `ApplyTo` links via `opsc` filtered to `ApplyTo`, then drives them with
+ * `link.oini.applyTo(this, ctx)` (the fault reads the target model's
+ * PROPERTIES directly, e.g. `motor.rotorMass` / `motor.airGap`, and accumulates
+ * its effect). Properties are read from the model, NOT published as ports; a
+ * port is a runtime DATA relation, an `ApplyTo` is a MODEL-consumption relation.
+ *
+ * Carries no payload; `type` is the ontology id "applyTo" (`isBindingRelation:
+ * false`, structural). Idiomatic alongside the other typed link subclasses
+ * (Child, CnnSynapse, ...). The fault keeps its own tuning editables (severity,
+ * defect counts, ...); the target validates acceptance (`acceptFault`).
+ */
+export class ApplyTo<B = unknown> extends GraphOLink<B> {
+    public constructor(fault?: INode, target?: INode) {
+        // oini = fault (source), ofin = target model. super() wires both ends.
+        super(fault, target);
+        this.type = "applyTo";
+    }
+}

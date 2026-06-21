@@ -21,6 +21,12 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  *
  * Source node (RuntimeNode): reads only the rotor angle rotorAngle from the
  * machine. Stateless, no allocation in the hot path.
+ *
+ * @deprecated Descriptor-publisher model, kept only for the PMSM path.
+ * Superseded by `RotorEccentricityFaultNode`, an `applyTo` CAUSE that contributes
+ * an air-gap eccentricity to the motor MODEL (which then computes flux + UMP).
+ * New (DC) graphs use the applyTo causes; the PMSM still consumes this until it
+ * is migrated.
  */
 export class EccentricityFaultNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _severity: number = 0; // [0, 1]
@@ -92,6 +98,7 @@ export class EccentricityFaultNode extends RuntimeNode implements IDeclaresPorts
     }
 }
 
+/** @deprecated Use `createRotorEccentricityFaultNode` (the applyTo cause). */
 export function createEccentricityFaultNode(): EccentricityFaultNode {
     return new EccentricityFaultNode();
 }

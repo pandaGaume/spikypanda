@@ -26,6 +26,12 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  * a Phase-2 current coupling would additionally modulate tau / flux at 1x
  * f_mech. Source node (RuntimeNode): reads angularVelocity + rotorAngle from the
  * machine. Stateless, no allocation in the hot path.
+ *
+ * @deprecated Descriptor-publisher model, kept only for the PMSM path.
+ * Superseded by `RotorImbalanceFaultNode`, an `applyTo` CAUSE that contributes a
+ * rotating radial force to the motor MODEL (FMEA: cause -> eccentricity state ->
+ * flux/UMP consequence). New (DC) graphs use the applyTo causes; the PMSM still
+ * consumes this until it is migrated.
  */
 export class ImbalanceFaultNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _severity: number = 0; // [0, 1]
@@ -108,6 +114,7 @@ export class ImbalanceFaultNode extends RuntimeNode implements IDeclaresPorts {
     }
 }
 
+/** @deprecated Use `createRotorImbalanceFaultNode` (the applyTo cause). */
 export function createImbalanceFaultNode(): ImbalanceFaultNode {
     return new ImbalanceFaultNode();
 }
