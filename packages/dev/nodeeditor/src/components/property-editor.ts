@@ -152,7 +152,7 @@ export class PropertyEditor {
 
         // 2. Schema-driven fallback: render one row per @editable field,
         // then a second read-only group for @viewable mirrors of state
-        // (i / omega / tau_em on the motor, matrix on Transform, ...).
+        // (i / angularVelocity / electromagneticTorque on the motor, matrix on Transform, ...).
         // Viewable fields delegate to the same factory pool but pass
         // `editable=false` so factories like vector.ts switch their
         // inputs to readOnly mode.

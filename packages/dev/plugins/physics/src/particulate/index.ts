@@ -8,14 +8,7 @@ import {
     PARTICULATE_OUT_ANCHOR,
 } from "./particulate.node.js";
 
-export {
-    ParticulateNode,
-    createParticulateNode,
-    createPM2_5ParticulateNode,
-    createPM10ParticulateNode,
-    createLunarDustParticulateNode,
-    PARTICULATE_OUT_ANCHOR,
-};
+export { ParticulateNode, createParticulateNode, createPM2_5ParticulateNode, createPM10ParticulateNode, createLunarDustParticulateNode, PARTICULATE_OUT_ANCHOR };
 
 /**
  * `Physics.Particulate` sub-plugin (V1 stub).

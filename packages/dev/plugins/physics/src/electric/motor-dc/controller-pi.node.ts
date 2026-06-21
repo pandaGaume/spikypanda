@@ -7,77 +7,77 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  * a hard saturation on the output and a back-calculation anti-windup
  * (integral term frozen while the controller is saturated):
  *
- *     error = omega_ref - omega_measured
- *     V_unsat = Kp · error + integral
- *     V_cmd   = clamp(V_unsat, -V_max, +V_max)
- *     integral += Ki · error · dt   (only if V_unsat == V_cmd)
+ *     error = angularVelocityReference - measuredAngularVelocity
+ *     V_unsat = proportionalGain · error + integral
+ *     voltageCommand   = clamp(V_unsat, -V_max, +V_max)
+ *     integral += integralGain · error · dt   (only if V_unsat == voltageCommand)
  *
  * Inputs (optional, default 0):
- *   omega_ref      setpoint speed [rad/s]
- *   omega_measured measured speed [rad/s] (typically from a Tachymeter)
+ *   angularVelocityReference      setpoint speed [rad/s]
+ *   measuredAngularVelocity measured speed [rad/s] (typically from a Tachymeter)
  *   dt             control step [s] — falls back to `t - lastT` when unwired
  *
  * Output:
- *   V_cmd          voltage command [V] (clamped to [-V_max, +V_max])
+ *   voltageCommand          voltage command [armatureVoltage] (clamped to [-V_max, +V_max])
  *
  * State (integral) resets to 0 on session reset.
  */
 export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
-    @cloneable private _Kp: number = 0.5;
-    @cloneable private _Ki: number = 2.0;
-    @cloneable private _Vmax: number = 24;
+    @cloneable private _proportionalGain: number = 0.5;
+    @cloneable private _integralGain: number = 2.0;
+    @cloneable private _maxVoltage: number = 24;
 
     @cloneable private _integral: number = 0;
     @cloneable private _Vcmd: number = 0;
 
     // Inputs and outputs are continuous signals (control setpoint,
     // measurement, command). No buffer, no overflow, no gating: the PI
-    // fires every tick, reads the current omega_ref / omega_measured
-    // via session.readSignal, computes V_cmd, overwrites the V_cmd
+    // fires every tick, reads the current angularVelocityReference / measuredAngularVelocity
+    // via session.readSignal, computes voltageCommand, overwrites the voltageCommand
     // signal. ZOH semantic matches the discrete-time control
     // literature: at each sample instant the controller sees the
     // latest available values.
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "omega_ref", optional: true, type: "float", kind: "signal" },
-        { slot: "omega_measured", optional: true, type: "float", kind: "signal" },
+        { slot: "angularVelocityReference", optional: true, type: "float", kind: "signal" },
+        { slot: "measuredAngularVelocity", optional: true, type: "float", kind: "signal" },
     ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "V_cmd", optional: false, type: "float", kind: "signal" }];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "voltageCommand", optional: false, type: "float", kind: "signal" }];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
     }
 
-    @editable("number") public get Kp(): number {
-        return this._Kp;
+    @editable("number") public get proportionalGain(): number {
+        return this._proportionalGain;
     }
-    public set Kp(v: number) {
-        this.setField("Kp", this._Kp, v, (n) => {
-            this._Kp = n;
+    public set proportionalGain(v: number) {
+        this.setField("proportionalGain", this._proportionalGain, v, (n) => {
+            this._proportionalGain = n;
         });
     }
 
-    @editable("number") public get Ki(): number {
-        return this._Ki;
+    @editable("number") public get integralGain(): number {
+        return this._integralGain;
     }
-    public set Ki(v: number) {
-        this.setField("Ki", this._Ki, v, (n) => {
-            this._Ki = n;
+    public set integralGain(v: number) {
+        this.setField("integralGain", this._integralGain, v, (n) => {
+            this._integralGain = n;
         });
     }
 
-    @editable("number") public get Vmax(): number {
-        return this._Vmax;
+    @editable("number") public get maxVoltage(): number {
+        return this._maxVoltage;
     }
-    public set Vmax(v: number) {
-        this.setField("Vmax", this._Vmax, v, (n) => {
-            this._Vmax = n;
+    public set maxVoltage(v: number) {
+        this.setField("maxVoltage", this._maxVoltage, v, (n) => {
+            this._maxVoltage = n;
         });
     }
 
     @viewable("number") public get integral(): number {
         return this._integral;
     }
-    @viewable("number") public get V_cmd(): number {
+    @viewable("number") public get voltageCommand(): number {
         return this._Vcmd;
     }
 
@@ -85,7 +85,7 @@ export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
         this.setField("integral", this._integral, 0, (n) => {
             this._integral = n;
         });
-        this.setField("V_cmd", this._Vcmd, 0, (n) => {
+        this.setField("voltageCommand", this._Vcmd, 0, (n) => {
             this._Vcmd = n;
         });
     }
@@ -105,8 +105,8 @@ export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
             if (idx < 0) continue;
             const value = session.readSignal(idx);
             if (typeof value !== "number") continue;
-            if (slot === "omega_ref") omegaRef = value;
-            else if (slot === "omega_measured") omegaMeasured = value;
+            if (slot === "angularVelocityReference") omegaRef = value;
+            else if (slot === "measuredAngularVelocity") omegaMeasured = value;
         }
         // dt now comes from the Session, not a wired port. First-tick
         // case (currentTick still pristine) returns Infinity → we clamp
@@ -116,16 +116,16 @@ export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
         const dt = Number.isFinite(sessionDt) ? Math.max(0, sessionDt) : 0;
 
         const error = omegaRef - omegaMeasured;
-        const proposedIntegral = this._integral + this._Ki * error * dt;
-        const Vunsat = this._Kp * error + proposedIntegral;
+        const proposedIntegral = this._integral + this._integralGain * error * dt;
+        const Vunsat = this._proportionalGain * error + proposedIntegral;
 
         let Vcmd = Vunsat;
         let newIntegral = this._integral;
-        if (Vunsat > this._Vmax) {
-            Vcmd = this._Vmax;
+        if (Vunsat > this._maxVoltage) {
+            Vcmd = this._maxVoltage;
             // Saturated high: freeze integral (back-calc anti-windup).
-        } else if (Vunsat < -this._Vmax) {
-            Vcmd = -this._Vmax;
+        } else if (Vunsat < -this._maxVoltage) {
+            Vcmd = -this._maxVoltage;
             // Saturated low: freeze.
         } else {
             newIntegral = proposedIntegral;
@@ -134,12 +134,12 @@ export class DcMotorSpeedPiNode extends RuntimeNode implements IDeclaresPorts {
         this.setField("integral", this._integral, newIntegral, (n) => {
             this._integral = n;
         });
-        this.setField("V_cmd", this._Vcmd, Vcmd, (n) => {
+        this.setField("voltageCommand", this._Vcmd, Vcmd, (n) => {
             this._Vcmd = n;
         });
 
         for (const link of this.onsc<IChannel>()) {
-            if (link.slot !== "V_cmd" || !link.enabled) continue;
+            if (link.slot !== "voltageCommand" || !link.enabled) continue;
             const idx = links.indexOf(link);
             if (idx < 0) continue;
             session.publish(idx, Vcmd);

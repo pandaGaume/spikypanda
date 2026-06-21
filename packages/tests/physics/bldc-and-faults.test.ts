@@ -78,21 +78,21 @@ describe("back-EMF shape functions", () => {
 describe("BldcMotorDynamicNode", () => {
     it("starts at the configured initial conditions", () => {
         const n = new BldcMotorDynamicNode();
-        n.omega0 = 50; n.theta0 = 1.2;
+        n.initialAngularVelocity = 50; n.initialRotorAngle = 1.2;
         n.reset(emptySession());
-        expect(n.omega).toBe(50);
-        expect(n.theta_m).toBe(1.2);
+        expect(n.angularVelocity).toBe(50);
+        expect(n.rotorAngle).toBe(1.2);
     });
 
-    it("stays bounded over 5000 ticks at dt=100µs with V=0, tau_load=0", () => {
+    it("stays bounded over 5000 ticks at dt=100µs with armatureVoltage=0, loadTorque=0", () => {
         const n = new BldcMotorDynamicNode();
-        n.omega0 = 100;
+        n.initialAngularVelocity = 100;
         n.reset(emptySession());
         const session = emptySession();
         for (let k = 0; k < 5000; k++) n.fire(session, k * 1e-4);
-        expect(Number.isFinite(n.omega)).toBe(true);
-        expect(Number.isFinite(n.i_a)).toBe(true);
-        expect(Math.abs(n.omega)).toBeLessThan(100);   // decays
+        expect(Number.isFinite(n.angularVelocity)).toBe(true);
+        expect(Number.isFinite(n.phaseCurrentA)).toBe(true);
+        expect(Math.abs(n.angularVelocity)).toBeLessThan(100);   // decays
     });
 });
 
@@ -100,8 +100,8 @@ describe("PmsmMotorDynamicNode", () => {
     it("produces a strictly different transient than BLDC for the same initial state", () => {
         const bldc = new BldcMotorDynamicNode();
         const pmsm = new PmsmMotorDynamicNode();
-        bldc.omega0 = 100; pmsm.omega0 = 100;
-        bldc.theta0 = 0.3; pmsm.theta0 = 0.3;
+        bldc.initialAngularVelocity = 100; pmsm.initialAngularVelocity = 100;
+        bldc.initialRotorAngle = 0.3; pmsm.initialRotorAngle = 0.3;
         bldc.reset(emptySession()); pmsm.reset(emptySession());
         for (let k = 0; k < 200; k++) {
             bldc.fire(emptySession(), k * 1e-4);
@@ -109,7 +109,7 @@ describe("PmsmMotorDynamicNode", () => {
         }
         // The torque ripple structure differs (6f_e for BLDC vs negligible
         // for PMSM in this stub), so the rotor angles must diverge.
-        expect(bldc.theta_m).not.toBe(pmsm.theta_m);
+        expect(bldc.rotorAngle).not.toBe(pmsm.rotorAngle);
     });
 });
 
@@ -118,16 +118,16 @@ describe("PmsmMotorDynamicNode", () => {
 // ---------------------------------------------------------------------------
 
 describe("BldcInverterNode", () => {
-    it("outputs zero when duty is zero", () => {
+    it("outputs zero when dutyCycle is zero", () => {
         const n = new BldcInverterNode();
-        n.V_dc_default = 24;
+        n.defaultDcBusVoltage = 24;
         n.fire(emptySession(), 0);
-        expect(n.V_a).toBe(0);
-        expect(n.V_b).toBe(0);
-        expect(n.V_c).toBe(0);
+        expect(n.phaseVoltageA).toBe(0);
+        expect(n.phaseVoltageB).toBe(0);
+        expect(n.phaseVoltageC).toBe(0);
     });
 
-    it("starts in sector 0 when theta_e is unwired", () => {
+    it("starts in sector 0 when electricalAngle is unwired", () => {
         const n = new BldcInverterNode();
         n.fire(emptySession(), 0);
         expect(n.sector).toBe(0);
@@ -139,10 +139,10 @@ describe("BldcInverterNode", () => {
 // ---------------------------------------------------------------------------
 
 describe("BldcSpeedPiNode", () => {
-    it("starts with duty = 0 after reset", () => {
+    it("starts with dutyCycle = 0 after reset", () => {
         const n = new BldcSpeedPiNode();
         n.reset(emptySession());
-        expect(n.duty).toBe(0);
+        expect(n.dutyCycle).toBe(0);
         expect(n.integral).toBe(0);
     });
 });
@@ -152,59 +152,59 @@ describe("BldcSpeedPiNode", () => {
 // ---------------------------------------------------------------------------
 
 describe("BearingFaultNode", () => {
-    it("output = signal_in (0) when all amplitudes are zero", () => {
+    it("output = inputSignal (0) when all amplitudes are zero", () => {
         const n = new BearingFaultNode();
-        n.bpfoAmp = 0; n.bpfiAmp = 0; n.bsfAmp = 0; n.ftfAmp = 0;
+        n.outerRaceAmplitude = 0; n.innerRaceAmplitude = 0; n.ballSpinAmplitude = 0; n.cageAmplitude = 0;
         n.reset(emptySession());
         n.fire(emptySession(), 0);
-        expect(n.signal_out).toBe(0);
+        expect(n.outputSignal).toBe(0);
     });
 });
 
 describe("ShaftUnbalanceNode", () => {
-    it("output equals signal_in (0) at t=0 with phase=0 (sin(0)=0)", () => {
+    it("output equals inputSignal (0) at t=0 with phase=0 (sin(0)=0)", () => {
         const n = new ShaftUnbalanceNode();
         n.reset(emptySession());
         n.fire(emptySession(), 0);
-        expect(n.signal_out).toBeCloseTo(0, 12);
+        expect(n.outputSignal).toBeCloseTo(0, 12);
     });
 });
 
 describe("GearMeshNode", () => {
     it("output = 0 with zero mesh amplitude and zero tooth amplitude", () => {
         const n = new GearMeshNode();
-        n.meshAmp = 0; n.toothAmp = 0;
+        n.meshAmplitude = 0; n.toothFaultAmplitude = 0;
         n.reset(emptySession());
         n.fire(emptySession(), 0);
-        expect(n.signal_out).toBe(0);
+        expect(n.outputSignal).toBe(0);
     });
 });
 
 describe("CoulombFrictionNode", () => {
-    it("returns 0 when omega = 0 and viscous b = 0", () => {
+    it("returns 0 when angularVelocity = 0 and viscous viscousFriction = 0", () => {
         const n = new CoulombFrictionNode();
-        n.b = 0;
+        n.viscousFriction = 0;
         n.fire(emptySession(), 0);
-        expect(n.tau_friction).toBe(0);
+        expect(n.frictionTorque).toBe(0);
     });
 });
 
 describe("AccelerometerNode", () => {
     it("passes through when all imperfections disabled", () => {
         const n = new AccelerometerNode();
-        n.noiseStd = 0; n.resolution = 0; n.bandwidthHz = 0;
+        n.noiseStdDev = 0; n.resolution = 0; n.bandwidthHz = 0;
         n.reset(emptySession());
         n.fire(emptySession(), 0);
-        expect(n.vibration_measured).toBe(0);
+        expect(n.measuredVibration).toBe(0);
     });
 });
 
 describe("FaultModulatorNode", () => {
-    it("output = signal_in (0) when amplitude is zero", () => {
+    it("output = inputSignal (0) when amplitude is zero", () => {
         const n = new FaultModulatorNode();
         n.amplitude = 0;
         n.reset(emptySession());
         n.fire(emptySession(), 0);
-        expect(n.signal_out).toBe(0);
+        expect(n.outputSignal).toBe(0);
     });
 });

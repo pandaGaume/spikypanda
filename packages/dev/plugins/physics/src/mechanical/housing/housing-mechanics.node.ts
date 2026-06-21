@@ -24,9 +24,9 @@ import type { IOlink, ICartesian, Nullable, IHasSampleRateRequirement } from "sp
  *     x_new = x + h * v_new
  *     a_new = (F - c*v_new - k*x_new) / m       (the acceleration probed)
  *
- * The force on each axis is read from the `force_x/y/z` inputs and held
+ * The force on each axis is read from the `forceX/y/z` inputs and held
  * constant across the substeps of one fire (matching the legacy
- * per-advance force accumulator). Outputs `accel_x/y/z` are the bracket
+ * per-advance force accumulator). Outputs `accelerationX/y/z` are the bracket
  * acceleration, the vibration channel of the gravity-signature study.
  *
  * Defaults: 100 g mass, 500 Hz, 2 % damping per axis, a small-motor
@@ -39,12 +39,12 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
     @cloneable private _massX: number = 0.1;
     @cloneable private _massY: number = 0.1;
     @cloneable private _massZ: number = 0.1;
-    @cloneable private _fnX: number = 500; // natural frequency [Hz]
-    @cloneable private _fnY: number = 500;
-    @cloneable private _fnZ: number = 500;
-    @cloneable private _zetaX: number = 0.02; // damping ratio
-    @cloneable private _zetaY: number = 0.02;
-    @cloneable private _zetaZ: number = 0.02;
+    @cloneable private _naturalFrequencyX: number = 500; // natural frequency [Hz]
+    @cloneable private _naturalFrequencyY: number = 500;
+    @cloneable private _naturalFrequencyZ: number = 500;
+    @cloneable private _dampingRatioX: number = 0.02; // damping ratio
+    @cloneable private _dampingRatioY: number = 0.02;
+    @cloneable private _dampingRatioZ: number = 0.02;
 
     // Integration state per axis: [pos, vel, accel].
     @cloneable private _posX: number = 0;
@@ -64,17 +64,17 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
     @cloneable private _requiredHzUserDefined: boolean = false;
 
     public override readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        ...TransformNode.TRANSFORM_INPUT_PORTS, // local, parent_world (shared assembly placement)
-        { slot: "force_x", optional: true, type: "float" },
-        { slot: "force_y", optional: true, type: "float" },
-        { slot: "force_z", optional: true, type: "float" },
+        ...TransformNode.TRANSFORM_INPUT_PORTS, // local, parentWorld (shared assembly placement)
+        { slot: "forceX", optional: true, type: "float" },
+        { slot: "forceY", optional: true, type: "float" },
+        { slot: "forceZ", optional: true, type: "float" },
         { slot: "dt", optional: true, type: "float" },
     ];
     public override readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
         ...TransformNode.TRANSFORM_OUTPUT_PORTS, // world
-        { slot: "accel_x", optional: false, type: "float" },
-        { slot: "accel_y", optional: false, type: "float" },
-        { slot: "accel_z", optional: false, type: "float" },
+        { slot: "accelerationX", optional: false, type: "float" },
+        { slot: "accelerationY", optional: false, type: "float" },
+        { slot: "accelerationZ", optional: false, type: "float" },
     ];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
@@ -107,66 +107,66 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
             this._massZ = n;
         });
     }
-    @editable("number", { unit: "Hz" }) public get fnX(): number {
-        return this._fnX;
+    @editable("number", { unit: "Hz" }) public get naturalFrequencyX(): number {
+        return this._naturalFrequencyX;
     }
-    public set fnX(v: number) {
-        this.setField("fnX", this._fnX, v, (n) => {
-            this._fnX = n;
+    public set naturalFrequencyX(v: number) {
+        this.setField("naturalFrequencyX", this._naturalFrequencyX, v, (n) => {
+            this._naturalFrequencyX = n;
         });
         this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number", { unit: "Hz" }) public get fnY(): number {
-        return this._fnY;
+    @editable("number", { unit: "Hz" }) public get naturalFrequencyY(): number {
+        return this._naturalFrequencyY;
     }
-    public set fnY(v: number) {
-        this.setField("fnY", this._fnY, v, (n) => {
-            this._fnY = n;
+    public set naturalFrequencyY(v: number) {
+        this.setField("naturalFrequencyY", this._naturalFrequencyY, v, (n) => {
+            this._naturalFrequencyY = n;
         });
         this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number", { unit: "Hz" }) public get fnZ(): number {
-        return this._fnZ;
+    @editable("number", { unit: "Hz" }) public get naturalFrequencyZ(): number {
+        return this._naturalFrequencyZ;
     }
-    public set fnZ(v: number) {
-        this.setField("fnZ", this._fnZ, v, (n) => {
-            this._fnZ = n;
+    public set naturalFrequencyZ(v: number) {
+        this.setField("naturalFrequencyZ", this._naturalFrequencyZ, v, (n) => {
+            this._naturalFrequencyZ = n;
         });
         this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number") public get zetaX(): number {
-        return this._zetaX;
+    @editable("number") public get dampingRatioX(): number {
+        return this._dampingRatioX;
     }
-    public set zetaX(v: number) {
-        this.setField("zetaX", this._zetaX, v, (n) => {
-            this._zetaX = n;
+    public set dampingRatioX(v: number) {
+        this.setField("dampingRatioX", this._dampingRatioX, v, (n) => {
+            this._dampingRatioX = n;
         });
     }
-    @editable("number") public get zetaY(): number {
-        return this._zetaY;
+    @editable("number") public get dampingRatioY(): number {
+        return this._dampingRatioY;
     }
-    public set zetaY(v: number) {
-        this.setField("zetaY", this._zetaY, v, (n) => {
-            this._zetaY = n;
+    public set dampingRatioY(v: number) {
+        this.setField("dampingRatioY", this._dampingRatioY, v, (n) => {
+            this._dampingRatioY = n;
         });
     }
-    @editable("number") public get zetaZ(): number {
-        return this._zetaZ;
+    @editable("number") public get dampingRatioZ(): number {
+        return this._dampingRatioZ;
     }
-    public set zetaZ(v: number) {
-        this.setField("zetaZ", this._zetaZ, v, (n) => {
-            this._zetaZ = n;
+    public set dampingRatioZ(v: number) {
+        this.setField("dampingRatioZ", this._dampingRatioZ, v, (n) => {
+            this._dampingRatioZ = n;
         });
     }
 
     // ── Viewables ──────────────────────────────────────────────────────
-    @viewable("number") public get accel_x(): number {
+    @viewable("number") public get accelerationX(): number {
         return this._accelX;
     }
-    @viewable("number") public get accel_y(): number {
+    @viewable("number") public get accelerationY(): number {
         return this._accelY;
     }
-    @viewable("number") public get accel_z(): number {
+    @viewable("number") public get accelerationZ(): number {
         return this._accelZ;
     }
 
@@ -184,20 +184,20 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
     }
 
     public computeRequiredHz(): number {
-        const fnMax = Math.max(this._fnX, this._fnY, this._fnZ, 1);
+        const fnMax = Math.max(this._naturalFrequencyX, this._naturalFrequencyY, this._naturalFrequencyZ, 1);
         return 8 * fnMax;
     }
 
-    @editable("number", { unit: "Hz" }) public get required_hz(): number {
+    @editable("number", { unit: "Hz" }) public get requiredSampleRateHz(): number {
         return this.requiredHz;
     }
-    public set required_hz(v: number) {
+    public set requiredSampleRateHz(v: number) {
         if (!Number.isFinite(v) || v <= 0) {
             if (this._requiredHzUserDefined || this._requiredHzValue !== 0) {
                 const prev = this.requiredHz;
                 this._requiredHzUserDefined = false;
                 this._requiredHzValue = 0;
-                this.notifyPropertyChanged("required_hz", prev, this.requiredHz);
+                this.notifyPropertyChanged("requiredSampleRateHz", prev, this.requiredHz);
             }
             return;
         }
@@ -205,13 +205,13 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
         if (this._requiredHzValue !== v || !this._requiredHzUserDefined) {
             this._requiredHzValue = v;
             this._requiredHzUserDefined = true;
-            this.notifyPropertyChanged("required_hz", prev, v);
+            this.notifyPropertyChanged("requiredSampleRateHz", prev, v);
         }
     }
 
     private _notifyRequiredHzMayHaveChanged(): void {
         if (this._requiredHzUserDefined && this._requiredHzValue > 0) return;
-        this.notifyPropertyChanged("required_hz", null, this.requiredHz);
+        this.notifyPropertyChanged("requiredSampleRateHz", null, this.requiredHz);
     }
 
     // ── Runtime ────────────────────────────────────────────────────────
@@ -219,20 +219,20 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
         super.reset(session); // world -> identity
         this._posX = this._posY = this._posZ = 0;
         this._velX = this._velY = this._velZ = 0;
-        this.setField("accel_x", this._accelX, 0, (n) => {
+        this.setField("accelerationX", this._accelX, 0, (n) => {
             this._accelX = n;
         });
-        this.setField("accel_y", this._accelY, 0, (n) => {
+        this.setField("accelerationY", this._accelY, 0, (n) => {
             this._accelY = n;
         });
-        this.setField("accel_z", this._accelZ, 0, (n) => {
+        this.setField("accelerationZ", this._accelZ, 0, (n) => {
             this._accelZ = n;
         });
         this._lastT = -1;
     }
 
     public override fire(session: ISession, t: number): void {
-        // TransformNode hop: consume local / parent_world, set + publish world.
+        // TransformNode hop: consume local / parentWorld, set + publish world.
         super.fire(session, t);
 
         const links = session.graph.links as ReadonlyArray<IChannel>;
@@ -248,9 +248,9 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
             if (idx < 0 || !session.linkStates[idx].ready) continue;
             const value = session.consume(idx);
             if (typeof value !== "number") continue;
-            if (slot === "force_x") fx = value;
-            else if (slot === "force_y") fy = value;
-            else if (slot === "force_z") fz = value;
+            if (slot === "forceX") fx = value;
+            else if (slot === "forceY") fy = value;
+            else if (slot === "forceZ") fz = value;
             else if (slot === "dt") dtIn = value;
         }
 
@@ -264,23 +264,23 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
         const dt = dtIn >= 0 ? dtIn : Math.max(0, t - this._lastT);
         this._lastT = t;
 
-        const ax = this._stepAxis(this._massX, this._fnX, this._zetaX, this._posX, this._velX, fx, dt);
+        const ax = this._stepAxis(this._massX, this._naturalFrequencyX, this._dampingRatioX, this._posX, this._velX, fx, dt);
         this._posX = ax.pos;
         this._velX = ax.vel;
-        const ay = this._stepAxis(this._massY, this._fnY, this._zetaY, this._posY, this._velY, fy, dt);
+        const ay = this._stepAxis(this._massY, this._naturalFrequencyY, this._dampingRatioY, this._posY, this._velY, fy, dt);
         this._posY = ay.pos;
         this._velY = ay.vel;
-        const az = this._stepAxis(this._massZ, this._fnZ, this._zetaZ, this._posZ, this._velZ, fz, dt);
+        const az = this._stepAxis(this._massZ, this._naturalFrequencyZ, this._dampingRatioZ, this._posZ, this._velZ, fz, dt);
         this._posZ = az.pos;
         this._velZ = az.vel;
 
-        this.setField("accel_x", this._accelX, ax.accel, (n) => {
+        this.setField("accelerationX", this._accelX, ax.accel, (n) => {
             this._accelX = n;
         });
-        this.setField("accel_y", this._accelY, ay.accel, (n) => {
+        this.setField("accelerationY", this._accelY, ay.accel, (n) => {
             this._accelY = n;
         });
-        this.setField("accel_z", this._accelZ, az.accel, (n) => {
+        this.setField("accelerationZ", this._accelZ, az.accel, (n) => {
             this._accelZ = n;
         });
         this._publish(session, links);
@@ -316,9 +316,9 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
             if (!link.enabled) continue;
             const idx = links.indexOf(link);
             if (idx < 0) continue;
-            if (link.slot === "accel_x") session.publish(idx, this._accelX);
-            else if (link.slot === "accel_y") session.publish(idx, this._accelY);
-            else if (link.slot === "accel_z") session.publish(idx, this._accelZ);
+            if (link.slot === "accelerationX") session.publish(idx, this._accelX);
+            else if (link.slot === "accelerationY") session.publish(idx, this._accelY);
+            else if (link.slot === "accelerationZ") session.publish(idx, this._accelZ);
         }
     }
 }

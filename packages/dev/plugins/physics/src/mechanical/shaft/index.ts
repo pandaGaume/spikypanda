@@ -13,13 +13,13 @@ export const shaftSubPlugin: IPlugin = {
             category: "Physics.Mechanical.Shaft",
             docPath: ctx.assetUrl("docs/physics/shaft/unbalance.md"),
             inputPorts: [
-                { slot: "signal_in", ...FLOAT_IN },
-                { slot: "omega", ...FLOAT_IN },
+                { slot: "inputSignal", ...FLOAT_IN },
+                { slot: "angularVelocity", ...FLOAT_IN },
                 { slot: "dt", ...FLOAT_IN },
             ],
             outputPorts: [
-                { slot: "signal_out", ...FLOAT_OUT },
-                { slot: "theta", ...FLOAT_OUT },
+                { slot: "outputSignal", ...FLOAT_OUT },
+                { slot: "shaftAngle", ...FLOAT_OUT },
             ],
         });
     },

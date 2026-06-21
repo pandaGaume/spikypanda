@@ -7,12 +7,12 @@
  * and the microgravity vanishing:
  *
  *   sag delta = (rotorMass * g_radial / bearingRadialStiffness / airGap)
- *               * cos(theta_m - g_angle)
+ *               * cos(rotorAngle - g_angle)
  *   F_radial_eff = nominalRadialPreload + rotorMass * g_radial
  *
  * Identity pose + Earth gravity (0,0,-9.81) -> g_body = (0,0,-9.81), so
  * g_radial = 9.81 and g_angle = atan2(-9.81, 0) = -pi/2. Aligning the
- * rotor at theta0 = -pi/2 makes cos(theta - g_angle) = 1, i.e. the sag
+ * rotor at initialRotorAngle = -pi/2 makes cos(theta - g_angle) = 1, i.e. the sag
  * delta equals the bare fractional gap modulation epsilon.
  */
 import { buildDefaultStateView, RuntimeGraphBuilder, Session, type SceneStateView } from "spikypanda-core";
@@ -29,7 +29,7 @@ function viewWithGravity(id: string, g: { x: number; y: number; z: number }): Sc
 
 function fireUnder(scene: SceneStateView | null, configure?: (n: ReturnType<typeof createPmsmMachineDqNode>) => void) {
     const node = createPmsmMachineDqNode();
-    node.theta0 = -Math.PI / 2; // align with Earth g_angle so cos() = 1
+    node.initialRotorAngle = -Math.PI / 2; // align with Earth g_angle so cos() = 1
     configure?.(node);
     const session = new Session(new RuntimeGraphBuilder().withMode("dynamic").withNodes(node).build());
     if (scene) session.sceneStateView = scene;
@@ -68,7 +68,7 @@ describe("PMSM intrinsic gravity coupling", () => {
 
     it("a per-node bound scene overrides the session scene (Earth motor in an Orbital session)", () => {
         const node = createPmsmMachineDqNode();
-        node.theta0 = -Math.PI / 2;
+        node.initialRotorAngle = -Math.PI / 2;
         const session = new Session(new RuntimeGraphBuilder().withMode("dynamic").withNodes(node).build());
         session.sceneStateView = viewWithGravity("session-orbital", ORBITAL); // session = microgravity
         node.setBoundSceneView(viewWithGravity("per-node-earth", EARTH)); // this motor lives on Earth

@@ -26,7 +26,7 @@ const SCENE_IN = { optional: true, type: "scene" } as const;
  *  transform pose + scene attach + variadic fault bank (fault_0 grows on connect). */
 const BASE_IN_PORTS = [
     { slot: "local", ...MAT44_IN },
-    { slot: "parent_world", ...MAT44_IN },
+    { slot: "parentWorld", ...MAT44_IN },
     { slot: "scene", ...SCENE_IN },
     { slot: "fault_0", ...FAULT_IN },
 ] as const;
@@ -40,20 +40,20 @@ export const motorBldcSubPlugin: IPlugin = {
             docPath: ctx.assetUrl("docs/physics/motor-bldc/bldc-dynamic.md"),
             inputPorts: [
                 ...BASE_IN_PORTS,
-                { slot: "V_a", ...FLOAT_IN },
-                { slot: "V_b", ...FLOAT_IN },
-                { slot: "V_c", ...FLOAT_IN },
-                { slot: "tau_load", ...FLOAT_IN },
+                { slot: "phaseVoltageA", ...FLOAT_IN },
+                { slot: "phaseVoltageB", ...FLOAT_IN },
+                { slot: "phaseVoltageC", ...FLOAT_IN },
+                { slot: "loadTorque", ...FLOAT_IN },
                 { slot: "dt", ...FLOAT_IN },
             ],
             outputPorts: [
                 TRANSFORM_OUT_PORT,
-                { slot: "i_a", ...FLOAT_OUT },
-                { slot: "i_b", ...FLOAT_OUT },
-                { slot: "i_c", ...FLOAT_OUT },
-                { slot: "omega", ...FLOAT_OUT },
-                { slot: "theta_m", ...FLOAT_OUT },
-                { slot: "tau_em", ...FLOAT_OUT },
+                { slot: "phaseCurrentA", ...FLOAT_OUT },
+                { slot: "phaseCurrentB", ...FLOAT_OUT },
+                { slot: "phaseCurrentC", ...FLOAT_OUT },
+                { slot: "angularVelocity", ...FLOAT_OUT },
+                { slot: "rotorAngle", ...FLOAT_OUT },
+                { slot: "electromagneticTorque", ...FLOAT_OUT },
             ],
         });
 
@@ -69,14 +69,14 @@ export const motorBldcSubPlugin: IPlugin = {
             category: "Physics.Electric.Motor.BLDC",
             docPath: ctx.assetUrl("docs/physics/motor-bldc/inverter.md"),
             inputPorts: [
-                { slot: "V_dc", ...FLOAT_IN },
-                { slot: "duty", ...FLOAT_IN },
-                { slot: "theta_e", ...FLOAT_IN },
+                { slot: "dcBusVoltage", ...FLOAT_IN },
+                { slot: "dutyCycle", ...FLOAT_IN },
+                { slot: "electricalAngle", ...FLOAT_IN },
             ],
             outputPorts: [
-                { slot: "V_a", ...FLOAT_OUT },
-                { slot: "V_b", ...FLOAT_OUT },
-                { slot: "V_c", ...FLOAT_OUT },
+                { slot: "phaseVoltageA", ...FLOAT_OUT },
+                { slot: "phaseVoltageB", ...FLOAT_OUT },
+                { slot: "phaseVoltageC", ...FLOAT_OUT },
                 { slot: "sector", ...FLOAT_OUT },
             ],
         });
@@ -86,11 +86,11 @@ export const motorBldcSubPlugin: IPlugin = {
             category: "Physics.Electric.Motor.BLDC",
             docPath: ctx.assetUrl("docs/physics/motor-bldc/speed-pi.md"),
             inputPorts: [
-                { slot: "omega_ref", ...FLOAT_IN },
-                { slot: "omega_measured", ...FLOAT_IN },
+                { slot: "angularVelocityReference", ...FLOAT_IN },
+                { slot: "measuredAngularVelocity", ...FLOAT_IN },
                 { slot: "dt", ...FLOAT_IN },
             ],
-            outputPorts: [{ slot: "duty", ...FLOAT_OUT }],
+            outputPorts: [{ slot: "dutyCycle", ...FLOAT_OUT }],
         });
     },
 };

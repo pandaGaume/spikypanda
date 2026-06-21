@@ -11,14 +11,14 @@
  * Harness choices (documented):
  *   - Same voltage-drive harness as the induction suite
  *     (induction-motor.test.ts pattern via bindDrivenInputs).
- *   - The PMSM starts AT synchronism (omega0 = omega_sync): a
+ *   - The PMSM starts AT synchronism (initialAngularVelocity = omega_sync): a
  *     synchronous machine has no asynchronous starting torque; real
  *     drives ramp the frequency, the test starts locked.
- *   - R = 2.0 (vs the 0.5 default): open-loop V/f operation of a
+ *   - armatureResistance = 2.0 (vs the 0.5 default): open-loop armatureVoltage/f operation of a
  *     low-inertia PMSM is marginally stable; raising the stator
- *     resistance damps the rotor swing mode (classic V/f stability
- *     result). With R = 0.5 the tau step makes the rotor hunt and slip
- *     poles; with R = 2.0 both regimes are locked and stationary.
+ *     resistance damps the rotor swing mode (classic armatureVoltage/f stability
+ *     result). With armatureResistance = 0.5 the tau step makes the rotor hunt and slip
+ *     poles; with armatureResistance = 2.0 both regimes are locked and stationary.
  *   - The fault channel is purely ELECTRICAL: speed returns to exactly
  *     omega_sync after the step (synchronous machine), only the load
  *     angle and the current amplitude change: monitoring the current
@@ -41,9 +41,9 @@ import { ENCODER_DIM, bindDrivenInputs, buildDiagnosticBytes, buildEncoderBytes,
 
 const TWO_PI = 2 * Math.PI;
 const F_ELEC = 100; // Hz electrical supply
-const DT = 5e-5; // 20 kHz solver (L/R = 1 ms at R = 2.0)
+const DT = 5e-5; // 20 kHz solver (armatureInductance/armatureResistance = 1 ms at armatureResistance = 2.0)
 const SAMPLES_PER_PERIOD = 200; // exact electrical period
-const V_PEAK = 36; // V phase peak (back-EMF at sync is 31.4 V)
+const V_PEAK = 36; // armatureVoltage phase peak (back-EMF at sync is 31.4 armatureVoltage)
 const R_STATOR = 2.0; // swing-mode damping, see header
 const TAU_NOMINAL = 0.05; // Nm
 const TAU_STEP = 1.0; // Nm (1.5 would lose synchronism)
@@ -74,34 +74,34 @@ const DIAG_B = [0, 0, 0];
 
 interface PmsmRun {
     ia: Float64Array;
-    omega: Float64Array;
+    angularVelocity: Float64Array;
     omegaSync: number;
 }
 
 function runPmsm(): PmsmRun {
     const node = new PmsmMotorDynamicNode();
-    node.R = R_STATOR;
-    const omegaSync = (TWO_PI * F_ELEC) / node.P;
-    node.omega0 = omegaSync;
+    node.armatureResistance = R_STATOR;
+    const omegaSync = (TWO_PI * F_ELEC) / node.polePairs;
+    node.initialAngularVelocity = omegaSync;
     node.reset(emptySession());
-    const drv = bindDrivenInputs(node, ["V_a", "V_b", "V_c", "tau_load"]);
+    const drv = bindDrivenInputs(node, ["phaseVoltageA", "phaseVoltageB", "phaseVoltageC", "loadTorque"]);
     const gauss = makeGaussian(0x9035);
     const n = Math.round(T_END / DT);
     const ia = new Float64Array(n);
-    const omega = new Float64Array(n);
+    const angularVelocity = new Float64Array(n);
     const w = TWO_PI * F_ELEC;
     for (let k = 0; k < n; k++) {
         const t = k * DT;
-        drv.set("V_a", V_PEAK * Math.sin(w * t));
-        drv.set("V_b", V_PEAK * Math.sin(w * t - TWO_PI / 3));
-        drv.set("V_c", V_PEAK * Math.sin(w * t + TWO_PI / 3));
-        drv.set("tau_load", t < T_STEP ? TAU_NOMINAL : TAU_STEP);
+        drv.set("phaseVoltageA", V_PEAK * Math.sin(w * t));
+        drv.set("phaseVoltageB", V_PEAK * Math.sin(w * t - TWO_PI / 3));
+        drv.set("phaseVoltageC", V_PEAK * Math.sin(w * t + TWO_PI / 3));
+        drv.set("loadTorque", t < T_STEP ? TAU_NOMINAL : TAU_STEP);
         drv.arm();
         node.fire(drv.session, t);
-        ia[k] = node.i_a + NOISE_STD * gauss();
-        omega[k] = node.omega;
+        ia[k] = node.phaseCurrentA + NOISE_STD * gauss();
+        angularVelocity[k] = node.angularVelocity;
     }
-    return { ia, omega, omegaSync };
+    return { ia, angularVelocity, omegaSync };
 }
 
 function envIndex(t: number): number {
@@ -118,7 +118,7 @@ describe("motorwatch PMSM end-to-end (SP2, motor-agnostic recipe)", () => {
         const lockedWithin = (fromT: number, toT: number): number => {
             let worst = 0;
             for (let k = Math.round(fromT / DT); k < Math.round(toT / DT); k++) {
-                worst = Math.max(worst, Math.abs(run.omega[k] - run.omegaSync));
+                worst = Math.max(worst, Math.abs(run.angularVelocity[k] - run.omegaSync));
             }
             return worst;
         };
@@ -132,7 +132,7 @@ describe("motorwatch PMSM end-to-end (SP2, motor-agnostic recipe)", () => {
         expect(feed[envIndex(2.5)]).toBeGreaterThan(0.55); // band 2 active
         expect(feed[envIndex(2.5)]).toBeLessThan(0.85);
 
-        // (b) Same device recipe as the induction flagship.
+        // (viscousFriction) Same device recipe as the induction flagship.
         const device = new MotorwatchDevice({ frameSize: FRAME_SIZE, deviceId: "edge-pmsm" });
         const encoderBytes = buildEncoderBytes(FRAME_SIZE);
         expect(device.loadEncoder(encoderBytes, { sha256: sha256Hex(encoderBytes), name: "pmsm-encoder.onnx" }).ok).toBe(true);

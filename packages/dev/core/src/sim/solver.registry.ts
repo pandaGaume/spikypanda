@@ -216,7 +216,7 @@ export const DEFAULT_SOLVER_KIND = "rk4-adaptive";
 // =====================================================================
 
 /**
- * Default merge strategy applied by the attachment helper before
+ * Default merge modulationStrategy applied by the attachment helper before
  * calling the factory:
  *
  *   For each numeric option key present on at least one leaf:
@@ -229,10 +229,7 @@ export const DEFAULT_SOLVER_KIND = "rk4-adaptive";
  * rules; this is just a convenient default applied before the factory
  * is called.
  */
-export function mergeSolverOptions(
-    base: ISolverOptions,
-    leafOverrides: ReadonlyArray<ISolverOptions | undefined>,
-): ISolverOptions {
+export function mergeSolverOptions(base: ISolverOptions, leafOverrides: ReadonlyArray<ISolverOptions | undefined>): ISolverOptions {
     const merged: Record<string, unknown> = { ...base };
     for (const overrides of leafOverrides) {
         if (!overrides) continue;

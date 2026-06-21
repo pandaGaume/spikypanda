@@ -270,7 +270,7 @@ describe("InProcessDeviceServer", () => {
             0, 0, 0, 1,
             0, 0, 0, 0,
         ], [0, 0, 0, 0]);
-        const evil = server.callTool("diagnostic_load_model", { model_bytes: fourScores, causes: ["a", "b", "c"], name: "diag-v2.onnx" }) as IDiagnosticLoadModelResult;
+        const evil = server.callTool("diagnostic_load_model", { model_bytes: fourScores, causes: ["a", "viscousFriction", "c"], name: "diag-v2.onnx" }) as IDiagnosticLoadModelResult;
         expect(isMcpError(evil)).toBe(false); // a rejected push is a report, not a protocol error
         expect(evil.ok).toBe(false);
         expect(evil.error).toMatch(/Output shape mismatch/);
@@ -289,7 +289,7 @@ describe("InProcessDeviceServer", () => {
         // static gate cannot catch the 3-scores-vs-4-causes mismatch;
         // the bank swap is legitimate and only the RUN fails.
         const dynamicOut = buildDiagnosticBytes(ENCODER_DIM, 3, DIAG_W5x3, [0, 0, 0], 0);
-        const result = server.callTool("diagnostic_load_model", { model_bytes: dynamicOut, causes: ["a", "b", "c", "d"], name: "diag-dyn.onnx" }) as IDiagnosticLoadModelResult;
+        const result = server.callTool("diagnostic_load_model", { model_bytes: dynamicOut, causes: ["a", "viscousFriction", "c", "d"], name: "diag-dyn.onnx" }) as IDiagnosticLoadModelResult;
         expect(isMcpError(result)).toBe(false);
         expect(result.ok).toBe(true); // the LOAD succeeded
         expect(result.ran).toBe(false); // the diagnosis did not run to completion

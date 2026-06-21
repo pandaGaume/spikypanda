@@ -7,16 +7,16 @@ import type { ICartesian, Nullable, IHasSampleRateRequirement, IFaultDescriptor 
  * numerics (implicit Euler on the 2x2 electrical system, implicit
  * mechanical, trapezoidal theta, same substep cap).
  *
- * State: i_d, i_q, omega_m, theta_m. Equations (salient via L_d != L_q):
+ * State: directAxisCurrent, quadratureAxisCurrent, omega_m, rotorAngle. Equations (salient via L_d != L_q):
  *
- *   V_d = R*i_d + L_d*di_d/dt - omega_e*L_q*i_q
- *   V_q = R*i_q + L_q*di_q/dt + omega_e*L_d*i_d + omega_e*lambda_m_eff
- *   T_e = (3/2)*p*(lambda_m_eff*i_q + (L_d - L_q)*i_d*i_q)
- *   J*domega_m/dt + B*omega_m = T_e - tau_load
+ *   V_d = armatureResistance*directAxisCurrent + L_d*di_d/dt - omega_e*L_q*quadratureAxisCurrent
+ *   V_q = armatureResistance*quadratureAxisCurrent + L_q*di_q/dt + omega_e*L_d*directAxisCurrent + omega_e*lambda_m_eff
+ *   T_e = (3/2)*p*(lambda_m_eff*quadratureAxisCurrent + (L_d - L_q)*directAxisCurrent*quadratureAxisCurrent)
+ *   rotorInertia*domega_m/dt + B*omega_m = T_e - loadTorque
  *   dtheta_m/dt = omega_m
  *
  * World object: like every other motor (DC, BLDC) this node extends
- * FaultableNode (-> TransformNode), so it carries the local / parent_world
+ * FaultableNode (-> TransformNode), so it carries the local / parentWorld
  * transform ports + a `world` output, reads environmental gravity from the
  * Scene via getScene(), and accepts perturbations on the variadic fault_N
  * bank. Two fault targets drive the gravity / MCSA study:
@@ -35,7 +35,7 @@ import type { ICartesian, Nullable, IHasSampleRateRequirement, IFaultDescriptor 
  * its bound scene's gravity. When `gravityCoupling` is on AND a scene is
  * bound, it computes its own rotor sag (rotor weight deflects the shaft,
  * modulating the air gap) and folds the resulting flux delta
- * epsilon*cos(theta_m - theta_grav) into lambda_m_eff, plus the
+ * epsilon*cos(rotorAngle - theta_grav) into lambda_m_eff, plus the
  * gravity-augmented bearing preloads (F_*_eff viewables). This is the
  * gravity -> MCSA signature, automatic: put the motor in a scene, it
  * responds; swap Earth -> Orbital and the sideband vanishes. The
@@ -45,22 +45,22 @@ import type { ICartesian, Nullable, IHasSampleRateRequirement, IFaultDescriptor 
  * gated on a BOUND scene (session.sceneStateView), not the per-node Earth
  * fallback, so headless drive validation with no scene stays gravity-free.
  *
- * Voltages V_a/V_b/V_c are line-neutral phase voltages (from an inverter
+ * Voltages phaseVoltageA/phaseVoltageB/phaseVoltageC are line-neutral phase voltages (from an inverter
  * or a composed 3-phase source). Decomposition-C: FOC, SVPWM and the
  * inverter are separate nodes; the gravity-coupling env models and the
- * faults are separate nodes feeding the fault bank / tau_load.
+ * faults are separate nodes feeding the fault bank / loadTorque.
  *
  * Defaults: Maxon ECX PRIME 6M/16L (the gravity-study reference).
  */
 export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, IHasSampleRateRequirement {
     // Electrical + mechanical parameters (SI). ECX PRIME 6M/16L defaults.
-    @cloneable private _R: number = 2.0; // stator resistance [ohm]
-    @cloneable private _Ld: number = 3e-4; // d-axis inductance [H]
-    @cloneable private _Lq: number = 3e-4; // q-axis inductance [H]
-    @cloneable private _lambdaM: number = 2e-3; // magnet flux linkage [Wb]
-    @cloneable private _P: number = 1; // pole pairs
-    @cloneable private _J: number = 1e-6; // rotor inertia [kg.m^2]
-    @cloneable private _b: number = 1e-7; // viscous friction [N.m.s/rad]
+    @cloneable private _armatureResistance: number = 2.0; // stator resistance [ohm]
+    @cloneable private _directAxisInductance: number = 3e-4; // d-axis inductance [H]
+    @cloneable private _quadratureAxisInductance: number = 3e-4; // q-axis inductance [H]
+    @cloneable private _magnetFluxLinkage: number = 2e-3; // magnet flux linkage [Wb]
+    @cloneable private _polePairs: number = 1; // pole pairs
+    @cloneable private _rotorInertia: number = 1e-6; // rotor inertia [kg.m^2]
+    @cloneable private _viscousFriction: number = 1e-7; // viscous friction [N.m.s/rad]
 
     // Intrinsic gravity-coupling parameters (rotor sag + bearing preload),
     // internalised from the legacy RotorSagModel / BearingPreloadModel.
@@ -72,10 +72,10 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     @cloneable private _nominalRadialPreload: number = 0; // N
     @cloneable private _umpRadialStiffness: number = 4000; // N/m (UMP -> housing vibration; 0 = none)
 
-    @cloneable private _id0: number = 0;
-    @cloneable private _iq0: number = 0;
-    @cloneable private _omega0: number = 0;
-    @cloneable private _theta0: number = 0;
+    @cloneable private _initialDirectAxisCurrent: number = 0;
+    @cloneable private _initialQuadratureAxisCurrent: number = 0;
+    @cloneable private _initialAngularVelocity: number = 0;
+    @cloneable private _initialRotorAngle: number = 0;
 
     // State.
     @cloneable private _iD: number = 0;
@@ -109,27 +109,27 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     @cloneable private _requiredHzUserDefined: boolean = false;
 
     public override readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        ...FaultableNode.BASE_INPUT_PORTS, // local, parent_world, fault_0
-        { slot: "V_a", optional: true, type: "float" },
-        { slot: "V_b", optional: true, type: "float" },
-        { slot: "V_c", optional: true, type: "float" },
-        { slot: "tau_load", optional: true, type: "float" },
+        ...FaultableNode.BASE_INPUT_PORTS, // local, parentWorld, fault_0
+        { slot: "phaseVoltageA", optional: true, type: "float" },
+        { slot: "phaseVoltageB", optional: true, type: "float" },
+        { slot: "phaseVoltageC", optional: true, type: "float" },
+        { slot: "loadTorque", optional: true, type: "float" },
         { slot: "dt", optional: true, type: "float" },
     ];
     public override readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
         ...FaultableNode.BASE_OUTPUT_PORTS, // world
-        { slot: "i_d", optional: false, type: "float" },
-        { slot: "i_q", optional: false, type: "float" },
-        { slot: "i_a", optional: false, type: "float" },
-        { slot: "i_b", optional: false, type: "float" },
-        { slot: "i_c", optional: false, type: "float" },
-        { slot: "omega", optional: false, type: "float" },
-        { slot: "theta_m", optional: false, type: "float" },
-        { slot: "tau_em", optional: false, type: "float" },
+        { slot: "directAxisCurrent", optional: false, type: "float" },
+        { slot: "quadratureAxisCurrent", optional: false, type: "float" },
+        { slot: "phaseCurrentA", optional: false, type: "float" },
+        { slot: "phaseCurrentB", optional: false, type: "float" },
+        { slot: "phaseCurrentC", optional: false, type: "float" },
+        { slot: "angularVelocity", optional: false, type: "float" },
+        { slot: "rotorAngle", optional: false, type: "float" },
+        { slot: "electromagneticTorque", optional: false, type: "float" },
         // Intrinsic vibration: the rotor sag / UMP radial force the motor
         // exerts on its housing, in the body radial plane (1x f_mech).
-        { slot: "force_y", optional: false, type: "float" },
-        { slot: "force_z", optional: false, type: "float" },
+        { slot: "forceY", optional: false, type: "float" },
+        { slot: "forceZ", optional: false, type: "float" },
     ];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
@@ -137,47 +137,47 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     }
 
     // ── Editables ──────────────────────────────────────────────────────
-    @editable("number", { unit: "ohm" }) public get R(): number {
-        return this._R;
+    @editable("number", { unit: "ohm" }) public get armatureResistance(): number {
+        return this._armatureResistance;
     }
-    public set R(v: number) {
-        if (this.setField("R", this._R, v, (n) => (this._R = n))) this._notifyRequiredHzMayHaveChanged();
+    public set armatureResistance(v: number) {
+        if (this.setField("armatureResistance", this._armatureResistance, v, (n) => (this._armatureResistance = n))) this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number", { unit: "H" }) public get Ld(): number {
-        return this._Ld;
+    @editable("number", { unit: "H" }) public get directAxisInductance(): number {
+        return this._directAxisInductance;
     }
-    public set Ld(v: number) {
-        if (this.setField("Ld", this._Ld, v, (n) => (this._Ld = n))) this._notifyRequiredHzMayHaveChanged();
+    public set directAxisInductance(v: number) {
+        if (this.setField("directAxisInductance", this._directAxisInductance, v, (n) => (this._directAxisInductance = n))) this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number", { unit: "H" }) public get Lq(): number {
-        return this._Lq;
+    @editable("number", { unit: "H" }) public get quadratureAxisInductance(): number {
+        return this._quadratureAxisInductance;
     }
-    public set Lq(v: number) {
-        if (this.setField("Lq", this._Lq, v, (n) => (this._Lq = n))) this._notifyRequiredHzMayHaveChanged();
+    public set quadratureAxisInductance(v: number) {
+        if (this.setField("quadratureAxisInductance", this._quadratureAxisInductance, v, (n) => (this._quadratureAxisInductance = n))) this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number", { unit: "Wb" }) public get lambdaM(): number {
-        return this._lambdaM;
+    @editable("number", { unit: "Wb" }) public get magnetFluxLinkage(): number {
+        return this._magnetFluxLinkage;
     }
-    public set lambdaM(v: number) {
-        this.setField("lambdaM", this._lambdaM, v, (n) => (this._lambdaM = n));
+    public set magnetFluxLinkage(v: number) {
+        this.setField("magnetFluxLinkage", this._magnetFluxLinkage, v, (n) => (this._magnetFluxLinkage = n));
     }
-    @editable("number") public get P(): number {
-        return this._P;
+    @editable("number") public get polePairs(): number {
+        return this._polePairs;
     }
-    public set P(v: number) {
-        if (this.setField("P", this._P, v, (n) => (this._P = n))) this._notifyRequiredHzMayHaveChanged();
+    public set polePairs(v: number) {
+        if (this.setField("polePairs", this._polePairs, v, (n) => (this._polePairs = n))) this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number", { unit: "kg.m^2" }) public get J(): number {
-        return this._J;
+    @editable("number", { unit: "kg.m^2" }) public get rotorInertia(): number {
+        return this._rotorInertia;
     }
-    public set J(v: number) {
-        if (this.setField("J", this._J, v, (n) => (this._J = n))) this._notifyRequiredHzMayHaveChanged();
+    public set rotorInertia(v: number) {
+        if (this.setField("rotorInertia", this._rotorInertia, v, (n) => (this._rotorInertia = n))) this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number") public get b(): number {
-        return this._b;
+    @editable("number") public get viscousFriction(): number {
+        return this._viscousFriction;
     }
-    public set b(v: number) {
-        if (this.setField("b", this._b, v, (n) => (this._b = n))) this._notifyRequiredHzMayHaveChanged();
+    public set viscousFriction(v: number) {
+        if (this.setField("viscousFriction", this._viscousFriction, v, (n) => (this._viscousFriction = n))) this._notifyRequiredHzMayHaveChanged();
     }
 
     // ── Intrinsic gravity coupling ─────────────────────────────────────
@@ -241,54 +241,54 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
             this._sagConstantsDirty = true;
         });
     }
-    @editable("number") public get id0(): number {
-        return this._id0;
+    @editable("number") public get initialDirectAxisCurrent(): number {
+        return this._initialDirectAxisCurrent;
     }
-    public set id0(v: number) {
-        this.setField("id0", this._id0, v, (n) => (this._id0 = n));
+    public set initialDirectAxisCurrent(v: number) {
+        this.setField("initialDirectAxisCurrent", this._initialDirectAxisCurrent, v, (n) => (this._initialDirectAxisCurrent = n));
     }
-    @editable("number") public get iq0(): number {
-        return this._iq0;
+    @editable("number") public get initialQuadratureAxisCurrent(): number {
+        return this._initialQuadratureAxisCurrent;
     }
-    public set iq0(v: number) {
-        this.setField("iq0", this._iq0, v, (n) => (this._iq0 = n));
+    public set initialQuadratureAxisCurrent(v: number) {
+        this.setField("initialQuadratureAxisCurrent", this._initialQuadratureAxisCurrent, v, (n) => (this._initialQuadratureAxisCurrent = n));
     }
-    @editable("number") public get omega0(): number {
-        return this._omega0;
+    @editable("number") public get initialAngularVelocity(): number {
+        return this._initialAngularVelocity;
     }
-    public set omega0(v: number) {
-        this.setField("omega0", this._omega0, v, (n) => (this._omega0 = n));
+    public set initialAngularVelocity(v: number) {
+        this.setField("initialAngularVelocity", this._initialAngularVelocity, v, (n) => (this._initialAngularVelocity = n));
     }
-    @editable("number") public get theta0(): number {
-        return this._theta0;
+    @editable("number") public get initialRotorAngle(): number {
+        return this._initialRotorAngle;
     }
-    public set theta0(v: number) {
-        this.setField("theta0", this._theta0, v, (n) => (this._theta0 = n));
+    public set initialRotorAngle(v: number) {
+        this.setField("initialRotorAngle", this._initialRotorAngle, v, (n) => (this._initialRotorAngle = n));
     }
 
     // ── Viewables ──────────────────────────────────────────────────────
-    @viewable("number") public get i_d(): number {
+    @viewable("number") public get directAxisCurrent(): number {
         return this._iD;
     }
-    @viewable("number") public get i_q(): number {
+    @viewable("number") public get quadratureAxisCurrent(): number {
         return this._iQ;
     }
-    @viewable("number") public get i_a(): number {
+    @viewable("number") public get phaseCurrentA(): number {
         return this._iA;
     }
-    @viewable("number") public get i_b(): number {
+    @viewable("number") public get phaseCurrentB(): number {
         return this._iB;
     }
-    @viewable("number") public get i_c(): number {
+    @viewable("number") public get phaseCurrentC(): number {
         return this._iC;
     }
-    @viewable("number") public get omega(): number {
+    @viewable("number") public get angularVelocity(): number {
         return this._omega;
     }
-    @viewable("number") public get theta_m(): number {
+    @viewable("number") public get rotorAngle(): number {
         return this._theta;
     }
-    @viewable("number") public get tau_em(): number {
+    @viewable("number") public get electromagneticTorque(): number {
         return this._tauEm;
     }
 
@@ -312,20 +312,23 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     }
     /** UMP rotor-sag vibration force the motor exerts on its housing
      *  (body radial plane, 1x f_mech). 0 without gravity / scene / UMP. */
-    @viewable("number", { unit: "N" }) public get force_y(): number {
+    @viewable("number", { unit: "N" }) public get forceY(): number {
         return this._fy;
     }
-    @viewable("number", { unit: "N" }) public get force_z(): number {
+    @viewable("number", { unit: "N" }) public get forceZ(): number {
         return this._fz;
     }
 
     // ── Sample-rate requirement (mirror of the BLDC/PMSM node) ─────────
     public computeRequiredHz(): number {
-        const tauE = this._Ld > 0 && this._R > 0 ? Math.min(this._Ld, this._Lq) / this._R : Infinity;
-        const tauM = this._J > 0 && this._b > 0 ? this._J / this._b : Infinity;
+        const tauE =
+            this._directAxisInductance > 0 && this._armatureResistance > 0
+                ? Math.min(this._directAxisInductance, this._quadratureAxisInductance) / this._armatureResistance
+                : Infinity;
+        const tauM = this._rotorInertia > 0 && this._viscousFriction > 0 ? this._rotorInertia / this._viscousFriction : Infinity;
         const tauMin = Math.min(tauE, tauM);
         const omegaMax = 1000;
-        const fe = (this._P * omegaMax) / (2 * Math.PI);
+        const fe = (this._polePairs * omegaMax) / (2 * Math.PI);
         const fromTau = Number.isFinite(tauMin) && tauMin > 0 ? 10 / tauMin : 0;
         const hz = Math.max(fromTau, 10 * fe);
         if (!Number.isFinite(hz) || hz <= 0) return 5000;
@@ -335,16 +338,16 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
         if (this._requiredHzUserDefined && this._requiredHzValue > 0) return this._requiredHzValue;
         return this.computeRequiredHz();
     }
-    @editable("number", { unit: "Hz" }) public get required_hz(): number {
+    @editable("number", { unit: "Hz" }) public get requiredSampleRateHz(): number {
         return this.requiredHz;
     }
-    public set required_hz(v: number) {
+    public set requiredSampleRateHz(v: number) {
         if (!Number.isFinite(v) || v <= 0) {
             if (this._requiredHzUserDefined || this._requiredHzValue !== 0) {
                 const prev = this.requiredHz;
                 this._requiredHzUserDefined = false;
                 this._requiredHzValue = 0;
-                this.notifyPropertyChanged("required_hz", prev, this.requiredHz);
+                this.notifyPropertyChanged("requiredSampleRateHz", prev, this.requiredHz);
             }
             return;
         }
@@ -352,12 +355,12 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
         if (this._requiredHzValue !== v || !this._requiredHzUserDefined) {
             this._requiredHzValue = v;
             this._requiredHzUserDefined = true;
-            this.notifyPropertyChanged("required_hz", prev, v);
+            this.notifyPropertyChanged("requiredSampleRateHz", prev, v);
         }
     }
     private _notifyRequiredHzMayHaveChanged(): void {
         if (this._requiredHzUserDefined && this._requiredHzValue > 0) return;
-        this.notifyPropertyChanged("required_hz", null, this.requiredHz);
+        this.notifyPropertyChanged("requiredSampleRateHz", null, this.requiredHz);
     }
 
     // ── Fault coherence ────────────────────────────────────────────────
@@ -373,13 +376,13 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     // ── Runtime ────────────────────────────────────────────────────────
     public override reset(session: ISession): void {
         super.reset(session); // transform world + fault accumulator
-        this._iD = this._id0;
-        this._iQ = this._iq0;
-        this._omega = this._omega0;
-        this._theta = this._theta0;
-        const [a, b, c] = PmsmMachineDqNode._dqToAbc(this._iD, this._iQ, this._P * this._theta);
+        this._iD = this._initialDirectAxisCurrent;
+        this._iQ = this._initialQuadratureAxisCurrent;
+        this._omega = this._initialAngularVelocity;
+        this._theta = this._initialRotorAngle;
+        const [a, viscousFriction, c] = PmsmMachineDqNode._dqToAbc(this._iD, this._iQ, this._polePairs * this._theta);
         this._iA = a;
-        this._iB = b;
+        this._iB = viscousFriction;
         this._iC = c;
         this._tauEm = 0;
         this._lastT = -1;
@@ -396,7 +399,7 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     }
 
     public override fire(session: ISession, t: number): void {
-        // 1) TransformNode hop (world = parent_world x local, publishes
+        // 1) TransformNode hop (world = parentWorld x local, publishes
         //    `world`) + FaultableNode hop (accumulates fault_N tokens).
         super.fire(session, t);
 
@@ -407,20 +410,20 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
             tauLoad = 0,
             dtIn = -1;
         // Consume only this node's data slots; the transform (local /
-        // parent_world) and fault_N tokens were already consumed by
+        // parentWorld) and fault_N tokens were already consumed by
         // super.fire(), so we leave them untouched here.
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const slot = inSlotOf(link);
-            if (slot !== "V_a" && slot !== "V_b" && slot !== "V_c" && slot !== "tau_load" && slot !== "dt") continue;
+            if (slot !== "phaseVoltageA" && slot !== "phaseVoltageB" && slot !== "phaseVoltageC" && slot !== "loadTorque" && slot !== "dt") continue;
             const idx = links.indexOf(link);
             if (idx < 0 || !session.linkStates[idx].ready) continue;
             const value = session.consume(idx);
             if (typeof value !== "number") continue;
-            if (slot === "V_a") vA = value;
-            else if (slot === "V_b") vB = value;
-            else if (slot === "V_c") vC = value;
-            else if (slot === "tau_load") tauLoad = value;
+            if (slot === "phaseVoltageA") vA = value;
+            else if (slot === "phaseVoltageB") vB = value;
+            else if (slot === "phaseVoltageC") vC = value;
+            else if (slot === "loadTorque") tauLoad = value;
             else if (slot === "dt") dtIn = value;
         }
 
@@ -442,7 +445,7 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
         if (dt > 0) {
             // lambda_m_eff held constant across the substeps of this fire,
             // matching the legacy per-advance flux envelope.
-            const lambdaMEff = this._lambdaM * fluxEnv;
+            const lambdaMEff = this._magnetFluxLinkage * fluxEnv;
             const maxSubstep = this._maxSubstep();
             let elapsed = 0;
             while (elapsed < dt) {
@@ -450,26 +453,26 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
                 this._integrateOneSubstep(h, lambdaMEff, vA, vB, vC, tauEffLoad);
                 elapsed += h;
             }
-            const [a, b, c] = PmsmMachineDqNode._dqToAbc(this._iD, this._iQ, this._P * this._theta);
+            const [a, viscousFriction, c] = PmsmMachineDqNode._dqToAbc(this._iD, this._iQ, this._polePairs * this._theta);
             this._iA = a;
-            this._iB = b;
+            this._iB = viscousFriction;
             this._iC = c;
-            const reluctant = (this._Ld - this._Lq) * this._iD * this._iQ;
-            this._tauEm = 1.5 * this._P * (lambdaMEff * this._iQ + reluctant);
+            const reluctant = (this._directAxisInductance - this._quadratureAxisInductance) * this._iD * this._iQ;
+            this._tauEm = 1.5 * this._polePairs * (lambdaMEff * this._iQ + reluctant);
         }
 
         this._publish(session, links);
     }
 
     private _maxSubstep(): number {
-        const tauElec = Math.min(this._Ld, this._Lq) / this._R;
-        const tauMech = this._b > 0 ? this._J / this._b : Number.POSITIVE_INFINITY;
+        const tauElec = Math.min(this._directAxisInductance, this._quadratureAxisInductance) / this._armatureResistance;
+        const tauMech = this._viscousFriction > 0 ? this._rotorInertia / this._viscousFriction : Number.POSITIVE_INFINITY;
         return Math.max(5e-6, Math.min(tauElec / 10, tauMech / 10));
     }
 
     /**
      * Fold the bound scene's gravity into this machine's coupling. The
-     * body-frame gravity (g_body = R^T * g_world) is cached + dirty-checked
+     * body-frame gravity (g_body = armatureResistance^T * g_world) is cached + dirty-checked
      * by the TransformNode base (recomputed only when the gravity value or
      * this machine's orientation changes); from it we recompute the rotor-
      * frame constants in lock-step, then apply the theta-dependent air-gap
@@ -480,7 +483,7 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
      * headless drive with no scene stays gravity-free and bit-exact with the
      * legacy oracle. Faithful to RotorSagModel / BearingPreloadModel:
      *   sag     = (rotorMass*g_radial / bearingRadialStiffness / airGap)
-     *             * cos(theta_m - g_angle)
+     *             * cos(rotorAngle - g_angle)
      *   F_*_eff = nominal_* + rotorMass * g_{axial,radial}
      */
     protected override _updateGravityCoupling(session: ISession): boolean {
@@ -537,30 +540,30 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     // trapezoidal theta, omega_e held at its pre-step value. Numerically
     // identical to the legacy PmsmMachine._integrateOneSubstep.
     private _integrateOneSubstep(dt: number, lambdaMEff: number, vA: number, vB: number, vC: number, tauLoad: number): void {
-        const Rs = this._R;
-        const Ld = this._Ld;
-        const Lq = this._Lq;
-        const p = this._P;
-        const J = this._J;
-        const B = this._b;
+        const statorResistance = this._armatureResistance;
+        const directAxisInductance = this._directAxisInductance;
+        const quadratureAxisInductance = this._quadratureAxisInductance;
+        const p = this._polePairs;
+        const rotorInertia = this._rotorInertia;
+        const B = this._viscousFriction;
 
         const thetaE = p * this._theta;
         const omegaE = p * this._omega;
         const [vD, vQ] = PmsmMachineDqNode._abcToDq(vA, vB, vC, thetaE);
 
-        const a11 = Ld / dt + Rs;
-        const a12 = -omegaE * Lq;
-        const a21 = omegaE * Ld;
-        const a22 = Lq / dt + Rs;
-        const b1 = (Ld / dt) * this._iD + vD;
-        const b2 = (Lq / dt) * this._iQ + vQ - omegaE * lambdaMEff;
+        const a11 = directAxisInductance / dt + statorResistance;
+        const a12 = -omegaE * quadratureAxisInductance;
+        const a21 = omegaE * directAxisInductance;
+        const a22 = quadratureAxisInductance / dt + statorResistance;
+        const b1 = (directAxisInductance / dt) * this._iD + vD;
+        const b2 = (quadratureAxisInductance / dt) * this._iQ + vQ - omegaE * lambdaMEff;
         const det = a11 * a22 - a12 * a21;
         const iDNew = (a22 * b1 - a12 * b2) / det;
         const iQNew = (a11 * b2 - a21 * b1) / det;
 
-        const tEReluctant = (Ld - Lq) * iDNew * iQNew;
+        const tEReluctant = (directAxisInductance - quadratureAxisInductance) * iDNew * iQNew;
         const tENew = 1.5 * p * (lambdaMEff * iQNew + tEReluctant);
-        const omegaMNew = ((J / dt) * this._omega + tENew - tauLoad) / (J / dt + B);
+        const omegaMNew = ((rotorInertia / dt) * this._omega + tENew - tauLoad) / (rotorInertia / dt + B);
         const thetaMNew = this._theta + 0.5 * (this._omega + omegaMNew) * dt;
 
         this._iD = iDNew;
@@ -576,34 +579,34 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
             const idx = links.indexOf(link);
             if (idx < 0) continue;
             switch (link.slot) {
-                case "i_d":
+                case "directAxisCurrent":
                     session.publish(idx, this._iD);
                     break;
-                case "i_q":
+                case "quadratureAxisCurrent":
                     session.publish(idx, this._iQ);
                     break;
-                case "i_a":
+                case "phaseCurrentA":
                     session.publish(idx, this._iA);
                     break;
-                case "i_b":
+                case "phaseCurrentB":
                     session.publish(idx, this._iB);
                     break;
-                case "i_c":
+                case "phaseCurrentC":
                     session.publish(idx, this._iC);
                     break;
-                case "omega":
+                case "angularVelocity":
                     session.publish(idx, this._omega);
                     break;
-                case "theta_m":
+                case "rotorAngle":
                     session.publish(idx, this._theta);
                     break;
-                case "tau_em":
+                case "electromagneticTorque":
                     session.publish(idx, this._tauEm);
                     break;
-                case "force_y":
+                case "forceY":
                     session.publish(idx, this._fy);
                     break;
-                case "force_z":
+                case "forceZ":
                     session.publish(idx, this._fz);
                     break;
             }
@@ -611,9 +614,9 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     }
 
     // ── Amplitude-invariant Clarke + Park (exact legacy convention) ────
-    private static _abcToDq(a: number, b: number, c: number, thetaE: number): [number, number] {
-        const alpha = (2 / 3) * (a - 0.5 * b - 0.5 * c);
-        const beta = (2 / 3) * (0.5 * Math.sqrt(3)) * (b - c);
+    private static _abcToDq(a: number, viscousFriction: number, c: number, thetaE: number): [number, number] {
+        const alpha = (2 / 3) * (a - 0.5 * viscousFriction - 0.5 * c);
+        const beta = (2 / 3) * (0.5 * Math.sqrt(3)) * (viscousFriction - c);
         const cs = Math.cos(thetaE);
         const sn = Math.sin(thetaE);
         return [alpha * cs + beta * sn, -alpha * sn + beta * cs];

@@ -13,7 +13,7 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  * Same Box-Muller + LCG deterministic noise as Tachymeter.
  */
 export class AccelerometerNode extends RuntimeNode implements IDeclaresPorts {
-    @cloneable private _noiseStd: number = 0.001;
+    @cloneable private _noiseStdDev: number = 0.001;
     @cloneable private _resolution: number = 1e-4;
     @cloneable private _bandwidthHz: number = 2000;
     @cloneable private _seed: number = 1;
@@ -27,18 +27,18 @@ export class AccelerometerNode extends RuntimeNode implements IDeclaresPorts {
         { slot: "vibration", optional: true, type: "float" },
         { slot: "dt", optional: true, type: "float" },
     ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "vibration_measured", optional: false, type: "float" }];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "measuredVibration", optional: false, type: "float" }];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
     }
 
-    @editable("number") public get noiseStd(): number {
-        return this._noiseStd;
+    @editable("number") public get noiseStdDev(): number {
+        return this._noiseStdDev;
     }
-    public set noiseStd(v: number) {
-        this.setField("noiseStd", this._noiseStd, v, (n) => {
-            this._noiseStd = n;
+    public set noiseStdDev(v: number) {
+        this.setField("noiseStdDev", this._noiseStdDev, v, (n) => {
+            this._noiseStdDev = n;
         });
     }
     @editable("number") public get resolution(): number {
@@ -66,7 +66,7 @@ export class AccelerometerNode extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @viewable("number") public get vibration_measured(): number {
+    @viewable("number") public get measuredVibration(): number {
         return this._measured;
     }
     @viewable("number") public get filtered(): number {
@@ -77,7 +77,7 @@ export class AccelerometerNode extends RuntimeNode implements IDeclaresPorts {
         this.setField("filtered", this._filtered, 0, (n) => {
             this._filtered = n;
         });
-        this.setField("vibration_measured", this._measured, 0, (n) => {
+        this.setField("measuredVibration", this._measured, 0, (n) => {
             this._measured = n;
         });
         this._rng = Math.max(1, Math.floor(this._seed));
@@ -110,7 +110,7 @@ export class AccelerometerNode extends RuntimeNode implements IDeclaresPorts {
             newFiltered = this._filtered + alpha * (vib - this._filtered);
         }
 
-        const noise = this._noiseStd > 0 ? this._noiseStd * this._gaussian() : 0;
+        const noise = this._noiseStdDev > 0 ? this._noiseStdDev * this._gaussian() : 0;
         let measured = newFiltered + noise;
         if (this._resolution > 0) {
             measured = Math.round(measured / this._resolution) * this._resolution;
@@ -119,11 +119,11 @@ export class AccelerometerNode extends RuntimeNode implements IDeclaresPorts {
         this.setField("filtered", this._filtered, newFiltered, (n) => {
             this._filtered = n;
         });
-        this.setField("vibration_measured", this._measured, measured, (n) => {
+        this.setField("measuredVibration", this._measured, measured, (n) => {
             this._measured = n;
         });
         for (const link of this.onsc<IChannel>()) {
-            if (link.slot !== "vibration_measured" || !link.enabled) continue;
+            if (link.slot !== "measuredVibration" || !link.enabled) continue;
             const idx = links.indexOf(link);
             if (idx < 0) continue;
             session.publish(idx, measured);

@@ -14,12 +14,7 @@
  *   7. Sample-rate requirement: defaults + editable accessor.
  */
 
-import {
-    AtmosphereGateNode,
-    GATE_IN_ATMOSPHERE_A,
-    GATE_IN_ATMOSPHERE_B,
-    GATE_OUT_FLOW_RATE,
-} from "../../dev/plugins/physics/src/scene/atmosphere-gate.node";
+import { AtmosphereGateNode, GATE_IN_ATMOSPHERE_A, GATE_IN_ATMOSPHERE_B, GATE_OUT_FLOW_RATE } from "../../dev/plugins/physics/src/scene/atmosphere-gate.node";
 import type { IAtmosphereGateHandle } from "../../dev/plugins/physics/src/scene/atmosphere-gate.node";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -38,14 +33,7 @@ class StubAtmosphere implements IAtmosphereGateHandle {
     public moleFractionBySpecies: Map<string, number>;
     public deltaLog: Array<{ species: string; deltaKg: number }> = [];
 
-    public constructor(opts: {
-        species: string[];
-        T?: number;
-        P?: number;
-        volume?: number;
-        mass?: Record<string, number>;
-        moleFraction?: Record<string, number>;
-    }) {
+    public constructor(opts: { species: string[]; T?: number; P?: number; volume?: number; mass?: Record<string, number>; moleFraction?: Record<string, number> }) {
         this.activeSpecies = [...opts.species];
         this.temperatureK = opts.T ?? 293.15;
         this.pressurePa = opts.P ?? 101325;
@@ -72,7 +60,10 @@ interface FakeChannel {
     enabled: boolean;
 }
 
-function fakeSession(dt = 0.01, channels: FakeChannel[] = []): {
+function fakeSession(
+    dt = 0.01,
+    channels: FakeChannel[] = []
+): {
     dt: number;
     graph: { links: FakeChannel[] };
     published: Map<string, number>;
@@ -333,13 +324,13 @@ describe("AtmosphereGateNode binding API", () => {
 // ─────────────────────────────────────────────────────────────────────
 
 describe("AtmosphereGateNode sample rate requirement", () => {
-    it("required_hz editable clamps to positive defaults on bad input", () => {
+    it("requiredSampleRateHz editable clamps to positive defaults on bad input", () => {
         const gate = new AtmosphereGateNode();
-        gate.required_hz = 250;
+        gate.requiredSampleRateHz = 250;
         expect(gate.requiredHz).toBe(250);
-        gate.required_hz = -5;
+        gate.requiredSampleRateHz = -5;
         expect(gate.requiredHz).toBe(100);
-        gate.required_hz = NaN;
+        gate.requiredSampleRateHz = NaN;
         expect(gate.requiredHz).toBe(100);
     });
 });

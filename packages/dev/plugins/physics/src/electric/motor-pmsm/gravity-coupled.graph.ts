@@ -22,7 +22,7 @@
  * `local` / `world` ports).
  *
  * Placement (no Transform fan-out): the inner machine / payload / housing
- * leave `parent_world` UNWIRED and inherit this container's `world` via the
+ * leave `parentWorld` UNWIRED and inherit this container's `world` via the
  * single-truth transform chain (at session bind each inner world object's
  * structural `parent` is set to this container, so `worldTransform()` =
  * `container.worldTransform() × local`). The body orientation that matters
@@ -32,9 +32,9 @@
  * (the geometry Transform publishes to its first output only).
  *
  * Boundary contract (matches the palette registration):
- *   input  : `speed_target` -> foc.speed_target
- *   outputs: `i_q`, `omega`, `force_y`, `force_z` (machine),
- *            `accel_y`, `accel_z` (housing)
+ *   input  : `speedTarget` -> foc.speedTarget
+ *   outputs: `quadratureAxisCurrent`, `angularVelocity`, `forceY`, `forceZ` (machine),
+ *            `accelerationY`, `accelerationZ` (housing)
  *   native : `local` (placement) in, `world` out - handled by SimGraphNode.
  * The Scene is inherited from the enclosing session; no Scene node lives
  * inside, so headless drives with no bound Scene stay gravity-free.
@@ -47,20 +47,20 @@ import { createGravityPayloadLoadNode } from "../../mechanical/load/gravity-payl
 import { createHousingMechanicsNode } from "../../mechanical/housing/housing-mechanics.node.js";
 
 /** ECX-PRIME-class FOC tuning: 1 kHz current loop, 100 Hz speed loop,
- *  derived from the machine's R / L / lambda. Baked at construction so
- *  the motor ships pre-tuned; speed itself arrives live on speed_target. */
+ *  derived from the machine's armatureResistance / armatureInductance / lambda. Baked at construction so
+ *  the motor ships pre-tuned; speed itself arrives live on speedTarget. */
 function configureFoc(foc: PmsmFocNode): void {
     const wI = 2 * Math.PI * 1000;
     const wW = 2 * Math.PI * 100;
     const kt = 1.5 * 1 * 2e-3;
-    foc.P = 1;
-    foc.currentKp = wI * 3e-4;
-    foc.currentKi = wI * 2;
-    foc.speedKp = (wW * 1e-6) / kt;
-    foc.speedKi = (wW * 1e-7) / kt;
-    foc.iMax = 5;
-    foc.vMaxPerAxis = 12;
-    foc.vBus = 24;
+    foc.polePairs = 1;
+    foc.currentProportionalGain = wI * 3e-4;
+    foc.currentIntegralGain = wI * 2;
+    foc.speedProportionalGain = (wW * 1e-6) / kt;
+    foc.speedIntegralGain = (wW * 1e-7) / kt;
+    foc.maxCurrent = 5;
+    foc.maxVoltagePerAxis = 12;
+    foc.dcBusVoltage = 24;
 }
 
 export class GravityCoupledPmsmGraph extends SimGraphNode {
@@ -89,26 +89,26 @@ export class GravityCoupledPmsmGraph extends SimGraphNode {
             .withMode("dynamic")
             .withNodes(foc, machine, payload, housing)
             // Forward edges.
-            .withChannel(foc, machine, "V_a")
-            .withChannel(foc, machine, "V_b")
-            .withChannel(foc, machine, "V_c")
-            .withChannel(machine, payload, "theta_m")
-            .withChannel(machine, housing, "force_y")
-            .withChannel(machine, housing, "force_z")
+            .withChannel(foc, machine, "phaseVoltageA")
+            .withChannel(foc, machine, "phaseVoltageB")
+            .withChannel(foc, machine, "phaseVoltageC")
+            .withChannel(machine, payload, "rotorAngle")
+            .withChannel(machine, housing, "forceY")
+            .withChannel(machine, housing, "forceZ")
             // Closed loops broken by a unit delay (Z^-1).
-            .withDelayedChannel(machine, foc, "i_d", 0)
-            .withDelayedChannel(machine, foc, "i_q", 0)
-            .withDelayedChannel(machine, foc, "omega", 0)
-            .withDelayedChannel(machine, foc, "theta_m", 0)
-            .withDelayedChannel(payload, machine, "tau_load", 0)
+            .withDelayedChannel(machine, foc, "directAxisCurrent", 0)
+            .withDelayedChannel(machine, foc, "quadratureAxisCurrent", 0)
+            .withDelayedChannel(machine, foc, "angularVelocity", 0)
+            .withDelayedChannel(machine, foc, "rotorAngle", 0)
+            .withDelayedChannel(payload, machine, "loadTorque", 0)
             // Boundary ports (public names = inner slot names).
-            .withInputPort(foc, "speed_target")
-            .withOutputPort(machine, "i_q")
-            .withOutputPort(machine, "omega")
-            .withOutputPort(machine, "force_y")
-            .withOutputPort(machine, "force_z")
-            .withOutputPort(housing, "accel_y")
-            .withOutputPort(housing, "accel_z")
+            .withInputPort(foc, "speedTarget")
+            .withOutputPort(machine, "quadratureAxisCurrent")
+            .withOutputPort(machine, "angularVelocity")
+            .withOutputPort(machine, "forceY")
+            .withOutputPort(machine, "forceZ")
+            .withOutputPort(housing, "accelerationY")
+            .withOutputPort(housing, "accelerationZ")
             .build();
 
         this.adoptTopologyFrom(interior);

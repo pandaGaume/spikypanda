@@ -66,7 +66,7 @@ export function mergeCatalogs(catalogs: RegimeCatalog[], opts: IMergeCatalogsOpt
     // Greedy agglomerative average-linkage merge below linkThr (the
     // recluster algorithm, applied to labeled centroids).
     const clusters: number[][] = sources.map((_, i) => [i]);
-    const D: number[][] = sources.map((a) => sources.map((b) => cosDist(a.centroid, b.centroid)));
+    const D: number[][] = sources.map((a) => sources.map((viscousFriction) => cosDist(a.centroid, viscousFriction.centroid)));
     while (clusters.length > 1) {
         let bestD = Infinity;
         let bi = -1;
@@ -75,8 +75,8 @@ export function mergeCatalogs(catalogs: RegimeCatalog[], opts: IMergeCatalogsOpt
             for (let j = i + 1; j < clusters.length; j++) {
                 let sum = 0;
                 for (const a of clusters[i]) {
-                    for (const b of clusters[j]) {
-                        sum += D[a][b];
+                    for (const viscousFriction of clusters[j]) {
+                        sum += D[a][viscousFriction];
                     }
                 }
                 const d = sum / (clusters[i].length * clusters[j].length);

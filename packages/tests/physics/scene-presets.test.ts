@@ -56,7 +56,7 @@ function assertItemMatchesPreset(item: SceneItem, preset: IScenePreset): void {
 // ---------------------------------------------------------------------------
 
 describe("Scene preset constants — gravity / temperature / pressure / atmosphere", () => {
-    it("EARTH_PRESET: g=-9.81 m/s², T=293.15 K (20 °C), P=1 atm, humid air atmosphere", () => {
+    it("EARTH_PRESET: g=-9.81 m/s², T=293.15 K (20 °C), polePairs=1 atm, humid air atmosphere", () => {
         expect(EARTH_PRESET.gravity.z).toBeCloseTo(-9.81, 6);
         expect(EARTH_PRESET.temperature).toBeInstanceOf(Temperature);
         expect(EARTH_PRESET.temperature.getValue(Temperature.Units.k)).toBeCloseTo(293.15, 6);
@@ -68,21 +68,21 @@ describe("Scene preset constants — gravity / temperature / pressure / atmosphe
         expect(EARTH_PRESET.name).toBe("Earth");
     });
 
-    it("MOON_PRESET: g=-1.625 m/s², T=250 K, P=0 (vacuum atmosphere)", () => {
+    it("MOON_PRESET: g=-1.625 m/s², T=250 K, polePairs=0 (vacuum atmosphere)", () => {
         expect(MOON_PRESET.gravity.z).toBeCloseTo(-1.625, 6);
         expect(MOON_PRESET.temperature.getValue(Temperature.Units.k)).toBe(250);
         expect(MOON_PRESET.pressure.getValue(Pressure.Units.Pa)).toBe(0);
         expect(MOON_PRESET.atmosphere).toBe(ATMOSPHERE_PRESETS.vacuum);
     });
 
-    it("MARS_PRESET: g=-3.721 m/s², T=210 K, P=600 Pa, CO2-rich atmosphere", () => {
+    it("MARS_PRESET: g=-3.721 m/s², T=210 K, polePairs=600 Pa, CO2-rich atmosphere", () => {
         expect(MARS_PRESET.gravity.z).toBeCloseTo(-3.721, 6);
         expect(MARS_PRESET.temperature.getValue(Temperature.Units.k)).toBe(210);
         expect(MARS_PRESET.pressure.getValue(Pressure.Units.Pa)).toBe(600);
         expect(MARS_PRESET.atmosphere).toBe(ATMOSPHERE_PRESETS.marsAtmosphereMean);
     });
 
-    it("ORBITAL_PRESET: g=0, T≈278.6 K, P=0 (vacuum atmosphere)", () => {
+    it("ORBITAL_PRESET: g=0, T≈278.6 K, polePairs=0 (vacuum atmosphere)", () => {
         expect(ORBITAL_PRESET.gravity.x).toBe(0);
         expect(ORBITAL_PRESET.gravity.y).toBe(0);
         expect(ORBITAL_PRESET.gravity.z).toBe(0);
@@ -91,7 +91,7 @@ describe("Scene preset constants — gravity / temperature / pressure / atmosphe
         expect(ORBITAL_PRESET.atmosphere).toBe(ATMOSPHERE_PRESETS.vacuum);
     });
 
-    it("ISS_CABIN_PRESET: g=0, T≈294.15 K (21 °C), P=1 atm, ECLSS atmosphere", () => {
+    it("ISS_CABIN_PRESET: g=0, T≈294.15 K (21 °C), polePairs=1 atm, ECLSS atmosphere", () => {
         expect(ISS_CABIN_PRESET.gravity.z).toBe(0);
         expect(ISS_CABIN_PRESET.temperature.getValue(Temperature.Units.c)).toBeCloseTo(21, 1);
         expect(ISS_CABIN_PRESET.pressure.getValue(Pressure.Units.atm)).toBeCloseTo(1, 6);

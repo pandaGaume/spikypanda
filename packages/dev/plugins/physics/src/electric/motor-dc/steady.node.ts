@@ -6,13 +6,13 @@ import { FaultableNode } from "spikypanda-core";
  * DC motor in steady state. Solves the coupled equations at
  * di/dt = 0 and dω/dt = 0 directly, no integration:
  *
- *     V = R·i + Ke·ω                    (electrical, L term vanishes)
- *     Kt·i = b·ω + (τ_load + τ_fault)   (mechanical, J term vanishes)
+ *     armatureVoltage = armatureResistance·armatureCurrent + backEmfConstant·ω                    (electrical, armatureInductance term vanishes)
+ *     torqueConstant·armatureCurrent = viscousFriction·ω + (τ_load + τ_fault)   (mechanical, rotorInertia term vanishes)
  *
- *  =>  ω = (V·Kt - R·τ_eff) / (Ke·Kt + R·b)
- *      i = (b·ω + τ_eff) / Kt
- *      τ = Kt·i
- *      back_emf = Ke·ω
+ *  =>  ω = (armatureVoltage·torqueConstant - armatureResistance·τ_eff) / (backEmfConstant·torqueConstant + armatureResistance·viscousFriction)
+ *      armatureCurrent = (viscousFriction·ω + τ_eff) / torqueConstant
+ *      τ = torqueConstant·armatureCurrent
+ *      backEmf = backEmfConstant·ω
  *
  * Stateless: each `fire` recomputes everything from the current inputs
  * and editable parameters. Useful for sanity checks, designing a working
@@ -23,84 +23,84 @@ import { FaultableNode } from "spikypanda-core";
  * fault bank from FaultableNode (target="tau" folds into τ_load).
  */
 export class DcMotorSteadyNode extends FaultableNode implements IDeclaresPorts {
-    private static readonly OWN_INPUT_SLOTS: ReadonlySet<string> = new Set(["V", "tau_load"]);
+    private static readonly OWN_INPUT_SLOTS: ReadonlySet<string> = new Set(["armatureVoltage", "loadTorque"]);
 
-    @cloneable private _R: number = 1.0;
-    @cloneable private _Kt: number = 0.01;
-    @cloneable private _Ke: number = 0.01;
-    @cloneable private _b: number = 1e-4;
+    @cloneable private _armatureResistance: number = 1.0;
+    @cloneable private _torqueConstant: number = 0.01;
+    @cloneable private _backEmfConstant: number = 0.01;
+    @cloneable private _viscousFriction: number = 1e-4;
 
     // Last computed values, exposed via @viewable so the property panel
     // mirrors them. Plain fields (no @cloneable) because they are pure
     // derivatives of inputs+params; recomputed on every fire.
     @cloneable private _i: number = 0;
     @cloneable private _omega: number = 0;
-    @cloneable private _tau: number = 0;
+    @cloneable private _developedTorque: number = 0;
     @cloneable private _backEmf: number = 0;
 
     public override readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
         ...FaultableNode.BASE_INPUT_PORTS,
-        { slot: "V", optional: true, type: "float" },
-        { slot: "tau_load", optional: true, type: "float" },
+        { slot: "armatureVoltage", optional: true, type: "float" },
+        { slot: "loadTorque", optional: true, type: "float" },
     ];
     public override readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
         ...FaultableNode.BASE_OUTPUT_PORTS,
-        { slot: "i", optional: false, type: "float" },
-        { slot: "omega", optional: false, type: "float" },
-        { slot: "tau", optional: false, type: "float" },
-        { slot: "back_emf", optional: false, type: "float" },
+        { slot: "armatureCurrent", optional: false, type: "float" },
+        { slot: "angularVelocity", optional: false, type: "float" },
+        { slot: "developedTorque", optional: false, type: "float" },
+        { slot: "backEmf", optional: false, type: "float" },
     ];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
     }
 
-    @editable("number") public get R(): number {
-        return this._R;
+    @editable("number") public get armatureResistance(): number {
+        return this._armatureResistance;
     }
-    public set R(v: number) {
-        this.setField("R", this._R, v, (n) => {
-            this._R = n;
+    public set armatureResistance(v: number) {
+        this.setField("armatureResistance", this._armatureResistance, v, (n) => {
+            this._armatureResistance = n;
         });
     }
 
-    @editable("number") public get Kt(): number {
-        return this._Kt;
+    @editable("number") public get torqueConstant(): number {
+        return this._torqueConstant;
     }
-    public set Kt(v: number) {
-        this.setField("Kt", this._Kt, v, (n) => {
-            this._Kt = n;
+    public set torqueConstant(v: number) {
+        this.setField("torqueConstant", this._torqueConstant, v, (n) => {
+            this._torqueConstant = n;
         });
     }
 
-    @editable("number") public get Ke(): number {
-        return this._Ke;
+    @editable("number") public get backEmfConstant(): number {
+        return this._backEmfConstant;
     }
-    public set Ke(v: number) {
-        this.setField("Ke", this._Ke, v, (n) => {
-            this._Ke = n;
+    public set backEmfConstant(v: number) {
+        this.setField("backEmfConstant", this._backEmfConstant, v, (n) => {
+            this._backEmfConstant = n;
         });
     }
 
-    @editable("number") public get b(): number {
-        return this._b;
+    @editable("number") public get viscousFriction(): number {
+        return this._viscousFriction;
     }
-    public set b(v: number) {
-        this.setField("b", this._b, v, (n) => {
-            this._b = n;
+    public set viscousFriction(v: number) {
+        this.setField("viscousFriction", this._viscousFriction, v, (n) => {
+            this._viscousFriction = n;
         });
     }
 
-    @viewable("number") public get i(): number {
+    @viewable("number") public get armatureCurrent(): number {
         return this._i;
     }
-    @viewable("number") public get omega(): number {
+    @viewable("number") public get angularVelocity(): number {
         return this._omega;
     }
-    @viewable("number") public get tau(): number {
-        return this._tau;
+    @viewable("number") public get developedTorque(): number {
+        return this._developedTorque;
     }
-    @viewable("number") public get back_emf(): number {
+    @viewable("number") public get backEmf(): number {
         return this._backEmf;
     }
 
@@ -110,7 +110,7 @@ export class DcMotorSteadyNode extends FaultableNode implements IDeclaresPorts {
 
         // Read motor-own inputs without disturbing transform tokens.
         const links = session.graph.links as ReadonlyArray<IChannel>;
-        let V = 0,
+        let armatureVoltage = 0,
             tauLoad = 0;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
@@ -120,29 +120,29 @@ export class DcMotorSteadyNode extends FaultableNode implements IDeclaresPorts {
             if (idx < 0 || !session.linkStates[idx].ready) continue;
             const value = session.consume(idx);
             if (typeof value !== "number") continue;
-            if (slot === "V") V = value;
-            else if (slot === "tau_load") tauLoad = value;
+            if (slot === "armatureVoltage") armatureVoltage = value;
+            else if (slot === "loadTorque") tauLoad = value;
         }
 
-        // Fold the accumulated tau-target faults into the effective load.
+        // Fold the accumulated "tau"-target faults into the effective load.
         const tauEff = tauLoad + this.getFault("tau");
 
-        const denom = this._Ke * this._Kt + this._R * this._b;
-        const omega = denom > 1e-18 ? (V * this._Kt - this._R * tauEff) / denom : 0;
-        const i = (this._b * omega + tauEff) / Math.max(this._Kt, 1e-12);
-        const tau = this._Kt * i;
-        const back_emf = this._Ke * omega;
+        const denom = this._backEmfConstant * this._torqueConstant + this._armatureResistance * this._viscousFriction;
+        const angularVelocity = denom > 1e-18 ? (armatureVoltage * this._torqueConstant - this._armatureResistance * tauEff) / denom : 0;
+        const armatureCurrent = (this._viscousFriction * angularVelocity + tauEff) / Math.max(this._torqueConstant, 1e-12);
+        const developedTorque = this._torqueConstant * armatureCurrent;
+        const backEmf = this._backEmfConstant * angularVelocity;
 
-        this.setField("i", this._i, i, (n) => {
+        this.setField("armatureCurrent", this._i, armatureCurrent, (n) => {
             this._i = n;
         });
-        this.setField("omega", this._omega, omega, (n) => {
+        this.setField("angularVelocity", this._omega, angularVelocity, (n) => {
             this._omega = n;
         });
-        this.setField("tau", this._tau, tau, (n) => {
-            this._tau = n;
+        this.setField("developedTorque", this._developedTorque, developedTorque, (n) => {
+            this._developedTorque = n;
         });
-        this.setField("back_emf", this._backEmf, back_emf, (n) => {
+        this.setField("backEmf", this._backEmf, backEmf, (n) => {
             this._backEmf = n;
         });
 
@@ -154,10 +154,10 @@ export class DcMotorSteadyNode extends FaultableNode implements IDeclaresPorts {
                 session.publish(idx, val);
             }
         };
-        broadcast("i", i);
-        broadcast("omega", omega);
-        broadcast("tau", tau);
-        broadcast("back_emf", back_emf);
+        broadcast("armatureCurrent", armatureCurrent);
+        broadcast("angularVelocity", angularVelocity);
+        broadcast("developedTorque", developedTorque);
+        broadcast("backEmf", backEmf);
     }
 }
 

@@ -3,13 +3,18 @@
   "label": "Mabuchi RS-385PH-15125",
   "source": "Manufacturer datasheet — 6 VDC class, brushed DC motor",
   "properties": {
-    "R":      1.22,
-    "L":      1.0e-3,
-    "Kt":     0.00822,
-    "Ke":     0.00822,
-    "J":      6.0e-7,
-    "b":      1.03e-6,
-    "i0":     0.0,
-    "omega0": 0.0
+    "armatureResistance":      1.22,
+    "armatureInductance":      1.0e-3,
+    "torqueConstant":     0.00822,
+    "backEmfConstant":     0.00822,
+    "rotorInertia":      6.0e-7,
+    "viscousFriction":      1.03e-6,
+    "initialArmatureCurrent":     0.0,
+    "initialAngularVelocity": 0.0,
+    "motorMass":             0.082,
+    "rotorMass":             0.013,
+    "rotorGyrationRadius":   0.00679,
+    "comOffset":             3.85e-4,
+    "comPhase":              0.0
   }
 }

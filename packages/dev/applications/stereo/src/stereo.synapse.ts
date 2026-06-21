@@ -3,7 +3,7 @@ import { IStereoCnnSynapse } from "./stereo.interfaces";
 
 /// <summary>
 /// A synapse in a stereo CNN graph. Extends CnnSynapse with cross-branch metadata.
-/// cross=true means this synapse connects neurons from different branches (L to R or R to L).
+/// cross=true means this synapse connects neurons from different branches (armatureInductance to armatureResistance or armatureResistance to armatureInductance).
 /// disparity is the horizontal offset for cross-synapses (0 to maxDisparity).
 /// </summary>
 export class StereoCnnSynapse extends CnnSynapse implements IStereoCnnSynapse {

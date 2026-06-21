@@ -8,7 +8,7 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  *
  *   1. **Bandwidth limit**: 1st-order low-pass filter at `bandwidthHz`.
  *      Set to 0 to bypass. τ = 1 / (2π·fc).
- *   2. **Gaussian noise**: zero-mean with standard deviation `noiseStd`
+ *   2. **Gaussian noise**: zero-mean with standard deviation `noiseStdDev`
  *      [rad/s]. Set to 0 to disable. Deterministic via a seeded LCG +
  *      Box-Muller transform, so reproducible across runs.
  *   3. **Quantization**: round to multiples of `resolution` [rad/s].
@@ -16,19 +16,19 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  *
  * Pipeline applied in this order each tick:
  *
- *     filtered = LPF(omega, bandwidthHz)
- *     noisy    = filtered + N(0, noiseStd)
+ *     filtered = LPF(angularVelocity, bandwidthHz)
+ *     noisy    = filtered + N(0, noiseStdDev)
  *     measured = quantize(noisy, resolution)
  *
  * Inputs:
- *   omega    raw angular speed (typically from a motor model)
+ *   angularVelocity    raw angular speed (typically from a motor model)
  *   dt       sample step [s], falls back to `t - lastT` when unwired
  *
  * Output:
- *   omega_measured  filtered + noisy + quantized speed
+ *   measuredAngularVelocity  filtered + noisy + quantized speed
  */
 export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts {
-    @cloneable private _noiseStd: number = 0.5; // [rad/s]
+    @cloneable private _noiseStdDev: number = 0.5; // [rad/s]
     @cloneable private _resolution: number = 0.1; // [rad/s] (0 = disabled)
     @cloneable private _bandwidthHz: number = 100; // [Hz]   (0 = bypass LPF)
     @cloneable private _seed: number = 1;
@@ -43,21 +43,19 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
     // internal and updates per tick using session.dt for the
     // discretisation. No buffer / no consume needed — ZOH applies
     // naturally at the sample instants of this node's fire.
-    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "omega", optional: true, type: "float", kind: "signal" },
-    ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "omega_measured", optional: false, type: "float", kind: "signal" }];
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "angularVelocity", optional: true, type: "float", kind: "signal" }];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "measuredAngularVelocity", optional: false, type: "float", kind: "signal" }];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
     }
 
-    @editable("number") public get noiseStd(): number {
-        return this._noiseStd;
+    @editable("number") public get noiseStdDev(): number {
+        return this._noiseStdDev;
     }
-    public set noiseStd(v: number) {
-        this.setField("noiseStd", this._noiseStd, v, (n) => {
-            this._noiseStd = n;
+    public set noiseStdDev(v: number) {
+        this.setField("noiseStdDev", this._noiseStdDev, v, (n) => {
+            this._noiseStdDev = n;
         });
     }
 
@@ -91,7 +89,7 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
     @viewable("number") public get filtered(): number {
         return this._filtered;
     }
-    @viewable("number") public get omega_measured(): number {
+    @viewable("number") public get measuredAngularVelocity(): number {
         return this._measured;
     }
 
@@ -99,7 +97,7 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
         this.setField("filtered", this._filtered, 0, (n) => {
             this._filtered = n;
         });
-        this.setField("omega_measured", this._measured, 0, (n) => {
+        this.setField("measuredAngularVelocity", this._measured, 0, (n) => {
             this._measured = n;
         });
         this._rng = Math.max(1, Math.floor(this._seed));
@@ -108,10 +106,10 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
     public override fire(session: ISession, _t: number): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
 
-        // Read omega via signal API (ZOH). No drain, no gating: the
+        // Read angularVelocity via signal API (ZOH). No drain, no gating: the
         // upstream motor publishes the latest value each tick; we
         // sample whatever is current when we fire.
-        let omega = 0;
+        let angularVelocity = 0;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const slot = inSlotOf(link);
@@ -119,7 +117,7 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
             if (idx < 0) continue;
             const value = session.readSignal(idx);
             if (typeof value !== "number") continue;
-            if (slot === "omega") omega = value;
+            if (slot === "angularVelocity") angularVelocity = value;
         }
         // dt sourced from the Session — no more `dt` input port. First
         // tick (Session.dt === Infinity) clamps to 0 so the LPF doesn't
@@ -131,14 +129,14 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
         // to passthrough rather than overshooting (alpha would exceed 1).
         let newFiltered = this._filtered;
         if (this._bandwidthHz <= 0) {
-            newFiltered = omega; // bypass
+            newFiltered = angularVelocity; // bypass
         } else if (dt > 0) {
             const tau = 1 / (2 * Math.PI * this._bandwidthHz);
             const alpha = dt / (tau + dt); // implicit Euler, always in [0,1]
-            newFiltered = this._filtered + alpha * (omega - this._filtered);
+            newFiltered = this._filtered + alpha * (angularVelocity - this._filtered);
         }
 
-        const noise = this._noiseStd > 0 ? this._noiseStd * this._gaussian() : 0;
+        const noise = this._noiseStdDev > 0 ? this._noiseStdDev * this._gaussian() : 0;
         let measured = newFiltered + noise;
         if (this._resolution > 0) {
             measured = Math.round(measured / this._resolution) * this._resolution;
@@ -147,12 +145,12 @@ export class DcMotorTachymeterNode extends RuntimeNode implements IDeclaresPorts
         this.setField("filtered", this._filtered, newFiltered, (n) => {
             this._filtered = n;
         });
-        this.setField("omega_measured", this._measured, measured, (n) => {
+        this.setField("measuredAngularVelocity", this._measured, measured, (n) => {
             this._measured = n;
         });
 
         for (const link of this.onsc<IChannel>()) {
-            if (link.slot !== "omega_measured" || !link.enabled) continue;
+            if (link.slot !== "measuredAngularVelocity" || !link.enabled) continue;
             const idx = links.indexOf(link);
             if (idx < 0) continue;
             session.publish(idx, measured);

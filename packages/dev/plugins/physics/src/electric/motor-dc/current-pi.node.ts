@@ -4,86 +4,86 @@ import type { ICartesian, Nullable } from "spikypanda-core";
 /**
  * Current PI controller for a DC motor — the inner loop of a
  * cascade current-then-speed control architecture (standard
- * industrial drive topology). Sits between an upstream `i_ref`
+ * industrial drive topology). Sits between an upstream `currentReference`
  * source (slider, outer speed loop output, ...) and the PWM
  * inverter that drives the motor.
  *
- *     error = i_ref - i_measured
- *     V_unsat = Kp · error + integral
- *     V_cmd   = clamp(V_unsat, -Vmax, +Vmax)
- *     integral += Ki · error · dt   (frozen when V_cmd is saturated)
+ *     error = currentReference - measuredCurrent
+ *     V_unsat = proportionalGain · error + integral
+ *     voltageCommand   = clamp(V_unsat, -maxVoltage, +maxVoltage)
+ *     integral += integralGain · error · dt   (frozen when voltageCommand is saturated)
  *
  * Same anti-windup pattern as the Speed PI. The CURRENT loop is
  * typically tuned MUCH faster than the speed loop:
  *
- *   - Speed loop:    bandwidth ~10-100 Hz (limited by J·R/(Kt·Ke))
- *   - Current loop:  bandwidth ~500-5000 Hz (limited by R/L)
+ *   - Speed loop:    bandwidth ~10-100 Hz (limited by rotorInertia·armatureResistance/(torqueConstant·backEmfConstant))
+ *   - Current loop:  bandwidth ~500-5000 Hz (limited by armatureResistance/armatureInductance)
  *
  * Defaults below target ~1 kHz current loop on the RS-385 (τ_e =
- * L/R = 0.5 ms, achievable bandwidth ~300 Hz with a safety margin).
+ * armatureInductance/armatureResistance = 0.5 ms, achievable bandwidth ~300 Hz with a safety margin).
  *
- * All ports are signals: i_ref / i_measured / V_cmd are continuous
+ * All ports are signals: currentReference / measuredCurrent / voltageCommand are continuous
  * physical quantities (ZOH). No buffer overflow, no gating issue
  * with the upstream sampling rate.
  *
- * Vmax should typically equal the inverter's `Vdc` — saturating the
+ * maxVoltage should typically equal the inverter's `dcBusVoltage` — saturating the
  * controller at the bus voltage matches what the PWM can actually
- * deliver. Mismatch → controller asks for V the inverter can't
+ * deliver. Mismatch → controller asks for armatureVoltage the inverter can't
  * produce, integral winds up uselessly.
  */
 export class DcMotorCurrentPiNode extends RuntimeNode implements IDeclaresPorts {
-    @cloneable private _Kp: number = 5;
-    @cloneable private _Ki: number = 200;
-    @cloneable private _Vmax: number = 12;
+    @cloneable private _proportionalGain: number = 5;
+    @cloneable private _integralGain: number = 200;
+    @cloneable private _maxVoltage: number = 12;
 
     @cloneable private _integral: number = 0;
     @cloneable private _Vcmd: number = 0;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "i_ref", optional: true, type: "float", kind: "signal" },
-        { slot: "i_measured", optional: true, type: "float", kind: "signal" },
+        { slot: "currentReference", optional: true, type: "float", kind: "signal" },
+        { slot: "measuredCurrent", optional: true, type: "float", kind: "signal" },
     ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "V_cmd", optional: false, type: "float", kind: "signal" }];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "voltageCommand", optional: false, type: "float", kind: "signal" }];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
     }
 
     @editable("number")
-    public get Kp(): number {
-        return this._Kp;
+    public get proportionalGain(): number {
+        return this._proportionalGain;
     }
-    public set Kp(v: number) {
-        this.setField("Kp", this._Kp, v, (n) => {
-            this._Kp = n;
+    public set proportionalGain(v: number) {
+        this.setField("proportionalGain", this._proportionalGain, v, (n) => {
+            this._proportionalGain = n;
         });
     }
 
     @editable("number")
-    public get Ki(): number {
-        return this._Ki;
+    public get integralGain(): number {
+        return this._integralGain;
     }
-    public set Ki(v: number) {
-        this.setField("Ki", this._Ki, v, (n) => {
-            this._Ki = n;
+    public set integralGain(v: number) {
+        this.setField("integralGain", this._integralGain, v, (n) => {
+            this._integralGain = n;
         });
     }
 
-    @editable("number", { unit: "V" })
-    public get Vmax(): number {
-        return this._Vmax;
+    @editable("number", { unit: "armatureVoltage" })
+    public get maxVoltage(): number {
+        return this._maxVoltage;
     }
-    public set Vmax(v: number) {
+    public set maxVoltage(v: number) {
         const next = v > 0 ? v : 1;
-        this.setField("Vmax", this._Vmax, next, (n) => {
-            this._Vmax = n;
+        this.setField("maxVoltage", this._maxVoltage, next, (n) => {
+            this._maxVoltage = n;
         });
     }
 
     @viewable("number") public get integral(): number {
         return this._integral;
     }
-    @viewable("number") public get V_cmd(): number {
+    @viewable("number") public get voltageCommand(): number {
         return this._Vcmd;
     }
 
@@ -91,7 +91,7 @@ export class DcMotorCurrentPiNode extends RuntimeNode implements IDeclaresPorts 
         this.setField("integral", this._integral, 0, (n) => {
             this._integral = n;
         });
-        this.setField("V_cmd", this._Vcmd, 0, (n) => {
+        this.setField("voltageCommand", this._Vcmd, 0, (n) => {
             this._Vcmd = n;
         });
     }
@@ -108,24 +108,24 @@ export class DcMotorCurrentPiNode extends RuntimeNode implements IDeclaresPorts 
             if (idx < 0) continue;
             const value = session.readSignal(idx);
             if (typeof value !== "number") continue;
-            if (slot === "i_ref") iRef = value;
-            else if (slot === "i_measured") iMeasured = value;
+            if (slot === "currentReference") iRef = value;
+            else if (slot === "measuredCurrent") iMeasured = value;
         }
 
         const sessionDt = session.dt;
         const dt = Number.isFinite(sessionDt) ? Math.max(0, sessionDt) : 0;
 
         const error = iRef - iMeasured;
-        const proposedIntegral = this._integral + this._Ki * error * dt;
-        const Vunsat = this._Kp * error + proposedIntegral;
+        const proposedIntegral = this._integral + this._integralGain * error * dt;
+        const Vunsat = this._proportionalGain * error + proposedIntegral;
 
         let Vcmd = Vunsat;
         let newIntegral = this._integral;
-        if (Vunsat > this._Vmax) {
-            Vcmd = this._Vmax;
+        if (Vunsat > this._maxVoltage) {
+            Vcmd = this._maxVoltage;
             // Anti-windup: freeze integral while saturated high.
-        } else if (Vunsat < -this._Vmax) {
-            Vcmd = -this._Vmax;
+        } else if (Vunsat < -this._maxVoltage) {
+            Vcmd = -this._maxVoltage;
             // Freeze low.
         } else {
             newIntegral = proposedIntegral;
@@ -134,12 +134,12 @@ export class DcMotorCurrentPiNode extends RuntimeNode implements IDeclaresPorts 
         this.setField("integral", this._integral, newIntegral, (n) => {
             this._integral = n;
         });
-        this.setField("V_cmd", this._Vcmd, Vcmd, (n) => {
+        this.setField("voltageCommand", this._Vcmd, Vcmd, (n) => {
             this._Vcmd = n;
         });
 
         for (const link of this.onsc<IChannel>()) {
-            if (link.slot !== "V_cmd" || !link.enabled) continue;
+            if (link.slot !== "voltageCommand" || !link.enabled) continue;
             const idx = links.indexOf(link);
             if (idx < 0) continue;
             session.publish(idx, Vcmd);

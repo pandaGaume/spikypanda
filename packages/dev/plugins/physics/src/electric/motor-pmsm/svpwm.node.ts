@@ -5,24 +5,24 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  * Space Vector PWM modulator, averaged (no switching ripple). Faithful
  * port of the legacy `sensors` SvpwmModulator, the validation oracle.
  *
- * Maps the stator voltage reference (V_alpha, V_beta) produced by the FOC
- * into three duty cycles (duty_a, duty_b, duty_c) in [minDuty, maxDuty],
+ * Maps the stator voltage reference (voltageAlpha, voltageBeta) produced by the FOC
+ * into three dutyCycle cycles (dutyCycleA, dutyCycleB, dutyCycleC) in [minDutyCycle, maxDutyCycle],
  * which the inverter turns back into line-neutral phase voltages.
  *
  * Algorithm (min-max zero-sequence injection, equivalent to the standard
  * 7-segment SVPWM in the averaged sense):
  *
- *   1. Inverse Clarke: (V_alpha, V_beta) -> (v_a, v_b, v_c) phase refs.
- *   2. Saturation: if |V_ref| > v_bus / sqrt(3), scale the reference down
+ *   1. Inverse Clarke: (voltageAlpha, voltageBeta) -> (phaseVoltageA, phaseVoltageB, phaseVoltageC) phase refs.
+ *   2. Saturation: if |V_ref| > dcBusVoltage / sqrt(3), scale the reference down
  *      to that circle (the linear-modulation boundary).
  *   3. Zero-sequence injection: v_zero = -(max + min) / 2. Adding v_zero
  *      to all three references centers the duties around 0.5 and extends
- *      the linear range to v_bus / sqrt(3).
- *   4. Duty cycles: duty_k = 0.5 + (v_k + v_zero) / v_bus, clamped.
+ *      the linear range to dcBusVoltage / sqrt(3).
+ *   4. Duty cycles: duty_k = 0.5 + (v_k + v_zero) / dcBusVoltage, clamped.
  *
  * Round-trip property (the validation invariant): averaged over a PWM
- * cycle, the inverter recovers (V_alpha, V_beta) exactly when |V_ref| <=
- * v_bus / sqrt(3), regardless of the zero-sequence injection, because the
+ * cycle, the inverter recovers (voltageAlpha, voltageBeta) exactly when |V_ref| <=
+ * dcBusVoltage / sqrt(3), regardless of the zero-sequence injection, because the
  * zero-sequence content is common-mode and cancels through the line-
  * neutral reference.
  *
@@ -32,9 +32,9 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  */
 export class PmsmSvpwmNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _pwmFrequencyHz: number = 20000;
-    @cloneable private _minDuty: number = 0;
-    @cloneable private _maxDuty: number = 1;
-    @cloneable private _vBus: number = 24;
+    @cloneable private _minDutyCycle: number = 0;
+    @cloneable private _maxDutyCycle: number = 1;
+    @cloneable private _dcBusVoltage: number = 24;
 
     @cloneable private _dutyA: number = 0.5;
     @cloneable private _dutyB: number = 0.5;
@@ -42,14 +42,14 @@ export class PmsmSvpwmNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _saturated: boolean = false;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "V_alpha", optional: true, type: "float" },
-        { slot: "V_beta", optional: true, type: "float" },
-        { slot: "v_bus", optional: true, type: "float" },
+        { slot: "voltageAlpha", optional: true, type: "float" },
+        { slot: "voltageBeta", optional: true, type: "float" },
+        { slot: "dcBusVoltage", optional: true, type: "float" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "duty_a", optional: false, type: "float" },
-        { slot: "duty_b", optional: false, type: "float" },
-        { slot: "duty_c", optional: false, type: "float" },
+        { slot: "dutyCycleA", optional: false, type: "float" },
+        { slot: "dutyCycleB", optional: false, type: "float" },
+        { slot: "dutyCycleC", optional: false, type: "float" },
     ];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
@@ -63,33 +63,33 @@ export class PmsmSvpwmNode extends RuntimeNode implements IDeclaresPorts {
     public set pwmFrequencyHz(v: number) {
         this.setField("pwmFrequencyHz", this._pwmFrequencyHz, v, (n) => (this._pwmFrequencyHz = n));
     }
-    @editable("number") public get minDuty(): number {
-        return this._minDuty;
+    @editable("number") public get minDutyCycle(): number {
+        return this._minDutyCycle;
     }
-    public set minDuty(v: number) {
-        this.setField("minDuty", this._minDuty, v, (n) => (this._minDuty = n));
+    public set minDutyCycle(v: number) {
+        this.setField("minDutyCycle", this._minDutyCycle, v, (n) => (this._minDutyCycle = n));
     }
-    @editable("number") public get maxDuty(): number {
-        return this._maxDuty;
+    @editable("number") public get maxDutyCycle(): number {
+        return this._maxDutyCycle;
     }
-    public set maxDuty(v: number) {
-        this.setField("maxDuty", this._maxDuty, v, (n) => (this._maxDuty = n));
+    public set maxDutyCycle(v: number) {
+        this.setField("maxDutyCycle", this._maxDutyCycle, v, (n) => (this._maxDutyCycle = n));
     }
-    @editable("number", { unit: "V" }) public get vBus(): number {
-        return this._vBus;
+    @editable("number", { unit: "V" }) public get dcBusVoltage(): number {
+        return this._dcBusVoltage;
     }
-    public set vBus(v: number) {
-        this.setField("vBus", this._vBus, v, (n) => (this._vBus = n));
+    public set dcBusVoltage(v: number) {
+        this.setField("dcBusVoltage", this._dcBusVoltage, v, (n) => (this._dcBusVoltage = n));
     }
 
     // ── Viewables ──────────────────────────────────────────────────────
-    @viewable("number") public get duty_a(): number {
+    @viewable("number") public get dutyCycleA(): number {
         return this._dutyA;
     }
-    @viewable("number") public get duty_b(): number {
+    @viewable("number") public get dutyCycleB(): number {
         return this._dutyB;
     }
-    @viewable("number") public get duty_c(): number {
+    @viewable("number") public get dutyCycleC(): number {
         return this._dutyC;
     }
     @viewable("boolean") public get saturated(): boolean {
@@ -107,7 +107,7 @@ export class PmsmSvpwmNode extends RuntimeNode implements IDeclaresPorts {
         const links = session.graph.links as ReadonlyArray<IChannel>;
         let vAlpha = 0,
             vBeta = 0,
-            vBus = this._vBus;
+            dcBusVoltage = this._dcBusVoltage;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const slot = inSlotOf(link);
@@ -115,25 +115,25 @@ export class PmsmSvpwmNode extends RuntimeNode implements IDeclaresPorts {
             if (idx < 0 || !session.linkStates[idx].ready) continue;
             const value = session.consume(idx);
             if (typeof value !== "number") continue;
-            if (slot === "V_alpha") vAlpha = value;
-            else if (slot === "V_beta") vBeta = value;
-            else if (slot === "v_bus") vBus = value;
+            if (slot === "voltageAlpha") vAlpha = value;
+            else if (slot === "voltageBeta") vBeta = value;
+            else if (slot === "dcBusVoltage") dcBusVoltage = value;
         }
 
-        this._modulate(vAlpha, vBeta, vBus);
+        this._modulate(vAlpha, vBeta, dcBusVoltage);
 
         for (const link of this.onsc<IChannel>()) {
             if (!link.enabled) continue;
             const idx = links.indexOf(link);
             if (idx < 0) continue;
             switch (link.slot) {
-                case "duty_a":
+                case "dutyCycleA":
                     session.publish(idx, this._dutyA);
                     break;
-                case "duty_b":
+                case "dutyCycleB":
                     session.publish(idx, this._dutyB);
                     break;
-                case "duty_c":
+                case "dutyCycleC":
                     session.publish(idx, this._dutyC);
                     break;
             }
@@ -141,8 +141,8 @@ export class PmsmSvpwmNode extends RuntimeNode implements IDeclaresPorts {
     }
 
     // Numerically identical to the legacy SvpwmModulator.advance().
-    private _modulate(vAlpha: number, vBeta: number, vBus: number): void {
-        if (vBus <= 0) {
+    private _modulate(vAlpha: number, vBeta: number, dcBusVoltage: number): void {
+        if (dcBusVoltage <= 0) {
             this._dutyA = 0.5;
             this._dutyB = 0.5;
             this._dutyC = 0.5;
@@ -159,7 +159,7 @@ export class PmsmSvpwmNode extends RuntimeNode implements IDeclaresPorts {
 
         // Step 2: saturation in the alpha-beta plane.
         const vMagSq = vAlpha * vAlpha + vBeta * vBeta;
-        const vMax = vBus / Math.sqrt(3);
+        const vMax = dcBusVoltage / Math.sqrt(3);
         if (vMagSq > vMax * vMax) {
             const scale = vMax / Math.sqrt(vMagSq);
             vA *= scale;
@@ -175,10 +175,10 @@ export class PmsmSvpwmNode extends RuntimeNode implements IDeclaresPorts {
         const vMinLN = Math.min(vA, vB, vC);
         const vZero = -0.5 * (vMaxLN + vMinLN);
 
-        // Step 4: duty cycles.
-        this._dutyA = clamp(0.5 + (vA + vZero) / vBus, this._minDuty, this._maxDuty);
-        this._dutyB = clamp(0.5 + (vB + vZero) / vBus, this._minDuty, this._maxDuty);
-        this._dutyC = clamp(0.5 + (vC + vZero) / vBus, this._minDuty, this._maxDuty);
+        // Step 4: dutyCycle cycles.
+        this._dutyA = clamp(0.5 + (vA + vZero) / dcBusVoltage, this._minDutyCycle, this._maxDutyCycle);
+        this._dutyB = clamp(0.5 + (vB + vZero) / dcBusVoltage, this._minDutyCycle, this._maxDutyCycle);
+        this._dutyC = clamp(0.5 + (vC + vZero) / dcBusVoltage, this._minDutyCycle, this._maxDutyCycle);
     }
 }
 

@@ -8,16 +8,16 @@ import type { ICartesian, Nullable, IHasSampleRateRequirement } from "spikypanda
  * Models a real 4-MOSFET H-bridge driven by a triangle-carrier PWM
  * comparator. Produces the INSTANTANEOUS switched voltage at the
  * motor terminals — NOT the average. This is essential for realistic
- * MCSA: the output `V` contains the carrier at `f_pwm` plus its
+ * MCSA: the output `armatureVoltage` contains the carrier at `f_pwm` plus its
  * harmonics, plus the intermodulation sidebands with whatever fault
- * frequencies the motor produces through Ke·ω back-EMF coupling.
+ * frequencies the motor produces through backEmfConstant·ω back-EMF coupling.
  *
  * Two switching strategies (editable):
  *
- *   "bipolar": V = +Vdc or -Vdc selon le comparateur. Toujours en
+ *   "bipolar": armatureVoltage = +dcBusVoltage or -dcBusVoltage selon le comparateur. Toujours en
  *     switching. Ripple courant maximal. 2-quadrant simple.
  *
- *   "unipolar": V = 0/+Vdc quand V_cmd > 0, V = 0/-Vdc quand V_cmd < 0.
+ *   "unipolar": armatureVoltage = 0/+dcBusVoltage quand voltageCommand > 0, armatureVoltage = 0/-dcBusVoltage quand voltageCommand < 0.
  *     dV/dt moitié, ripple réduit, plus utilisé en VFD industriel.
  *
  * Dead time (editable, default 1 µs): pendant la transition
@@ -36,34 +36,34 @@ export class DcInverterNode extends IntegrableRuntimeNode implements IDeclaresPo
     /** PWM sample-rate requirement: 20 × f_PWM, per the docstring rule.
      *  Clamped to [60, 1e7] for sanity. */
     protected override computeRequiredHz(): number {
-        const hz = 20 * this._fPwm;
+        const hz = 20 * this._pwmFrequency;
         if (!Number.isFinite(hz) || hz <= 0) return 200_000;
         return Math.max(60, Math.min(1e7, hz));
     }
 
     // ── Editable parameters ───────────────────────────────────────────
-    @cloneable private _Vdc: number = 12;
-    @cloneable private _fPwm: number = 10000;
-    @cloneable private _strategy: "bipolar" | "unipolar" = "bipolar";
+    @cloneable private _dcBusVoltage: number = 12;
+    @cloneable private _pwmFrequency: number = 10000;
+    @cloneable private _modulationStrategy: "bipolar" | "unipolar" = "bipolar";
     @cloneable private _deadTime: number = 1e-6;
 
     // ── Internal state ────────────────────────────────────────────────
     @cloneable private _carrierPhase: number = 0; // [0, 1)
-    @cloneable private _V: number = 0; // instantaneous output AFTER dead-time gate
-    @cloneable private _duty: number = 0; // clamped V_cmd / Vdc, for diagnostic
+    @cloneable private _armatureVoltage: number = 0; // instantaneous output AFTER dead-time gate
+    @cloneable private _duty: number = 0; // clamped voltageCommand / dcBusVoltage, for diagnostic
     @cloneable private _switchCount: number = 0; // cumulative since reset
     // Last value the COMPARATOR decided (before dead-time gating). We
-    // detect commutation by watching this field, NOT _V — otherwise
-    // the dead-time gate (which zeroes _V) re-triggers as a "switch"
+    // detect commutation by watching this field, NOT _armatureVoltage — otherwise
+    // the dead-time gate (which zeroes _armatureVoltage) re-triggers as a "switch"
     // every tick during the dead-time interval, blowing up the switch
-    // count and locking V at 0.
+    // count and locking armatureVoltage at 0.
     private _lastTarget: number = 0;
     private _lastSwitchT: number = -Infinity;
 
-    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "V_cmd", optional: true, type: "float", kind: "signal" }];
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "voltageCommand", optional: true, type: "float", kind: "signal" }];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "V", optional: false, type: "float", kind: "signal" },
-        { slot: "duty", optional: false, type: "float", kind: "signal" },
+        { slot: "armatureVoltage", optional: false, type: "float", kind: "signal" },
+        { slot: "dutyCycle", optional: false, type: "float", kind: "signal" },
         { slot: "switching", optional: false, type: "boolean", kind: "signal" },
     ];
 
@@ -72,36 +72,39 @@ export class DcInverterNode extends IntegrableRuntimeNode implements IDeclaresPo
     }
 
     // ── Editables ─────────────────────────────────────────────────────
-    @editable("number", { unit: "V" })
-    public get Vdc(): number {
-        return this._Vdc;
+    @editable("number", { unit: "armatureVoltage" })
+    public get dcBusVoltage(): number {
+        return this._dcBusVoltage;
     }
-    public set Vdc(v: number) {
+    public set dcBusVoltage(v: number) {
         const next = v > 0 ? v : 1;
-        this.setField("Vdc", this._Vdc, next, (n) => {
-            this._Vdc = n;
+        this.setField("dcBusVoltage", this._dcBusVoltage, next, (n) => {
+            this._dcBusVoltage = n;
         });
     }
 
     @editable("number", { unit: "Hz" })
-    public get fPwm(): number {
-        return this._fPwm;
+    public get pwmFrequency(): number {
+        return this._pwmFrequency;
     }
-    public set fPwm(v: number) {
+    public set pwmFrequency(v: number) {
         const next = v > 0 ? v : 1;
-        if (this.setField("fPwm", this._fPwm, next, (n) => {
-            this._fPwm = n;
-        })) this.notifyComputedRequiredHzMayHaveChanged();
+        if (
+            this.setField("pwmFrequency", this._pwmFrequency, next, (n) => {
+                this._pwmFrequency = n;
+            })
+        )
+            this.notifyComputedRequiredHzMayHaveChanged();
     }
 
     @editable("string")
-    public get strategy(): "bipolar" | "unipolar" {
-        return this._strategy;
+    public get modulationStrategy(): "bipolar" | "unipolar" {
+        return this._modulationStrategy;
     }
-    public set strategy(v: "bipolar" | "unipolar") {
+    public set modulationStrategy(v: "bipolar" | "unipolar") {
         const next: "bipolar" | "unipolar" = v === "unipolar" ? "unipolar" : "bipolar";
-        this.setField("strategy", this._strategy, next, (n: "bipolar" | "unipolar") => {
-            this._strategy = n;
+        this.setField("modulationStrategy", this._modulationStrategy, next, (n: "bipolar" | "unipolar") => {
+            this._modulationStrategy = n;
         });
     }
 
@@ -117,10 +120,10 @@ export class DcInverterNode extends IntegrableRuntimeNode implements IDeclaresPo
     }
 
     // ── Viewables (diagnostics) ───────────────────────────────────────
-    @viewable("number") public get V(): number {
-        return this._V;
+    @viewable("number") public get armatureVoltage(): number {
+        return this._armatureVoltage;
     }
-    @viewable("number") public get duty(): number {
+    @viewable("number") public get dutyCycle(): number {
         return this._duty;
     }
     @viewable("number") public get carrierPhase(): number {
@@ -134,10 +137,10 @@ export class DcInverterNode extends IntegrableRuntimeNode implements IDeclaresPo
         this.setField("carrierPhase", this._carrierPhase, 0, (n) => {
             this._carrierPhase = n;
         });
-        this.setField("V", this._V, 0, (n) => {
-            this._V = n;
+        this.setField("armatureVoltage", this._armatureVoltage, 0, (n) => {
+            this._armatureVoltage = n;
         });
-        this.setField("duty", this._duty, 0, (n) => {
+        this.setField("dutyCycle", this._duty, 0, (n) => {
             this._duty = n;
         });
         this.setField("switchCount", this._switchCount, 0, (n) => {
@@ -150,7 +153,7 @@ export class DcInverterNode extends IntegrableRuntimeNode implements IDeclaresPo
     public override fire(session: ISession, t: number): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
 
-        // Read V_cmd via signal API. Unwired or never-published → 0.
+        // Read voltageCommand via signal API. Unwired or never-published → 0.
         let vCmd = 0;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
@@ -168,40 +171,40 @@ export class DcInverterNode extends IntegrableRuntimeNode implements IDeclaresPo
         // before the first run it's Infinity (clamp to 0 so the
         // carrier doesn't jump a huge amount on tick 1).
         const dt = Number.isFinite(session.dt) ? Math.max(0, session.dt) : 0;
-        let newPhase = this._carrierPhase + dt * this._fPwm;
+        let newPhase = this._carrierPhase + dt * this._pwmFrequency;
         // Modulo 1, robust even for very long dt (defensive).
         newPhase = newPhase - Math.floor(newPhase);
 
         // Triangle in [-1, +1]: rises 0→0.5 (−1→+1), falls 0.5→1 (+1→−1).
         // |phase - 0.5| ranges [0, 0.5]. Map ×2 → [0, 1], ×−2+1 → [+1, −1].
         const carrier = 1 - 4 * Math.abs(newPhase - 0.5);
-        const ref = Math.max(-1, Math.min(1, vCmd / this._Vdc));
+        const ref = Math.max(-1, Math.min(1, vCmd / this._dcBusVoltage));
 
         // Determine the requested switch state via the chosen modulation
-        // strategy. Compare reference signal against the carrier.
+        // modulationStrategy. Compare reference signal against the carrier.
         // `target` is what the comparator wants BEFORE dead-time gating.
         let target = 0;
-        if (this._strategy === "bipolar") {
-            // Classic 2-state: V = +Vdc when ref > carrier, else -Vdc.
-            // Always switching, even at zero V_cmd (ref=0 vs carrier
-            // straddling 0 → 50% duty alternating).
-            target = ref > carrier ? this._Vdc : -this._Vdc;
+        if (this._modulationStrategy === "bipolar") {
+            // Classic 2-state: armatureVoltage = +dcBusVoltage when ref > carrier, else -dcBusVoltage.
+            // Always switching, even at zero voltageCommand (ref=0 vs carrier
+            // straddling 0 → 50% dutyCycle alternating).
+            target = ref > carrier ? this._dcBusVoltage : -this._dcBusVoltage;
         } else {
-            // Unipolar: V = +Vdc / 0 (forward), -Vdc / 0 (reverse).
+            // Unipolar: armatureVoltage = +dcBusVoltage / 0 (forward), -dcBusVoltage / 0 (reverse).
             // Less ripple. Comparator uses |ref| against |carrier|;
-            // sign chosen from sign(V_cmd).
+            // sign chosen from sign(voltageCommand).
             const absCarrier = Math.abs(carrier);
             if (vCmd >= 0) {
-                target = ref > absCarrier ? this._Vdc : 0;
+                target = ref > absCarrier ? this._dcBusVoltage : 0;
             } else {
-                target = -ref > absCarrier ? -this._Vdc : 0;
+                target = -ref > absCarrier ? -this._dcBusVoltage : 0;
             }
         }
 
         // Detect a comparator commutation (target changed since last
         // tick). When that happens, snapshot the time for the dead-time
         // interval. Tracking on `target` (pre-gate) keeps the dead-time
-        // self-contained: the gate zeros V during the interval, but the
+        // self-contained: the gate zeros armatureVoltage during the interval, but the
         // gate never falsely re-triggers itself.
         if (target !== this._lastTarget) {
             this._lastSwitchT = t;
@@ -218,10 +221,10 @@ export class DcInverterNode extends IntegrableRuntimeNode implements IDeclaresPo
             newV = 0;
         }
 
-        // switchCount counts changes of the ACTUAL V (after gating), so
+        // switchCount counts changes of the ACTUAL armatureVoltage (after gating), so
         // it matches what an external observer (current sensor) sees.
         let switching = false;
-        if (newV !== this._V) {
+        if (newV !== this._armatureVoltage) {
             switching = true;
             this._switchCount++;
         }
@@ -230,10 +233,10 @@ export class DcInverterNode extends IntegrableRuntimeNode implements IDeclaresPo
         this.setField("carrierPhase", this._carrierPhase, newPhase, (n) => {
             this._carrierPhase = n;
         });
-        this.setField("V", this._V, newV, (n) => {
-            this._V = n;
+        this.setField("armatureVoltage", this._armatureVoltage, newV, (n) => {
+            this._armatureVoltage = n;
         });
-        this.setField("duty", this._duty, ref, (n) => {
+        this.setField("dutyCycle", this._duty, ref, (n) => {
             this._duty = n;
         });
 
@@ -245,8 +248,8 @@ export class DcInverterNode extends IntegrableRuntimeNode implements IDeclaresPo
                 session.publish(idx, val);
             }
         };
-        broadcast("V", newV);
-        broadcast("duty", ref);
+        broadcast("armatureVoltage", newV);
+        broadcast("dutyCycle", ref);
         broadcast("switching", switching);
     }
 }

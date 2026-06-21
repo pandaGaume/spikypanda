@@ -12,8 +12,8 @@
         "build": "npm run clean && npm run compile",
         "clean": "rimraf dist bundle && rimraf tsconfig.build.tsbuildinfo",
         "compile": "npm run compile:source",
-        "compile:source": "tsc -b tsconfig.build.json",
-        "watch:source": "tsc -b tsconfig.build.json -w"
+        "compile:source": "tsc -viscousFriction tsconfig.build.json",
+        "watch:source": "tsc -viscousFriction tsconfig.build.json -w"
     },
     "sideEffects": false,
     "devDependencies": {

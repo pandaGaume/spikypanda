@@ -4,22 +4,22 @@ import type { ICartesian, Nullable } from "spikypanda-core";
 /**
  * Park transform (alpha-beta -> dq). Faithful port of the legacy
  * `sensors` ThreePhaseTransforms.park, the validation oracle. Aligns the
- * d axis with the rotor flux at the electrical angle theta_e = P *
- * theta_m:
+ * directAxis axis with the rotor flux at the electrical angle electricalAngle = polePairs *
+ * rotorAngle:
  *
- *   d =  alpha * cos(theta_e) + beta * sin(theta_e)
- *   q = -alpha * sin(theta_e) + beta * cos(theta_e)
+ *   directAxis =  alpha * cos(electricalAngle) + beta * sin(electricalAngle)
+ *   quadratureAxis = -alpha * sin(electricalAngle) + beta * cos(electricalAngle)
  *
  * Second stage of the canonical FOC feedback path: a Clarke node turns
  * the machine phase currents into (alpha, beta), this node rotates them
- * into the rotor frame (i_d, i_q) for the controller. The mechanical
- * rotor angle theta_m is wired from the machine; the editable P (pole
+ * into the rotor frame (directAxisCurrent, quadratureAxisCurrent) for the controller. The mechanical
+ * rotor angle rotorAngle is wired from the machine; the editable polePairs (pole
  * pairs, must match the machine and the FOC) forms the electrical angle.
  *
  * Stateless, no allocation in the hot path.
  */
 export class ParkNode extends RuntimeNode implements IDeclaresPorts {
-    @cloneable private _P: number = 1;
+    @cloneable private _polePairs: number = 1;
 
     private _d: number = 0;
     private _q: number = 0;
@@ -27,28 +27,28 @@ export class ParkNode extends RuntimeNode implements IDeclaresPorts {
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
         { slot: "alpha", optional: true, type: "float" },
         { slot: "beta", optional: true, type: "float" },
-        { slot: "theta_m", optional: true, type: "float" },
+        { slot: "rotorAngle", optional: true, type: "float" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "d", optional: false, type: "float" },
-        { slot: "q", optional: false, type: "float" },
+        { slot: "directAxis", optional: false, type: "float" },
+        { slot: "quadratureAxis", optional: false, type: "float" },
     ];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
     }
 
-    @editable("number") public get P(): number {
-        return this._P;
+    @editable("number") public get polePairs(): number {
+        return this._polePairs;
     }
-    public set P(v: number) {
-        this.setField("P", this._P, v, (n) => (this._P = n));
+    public set polePairs(v: number) {
+        this.setField("polePairs", this._polePairs, v, (n) => (this._polePairs = n));
     }
 
-    @viewable("number") public get d(): number {
+    @viewable("number") public get directAxis(): number {
         return this._d;
     }
-    @viewable("number") public get q(): number {
+    @viewable("number") public get quadratureAxis(): number {
         return this._q;
     }
 
@@ -71,10 +71,10 @@ export class ParkNode extends RuntimeNode implements IDeclaresPorts {
             if (typeof value !== "number") continue;
             if (slot === "alpha") alpha = value;
             else if (slot === "beta") beta = value;
-            else if (slot === "theta_m") thetaM = value;
+            else if (slot === "rotorAngle") thetaM = value;
         }
 
-        const thetaE = this._P * thetaM;
+        const thetaE = this._polePairs * thetaM;
         const cs = Math.cos(thetaE);
         const sn = Math.sin(thetaE);
         this._d = alpha * cs + beta * sn;
@@ -84,8 +84,8 @@ export class ParkNode extends RuntimeNode implements IDeclaresPorts {
             if (!link.enabled) continue;
             const idx = links.indexOf(link);
             if (idx < 0) continue;
-            if (link.slot === "d") session.publish(idx, this._d);
-            else if (link.slot === "q") session.publish(idx, this._q);
+            if (link.slot === "directAxis") session.publish(idx, this._d);
+            else if (link.slot === "quadratureAxis") session.publish(idx, this._q);
         }
     }
 }

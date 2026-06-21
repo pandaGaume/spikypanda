@@ -34,18 +34,18 @@ describe("demo graphs: headless round-trip", () => {
         const loaded = loadGraphHeadless("motor-r385.spikypanda", registry);
         const motor = findInstance(loaded, DcMotorDynamicNode);
         runTicks(loaded.session, 3000, 1e-4);
-        expect(Number.isFinite(motor.i)).toBe(true);
-        expect(Number.isFinite(motor.omega)).toBe(true);
-        expect(Math.abs(motor.i)).toBeGreaterThan(1e-3);
-        expect(motor.omega).toBeGreaterThan(1);
+        expect(Number.isFinite(motor.armatureCurrent)).toBe(true);
+        expect(Number.isFinite(motor.angularVelocity)).toBe(true);
+        expect(Math.abs(motor.armatureCurrent)).toBeGreaterThan(1e-3);
+        expect(motor.angularVelocity).toBeGreaterThan(1);
     });
 
     test("motorwatch-r385: monitoring chain runs alongside the motor", () => {
         const loaded = loadGraphHeadless("motorwatch-r385.spikypanda", registry);
         const motor = findInstance(loaded, DcMotorDynamicNode);
         runTicks(loaded.session, 3000, 1e-4);
-        expect(Number.isFinite(motor.i)).toBe(true);
-        expect(Math.abs(motor.i)).toBeGreaterThan(1e-3);
+        expect(Number.isFinite(motor.armatureCurrent)).toBe(true);
+        expect(Math.abs(motor.armatureCurrent)).toBeGreaterThan(1e-3);
     });
 
     test("motorwatch-r385: the load is swappable from outside the motor block", () => {
@@ -56,15 +56,15 @@ describe("demo graphs: headless round-trip", () => {
         // Pin the shipped step profile to a light constant load and let
         // the motor settle.
         load.profile = "constant";
-        load.tau0 = 0.002;
+        load.baseTorque = 0.002;
         const t = runTicks(loaded.session, 4000, 1e-4);
-        const omegaLight = motor.omega;
+        const omegaLight = motor.angularVelocity;
 
         // Swap the load law without touching anything else in the motor
         // block: same wire, heavier torque, the regime must change.
-        load.tau0 = 0.012;
+        load.baseTorque = 0.012;
         runTicks(loaded.session, 4000, 1e-4, t);
-        const omegaHeavy = motor.omega;
+        const omegaHeavy = motor.angularVelocity;
 
         expect(Number.isFinite(omegaLight)).toBe(true);
         expect(Number.isFinite(omegaHeavy)).toBe(true);
@@ -91,14 +91,14 @@ describe("demo graphs: headless round-trip", () => {
         // profile once the gate settles and windows flow through
         // mux -> buffer -> transpose -> encoder -> clusterer.
         load.profile = "constant";
-        load.tau0 = 0.002;
+        load.baseTorque = 0.002;
         const t = runTicks(loaded.session, 9000, 1e-4);
         expect(cluster.k).toBeGreaterThanOrEqual(1);
         const kBefore = cluster.k;
 
-        // Regime 2: heavier load through the SAME single tau_load wire.
+        // Regime 2: heavier load through the SAME single loadTorque wire.
         // The open-set clusterer must discover a new regime.
-        load.tau0 = 0.012;
+        load.baseTorque = 0.012;
         runTicks(loaded.session, 9000, 1e-4, t);
         expect(cluster.k).toBeGreaterThan(kBefore);
     });
@@ -107,9 +107,9 @@ describe("demo graphs: headless round-trip", () => {
         const loaded = loadGraphHeadless("motor-induction.spikypanda", registry);
         const motor = findInstance(loaded, InductionMotorDynamicNode);
         runTicks(loaded.session, 5000, 2e-4);
-        expect(Number.isFinite(motor.i_a)).toBe(true);
-        expect(Number.isFinite(motor.omega)).toBe(true);
-        expect(motor.omega).toBeGreaterThan(1);
+        expect(Number.isFinite(motor.phaseCurrentA)).toBe(true);
+        expect(Number.isFinite(motor.angularVelocity)).toBe(true);
+        expect(motor.angularVelocity).toBeGreaterThan(1);
         expect(motor.slip).toBeLessThan(1);
     });
 
@@ -117,6 +117,6 @@ describe("demo graphs: headless round-trip", () => {
         const loaded = loadGraphHeadless("motorwatch-induction.spikypanda", registry);
         const motor = findInstance(loaded, InductionMotorDynamicNode);
         runTicks(loaded.session, 5000, 2e-4);
-        expect(motor.omega).toBeGreaterThan(1);
+        expect(motor.angularVelocity).toBeGreaterThan(1);
     });
 });

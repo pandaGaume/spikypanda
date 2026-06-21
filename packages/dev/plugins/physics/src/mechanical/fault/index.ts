@@ -15,18 +15,18 @@ export const faultSubPlugin: IPlugin = {
             category: "Physics.Mechanical.Fault",
             docPath: ctx.assetUrl("docs/physics/fault/modulator.md"),
             inputPorts: [
-                { slot: "signal_in", ...FLOAT_IN },
+                { slot: "inputSignal", ...FLOAT_IN },
                 { slot: "freq", ...FLOAT_IN },
                 { slot: "amplitude", ...FLOAT_IN },
                 { slot: "dt", ...FLOAT_IN },
             ],
-            outputPorts: [{ slot: "signal_out", ...FLOAT_OUT }],
+            outputPorts: [{ slot: "outputSignal", ...FLOAT_OUT }],
         });
         ctx.nodes.register("Physics.Mechanical.Fault:eccentricity", () => createEccentricityFaultNode() as never, {
             label: "Eccentricity Fault (D4)",
             category: "Physics.Mechanical.Fault",
             docPath: ctx.assetUrl("docs/physics/fault/eccentricity.md"),
-            inputPorts: [{ slot: "theta_m", ...FLOAT_IN }],
+            inputPorts: [{ slot: "rotorAngle", ...FLOAT_IN }],
             outputPorts: [{ slot: "flux", optional: false, type: "any" }],
         });
         ctx.nodes.register("Physics.Mechanical.Fault:imbalance", () => createImbalanceFaultNode() as never, {
@@ -34,12 +34,12 @@ export const faultSubPlugin: IPlugin = {
             category: "Physics.Mechanical.Fault",
             docPath: ctx.assetUrl("docs/physics/fault/imbalance.md"),
             inputPorts: [
-                { slot: "omega", ...FLOAT_IN },
-                { slot: "theta_m", ...FLOAT_IN },
+                { slot: "angularVelocity", ...FLOAT_IN },
+                { slot: "rotorAngle", ...FLOAT_IN },
             ],
             outputPorts: [
-                { slot: "force_y", ...FLOAT_OUT },
-                { slot: "force_z", ...FLOAT_OUT },
+                { slot: "forceY", ...FLOAT_OUT },
+                { slot: "forceZ", ...FLOAT_OUT },
             ],
         });
     },

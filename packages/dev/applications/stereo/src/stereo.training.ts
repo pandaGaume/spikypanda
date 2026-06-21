@@ -17,7 +17,7 @@ import { StereoInferenceRuntime } from "./stereo.inference";
 
 /// <summary>
 /// Training runtime for stereo CNN graphs.
-/// Handles backpropagation with shared kernels between L and R branches.
+/// Handles backpropagation with shared kernels between armatureInductance and armatureResistance branches.
 /// Shared kernels accumulate gradients from both branches into the same kernel weights.
 /// Cross-kernel gradients also accumulate normally through the KernelWeightSlot pattern.
 /// </summary>
@@ -54,7 +54,7 @@ export class StereoTrainingRuntime {
             this._kernelNeuronMap.set(kernel, []);
         }
 
-        // Map conv neurons to their kernels (from both L and R branches + cross)
+        // Map conv neurons to their kernels (from both armatureInductance and armatureResistance branches + cross)
         for (const desc of this.graph.layerDescriptors) {
             if (desc.type === CnnLayerType.Conv) {
                 for (const neuron of desc.neurons) {

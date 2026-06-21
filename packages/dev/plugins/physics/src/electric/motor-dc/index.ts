@@ -32,11 +32,11 @@ const FAULT_IN = { optional: true, type: "any" } as const;
 const SCENE_IN = { optional: true, type: "scene" } as const;
 
 /** Base-class-inherited port blocks shared by every motor node:
- *  transform pose (local / parent_world / world) + scene attach +
+ *  transform pose (local / parentWorld / world) + scene attach +
  *  variadic fault bank (fault_0; the editor grows fault_1 ... on connect). */
 const BASE_IN_PORTS = [
     { slot: "local", ...MAT44_IN },
-    { slot: "parent_world", ...MAT44_IN },
+    { slot: "parentWorld", ...MAT44_IN },
     { slot: "scene", ...SCENE_IN },
     { slot: "fault_0", ...FAULT_IN },
 ] as const;
@@ -49,7 +49,7 @@ const TRANSFORM_OUT_PORT = { slot: "world", ...MAT44_OUT } as const;
  * manifest's `subPlugins[]` entry.
  *
  * Both motor nodes inherit `TransformNode` so they expose `local` +
- * `parent_world` matrix44 inputs and a `world` matrix44 output — they
+ * `parentWorld` matrix44 inputs and a `world` matrix44 output — they
  * are positionable in a world reference frame and compose with the
  * Geometry.Transform output without conversion.
  */
@@ -67,16 +67,27 @@ export const motorDcSubPlugin: IPlugin = {
             // session.dt, the motor exposes its state via gatherState
             // / writeState / rhs. Drop a Control.Sim:rk4-solver marker
             // node in the graph to enable integration.
-            inputPorts: [...BASE_IN_PORTS, { slot: "V", ...FLOAT_IN }, { slot: "tau_load", ...FLOAT_IN }],
-            outputPorts: [TRANSFORM_OUT_PORT, { slot: "i", ...FLOAT_OUT }, { slot: "omega", ...FLOAT_OUT }, { slot: "tau_em", ...FLOAT_OUT }],
+            inputPorts: [...BASE_IN_PORTS, { slot: "armatureVoltage", ...FLOAT_IN }, { slot: "loadTorque", ...FLOAT_IN }],
+            outputPorts: [
+                TRANSFORM_OUT_PORT,
+                { slot: "armatureCurrent", ...FLOAT_OUT },
+                { slot: "angularVelocity", ...FLOAT_OUT },
+                { slot: "electromagneticTorque", ...FLOAT_OUT },
+            ],
         });
 
         ctx.nodes.register("Physics.Electric.Motor.DC:steady", () => createDcMotorSteadyNode() as never, {
             label: "DC Motor (Steady)",
             category: "Physics.Electric.Motor.DC",
             docPath: ctx.assetUrl("docs/physics/motor-dc/steady.md"),
-            inputPorts: [...BASE_IN_PORTS, { slot: "V", ...FLOAT_IN }, { slot: "tau_load", ...FLOAT_IN }],
-            outputPorts: [TRANSFORM_OUT_PORT, { slot: "i", ...FLOAT_OUT }, { slot: "omega", ...FLOAT_OUT }, { slot: "tau", ...FLOAT_OUT }, { slot: "back_emf", ...FLOAT_OUT }],
+            inputPorts: [...BASE_IN_PORTS, { slot: "armatureVoltage", ...FLOAT_IN }, { slot: "loadTorque", ...FLOAT_IN }],
+            outputPorts: [
+                TRANSFORM_OUT_PORT,
+                { slot: "armatureCurrent", ...FLOAT_OUT },
+                { slot: "angularVelocity", ...FLOAT_OUT },
+                { slot: "developedTorque", ...FLOAT_OUT },
+                { slot: "backEmf", ...FLOAT_OUT },
+            ],
         });
 
         ctx.nodes.register("Physics.Electric.Motor.DC:speedPI", () => createDcMotorSpeedPiNode() as never, {
@@ -88,10 +99,10 @@ export const motorDcSubPlugin: IPlugin = {
             // any IIntegrable leaves earlier in the same tick. Single
             // source of truth across the entire closed loop.
             inputPorts: [
-                { slot: "omega_ref", ...FLOAT_IN },
-                { slot: "omega_measured", ...FLOAT_IN },
+                { slot: "angularVelocityReference", ...FLOAT_IN },
+                { slot: "measuredAngularVelocity", ...FLOAT_IN },
             ],
-            outputPorts: [{ slot: "V_cmd", ...FLOAT_OUT }],
+            outputPorts: [{ slot: "voltageCommand", ...FLOAT_OUT }],
         });
 
         ctx.nodes.register("Physics.Electric.Motor.DC:tachymeter", () => createDcMotorTachymeterNode() as never, {
@@ -99,8 +110,8 @@ export const motorDcSubPlugin: IPlugin = {
             category: "Physics.Electric.Motor.DC",
             docPath: ctx.assetUrl("docs/physics/motor-dc/tachymeter.md"),
             // dt port dropped — see Speed PI above for the rationale.
-            inputPorts: [{ slot: "omega", ...FLOAT_IN }],
-            outputPorts: [{ slot: "omega_measured", ...FLOAT_OUT }],
+            inputPorts: [{ slot: "angularVelocity", ...FLOAT_IN }],
+            outputPorts: [{ slot: "measuredAngularVelocity", ...FLOAT_OUT }],
         });
 
         // ── MCSA chain: PWM Inverter + Current PI + Current Sensor ──
@@ -113,10 +124,10 @@ export const motorDcSubPlugin: IPlugin = {
             label: "DC PWM Inverter",
             category: "Physics.Electric.Motor.DC",
             docPath: ctx.assetUrl("docs/physics/motor-dc/inverter.md"),
-            inputPorts: [{ slot: "V_cmd", ...FLOAT_IN }],
+            inputPorts: [{ slot: "voltageCommand", ...FLOAT_IN }],
             outputPorts: [
-                { slot: "V", ...FLOAT_OUT },
-                { slot: "duty", ...FLOAT_OUT },
+                { slot: "armatureVoltage", ...FLOAT_OUT },
+                { slot: "dutyCycle", ...FLOAT_OUT },
                 { slot: "switching", optional: false, type: "boolean" },
             ],
         });
@@ -126,10 +137,10 @@ export const motorDcSubPlugin: IPlugin = {
             category: "Physics.Electric.Motor.DC",
             docPath: ctx.assetUrl("docs/physics/motor-dc/current-pi.md"),
             inputPorts: [
-                { slot: "i_ref", ...FLOAT_IN },
-                { slot: "i_measured", ...FLOAT_IN },
+                { slot: "currentReference", ...FLOAT_IN },
+                { slot: "measuredCurrent", ...FLOAT_IN },
             ],
-            outputPorts: [{ slot: "V_cmd", ...FLOAT_OUT }],
+            outputPorts: [{ slot: "voltageCommand", ...FLOAT_OUT }],
         });
 
         // Alias of the generic Physics.Electric.Sensor:current (same node
@@ -139,8 +150,8 @@ export const motorDcSubPlugin: IPlugin = {
             label: "Current Sensor (LEM)",
             category: "Physics.Electric.Motor.DC",
             docPath: ctx.assetUrl("docs/physics/motor-dc/current-sensor.md"),
-            inputPorts: [{ slot: "i", ...FLOAT_IN }],
-            outputPorts: [{ slot: "i_measured", ...FLOAT_OUT }],
+            inputPorts: [{ slot: "armatureCurrent", ...FLOAT_IN }],
+            outputPorts: [{ slot: "measuredCurrent", ...FLOAT_OUT }],
         });
     },
 };

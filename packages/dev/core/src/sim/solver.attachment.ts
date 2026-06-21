@@ -15,7 +15,7 @@
  *      When missing AND the registry has a factory for that kind,
  *      AUTO-FILL with `{ kind, options: SOLVER_REGISTRY.defaultOptions(kind) }`.
  *      When missing AND the registry has no factory, log a warning
- *      and skip the leaves (they stay at i0 / omega0 / ...).
+ *      and skip the leaves (they stay at initialArmatureCurrent / initialAngularVelocity / ...).
  *   3. Merge per-leaf `solverOptions` into the descriptor's `options`
  *      using `mergeSolverOptions` (tightening rules).
  *   4. Ask `SOLVER_REGISTRY.create(kind, mergedOptions, leaves)` for an
@@ -31,12 +31,7 @@
 import type { IRuntimeGraph } from "../execution/execution.interfaces";
 import type { IIntegrable, ISolver } from "./sim.interfaces";
 import { isIntegrable } from "./sim.interfaces";
-import {
-    DEFAULT_SOLVER_KIND,
-    ISolverDescriptor,
-    mergeSolverOptions,
-    SOLVER_REGISTRY,
-} from "./solver.registry";
+import { DEFAULT_SOLVER_KIND, ISolverDescriptor, mergeSolverOptions, SOLVER_REGISTRY } from "./solver.registry";
 
 /**
  * Walk the graph, build a `kind → leaves` index. Leaves that don't
@@ -65,10 +60,7 @@ function groupLeavesByKind(graph: IRuntimeGraph): Map<string, IIntegrable[]> {
  *
  * The caller attaches each returned solver to its session.
  */
-export function buildSolverAttachmentsForGraph(
-    sceneDescriptors: ReadonlyArray<ISolverDescriptor>,
-    graph: IRuntimeGraph,
-): ISolver[] {
+export function buildSolverAttachmentsForGraph(sceneDescriptors: ReadonlyArray<ISolverDescriptor>, graph: IRuntimeGraph): ISolver[] {
     const groups = groupLeavesByKind(graph);
     if (groups.size === 0) return [];
 
@@ -80,10 +72,7 @@ export function buildSolverAttachmentsForGraph(
         if (!desc) {
             if (!SOLVER_REGISTRY.hasKind(kind)) {
                 // eslint-disable-next-line no-console
-                console.warn(
-                    `[solver-attachment] no factory registered for kind "${kind}", `
-                    + `${leaves.length} leaves will not be integrated`,
-                );
+                console.warn(`[solver-attachment] no factory registered for kind "${kind}", ` + `${leaves.length} leaves will not be integrated`);
                 continue;
             }
             desc = { kind, options: SOLVER_REGISTRY.defaultOptions(kind) };
@@ -105,9 +94,7 @@ export function buildSolverAttachmentsForGraph(
  * compatible objects (SolverItem GraphItems). Tolerates the array
  * containing nulls (filter-friendly).
  */
-export function collectDescriptors(
-    sources: ReadonlyArray<{ toSolverDescriptor?: () => ISolverDescriptor } | null | undefined>,
-): ISolverDescriptor[] {
+export function collectDescriptors(sources: ReadonlyArray<{ toSolverDescriptor?: () => ISolverDescriptor } | null | undefined>): ISolverDescriptor[] {
     const descriptors: ISolverDescriptor[] = [];
     for (const source of sources) {
         if (!source || typeof source.toSolverDescriptor !== "function") continue;

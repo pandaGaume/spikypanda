@@ -37,7 +37,7 @@
  * `IHasSampleRateRequirement` scaffolding (user-pin + `computeRequiredHz()`
  * virtual hook). The layer's `computeRequiredHz()` returns a constant
  * 100 Hz baseline; the user can pin a different rate through the
- * inherited `required_hz` editable.
+ * inherited `requiredSampleRateHz` editable.
  *
  * Design choices preserved from the pre-split atmosphere:
  *   - Composition is the species schema + initial-conditions snapshot
@@ -180,7 +180,7 @@ export class AtmosphereLayerNode extends IntegrableRuntimeNode implements IDecla
      *  baseline. ECLSS / habitat-air mass-balance dynamics happen on
      *  the sub-second scale; integrating faster doesn't add accuracy
      *  for a well-stirred volume. The user can pin a different value
-     *  via the inherited `required_hz` editable. */
+     *  via the inherited `requiredSampleRateHz` editable. */
     protected override computeRequiredHz(): number {
         return 100;
     }

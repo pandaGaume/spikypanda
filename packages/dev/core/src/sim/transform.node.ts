@@ -14,11 +14,11 @@ import type { ILiveInScene } from "./sim.interfaces";
  * frame. Computes the node's world transform by composing a parent's
  * world transform with the local one:
  *
- *     world = parent_world × local
+ *     world = parentWorld × local
  *
  * Inputs (both optional, default = identity):
  *   local         this object's pose in the parent's frame [matrix44]
- *   parent_world  the parent's world transform              [matrix44]
+ *   parentWorld  the parent's world transform              [matrix44]
  *
  * Output:
  *   world         this object's pose in the world frame    [matrix44]
@@ -34,13 +34,13 @@ import type { ILiveInScene } from "./sim.interfaces";
  * implements `ILiveInScene`). So `worldTransform()` chains object ->
  * scene -> ... -> root through the single `parent.worldTransform()`
  * mechanism, with NO separate scene-view transform. A wired
- * `parent_world` port is an explicit override that wins over the
+ * `parentWorld` port is an explicit override that wins over the
  * structural parent. A root scene's world is identity unless given a
  * pose, so graphs that never pose a scene see an identity parent.
  *
  * This is a CORE primitive (it was previously vendored inside the physics
  * plugin): any plugin's world object (motor, sensor, mechanical body,
- * robot link) extends it to inherit the local / parent_world ports and a
+ * robot link) extends it to inherit the local / parentWorld ports and a
  * `super.fire()` it calls before its own physics. The matrix is a flat
  * array of 16 numbers in column-major layout.
  */
@@ -52,7 +52,7 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts, ILiveI
 
     /** Slot names exposed as static so subclasses can reference them. */
     public static readonly INPUT_LOCAL = "local";
-    public static readonly INPUT_PARENT_WORLD = "parent_world";
+    public static readonly INPUT_PARENT_WORLD = "parentWorld";
     public static readonly OUTPUT_WORLD = "world";
 
     /** Reusable port descriptor blocks so subclasses can spread them. */
@@ -76,7 +76,7 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts, ILiveI
     // The MATH lives once in the base `GraphNode` (position/orientation →
     // local → parent × local, via `composeWorldInto`). This node only layers
     // the SIM concerns the base must not know about: the wired `local` /
-    // `parent_world` port OVERRIDES and the enclosing scene as the default
+    // `parentWorld` port OVERRIDES and the enclosing scene as the default
     // parent frame. They are captured each `fire()` as fields so the pull
     // methods (`localTransform` / `worldTransform`, overridden below) report
     // the SAME pose the `world` port publishes. The world is recomposed every
@@ -88,7 +88,7 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts, ILiveI
     private _localOverride?: Matrix4;
     private _localOverrideActive: boolean = false;
 
-    /** Wired `parent_world` port override (reused buffer); when active it
+    /** Wired `parentWorld` port override (reused buffer); when active it
      *  wins over the structural `parent` and the scene. */
     private _parentWorldOverride?: Matrix4;
     private _parentWorldActive: boolean = false;
@@ -210,7 +210,7 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts, ILiveI
     }
 
     /** Current world transform in flat (`Matrix44`) form: equals
-     *  parent_world × local after the last fire() consumed inputs. */
+     *  parentWorld × local after the last fire() consumed inputs. */
     public get world(): ReadonlyArray<number> {
         return this._worldFlat;
     }
@@ -222,7 +222,7 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts, ILiveI
     }
 
     /** World pose (see IHasTransform): `parentWorld × local`, where
-     *  parentWorld follows the precedence wired `parent_world` override >
+     *  parentWorld follows the precedence wired `parentWorld` override >
      *  structural `parent` (the enclosing scene, wired at bind). With
      *  neither, it degrades to the bare local pose. */
     public override worldTransform(): Matrix4 {
@@ -295,7 +295,7 @@ export class TransformNode extends RuntimeNode implements IDeclaresPorts, ILiveI
             this._localOverrideActive = false;
         }
 
-        // `parent_world` port override (wins over the scene parent below).
+        // `parentWorld` port override (wins over the scene parent below).
         const parentV = this.consumeLatest(session, TransformNode.INPUT_PARENT_WORLD);
         if (isMatrix44(parentV)) {
             (this._parentWorldOverride ??= new Matrix4()).setFromArray(parentV);

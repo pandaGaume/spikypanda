@@ -8,28 +8,28 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  *     out = in + amplitude · sin(θ_shaft + phase)
  *
  * where θ_shaft is the integrated shaft angle (radians). Computed from
- * the wired `omega` input by accumulating dt-scaled increments.
+ * the wired `angularVelocity` input by accumulating dt-scaled increments.
  *
- * Connect the motor's `omega` output to this node's `omega` input, and
- * place this node in series on the `tau_load` line (or on a measured
+ * Connect the motor's `angularVelocity` output to this node's `angularVelocity` input, and
+ * place this node in series on the `loadTorque` line (or on a measured
  * vibration channel) to introduce a classic 1× unbalance signature.
  */
 export class ShaftUnbalanceNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _amplitude: number = 0.005;
     @cloneable private _phase: number = 0;
 
-    @cloneable private _theta: number = 0;
+    @cloneable private _shaftAngle: number = 0;
     @cloneable private _out: number = 0;
     private _lastT: number = -1;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "signal_in", optional: true, type: "float" },
-        { slot: "omega", optional: true, type: "float" },
+        { slot: "inputSignal", optional: true, type: "float" },
+        { slot: "angularVelocity", optional: true, type: "float" },
         { slot: "dt", optional: true, type: "float" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "signal_out", optional: false, type: "float" },
-        { slot: "theta", optional: false, type: "float" },
+        { slot: "outputSignal", optional: false, type: "float" },
+        { slot: "shaftAngle", optional: false, type: "float" },
     ];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
@@ -53,19 +53,19 @@ export class ShaftUnbalanceNode extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @viewable("number") public get signal_out(): number {
+    @viewable("number") public get outputSignal(): number {
         return this._out;
     }
-    @viewable("number") public get theta(): number {
-        return this._theta;
+    @viewable("number") public get shaftAngle(): number {
+        return this._shaftAngle;
     }
 
     public override reset(_session: ISession): void {
-        this.setField("signal_out", this._out, 0, (n) => {
+        this.setField("outputSignal", this._out, 0, (n) => {
             this._out = n;
         });
-        this.setField("theta", this._theta, 0, (n) => {
-            this._theta = n;
+        this.setField("shaftAngle", this._shaftAngle, 0, (n) => {
+            this._shaftAngle = n;
         });
         this._lastT = -1;
     }
@@ -73,7 +73,7 @@ export class ShaftUnbalanceNode extends RuntimeNode implements IDeclaresPorts {
     public override fire(session: ISession, t: number): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
         let inSig = 0,
-            omega = 0,
+            angularVelocity = 0,
             dt = -1;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
@@ -82,21 +82,21 @@ export class ShaftUnbalanceNode extends RuntimeNode implements IDeclaresPorts {
             if (idx < 0 || !session.linkStates[idx].ready) continue;
             const value = session.consume(idx);
             if (typeof value !== "number") continue;
-            if (slot === "signal_in") inSig = value;
-            else if (slot === "omega") omega = value;
+            if (slot === "inputSignal") inSig = value;
+            else if (slot === "angularVelocity") angularVelocity = value;
             else if (slot === "dt") dt = value;
         }
         if (dt < 0) dt = this._lastT < 0 ? 0 : Math.max(0, t - this._lastT);
         this._lastT = t;
 
-        this._theta += omega * dt;
-        const out = inSig + this._amplitude * Math.sin(this._theta + this._phase);
+        this._shaftAngle += angularVelocity * dt;
+        const out = inSig + this._amplitude * Math.sin(this._shaftAngle + this._phase);
 
-        this.setField("signal_out", this._out, out, (n) => {
+        this.setField("outputSignal", this._out, out, (n) => {
             this._out = n;
         });
-        this.setField("theta", this._theta, this._theta, (n) => {
-            this._theta = n;
+        this.setField("shaftAngle", this._shaftAngle, this._shaftAngle, (n) => {
+            this._shaftAngle = n;
         });
         const broadcast = (slot: string, val: unknown): void => {
             for (const link of this.onsc<IChannel>()) {
@@ -106,8 +106,8 @@ export class ShaftUnbalanceNode extends RuntimeNode implements IDeclaresPorts {
                 session.publish(idx, val);
             }
         };
-        broadcast("signal_out", out);
-        broadcast("theta", this._theta);
+        broadcast("outputSignal", out);
+        broadcast("shaftAngle", this._shaftAngle);
     }
 }
 

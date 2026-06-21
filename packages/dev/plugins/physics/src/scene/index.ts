@@ -5,23 +5,9 @@ import type { IPlugin, IPluginContext } from "spikypanda-nodeeditor";
 // I/O slots. The atmosphere itself no longer leaks the V1 species
 // schema to the editor: its species list is purely composition-driven.
 void V1_SPECIES_ORDER;
-import {
-    AtmosphereGateNode,
-    createAtmosphereGateNode,
-    GATE_IN_ATMOSPHERE_A,
-    GATE_IN_ATMOSPHERE_B,
-    GATE_OUT_FLOW_RATE,
-} from "./atmosphere-gate.node.js";
-import {
-    ATMOSPHERE_LAYER_IN_COMPOSITION,
-    AtmosphereLayerNode,
-    createAtmosphereLayerNode,
-} from "./atmosphere-layer.node.js";
-import {
-    ATMOSPHERE_IN_LAYER_PREFIX,
-    AtmosphereNode,
-    createAtmosphereNode,
-} from "./atmosphere.node.js";
+import { AtmosphereGateNode, createAtmosphereGateNode, GATE_IN_ATMOSPHERE_A, GATE_IN_ATMOSPHERE_B, GATE_OUT_FLOW_RATE } from "./atmosphere-gate.node.js";
+import { ATMOSPHERE_LAYER_IN_COMPOSITION, AtmosphereLayerNode, createAtmosphereLayerNode } from "./atmosphere-layer.node.js";
+import { ATMOSPHERE_IN_LAYER_PREFIX, AtmosphereNode, createAtmosphereNode } from "./atmosphere.node.js";
 import {
     createEarthSceneItem,
     createIssCabinSceneItem,
@@ -143,9 +129,7 @@ export const sceneSubPlugin: IPlugin = {
         // particulates ride along inside the bound Composition (their
         // own `particulate_in_<k>` slots live on the Composition node).
         // Species schema is composition-driven (no V1-hardcoded ports).
-        const layerInputs: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [
-            { slot: ATMOSPHERE_LAYER_IN_COMPOSITION, optional: true, type: "composition" },
-        ];
+        const layerInputs: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [{ slot: ATMOSPHERE_LAYER_IN_COMPOSITION, optional: true, type: "composition" }];
         const layerOutputs: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [
             { slot: "pressure", optional: true, type: "float" },
             { slot: "temperature", optional: true, type: "float" },
@@ -169,9 +153,7 @@ export const sceneSubPlugin: IPlugin = {
         // stratification; the hidden default is then suppressed.
         // Aggregates pressure/temperature/density are volume-weighted
         // across the active layer set.
-        const atmosphereInputs: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [
-            { slot: `${ATMOSPHERE_IN_LAYER_PREFIX}0`, optional: true, type: "layer" },
-        ];
+        const atmosphereInputs: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [{ slot: `${ATMOSPHERE_IN_LAYER_PREFIX}0`, optional: true, type: "layer" }];
         const atmosphereOutputs: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [
             { slot: "pressure", optional: true, type: "float" },
             { slot: "temperature", optional: true, type: "float" },
@@ -199,9 +181,7 @@ export const sceneSubPlugin: IPlugin = {
             { slot: GATE_IN_ATMOSPHERE_A, optional: true, type: "atmosphere" },
             { slot: GATE_IN_ATMOSPHERE_B, optional: true, type: "atmosphere" },
         ];
-        const gateOutputs = [
-            { slot: GATE_OUT_FLOW_RATE, optional: true, type: "float" },
-        ];
+        const gateOutputs = [{ slot: GATE_OUT_FLOW_RATE, optional: true, type: "float" }];
         ctx.nodes.register("Physics.Scene:atmosphere-gate", () => createAtmosphereGateNode() as never, {
             label: "Atmosphere Gate",
             category: "Physics.Scene",

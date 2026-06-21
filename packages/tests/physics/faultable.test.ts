@@ -9,7 +9,7 @@
  *      { target: "tau", value }.
  *   3. Reset clears the accumulator.
  *   4. Motor inheritance: DcMotorSteadyNode reacts to a fault on fault_0
- *      exactly as if it had received the same delta on tau_load.
+ *      exactly as if it had received the same delta on loadTorque.
  *
  * The motor wiring tests use a SessionMock helper that emulates the
  * minimal IChannel + linkStates contract the runtime nodes touch.
@@ -108,7 +108,7 @@ class TestFaultableNode extends FaultableNode {
 describe("isFaultDescriptor", () => {
     it("accepts plain { target, value } objects", () => {
         expect(isFaultDescriptor({ target: "tau", value: 1.5 })).toBe(true);
-        expect(isFaultDescriptor({ target: "R",   value: 0   })).toBe(true);
+        expect(isFaultDescriptor({ target: "armatureResistance",   value: 0   })).toBe(true);
     });
     it("rejects missing or wrongly-typed fields", () => {
         expect(isFaultDescriptor({ target: "tau" })).toBe(false);
@@ -133,7 +133,7 @@ describe("FaultableNode accumulator", () => {
         const node = new TestFaultableNode();
         node.reset(emptySession());
         expect(node.read("tau")).toBe(0);
-        expect(node.read("R")).toBe(0);
+        expect(node.read("armatureResistance")).toBe(0);
         expect(node.read("anything")).toBe(0);
     });
 
@@ -150,12 +150,12 @@ describe("FaultableNode accumulator", () => {
     it("accepts a structured descriptor unchanged", () => {
         const node = new TestFaultableNode();
         node.reset(emptySession());
-        const fault: IFaultDescriptor = { target: "R", value: 0.07 };
+        const fault: IFaultDescriptor = { target: "armatureResistance", value: 0.07 };
         const { session } = bindOpsc(node as unknown as { _opsc: IOlink[] }, [
             { slot: "fault_0", value: fault },
         ]);
         node.fire(session, 0);
-        expect(node.read("R")).toBeCloseTo(0.07, 12);
+        expect(node.read("armatureResistance")).toBeCloseTo(0.07, 12);
         expect(node.read("tau")).toBe(0);
     });
 
@@ -165,11 +165,11 @@ describe("FaultableNode accumulator", () => {
         const { session } = bindOpsc(node as unknown as { _opsc: IOlink[] }, [
             { slot: "fault_0", value: 1 },                                   // tau += 1 (auto-wrap)
             { slot: "fault_1", value: { target: "tau", value: 2 } },
-            { slot: "fault_2", value: { target: "R",   value: 0.5 } },
+            { slot: "fault_2", value: { target: "armatureResistance",   value: 0.5 } },
         ]);
         node.fire(session, 0);
         expect(node.read("tau")).toBeCloseTo(3, 12);
-        expect(node.read("R")).toBeCloseTo(0.5, 12);
+        expect(node.read("armatureResistance")).toBeCloseTo(0.5, 12);
     });
 
     it("clears the accumulator at the start of each fire()", () => {
@@ -203,7 +203,7 @@ describe("FaultableNode accumulator", () => {
         const node = new TestFaultableNode();
         node.reset(emptySession());
         const { session } = bindOpsc(node as unknown as { _opsc: IOlink[] }, [
-            { slot: "tau_load", value: 99 },                                  // wrong slot family
+            { slot: "loadTorque", value: 99 },                                  // wrong slot family
             { slot: "fault_X",  value: 1  },                                  // bad index suffix
             { slot: "fault_0",  value: 3  },
         ]);
@@ -224,29 +224,29 @@ describe("FaultableNode accumulator", () => {
 // ---------------------------------------------------------------------------
 
 describe("DcMotorSteadyNode fault wiring", () => {
-    it("a fault on fault_0 perturbs omega exactly like tau_load would", () => {
-        // Steady-state omega formula:
-        //     ω = (V·Kt - R·τ_eff) / (Ke·Kt + R·b)
-        // With V=0 and the fault as the only torque, τ_eff = fault_value
-        // and ω = -R·fault / (Ke·Kt + R·b). With defaults R=1, Kt=Ke=0.01,
-        // b=1e-4, denom = 1e-4 + 1e-4 = 2e-4, so ω = -1·1/2e-4 = -5000.
+    it("a fault on fault_0 perturbs angularVelocity exactly like loadTorque would", () => {
+        // Steady-state angularVelocity formula:
+        //     ω = (armatureVoltage·torqueConstant - armatureResistance·τ_eff) / (backEmfConstant·torqueConstant + armatureResistance·viscousFriction)
+        // With armatureVoltage=0 and the fault as the only torque, τ_eff = fault_value
+        // and ω = -armatureResistance·fault / (backEmfConstant·torqueConstant + armatureResistance·viscousFriction). With defaults armatureResistance=1, torqueConstant=backEmfConstant=0.01,
+        // viscousFriction=1e-4, denom = 1e-4 + 1e-4 = 2e-4, so ω = -1·1/2e-4 = -5000.
         const node = new DcMotorSteadyNode();
         const { session } = bindOpsc(node as unknown as { _opsc: IOlink[] }, [
             { slot: "fault_0", value: 1 },                                    // 1 Nm torque fault
         ]);
         node.fire(session, 0);
-        const denom = node.Ke * node.Kt + node.R * node.b;
-        const expectedOmega = -node.R * 1 / denom;
-        expect(node.omega).toBeCloseTo(expectedOmega, 6);
+        const denom = node.backEmfConstant * node.torqueConstant + node.armatureResistance * node.viscousFriction;
+        const expectedOmega = -node.armatureResistance * 1 / denom;
+        expect(node.angularVelocity).toBeCloseTo(expectedOmega, 6);
     });
 
     it("declares fault_0 in its inputPorts", () => {
         const node = new DcMotorSteadyNode();
         const slots = node.inputPorts.map((p) => p.slot);
         expect(slots).toContain("fault_0");
-        // Order: transform (local, parent_world, scene), then fault, then motor own.
+        // Order: transform (local, parentWorld, scene), then fault, then motor own.
         const fIdx = slots.indexOf("fault_0");
-        const vIdx = slots.indexOf("V");
+        const vIdx = slots.indexOf("armatureVoltage");
         expect(fIdx).toBeGreaterThan(slots.indexOf("scene"));
         expect(fIdx).toBeLessThan(vIdx);
     });

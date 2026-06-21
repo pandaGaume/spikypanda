@@ -68,7 +68,7 @@ export { physicsParticulateSubPlugin } from "./particulate/index.js";
  *     Gear      — mesh harmonic + tooth-fault Gaussian pulse
  *     Friction  — Coulomb + Stribeck + viscous combined torque
  *     Load      — load-torque source with profiles (constant, step, ramp,
- *                 quadratic, periodic) for any motor's tau_load input
+ *                 quadratic, periodic) for any motor's loadTorque input
  *     Vibration — accelerometer transducer (LPF + noise + quantization)
  *     Fault     — generic sinusoidal modulator (composable building block)
  *

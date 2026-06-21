@@ -6,16 +6,16 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  *
  * A point payload of mass `m` on a crank arm of radius `r` (phase `phi0`
  * in the rotor radial plane) that turns with the rotor. The payload is a
- * world object (extends TransformNode): wire its `local` / `parent_world`
+ * world object (extends TransformNode): wire its `local` / `parentWorld`
  * from the SAME transform that places the motor, so it shares the
  * assembly's orientation, and bind the Scene on its `scene` port. It
  * reads the world gravity from the bound Scene and projects it into the
  * body frame with its own `world` (g_body = R^T * g_world): NO separate
  * gravity-vector node. The projected weight reacts as:
  *
- *   tau_load     = m * g_radial * r * sin((theta_m + phi0) - g_angle)
- *   force_axial  = m * g_axial      (thrust along the shaft)
- *   force_radial = m * g_radial     (radial weight on the bearing/housing)
+ *   loadTorque     = m * g_radial * r * sin((rotorAngle + phi0) - g_angle)
+ *   axialForce  = m * g_axial      (thrust along the shaft)
+ *   radialForce = m * g_radial     (radial weight on the bearing/housing)
  *
  * The torque is a 1x f_mech ripple of amplitude `m * g_radial * r`: a pure
  * SIGNATURE (zero mean over a turn). It scales with GRAVITY (-> 0 in
@@ -23,7 +23,7 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  * is the component perpendicular to the shaft, so a horizontal shaft gives
  * the max ripple, a vertical shaft gives zero). On a small modern PMSM
  * this payload torque ripple is the dominant mechanism that makes the
- * gravity signature READABLE in i_q (study 4.2, "charge importante").
+ * gravity signature READABLE in quadratureAxisCurrent (study 4.2, "charge importante").
  *
  * Gated on a BOUND scene (per-node `scene` port or session scene); with
  * no scene there is no defined gravity, so the load is inert.
@@ -39,14 +39,14 @@ export class GravityPayloadLoadNode extends TransformNode implements IDeclaresPo
     private _gRadial: number = 0;
 
     public override readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        ...TransformNode.TRANSFORM_INPUT_PORTS, // local, parent_world
-        { slot: "theta_m", optional: true, type: "float" },
+        ...TransformNode.TRANSFORM_INPUT_PORTS, // local, parentWorld
+        { slot: "rotorAngle", optional: true, type: "float" },
     ];
     public override readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
         ...TransformNode.TRANSFORM_OUTPUT_PORTS, // world
-        { slot: "tau_load", optional: false, type: "float" },
-        { slot: "force_axial", optional: false, type: "float" },
-        { slot: "force_radial", optional: false, type: "float" },
+        { slot: "loadTorque", optional: false, type: "float" },
+        { slot: "axialForce", optional: false, type: "float" },
+        { slot: "radialForce", optional: false, type: "float" },
     ];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
@@ -74,13 +74,13 @@ export class GravityPayloadLoadNode extends TransformNode implements IDeclaresPo
     }
 
     // ── Viewables ──────────────────────────────────────────────────────
-    @viewable("number", { unit: "N.m" }) public get tau_load(): number {
+    @viewable("number", { unit: "N.m" }) public get loadTorque(): number {
         return this._tauLoad;
     }
-    @viewable("number", { unit: "N" }) public get force_axial(): number {
+    @viewable("number", { unit: "N" }) public get axialForce(): number {
         return this._fAxial;
     }
-    @viewable("number", { unit: "N" }) public get force_radial(): number {
+    @viewable("number", { unit: "N" }) public get radialForce(): number {
         return this._fRadial;
     }
     /** The 1x torque-ripple amplitude m * g_radial * r (signature magnitude). */
@@ -97,7 +97,7 @@ export class GravityPayloadLoadNode extends TransformNode implements IDeclaresPo
     }
 
     public override fire(session: ISession, t: number): void {
-        // TransformNode hop: consume local / parent_world, set + publish world.
+        // TransformNode hop: consume local / parentWorld, set + publish world.
         super.fire(session, t);
 
         const links = session.graph.links as ReadonlyArray<IChannel>;
@@ -105,7 +105,7 @@ export class GravityPayloadLoadNode extends TransformNode implements IDeclaresPo
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const slot = String(inSlotOf(link));
-            if (slot !== "theta_m") continue; // local/parent_world consumed by super.fire
+            if (slot !== "rotorAngle") continue; // local/parentWorld consumed by super.fire
             const idx = links.indexOf(link);
             if (idx < 0 || !session.linkStates[idx].ready) continue;
             const value = session.consume(idx);
@@ -139,13 +139,13 @@ export class GravityPayloadLoadNode extends TransformNode implements IDeclaresPo
             const idx = links.indexOf(link);
             if (idx < 0) continue;
             switch (link.slot) {
-                case "tau_load":
+                case "loadTorque":
                     session.publish(idx, this._tauLoad);
                     break;
-                case "force_axial":
+                case "axialForce":
                     session.publish(idx, this._fAxial);
                     break;
-                case "force_radial":
+                case "radialForce":
                     session.publish(idx, this._fRadial);
                     break;
             }

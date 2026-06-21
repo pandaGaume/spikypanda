@@ -6,10 +6,10 @@
  *   a) Direct-on-line start with balanced 3-phase sinusoidal voltages:
  *      the motor accelerates, settles below synchronous speed, slip in
  *      (0, 0.2) under a modest constant load, all signals finite/bounded.
- *   b) Te > 0 (on average) during acceleration; omega rises
+ *   viscousFriction) Te > 0 (on average) during acceleration; angularVelocity rises
  *      monotonically-ish toward steady state.
  *   c) Broken-rotor-bar spectral signature: single-bin Hann-windowed DFT
- *      of i_a at f_supply*(1 +/- 2s) relative to the fundamental.
+ *      of phaseCurrentA at supplyFrequency*(1 +/- 2s) relative to the fundamental.
  *      Faulty sidebands exceed healthy by a clear factor, and 4 broken
  *      bars give larger sidebands than 2 (ratio roughly tracking k).
  *
@@ -77,7 +77,7 @@ function emptySession(): ISession {
 // ---------------------------------------------------------------------------
 
 const F_SUPPLY = 60; // Hz
-const V_PEAK = 80; // V phase peak
+const V_PEAK = 80; // armatureVoltage phase peak
 const DT = 2e-4; // s (5 kHz legacy calibration regime; the node declares ~9.8 kHz)
 const TAU_LOAD = 1.5; // Nm, modest constant load
 const TWO_PI = 2 * Math.PI;
@@ -85,35 +85,35 @@ const TWO_PI = 2 * Math.PI;
 interface RunResult {
     node: InductionMotorDynamicNode;
     ia: Float64Array;
-    omega: Float64Array;
+    angularVelocity: Float64Array;
     tauEm: Float64Array;
     dt: number;
 }
 
 function runDirectOnLine(seconds: number, configure?: (node: InductionMotorDynamicNode) => void, dt: number = DT): RunResult {
     const node = createInductionMotorDynamicNode();
-    node.f_supply = F_SUPPLY;
+    node.supplyFrequency = F_SUPPLY;
     if (configure) configure(node);
     node.reset(emptySession());
-    const drv = bindDrivenInputs(node, ["V_a", "V_b", "V_c", "tau_load"]);
+    const drv = bindDrivenInputs(node, ["phaseVoltageA", "phaseVoltageB", "phaseVoltageC", "loadTorque"]);
     const n = Math.round(seconds / dt);
     const ia = new Float64Array(n);
-    const omega = new Float64Array(n);
+    const angularVelocity = new Float64Array(n);
     const tauEm = new Float64Array(n);
     const w = TWO_PI * F_SUPPLY;
     for (let k = 0; k < n; k++) {
         const t = k * dt;
-        drv.set("V_a", V_PEAK * Math.sin(w * t));
-        drv.set("V_b", V_PEAK * Math.sin(w * t - TWO_PI / 3));
-        drv.set("V_c", V_PEAK * Math.sin(w * t + TWO_PI / 3));
-        drv.set("tau_load", TAU_LOAD);
+        drv.set("phaseVoltageA", V_PEAK * Math.sin(w * t));
+        drv.set("phaseVoltageB", V_PEAK * Math.sin(w * t - TWO_PI / 3));
+        drv.set("phaseVoltageC", V_PEAK * Math.sin(w * t + TWO_PI / 3));
+        drv.set("loadTorque", TAU_LOAD);
         drv.arm();
         node.fire(drv.session, t);
-        ia[k] = node.i_a;
-        omega[k] = node.omega;
-        tauEm[k] = node.tau_em;
+        ia[k] = node.phaseCurrentA;
+        angularVelocity[k] = node.angularVelocity;
+        tauEm[k] = node.electromagneticTorque;
     }
-    return { node, ia, omega, tauEm, dt };
+    return { node, ia, angularVelocity, tauEm, dt };
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +141,7 @@ function mean(x: Float64Array, start: number, end: number): number {
     return s / (end - start);
 }
 
-/** Steady-state spectral summary of one run: actual slip from omega,
+/** Steady-state spectral summary of one run: actual slip from angularVelocity,
  *  fundamental, and the two broken-bar sidebands at f*(1 +/- 2s). */
 function analyze(
     run: RunResult,
@@ -154,9 +154,9 @@ function analyze(
 } {
     const start = Math.round(discardSeconds / run.dt);
     const count = run.ia.length - start;
-    const omegaMean = mean(run.omega, start, run.ia.length);
+    const omegaMean = mean(run.angularVelocity, start, run.ia.length);
     const omegaSync = TWO_PI * F_SUPPLY;
-    const slip = (omegaSync - run.node.P * omegaMean) / omegaSync;
+    const slip = (omegaSync - run.node.polePairs * omegaMean) / omegaSync;
     return {
         slip,
         fundamental: dftMag(run.ia, start, count, run.dt, F_SUPPLY),
@@ -172,59 +172,59 @@ function analyze(
 describe("InductionMotorDynamicNode defaults", () => {
     it("instantiates with the small-industrial defaults", () => {
         const node = new InductionMotorDynamicNode();
-        expect(node.Rs).toBeCloseTo(2.3, 12);
-        expect(node.Rr).toBeCloseTo(2.5, 12);
-        expect(node.Ls).toBeCloseTo(0.23, 12);
-        expect(node.Lr).toBeCloseTo(0.23, 12);
-        expect(node.Lm).toBeCloseTo(0.22, 12);
-        expect(node.P).toBe(2);
-        expect(node.f_supply).toBe(60);
-        expect(node.broken_bars).toBe(0);
-        expect(node.total_bars).toBe(28);
-        expect(node.bar_severity).toBe(1);
+        expect(node.statorResistance).toBeCloseTo(2.3, 12);
+        expect(node.rotorResistance).toBeCloseTo(2.5, 12);
+        expect(node.statorInductance).toBeCloseTo(0.23, 12);
+        expect(node.rotorInductance).toBeCloseTo(0.23, 12);
+        expect(node.magnetizingInductance).toBeCloseTo(0.22, 12);
+        expect(node.polePairs).toBe(2);
+        expect(node.supplyFrequency).toBe(60);
+        expect(node.brokenBarCount).toBe(0);
+        expect(node.totalBarCount).toBe(28);
+        expect(node.barFaultSeverity).toBe(1);
     });
 
     it("declares the motor ports on top of the transform/fault base", () => {
         const node = new InductionMotorDynamicNode();
         const inSlots = node.inputPorts.map((p) => p.slot);
         const outSlots = node.outputPorts.map((p) => p.slot);
-        for (const s of ["fault_0", "V_a", "V_b", "V_c", "tau_load", "dt"]) {
+        for (const s of ["fault_0", "phaseVoltageA", "phaseVoltageB", "phaseVoltageC", "loadTorque", "dt"]) {
             expect(inSlots).toContain(s);
         }
-        for (const s of ["world", "i_a", "i_b", "i_c", "omega", "theta_m", "tau_em", "slip"]) {
+        for (const s of ["world", "phaseCurrentA", "phaseCurrentB", "phaseCurrentC", "angularVelocity", "rotorAngle", "electromagneticTorque", "slip"]) {
             expect(outSlots).toContain(s);
         }
     });
 
-    it("requiredHz honors the true fast pole (Rs AND Rr) and the 80x supply floor", () => {
+    it("requiredHz honors the true fast pole (statorResistance AND rotorResistance) and the 80x supply floor", () => {
         const node = new InductionMotorDynamicNode();
-        // The fast flux pole is 1/tau_e = (Rs*Lr + Rr*Ls)/D with
-        // D = Ls*Lr - Lm^2 ~ 4.5 mH^2: tau_e ~ 4.08 ms, so 40/tau_e
-        // ~ 9813 Hz, above the 80*f_supply = 4800 Hz floor and at or
+        // The fast flux pole is 1/tau_e = (statorResistance*rotorInductance + rotorResistance*statorInductance)/D with
+        // D = statorInductance*rotorInductance - magnetizingInductance^2 ~ 4.5 mH^2: tau_e ~ 4.08 ms, so 40/tau_e
+        // ~ 9813 Hz, above the 80*supplyFrequency = 4800 Hz floor and at or
         // above the 5 kHz calibration regime.
         expect(node.requiredHz).toBeGreaterThanOrEqual(4800);
         expect(node.requiredHz).toBeGreaterThanOrEqual(5000);
         expect(node.requiredHz).toBeLessThan(20000);
-        expect(node.required_hz_user_defined).toBe(false);
-        // The heuristic must scale with the ROTOR resistance: high-Rr
-        // rotors stiffen the fast pole (the old Rs-only estimate let
-        // forward Euler diverge for Rr >~ 19*Rs).
+        expect(node.requiredSampleRateHzUserDefined).toBe(false);
+        // The heuristic must scale with the ROTOR resistance: high-rotorResistance
+        // rotors stiffen the fast pole (the old statorResistance-only estimate let
+        // forward Euler diverge for rotorResistance >~ 19*statorResistance).
         const stiff = new InductionMotorDynamicNode();
-        stiff.Rr = 25 * stiff.Rs;
+        stiff.rotorResistance = 25 * stiff.statorResistance;
         expect(stiff.requiredHz).toBeGreaterThan(5 * node.requiredHz);
-        node.required_hz = 20000;
+        node.requiredSampleRateHz = 20000;
         expect(node.requiredHz).toBe(20000);
-        expect(node.required_hz_user_defined).toBe(true);
+        expect(node.requiredSampleRateHzUserDefined).toBe(true);
     });
 
-    it("reset applies omega0/theta0 and a standstill slip of 1", () => {
+    it("reset applies initialAngularVelocity/initialRotorAngle and a standstill slip of 1", () => {
         const node = new InductionMotorDynamicNode();
-        node.omega0 = 50;
-        node.theta0 = 1.2;
+        node.initialAngularVelocity = 50;
+        node.initialRotorAngle = 1.2;
         node.reset(emptySession());
-        expect(node.omega).toBe(50);
-        expect(node.theta_m).toBe(1.2);
-        node.omega0 = 0;
+        expect(node.angularVelocity).toBe(50);
+        expect(node.rotorAngle).toBe(1.2);
+        node.initialAngularVelocity = 0;
         node.reset(emptySession());
         expect(node.slip).toBe(1);
     });
@@ -234,15 +234,15 @@ describe("InductionMotorDynamicNode defaults", () => {
         const graph = new RuntimeGraph<RuntimeNode, Channel>([node], [], "dynamic");
         const session = new Session(graph);
         // Reverse rotation at half synchronous speed: s = 1.5.
-        node.omega0 = -(TWO_PI * F_SUPPLY) / (2 * node.P);
+        node.initialAngularVelocity = -(TWO_PI * F_SUPPLY) / (2 * node.polePairs);
         node.reset(session);
         expect(node.slip).toBeCloseTo(1.5, 6);
         // Full reverse synchronous speed is the plugging extreme: s = 2.
-        node.omega0 = -(TWO_PI * F_SUPPLY) / node.P;
+        node.initialAngularVelocity = -(TWO_PI * F_SUPPLY) / node.polePairs;
         node.reset(session);
         expect(node.slip).toBeCloseTo(2, 6);
         // The regenerative side still clamps at -1.
-        node.omega0 = (3 * TWO_PI * F_SUPPLY) / node.P;
+        node.initialAngularVelocity = (3 * TWO_PI * F_SUPPLY) / node.polePairs;
         node.reset(session);
         expect(node.slip).toBe(-1);
     });
@@ -289,51 +289,51 @@ class ConstantSourceNode extends RuntimeNode {
 
 interface SessionRun {
     node: InductionMotorDynamicNode;
-    omega: Float64Array;
+    angularVelocity: Float64Array;
     ia: Float64Array;
     dt: number;
 }
 
 function runDirectOnLineSession(seconds: number, dt: number, configure?: (node: InductionMotorDynamicNode) => void): SessionRun {
     const node = createInductionMotorDynamicNode();
-    node.f_supply = F_SUPPLY;
+    node.supplyFrequency = F_SUPPLY;
     if (configure) configure(node);
     const w = TWO_PI * F_SUPPLY;
     const va = new SineSourceNode(V_PEAK, w, 0);
     const vb = new SineSourceNode(V_PEAK, w, -TWO_PI / 3);
     const vc = new SineSourceNode(V_PEAK, w, TWO_PI / 3);
     const tau = new ConstantSourceNode(TAU_LOAD);
-    const links = [new Channel(va, node, "V_a"), new Channel(vb, node, "V_b"), new Channel(vc, node, "V_c"), new Channel(tau, node, "tau_load")];
+    const links = [new Channel(va, node, "phaseVoltageA"), new Channel(vb, node, "phaseVoltageB"), new Channel(vc, node, "phaseVoltageC"), new Channel(tau, node, "loadTorque")];
     const graph = new RuntimeGraph<RuntimeNode, Channel>([va, vb, vc, tau, node], links, "dynamic");
     const session = new Session(graph);
     node.reset(session);
     const n = Math.round(seconds / dt);
-    const omega = new Float64Array(n);
+    const angularVelocity = new Float64Array(n);
     const ia = new Float64Array(n);
     for (let k = 0; k < n; k++) {
         session.run(k * dt);
-        omega[k] = node.omega;
-        ia[k] = node.i_a;
+        angularVelocity[k] = node.angularVelocity;
+        ia[k] = node.phaseCurrentA;
     }
-    return { node, omega, ia, dt };
+    return { node, angularVelocity, ia, dt };
 }
 
 function meanSlipOf(run: SessionRun, fromSeconds: number, toSeconds: number): number {
-    const omegaMean = mean(run.omega, Math.round(fromSeconds / run.dt), Math.round(toSeconds / run.dt));
-    return (TWO_PI * F_SUPPLY - run.node.P * omegaMean) / (TWO_PI * F_SUPPLY);
+    const omegaMean = mean(run.angularVelocity, Math.round(fromSeconds / run.dt), Math.round(toSeconds / run.dt));
+    return (TWO_PI * F_SUPPLY - run.node.polePairs * omegaMean) / (TWO_PI * F_SUPPLY);
 }
 
 describe("InductionMotorDynamicNode rate declaration (real Session)", () => {
-    it("forward Euler stays finite at the declared rate for Rr = 25*Rs (sweep guard)", () => {
+    it("forward Euler stays finite at the declared rate for rotorResistance = 25*statorResistance (sweep guard)", () => {
         const probe = new InductionMotorDynamicNode();
-        probe.Rr = 25 * probe.Rs;
+        probe.rotorResistance = 25 * probe.statorResistance;
         const dt = 1 / probe.requiredHz;
         const run = runDirectOnLineSession(1, dt, (n) => {
-            n.Rr = 25 * n.Rs;
+            n.rotorResistance = 25 * n.statorResistance;
         });
         let finite = true;
-        for (let k = 0; k < run.omega.length && finite; k++) {
-            finite = Number.isFinite(run.omega[k]) && Number.isFinite(run.ia[k]);
+        for (let k = 0; k < run.angularVelocity.length && finite; k++) {
+            finite = Number.isFinite(run.angularVelocity[k]) && Number.isFinite(run.ia[k]);
         }
         expect(finite).toBe(true);
     }, 30000);
@@ -367,7 +367,7 @@ describe("InductionMotorDynamicNode calibration at the declared rate", () => {
             runDirectOnLine(
                 8,
                 (n) => {
-                    n.broken_bars = 0;
+                    n.brokenBarCount = 0;
                 },
                 dt
             ),
@@ -377,7 +377,7 @@ describe("InductionMotorDynamicNode calibration at the declared rate", () => {
             runDirectOnLine(
                 8,
                 (n) => {
-                    n.broken_bars = 2;
+                    n.brokenBarCount = 2;
                 },
                 dt
             ),
@@ -387,13 +387,13 @@ describe("InductionMotorDynamicNode calibration at the declared rate", () => {
             runDirectOnLine(
                 8,
                 (n) => {
-                    n.broken_bars = 4;
+                    n.brokenBarCount = 4;
                 },
                 dt
             ),
             4
         );
-        // Operating point: slip ~ 9.2 percent (omega ~ 171 rad/s).
+        // Operating point: slip ~ 9.2 percent (angularVelocity ~ 171 rad/s).
         expect(healthy.slip).toBeGreaterThan(0.085);
         expect(healthy.slip).toBeLessThan(0.1);
         // Healthy sidebands at the numerical floor.
@@ -419,43 +419,43 @@ describe("InductionMotorDynamicNode calibration at the declared rate", () => {
 describe("InductionMotorDynamicNode direct-on-line start", () => {
     // 3 s is enough: acceleration completes in ~1 s with these params.
     const run = runDirectOnLine(3);
-    const omegaSyncMech = (TWO_PI * F_SUPPLY) / run.node.P;
+    const omegaSyncMech = (TWO_PI * F_SUPPLY) / run.node.polePairs;
 
     it("accelerates and settles below synchronous speed", () => {
-        expect(run.node.omega).toBeGreaterThan(0.5 * omegaSyncMech);
-        expect(run.node.omega).toBeLessThan(omegaSyncMech);
+        expect(run.node.angularVelocity).toBeGreaterThan(0.5 * omegaSyncMech);
+        expect(run.node.angularVelocity).toBeLessThan(omegaSyncMech);
     });
 
     it("steady-state slip is in (0, 0.2) under the modest load", () => {
         const a = analyze(run, 2);
         expect(a.slip).toBeGreaterThan(0);
         expect(a.slip).toBeLessThan(0.2);
-        // The node's own slip output agrees with the omega-derived value.
+        // The node's own slip output agrees with the angularVelocity-derived value.
         expect(run.node.slip).toBeCloseTo(a.slip, 2);
     });
 
     it("all signals stay finite and bounded", () => {
         for (let k = 0; k < run.ia.length; k++) {
             expect(Number.isFinite(run.ia[k])).toBe(true);
-            expect(Number.isFinite(run.omega[k])).toBe(true);
+            expect(Number.isFinite(run.angularVelocity[k])).toBe(true);
         }
         let iaMax = 0,
             omegaMax = 0;
         for (let k = 0; k < run.ia.length; k++) {
             iaMax = Math.max(iaMax, Math.abs(run.ia[k]));
-            omegaMax = Math.max(omegaMax, Math.abs(run.omega[k]));
+            omegaMax = Math.max(omegaMax, Math.abs(run.angularVelocity[k]));
         }
         expect(iaMax).toBeLessThan(100); // inrush stays sane
         expect(omegaMax).toBeLessThan(omegaSyncMech); // never oversynchronous
     });
 
     it("phase currents sum to ~0 (isolated neutral)", () => {
-        expect(Math.abs(run.node.i_a + run.node.i_b + run.node.i_c)).toBeLessThan(1e-9);
+        expect(Math.abs(run.node.phaseCurrentA + run.node.phaseCurrentB + run.node.phaseCurrentC)).toBeLessThan(1e-9);
     });
 });
 
 // ---------------------------------------------------------------------------
-// b) Torque sign + speed monotonicity during acceleration
+// viscousFriction) Torque sign + speed monotonicity during acceleration
 // ---------------------------------------------------------------------------
 
 describe("InductionMotorDynamicNode acceleration phase", () => {
@@ -466,21 +466,21 @@ describe("InductionMotorDynamicNode acceleration phase", () => {
         expect(mean(run.tauEm, 0, accelEnd)).toBeGreaterThan(0);
     });
 
-    it("omega rises monotonically-ish to steady state", () => {
-        // Sample omega every 200 ms over the first 1.6 s; each sample
+    it("angularVelocity rises monotonically-ish to steady state", () => {
+        // Sample angularVelocity every 200 ms over the first 1.6 s; each sample
         // must not regress more than 2 percent of synchronous speed
         // below the running maximum (tolerates the electrical-transient
         // torque ripple at startup).
-        const omegaSyncMech = (TWO_PI * F_SUPPLY) / run.node.P;
+        const omegaSyncMech = (TWO_PI * F_SUPPLY) / run.node.polePairs;
         const stepTicks = Math.round(0.2 / DT);
         let runningMax = -Infinity;
         for (let k = stepTicks; k <= Math.round(1.6 / DT); k += stepTicks) {
-            const w = run.omega[k];
+            const w = run.angularVelocity[k];
             expect(w).toBeGreaterThan(runningMax - 0.02 * omegaSyncMech);
             runningMax = Math.max(runningMax, w);
         }
         // And the end point dominates the early transient.
-        expect(run.omega[Math.round(1.6 / DT)]).toBeGreaterThan(run.omega[stepTicks]);
+        expect(run.angularVelocity[Math.round(1.6 / DT)]).toBeGreaterThan(run.angularVelocity[stepTicks]);
     });
 });
 
@@ -497,19 +497,19 @@ describe("InductionMotorDynamicNode broken-bar spectral signature", () => {
 
     const healthy = analyze(
         runDirectOnLine(SIM_SECONDS, (n) => {
-            n.broken_bars = 0;
+            n.brokenBarCount = 0;
         }),
         DISCARD_SECONDS
     );
     const faulty2 = analyze(
         runDirectOnLine(SIM_SECONDS, (n) => {
-            n.broken_bars = 2;
+            n.brokenBarCount = 2;
         }),
         DISCARD_SECONDS
     );
     const faulty4 = analyze(
         runDirectOnLine(SIM_SECONDS, (n) => {
-            n.broken_bars = 4;
+            n.brokenBarCount = 4;
         }),
         DISCARD_SECONDS
     );
@@ -553,11 +553,11 @@ describe("InductionMotorDynamicNode broken-bar spectral signature", () => {
         expect(ratio).toBeLessThan(3.2);
     });
 
-    it("bar_severity scales the signature", () => {
+    it("barFaultSeverity scales the signature", () => {
         const tame = analyze(
             runDirectOnLine(SIM_SECONDS, (n) => {
-                n.broken_bars = 2;
-                n.bar_severity = 0.5;
+                n.brokenBarCount = 2;
+                n.barFaultSeverity = 0.5;
             }),
             DISCARD_SECONDS
         );

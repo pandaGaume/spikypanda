@@ -1,21 +1,21 @@
 /**
- * Unit tests for `LoadTorqueNode`, the tau_load generator for motor
+ * Unit tests for `LoadTorqueNode`, the loadTorque generator for motor
  * simulation graphs.
  *
  * Test layout:
- *   1. Each profile shape: constant stays at tau0, step switches exactly
- *      at tStep, ramp drifts from tau0 toward tau1 at |rampRate| and
- *      holds at tau1 (bounded, both directions), quadratic equals
- *      k * omega * |omega| when omega is wired (signed opposing law),
- *      periodic oscillates around tau0 with the configured period.
- *   2. Invariants: the output never DRIVES the rotor (tau * omega >= 0
- *      for the omega-dependent profiles; >= 0 for the time-only braking
+ *   1. Each profile shape: constant stays at baseTorque, step switches exactly
+ *      at stepTime, ramp drifts from baseTorque toward targetTorque at |rampRate| and
+ *      holds at targetTorque (bounded, both directions), quadratic equals
+ *      k * angularVelocity * |angularVelocity| when angularVelocity is wired (signed opposing law),
+ *      periodic oscillates around baseTorque with the configured period.
+ *   2. Invariants: the output never DRIVES the rotor (tau * angularVelocity >= 0
+ *      for the angularVelocity-dependent profiles; >= 0 for the time-only braking
  *      profiles) and is never NaN, for every profile, wired or not.
  *   3. Passivity under reverse rotation, through a real Session: the
- *      quadratic law is odd in omega, and a reverse coast on a minimal
- *      J/b rotor decays instead of blowing up.
+ *      quadratic law is odd in angularVelocity, and a reverse coast on a minimal
+ *      rotorInertia/viscousFriction rotor decays instead of blowing up.
  *   4. Publication: fire() pushes the computed torque on every enabled
- *      "tau_load" outgoing link.
+ *      "loadTorque" outgoing link.
  *
  * Input wiring uses the same SessionMock helper as faultable.test.ts
  * for the profile-shape units; the passivity scenarios run a real
@@ -114,9 +114,9 @@ describe("LoadTorqueNode construction", () => {
         const n = createLoadTorqueNode();
         expect(n).toBeInstanceOf(LoadTorqueNode);
         expect(n.profile).toBe("constant");
-        expect(n.tau0).toBeCloseTo(0.01, 12);
-        expect(n.tau1).toBeCloseTo(0.02, 12);
-        expect(n.tStep).toBe(5);
+        expect(n.baseTorque).toBeCloseTo(0.01, 12);
+        expect(n.targetTorque).toBeCloseTo(0.02, 12);
+        expect(n.stepTime).toBe(5);
         expect(n.rampRate).toBeCloseTo(0.001, 12);
         expect(n.k).toBeCloseTo(1.5e-7, 15);
         expect(n.amplitude).toBeCloseTo(0.005, 12);
@@ -124,10 +124,10 @@ describe("LoadTorqueNode construction", () => {
         expect(n.tau).toBe(0);
     });
 
-    it("declares omega in and tau_load out", () => {
+    it("declares angularVelocity in and loadTorque out", () => {
         const n = new LoadTorqueNode();
-        expect(n.inputPorts.map((p) => p.slot)).toEqual(["omega"]);
-        expect(n.outputPorts.map((p) => p.slot)).toEqual(["tau_load"]);
+        expect(n.inputPorts.map((p) => p.slot)).toEqual(["angularVelocity"]);
+        expect(n.outputPorts.map((p) => p.slot)).toEqual(["loadTorque"]);
         expect(n.inputPorts[0].optional).toBe(true);
         expect(n.outputPorts[0].optional).toBe(false);
     });
@@ -154,53 +154,53 @@ describe("LoadTorqueNode construction", () => {
 // ---------------------------------------------------------------------------
 
 describe("LoadTorqueNode profiles", () => {
-    it("constant: tau stays at tau0 regardless of t", () => {
+    it("constant: tau stays at baseTorque regardless of t", () => {
         const n = new LoadTorqueNode();
-        n.tau0 = 0.03;
+        n.baseTorque = 0.03;
         for (const t of [0, 1, 5, 100]) {
             n.fire(emptySession(), t);
             expect(n.tau).toBeCloseTo(0.03, 12);
         }
     });
 
-    it("step: switches from tau0 to tau1 exactly at tStep", () => {
+    it("step: switches from baseTorque to targetTorque exactly at stepTime", () => {
         const n = new LoadTorqueNode();
         n.profile = "step";
-        n.tau0 = 0.01;
-        n.tau1 = 0.02;
-        n.tStep = 5;
+        n.baseTorque = 0.01;
+        n.targetTorque = 0.02;
+        n.stepTime = 5;
         n.fire(emptySession(), 0);
         expect(n.tau).toBeCloseTo(0.01, 12);
         n.fire(emptySession(), 4.999999);
         expect(n.tau).toBeCloseTo(0.01, 12);
-        n.fire(emptySession(), 5); // t >= tStep: new regime
+        n.fire(emptySession(), 5); // t >= stepTime: new regime
         expect(n.tau).toBeCloseTo(0.02, 12);
         n.fire(emptySession(), 100);
         expect(n.tau).toBeCloseTo(0.02, 12);
     });
 
-    it("ramp: rises from tau0 toward tau1 at |rampRate| and holds at tau1", () => {
+    it("ramp: rises from baseTorque toward targetTorque at |rampRate| and holds at targetTorque", () => {
         const n = new LoadTorqueNode();
         n.profile = "ramp";
-        n.tau0 = 0.01;
-        n.tau1 = 0.02;
-        n.rampRate = 0.001; // span 0.01 N.m: tau1 reached at t = 10 s
+        n.baseTorque = 0.01;
+        n.targetTorque = 0.02;
+        n.rampRate = 0.001; // span 0.01 N.m: targetTorque reached at t = 10 s
         n.fire(emptySession(), 0);
         expect(n.tau).toBeCloseTo(0.01, 12);
         n.fire(emptySession(), 5);
         expect(n.tau).toBeCloseTo(0.015, 12);
-        n.fire(emptySession(), 10); // inclusive: exactly tau1 at the reach time
+        n.fire(emptySession(), 10); // inclusive: exactly targetTorque at the reach time
         expect(n.tau).toBeCloseTo(0.02, 12);
-        n.fire(emptySession(), 1000); // holds at tau1, never beyond
+        n.fire(emptySession(), 1000); // holds at targetTorque, never beyond
         expect(n.tau).toBeCloseTo(0.02, 12);
     });
 
-    it("ramp: drifts downward and holds at tau1 when tau1 < tau0", () => {
+    it("ramp: drifts downward and holds at targetTorque when targetTorque < baseTorque", () => {
         const n = new LoadTorqueNode();
         n.profile = "ramp";
-        n.tau0 = 0.03;
-        n.tau1 = 0.01;
-        n.rampRate = 0.002; // direction comes from sign(tau1 - tau0)
+        n.baseTorque = 0.03;
+        n.targetTorque = 0.01;
+        n.rampRate = 0.002; // direction comes from sign(targetTorque - baseTorque)
         n.fire(emptySession(), 0);
         expect(n.tau).toBeCloseTo(0.03, 12);
         n.fire(emptySession(), 5);
@@ -214,8 +214,8 @@ describe("LoadTorqueNode profiles", () => {
     it("ramp: a negative rampRate drifts with the same magnitude", () => {
         const n = new LoadTorqueNode();
         n.profile = "ramp";
-        n.tau0 = 0.01;
-        n.tau1 = 0.02;
+        n.baseTorque = 0.01;
+        n.targetTorque = 0.02;
         n.rampRate = -0.001;
         n.fire(emptySession(), 5);
         expect(n.tau).toBeCloseTo(0.015, 12);
@@ -223,34 +223,34 @@ describe("LoadTorqueNode profiles", () => {
         expect(n.tau).toBeCloseTo(0.02, 12);
     });
 
-    it("ramp: never NaN and clamps at 0 when drifting toward a negative tau1", () => {
+    it("ramp: never NaN and clamps at 0 when drifting toward a negative targetTorque", () => {
         const n = new LoadTorqueNode();
         n.profile = "ramp";
-        n.tau0 = 0.02;
-        n.tau1 = -0.01;
+        n.baseTorque = 0.02;
+        n.targetTorque = -0.01;
         n.rampRate = 0.001;
         for (let kStep = 0; kStep <= 60; kStep++) {
             n.fire(emptySession(), kStep);
             expect(Number.isFinite(n.tau)).toBe(true);
             expect(n.tau).toBeGreaterThanOrEqual(0);
         }
-        // Held at tau1 = -0.01, clamped by the braking >= 0 convention.
+        // Held at targetTorque = -0.01, clamped by the braking >= 0 convention.
         n.fire(emptySession(), 1000);
         expect(n.tau).toBe(0);
     });
 
-    it("quadratic: equals k * omega * |omega| when omega is wired", () => {
+    it("quadratic: equals k * angularVelocity * |angularVelocity| when angularVelocity is wired", () => {
         const n = new LoadTorqueNode();
         n.profile = "quadratic";
         n.k = 1.5e-7;
-        for (const omega of [0, 100, 314.159, 1000, -100, -314.159]) {
-            const { session } = bindOpsc(n as unknown as { _opsc: IOlink[] }, [{ slot: "omega", value: omega }]);
+        for (const angularVelocity of [0, 100, 314.159, 1000, -100, -314.159]) {
+            const { session } = bindOpsc(n as unknown as { _opsc: IOlink[] }, [{ slot: "angularVelocity", value: angularVelocity }]);
             n.fire(session, 0);
-            expect(n.tau).toBeCloseTo(1.5e-7 * omega * Math.abs(omega), 12);
+            expect(n.tau).toBeCloseTo(1.5e-7 * angularVelocity * Math.abs(angularVelocity), 12);
         }
     });
 
-    it("quadratic: defaults omega to 0 when unwired", () => {
+    it("quadratic: defaults angularVelocity to 0 when unwired", () => {
         const n = new LoadTorqueNode();
         n.profile = "quadratic";
         n.fire(emptySession(), 3);
@@ -261,17 +261,17 @@ describe("LoadTorqueNode profiles", () => {
         const n = new LoadTorqueNode();
         n.profile = "quadratic";
         n.k = -1;
-        for (const omega of [100, -100]) {
-            const { session } = bindOpsc(n as unknown as { _opsc: IOlink[] }, [{ slot: "omega", value: omega }]);
+        for (const angularVelocity of [100, -100]) {
+            const { session } = bindOpsc(n as unknown as { _opsc: IOlink[] }, [{ slot: "angularVelocity", value: angularVelocity }]);
             n.fire(session, 0);
             expect(n.tau).toBe(0);
         }
     });
 
-    it("periodic: oscillates around tau0 with period 1/frequency", () => {
+    it("periodic: oscillates around baseTorque with period 1/frequency", () => {
         const n = new LoadTorqueNode();
         n.profile = "periodic";
-        n.tau0 = 0.01;
+        n.baseTorque = 0.01;
         n.amplitude = 0.005;
         n.frequency = 2; // period T = 0.5 s
         const T = 0.5;
@@ -300,13 +300,13 @@ describe("LoadTorqueNode profiles", () => {
 describe("LoadTorqueNode invariants", () => {
     it("output is clamped at 0 when the law goes negative", () => {
         const n = new LoadTorqueNode();
-        n.tau0 = -1; // constant, negative
+        n.baseTorque = -1; // constant, negative
         n.fire(emptySession(), 0);
         expect(n.tau).toBe(0);
 
         n.profile = "periodic";
-        n.tau0 = 0.001;
-        n.amplitude = 0.01; // trough at tau0 - amplitude < 0
+        n.baseTorque = 0.001;
+        n.amplitude = 0.01; // trough at baseTorque - amplitude < 0
         n.frequency = 1;
         n.fire(emptySession(), 0.75); // sin(2*pi*0.75) = -1
         expect(n.tau).toBe(0);
@@ -319,10 +319,10 @@ describe("LoadTorqueNode invariants", () => {
             n.profile = profile;
             for (let kStep = 0; kStep <= 50; kStep++) {
                 const t = kStep * 0.37;
-                let omega = 0;
+                let angularVelocity = 0;
                 if (kStep % 2 === 0) {
-                    omega = 100 * Math.sin(t);
-                    const { session } = bindOpsc(n as unknown as { _opsc: IOlink[] }, [{ slot: "omega", value: omega }]);
+                    angularVelocity = 100 * Math.sin(t);
+                    const { session } = bindOpsc(n as unknown as { _opsc: IOlink[] }, [{ slot: "angularVelocity", value: angularVelocity }]);
                     n.fire(session, t);
                 } else {
                     n.fire(emptySession(), t);
@@ -330,7 +330,7 @@ describe("LoadTorqueNode invariants", () => {
                 expect(Number.isFinite(n.tau)).toBe(true);
                 if (profile === "quadratic") {
                     // Omega-dependent: opposes the actual rotation.
-                    expect(n.tau * omega).toBeGreaterThanOrEqual(0);
+                    expect(n.tau * angularVelocity).toBeGreaterThanOrEqual(0);
                 } else {
                     // Time-only braking torque convention.
                     expect(n.tau).toBeGreaterThanOrEqual(0);
@@ -344,7 +344,7 @@ describe("LoadTorqueNode invariants", () => {
 // Passivity under reverse rotation (real Session)
 // ---------------------------------------------------------------------------
 
-/** Publishes a mutable omega value on its single outgoing link. */
+/** Publishes a mutable angularVelocity value on its single outgoing link. */
 class OmegaSourceNode extends RuntimeNode {
     public value = 0;
     public override isReady(_s: ISession): boolean {
@@ -371,8 +371,8 @@ class TauSinkNode extends RuntimeNode {
 function buildLoadChain(load: LoadTorqueNode): { session: Session; source: OmegaSourceNode; sink: TauSinkNode } {
     const source = new OmegaSourceNode();
     const sink = new TauSinkNode();
-    const toLoad = new Channel(source, load, "omega");
-    const toSink = new Channel(load, sink, "tau_load");
+    const toLoad = new Channel(source, load, "angularVelocity");
+    const toSink = new Channel(load, sink, "loadTorque");
     const graph = new RuntimeGraph<RuntimeNode, Channel>([source, load, sink], [toLoad, toSink], "dynamic");
     return { session: new Session(graph), source, sink };
 }
@@ -392,34 +392,34 @@ describe("LoadTorqueNode passivity under reverse rotation (real Session)", () =>
         expect(sink.last).toBeCloseTo(-forward, 12);
     });
 
-    it("quadratic: a reverse coast on a minimal J/b rotor decays and stays finite", () => {
+    it("quadratic: a reverse coast on a minimal rotorInertia/viscousFriction rotor decays and stays finite", () => {
         // Repro of the passivity violation: with the unsigned law
-        // tau = k*omega^2 a reverse-spinning rotor is ACCELERATED by its
+        // tau = k*angularVelocity^2 a reverse-spinning rotor is ACCELERATED by its
         // own "passive" load (positive feedback) and reaches NaN in
-        // finite time (J=0.005, b=1e-4, k=1.5/173^2, omega0=-5 diverges
-        // to NaN at t ~ 25 s). With the signed law tau = k*omega*|omega|
+        // finite time (rotorInertia=0.005, viscousFriction=1e-4, k=1.5/173^2, initialAngularVelocity=-5 diverges
+        // to NaN at t ~ 25 s). With the signed law tau = k*angularVelocity*|angularVelocity|
         // the published torque opposes the motion and the coast decays.
-        const J = 0.005;
-        const b = 1e-4;
+        const rotorInertia = 0.005;
+        const viscousFriction = 1e-4;
         const load = new LoadTorqueNode();
         load.profile = "quadratic";
         load.k = 1.5 / (173 * 173);
         const { session, source, sink } = buildLoadChain(load);
         const dt = 1e-3;
-        let omega = -5;
+        let angularVelocity = -5;
         let finite = true;
         for (let step = 0; step <= 30000 && finite; step++) {
-            source.value = omega;
+            source.value = angularVelocity;
             session.run(step * dt);
-            // Minimal passive rotor: J*domega/dt = -b*omega - tau_load.
-            omega += (dt * (-b * omega - sink.last)) / J;
-            finite = Number.isFinite(omega);
+            // Minimal passive rotor: rotorInertia*domega/dt = -viscousFriction*angularVelocity - loadTorque.
+            angularVelocity += (dt * (-viscousFriction * angularVelocity - sink.last)) / rotorInertia;
+            finite = Number.isFinite(angularVelocity);
         }
         expect(finite).toBe(true);
-        // The coast DECAYS: |omega| shrinks (analytically ~1.3 rad/s at
+        // The coast DECAYS: |angularVelocity| shrinks (analytically ~1.3 rad/s at
         // t = 30 s) and the rotation never flips sign.
-        expect(omega).toBeLessThanOrEqual(0);
-        expect(Math.abs(omega)).toBeLessThan(2);
+        expect(angularVelocity).toBeLessThanOrEqual(0);
+        expect(Math.abs(angularVelocity)).toBeLessThan(2);
     });
 });
 
@@ -428,10 +428,10 @@ describe("LoadTorqueNode passivity under reverse rotation (real Session)", () =>
 // ---------------------------------------------------------------------------
 
 describe("LoadTorqueNode publication", () => {
-    it("publishes tau on every enabled tau_load outgoing link", () => {
+    it("publishes tau on every enabled loadTorque outgoing link", () => {
         const n = new LoadTorqueNode();
-        n.tau0 = 0.04;
-        const { session, published } = bindOnsc(n as unknown as { _onsc: IOlink[] }, ["tau_load", "tau_load"]);
+        n.baseTorque = 0.04;
+        const { session, published } = bindOnsc(n as unknown as { _onsc: IOlink[] }, ["loadTorque", "loadTorque"]);
         n.fire(session, 0);
         expect(published).toEqual([0.04, 0.04]);
     });

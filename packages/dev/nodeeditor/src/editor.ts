@@ -504,8 +504,8 @@ export class NodeEditor {
         this.layoutStrategy(this);
     }
 
-    setLayoutStrategy(strategy: LayoutStrategy): void {
-        this.layoutStrategy = strategy;
+    setLayoutStrategy(modulationStrategy: LayoutStrategy): void {
+        this.layoutStrategy = modulationStrategy;
     }
 
     loadFile(data: ArrayBuffer, filename: string): void {

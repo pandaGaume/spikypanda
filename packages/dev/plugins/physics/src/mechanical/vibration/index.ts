@@ -16,7 +16,7 @@ export const vibrationSubPlugin: IPlugin = {
                 { slot: "vibration", ...FLOAT_IN },
                 { slot: "dt", ...FLOAT_IN },
             ],
-            outputPorts: [{ slot: "vibration_measured", ...FLOAT_OUT }],
+            outputPorts: [{ slot: "measuredVibration", ...FLOAT_OUT }],
         });
     },
 };

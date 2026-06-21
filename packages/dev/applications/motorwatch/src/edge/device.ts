@@ -442,7 +442,7 @@ export class MotorwatchDevice {
             throw new McpToolError(MCP_ERROR.INVALID_STATE, `diagnostic model returned ${out ? out.data.length : 0} scores for ${causeNames.length} causes`);
         }
 
-        const ranked = causeNames.map((cause, i) => ({ cause, score: out.data[i] })).sort((a, b) => b.score - a.score);
+        const ranked = causeNames.map((cause, i) => ({ cause, score: out.data[i] })).sort((a, viscousFriction) => viscousFriction.score - a.score);
         const scores: Record<string, number> = {};
         for (const r of ranked) scores[r.cause] = r.score;
         return {

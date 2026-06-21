@@ -31,7 +31,7 @@ const MIN_EFFECTIVE_HZ_VALUE = 60;
 export type RunnerState = "idle" | "playing" | "paused";
 
 /**
- * Tick-scheduling strategy.
+ * Tick-scheduling modulationStrategy.
  *
  *   "free"            One sim tick per rAF, dt = wall-clock elapsed × speed.
  *                     Easy and synchronous with the display refresh, but
@@ -91,7 +91,7 @@ export class GraphRunner implements IDisposable {
     public t: number = 0;
 
     /**
-     * Scheduling strategy. Derived at `_bootstrapSession()` from the
+     * Scheduling modulationStrategy. Derived at `_bootstrapSession()` from the
      * graph's leaves:
      *   - "fixed-realtime" when at least one IHasSampleRateRequirement
      *     leaf opts in (SimGraphNode._aggregateRequiredHzFromSession
@@ -100,7 +100,7 @@ export class GraphRunner implements IDisposable {
      *
      * The user does NOT pick this from the toolbar anymore (P8 + the
      * 2026-06-09 auto-derivation pass): rates are declarative on the
-     * leaves themselves. Override per-leaf via `required_hz` on the
+     * leaves themselves. Override per-leaf via `requiredSampleRateHz` on the
      * node's property panel.
      */
     public mode: RunnerMode = "free";
@@ -113,9 +113,9 @@ export class GraphRunner implements IDisposable {
      *   60   — pure-data graph with no opt-in leaves (would be free-mode)
      *   100  — atmosphere-only habitat
      *   10000 — atmosphere + DC motor (L=1mH R=1Ω → 10 kHz)
-     *   200000 — motor + PWM inverter (fPwm = 10 kHz → 20×)
+     *   200000 — motor + PWM inverter (pwmFrequency = 10 kHz → 20×)
      * Ignored in "free" mode. Read-only consequence of the graph
-     * topology + per-leaf required_hz editables.
+     * topology + per-leaf requiredSampleRateHz editables.
      */
     public simRate: number = 1000;
 

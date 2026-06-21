@@ -3,9 +3,9 @@
  * the legacy sensors fault oracle (EccentricityFault, ImbalanceFault).
  *
  *   1. Eccentricity flux delta == legacy preStep addFluxEnvelope envelope
- *      (envelope = 1 + delta) across a theta_m sweep; zero at severity 0.
- *   2. Imbalance force_y/z == legacy postStep centripetal force m*r*omega^2
- *      in quadrature; scales with omega^2 and severity.
+ *      (envelope = 1 + delta) across a rotorAngle sweep; zero at severity 0.
+ *   2. Imbalance forceY/z == legacy postStep centripetal force m*r*angularVelocity^2
+ *      in quadrature; scales with angularVelocity^2 and severity.
  */
 import { Channel, RuntimeGraphBuilder, RuntimeNode, Session } from "spikypanda-core";
 import type { IChannel, ISession } from "spikypanda-core";
@@ -54,19 +54,19 @@ function runNode(node: RuntimeNode, inputs: Record<string, number>): void {
 }
 
 describe("Eccentricity fault == legacy oracle", () => {
-    it("flux_envelope matches legacy preStep across a theta_m sweep", () => {
+    it("flux_envelope matches legacy preStep across a rotorAngle sweep", () => {
         const severity = 0.4,
-            epsilonMax = 0.5,
-            thetaOffset = 0.3;
+            maxEccentricity = 0.5,
+            eccentricityPhase = 0.3;
         const oracle = loadFixture<number[]>("pmsm-ecc-envelope");
         let maxErr = 0;
         for (let k = 0; k <= 32; k++) {
             const thetaM = (2 * Math.PI * k) / 32;
             const node: EccentricityFaultNode = createEccentricityFaultNode();
             node.severity = severity;
-            node.epsilonMax = epsilonMax;
-            node.thetaOffset = thetaOffset;
-            runNode(node, { theta_m: thetaM });
+            node.maxEccentricity = maxEccentricity;
+            node.eccentricityPhase = eccentricityPhase;
+            runNode(node, { rotorAngle: thetaM });
             maxErr = Math.max(maxErr, Math.abs(node.flux_envelope - oracle[k]));
         }
         expect(maxErr).toBeLessThan(1e-12);
@@ -74,40 +74,40 @@ describe("Eccentricity fault == legacy oracle", () => {
 
     it("zero severity yields no modulation", () => {
         const node = createEccentricityFaultNode();
-        runNode(node, { theta_m: 1.0 });
+        runNode(node, { rotorAngle: 1.0 });
         expect(node.flux_envelope).toBe(1);
         expect(node.flux_delta).toBe(0);
     });
 });
 
 describe("Imbalance fault == legacy oracle", () => {
-    it("force_y / force_z match legacy postStep centripetal force", () => {
+    it("forceY / forceZ match legacy postStep centripetal force", () => {
         const severity = 0.6,
-            kImbalanceMax = 5e-6;
-        const omega = 314,
+            maxUnbalanceProduct = 5e-6;
+        const angularVelocity = 314,
             thetaM = 1.234;
 
         const node = createImbalanceFaultNode();
         node.severity = severity;
-        node.kImbalanceMax = kImbalanceMax;
-        runNode(node, { omega, theta_m: thetaM });
+        node.maxUnbalanceProduct = maxUnbalanceProduct;
+        runNode(node, { angularVelocity, rotorAngle: thetaM });
         const [ly, lz] = loadFixture<[number, number]>("pmsm-imbalance-forces");
-        expect(Math.abs(node.force_y - ly)).toBeLessThan(1e-15);
-        expect(Math.abs(node.force_z - lz)).toBeLessThan(1e-15);
-        // axis x sees no force; the magnitude is m*r*omega^2.
-        const mag = Math.sqrt(node.force_y ** 2 + node.force_z ** 2);
-        expect(mag).toBeCloseTo(severity * kImbalanceMax * omega * omega, 12);
+        expect(Math.abs(node.forceY - ly)).toBeLessThan(1e-15);
+        expect(Math.abs(node.forceZ - lz)).toBeLessThan(1e-15);
+        // axis x sees no force; the magnitude is m*r*angularVelocity^2.
+        const mag = Math.sqrt(node.forceY ** 2 + node.forceZ ** 2);
+        expect(mag).toBeCloseTo(severity * maxUnbalanceProduct * angularVelocity * angularVelocity, 12);
     });
 
-    it("force scales with omega^2", () => {
-        const make = (omega: number): number => {
+    it("force scales with angularVelocity^2", () => {
+        const make = (angularVelocity: number): number => {
             const node = createImbalanceFaultNode();
             node.severity = 1;
-            runNode(node, { omega, theta_m: 0 });
-            return node.force_y; // theta_m=0 -> force on y
+            runNode(node, { angularVelocity, rotorAngle: 0 });
+            return node.forceY; // rotorAngle=0 -> force on y
         };
         const f1 = make(100);
         const f2 = make(200);
-        expect(f2 / f1).toBeCloseTo(4, 6); // 2x omega -> 4x force
+        expect(f2 / f1).toBeCloseTo(4, 6); // 2x angularVelocity -> 4x force
     });
 });

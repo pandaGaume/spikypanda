@@ -7,7 +7,7 @@ import { createClarkeNode, ClarkeNode } from "./clarke.node.js";
 import { createParkNode, ParkNode } from "./park.node.js";
 import { createGravityCoupledPmsmGraph, GravityCoupledPmsmGraph } from "./gravity-coupled.graph.js";
 // Sinusoidal abc-frame PMSM: code lives in motor-bldc/ (shares back-emf.ts
-// with the trapezoidal BLDC), but it is a PMSM, so it is registered HERE,
+// with the trapezoidal BLDC), but it is phaseA PMSM, so it is registered HERE,
 // in the PMSM family. Class re-exported from motor-bldc/index.
 import { createPmsmMotorDynamicNode } from "../motor-bldc/pmsm-dynamic.node.js";
 
@@ -42,21 +42,21 @@ export const motorPmsmSubPlugin: IPlugin = {
             category: "Physics.Electric.Motor.PMSM",
             docPath: ctx.assetUrl("docs/physics/motor-pmsm/foc.md"),
             inputPorts: [
-                { slot: "i_d", ...FLOAT_IN },
-                { slot: "i_q", ...FLOAT_IN },
-                { slot: "omega", ...FLOAT_IN },
-                { slot: "theta_m", ...FLOAT_IN },
-                { slot: "speed_target", ...FLOAT_IN },
-                { slot: "iq_ref", ...FLOAT_IN },
-                { slot: "v_bus", ...FLOAT_IN },
+                { slot: "directAxisCurrent", ...FLOAT_IN },
+                { slot: "quadratureAxisCurrent", ...FLOAT_IN },
+                { slot: "angularVelocity", ...FLOAT_IN },
+                { slot: "rotorAngle", ...FLOAT_IN },
+                { slot: "speedTarget", ...FLOAT_IN },
+                { slot: "quadratureCurrentReference", ...FLOAT_IN },
+                { slot: "dcBusVoltage", ...FLOAT_IN },
                 { slot: "dt", ...FLOAT_IN },
             ],
             outputPorts: [
-                { slot: "V_alpha", ...FLOAT_OUT },
-                { slot: "V_beta", ...FLOAT_OUT },
-                { slot: "V_a", ...FLOAT_OUT },
-                { slot: "V_b", ...FLOAT_OUT },
-                { slot: "V_c", ...FLOAT_OUT },
+                { slot: "voltageAlpha", ...FLOAT_OUT },
+                { slot: "voltageBeta", ...FLOAT_OUT },
+                { slot: "phaseVoltageA", ...FLOAT_OUT },
+                { slot: "phaseVoltageB", ...FLOAT_OUT },
+                { slot: "phaseVoltageC", ...FLOAT_OUT },
             ],
         });
         ctx.nodes.register("Physics.Electric.Motor.PMSM:machine", () => createPmsmMachineDqNode() as never, {
@@ -65,27 +65,27 @@ export const motorPmsmSubPlugin: IPlugin = {
             docPath: ctx.assetUrl("docs/physics/motor-pmsm/machine-dq.md"),
             inputPorts: [
                 { slot: "local", optional: true, type: "matrix44" },
-                { slot: "parent_world", optional: true, type: "matrix44" },
+                { slot: "parentWorld", optional: true, type: "matrix44" },
                 { slot: "scene", ...SCENE_IN },
                 { slot: "fault_0", optional: true, type: "any" },
-                { slot: "V_a", ...FLOAT_IN },
-                { slot: "V_b", ...FLOAT_IN },
-                { slot: "V_c", ...FLOAT_IN },
-                { slot: "tau_load", ...FLOAT_IN },
+                { slot: "phaseVoltageA", ...FLOAT_IN },
+                { slot: "phaseVoltageB", ...FLOAT_IN },
+                { slot: "phaseVoltageC", ...FLOAT_IN },
+                { slot: "loadTorque", ...FLOAT_IN },
                 { slot: "dt", ...FLOAT_IN },
             ],
             outputPorts: [
                 { slot: "world", optional: false, type: "matrix44" },
-                { slot: "i_d", ...FLOAT_OUT },
-                { slot: "i_q", ...FLOAT_OUT },
-                { slot: "i_a", ...FLOAT_OUT },
-                { slot: "i_b", ...FLOAT_OUT },
-                { slot: "i_c", ...FLOAT_OUT },
-                { slot: "omega", ...FLOAT_OUT },
-                { slot: "theta_m", ...FLOAT_OUT },
-                { slot: "tau_em", ...FLOAT_OUT },
-                { slot: "force_y", ...FLOAT_OUT },
-                { slot: "force_z", ...FLOAT_OUT },
+                { slot: "directAxisCurrent", ...FLOAT_OUT },
+                { slot: "quadratureAxisCurrent", ...FLOAT_OUT },
+                { slot: "phaseCurrentA", ...FLOAT_OUT },
+                { slot: "phaseCurrentB", ...FLOAT_OUT },
+                { slot: "phaseCurrentC", ...FLOAT_OUT },
+                { slot: "angularVelocity", ...FLOAT_OUT },
+                { slot: "rotorAngle", ...FLOAT_OUT },
+                { slot: "electromagneticTorque", ...FLOAT_OUT },
+                { slot: "forceY", ...FLOAT_OUT },
+                { slot: "forceZ", ...FLOAT_OUT },
             ],
         });
         // Sinusoidal abc-frame PMSM (was Physics.Electric.Motor.BLDC:pmsm,
@@ -99,23 +99,23 @@ export const motorPmsmSubPlugin: IPlugin = {
             docPath: ctx.assetUrl("docs/physics/motor-bldc/pmsm-dynamic.md"),
             inputPorts: [
                 { slot: "local", ...MAT44_IN },
-                { slot: "parent_world", ...MAT44_IN },
+                { slot: "parentWorld", ...MAT44_IN },
                 { slot: "scene", ...SCENE_IN },
                 { slot: "fault_0", ...FAULT_IN },
-                { slot: "V_a", ...FLOAT_IN },
-                { slot: "V_b", ...FLOAT_IN },
-                { slot: "V_c", ...FLOAT_IN },
-                { slot: "tau_load", ...FLOAT_IN },
+                { slot: "phaseVoltageA", ...FLOAT_IN },
+                { slot: "phaseVoltageB", ...FLOAT_IN },
+                { slot: "phaseVoltageC", ...FLOAT_IN },
+                { slot: "loadTorque", ...FLOAT_IN },
                 { slot: "dt", ...FLOAT_IN },
             ],
             outputPorts: [
                 { slot: "world", ...MAT44_OUT },
-                { slot: "i_a", ...FLOAT_OUT },
-                { slot: "i_b", ...FLOAT_OUT },
-                { slot: "i_c", ...FLOAT_OUT },
-                { slot: "omega", ...FLOAT_OUT },
-                { slot: "theta_m", ...FLOAT_OUT },
-                { slot: "tau_em", ...FLOAT_OUT },
+                { slot: "phaseCurrentA", ...FLOAT_OUT },
+                { slot: "phaseCurrentB", ...FLOAT_OUT },
+                { slot: "phaseCurrentC", ...FLOAT_OUT },
+                { slot: "angularVelocity", ...FLOAT_OUT },
+                { slot: "rotorAngle", ...FLOAT_OUT },
+                { slot: "electromagneticTorque", ...FLOAT_OUT },
             ],
         });
         ctx.nodes.register("Physics.Electric.Motor.PMSM:svpwm", () => createPmsmSvpwmNode() as never, {
@@ -123,14 +123,14 @@ export const motorPmsmSubPlugin: IPlugin = {
             category: "Physics.Electric.Motor.PMSM",
             docPath: ctx.assetUrl("docs/physics/motor-pmsm/svpwm.md"),
             inputPorts: [
-                { slot: "V_alpha", ...FLOAT_IN },
-                { slot: "V_beta", ...FLOAT_IN },
-                { slot: "v_bus", ...FLOAT_IN },
+                { slot: "voltageAlpha", ...FLOAT_IN },
+                { slot: "voltageBeta", ...FLOAT_IN },
+                { slot: "dcBusVoltage", ...FLOAT_IN },
             ],
             outputPorts: [
-                { slot: "duty_a", ...FLOAT_OUT },
-                { slot: "duty_b", ...FLOAT_OUT },
-                { slot: "duty_c", ...FLOAT_OUT },
+                { slot: "dutyCycleA", ...FLOAT_OUT },
+                { slot: "dutyCycleB", ...FLOAT_OUT },
+                { slot: "dutyCycleC", ...FLOAT_OUT },
             ],
         });
         ctx.nodes.register("Physics.Electric.Motor.PMSM:inverter", () => createPmsmInverterNode() as never, {
@@ -138,15 +138,15 @@ export const motorPmsmSubPlugin: IPlugin = {
             category: "Physics.Electric.Motor.PMSM",
             docPath: ctx.assetUrl("docs/physics/motor-pmsm/inverter.md"),
             inputPorts: [
-                { slot: "duty_a", ...FLOAT_IN },
-                { slot: "duty_b", ...FLOAT_IN },
-                { slot: "duty_c", ...FLOAT_IN },
-                { slot: "v_bus", ...FLOAT_IN },
+                { slot: "dutyCycleA", ...FLOAT_IN },
+                { slot: "dutyCycleB", ...FLOAT_IN },
+                { slot: "dutyCycleC", ...FLOAT_IN },
+                { slot: "dcBusVoltage", ...FLOAT_IN },
             ],
             outputPorts: [
-                { slot: "V_a", ...FLOAT_OUT },
-                { slot: "V_b", ...FLOAT_OUT },
-                { slot: "V_c", ...FLOAT_OUT },
+                { slot: "phaseVoltageA", ...FLOAT_OUT },
+                { slot: "phaseVoltageB", ...FLOAT_OUT },
+                { slot: "phaseVoltageC", ...FLOAT_OUT },
             ],
         });
         ctx.nodes.register("Physics.Electric.Motor.PMSM:clarke", () => createClarkeNode() as never, {
@@ -154,9 +154,9 @@ export const motorPmsmSubPlugin: IPlugin = {
             category: "Physics.Electric.Motor.PMSM",
             docPath: ctx.assetUrl("docs/physics/motor-pmsm/clarke-park.md"),
             inputPorts: [
-                { slot: "a", ...FLOAT_IN },
-                { slot: "b", ...FLOAT_IN },
-                { slot: "c", ...FLOAT_IN },
+                { slot: "phaseA", ...FLOAT_IN },
+                { slot: "phaseB", ...FLOAT_IN },
+                { slot: "phaseC", ...FLOAT_IN },
             ],
             outputPorts: [
                 { slot: "alpha", ...FLOAT_OUT },
@@ -170,20 +170,20 @@ export const motorPmsmSubPlugin: IPlugin = {
             inputPorts: [
                 { slot: "alpha", ...FLOAT_IN },
                 { slot: "beta", ...FLOAT_IN },
-                { slot: "theta_m", ...FLOAT_IN },
+                { slot: "rotorAngle", ...FLOAT_IN },
             ],
             outputPorts: [
-                { slot: "d", ...FLOAT_OUT },
-                { slot: "q", ...FLOAT_OUT },
+                { slot: "directAxis", ...FLOAT_OUT },
+                { slot: "quadratureAxis", ...FLOAT_OUT },
             ],
         });
         // Specialized graph node: the gravity-coupled PMSM ASSEMBLY (FOC +
-        // dq machine + gravity payload + resonant housing) packaged as a
+        // dq machine + gravity payload + resonant housing) packaged as phaseA
         // palette-droppable, drillable container. Its interior is built at
-        // CONSTRUCTION (the factory returns a fully-wired graph), so a save
+        // CONSTRUCTION (the factory returns phaseA fully-wired graph), so phaseA save
         // is just this typeId; on load the factory rebuilds the assembly.
         // Ports: `local` places + orients the whole body (yaw vs gravity),
-        // `speed_target` drives the FOC, the Scene is inherited; the machine
+        // `speedTarget` drives the FOC, the Scene is inherited; the machine
         // current/vibration + housing acceleration are the study readouts.
         ctx.nodes.register("Physics.Electric.Motor.PMSM:gravity-coupled", () => createGravityCoupledPmsmGraph() as never, {
             label: "PMSM (gravity-coupled)",
@@ -192,16 +192,16 @@ export const motorPmsmSubPlugin: IPlugin = {
             inputPorts: [
                 { slot: "scene_in", ...SCENE_IN },
                 { slot: "local", ...MAT44_IN },
-                { slot: "speed_target", ...FLOAT_IN },
+                { slot: "speedTarget", ...FLOAT_IN },
             ],
             outputPorts: [
                 { slot: "world", ...MAT44_OUT },
-                { slot: "i_q", ...FLOAT_OUT },
-                { slot: "omega", ...FLOAT_OUT },
-                { slot: "force_y", ...FLOAT_OUT },
-                { slot: "force_z", ...FLOAT_OUT },
-                { slot: "accel_y", ...FLOAT_OUT },
-                { slot: "accel_z", ...FLOAT_OUT },
+                { slot: "quadratureAxisCurrent", ...FLOAT_OUT },
+                { slot: "angularVelocity", ...FLOAT_OUT },
+                { slot: "forceY", ...FLOAT_OUT },
+                { slot: "forceZ", ...FLOAT_OUT },
+                { slot: "accelerationY", ...FLOAT_OUT },
+                { slot: "accelerationZ", ...FLOAT_OUT },
             ],
         });
     },

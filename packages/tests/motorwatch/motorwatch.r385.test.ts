@@ -10,13 +10,13 @@
  * Harness choices (documented):
  *   - The motor (IIntegrable) is stepped manually with the
  *     RK4AdaptiveSolver (packages/tests/physics/motor-dc.test.ts
- *     pattern); tau_load is driven DIRECTLY on a wrapper leaf rather
+ *     pattern); loadTorque is driven DIRECTLY on a wrapper leaf rather
  *     than through LoadTorqueNode instances: the three profiles are
- *     two constants and one quadratic fan law read off motor.omega
+ *     two constants and one quadratic fan law read off motor.angularVelocity
  *     once per macro step (quasi-static, dt = 0.1 ms).
  *   - DECIMATION: the solver runs at 10 kHz (dt 1e-4, well under the
- *     electrical pole tau_e = L/R = 0.82 ms); the device is fed every
- *     10th sample, i.e. a 1 kHz current sensor.
+ *     electrical pole tau_e = armatureInductance/armatureResistance = 0.82 ms); the device is fed every
+ *     10th sample, armatureCurrent.e. a 1 kHz current sensor.
  *   - Sensor noise: deterministic Gaussian (sigma 3 mA) added at
  *     sampling time. Same imperfection the DC current sensor node
  *     models, applied inline so the sim needs no signal-channel wiring.
@@ -35,7 +35,7 @@ import { ENCODER_DIM, buildDiagnosticBytes, buildEncoderBytes, makeGaussian } fr
 // ─── Simulation constants ───────────────────────────────────────────────────
 
 /** R385 parameters (plugin defaults are NOT the R385). */
-const R385 = { R: 1.22, L: 1e-3, Kt: 8.22e-3, Ke: 8.22e-3, J: 6e-7, b: 1.03e-6 };
+const R385 = { armatureResistance: 1.22, armatureInductance: 1e-3, torqueConstant: 8.22e-3, backEmfConstant: 8.22e-3, rotorInertia: 6e-7, viscousFriction: 1.03e-6 };
 
 /** PWM-average armature voltage, held constant. */
 const PWM_AVG_V = 7.0;
@@ -50,7 +50,7 @@ const T_REGIME3 = 2.4;
 const T_TOTAL = 3.8;
 const TAU_LOW = 2e-3; // Nm
 const TAU_STEP = 5e-3; // Nm (2.5x)
-const K_FAN = 1.5e-8; // Nm s^2 (tau = K_FAN omega^2)
+const K_FAN = 1.5e-8; // Nm s^2 (tau = K_FAN angularVelocity^2)
 
 const FRAME_SIZE = 64;
 
@@ -83,13 +83,13 @@ function emptySession(): ISession {
 
 /**
  * IIntegrable wrapper delegating to the motor's rhs with directly
- * driven V / tau_load (no signal channels needed for a headless sim).
+ * driven armatureVoltage / loadTorque (no signal channels needed for a headless sim).
  */
 class DrivenMotorLeaf implements IIntegrable {
     public readonly stateSize = 2;
-    public readonly stateNames: ReadonlyArray<string> = ["i", "omega"];
+    public readonly stateNames: ReadonlyArray<string> = ["armatureCurrent", "angularVelocity"];
 
-    public V = 0;
+    public armatureVoltage = 0;
     public tauLoad = 0;
 
     private readonly _motor: DcMotorDynamicNode;
@@ -98,8 +98,8 @@ class DrivenMotorLeaf implements IIntegrable {
     public constructor(motor: DcMotorDynamicNode) {
         this._motor = motor;
         this._inputs = {
-            get: (port: string) => (port === "V" ? this.V : port === "tau_load" ? this.tauLoad : undefined),
-            has: (port: string) => port === "V" || port === "tau_load",
+            get: (port: string) => (port === "armatureVoltage" ? this.armatureVoltage : port === "loadTorque" ? this.tauLoad : undefined),
+            has: (port: string) => port === "armatureVoltage" || port === "loadTorque",
             sumPrefix: () => 0,
         };
     }
@@ -127,16 +127,16 @@ class DrivenMotorLeaf implements IIntegrable {
  *  noisy current samples the edge sensor would deliver. */
 function simulateR385Current(): number[] {
     const motor = new DcMotorDynamicNode();
-    motor.R = R385.R;
-    motor.L = R385.L;
-    motor.Kt = R385.Kt;
-    motor.Ke = R385.Ke;
-    motor.J = R385.J;
-    motor.b = R385.b;
+    motor.armatureResistance = R385.armatureResistance;
+    motor.armatureInductance = R385.armatureInductance;
+    motor.torqueConstant = R385.torqueConstant;
+    motor.backEmfConstant = R385.backEmfConstant;
+    motor.rotorInertia = R385.rotorInertia;
+    motor.viscousFriction = R385.viscousFriction;
     motor.reset(emptySession());
 
     const leaf = new DrivenMotorLeaf(motor);
-    leaf.V = PWM_AVG_V;
+    leaf.armatureVoltage = PWM_AVG_V;
 
     const solver = new RK4AdaptiveSolver({ tolerance: 1e-5, maxStep: DT });
     solver.initialize([leaf], 0);
@@ -147,10 +147,10 @@ function simulateR385Current(): number[] {
     const steps = Math.round(T_TOTAL / DT);
     for (let k = 0; k < steps; k++) {
         const t = k * DT;
-        leaf.tauLoad = t < T_REGIME2 ? TAU_LOW : t < T_REGIME3 ? TAU_STEP : K_FAN * motor.omega * motor.omega;
+        leaf.tauLoad = t < T_REGIME2 ? TAU_LOW : t < T_REGIME3 ? TAU_STEP : K_FAN * motor.angularVelocity * motor.angularVelocity;
         solver.step(DT, session);
         if ((k + 1) % DECIMATION === 0) {
-            samples.push(motor.i + NOISE_STD * gauss());
+            samples.push(motor.armatureCurrent + NOISE_STD * gauss());
         }
     }
     return samples;
@@ -164,7 +164,7 @@ describe("motorwatch R385 end-to-end (SP1)", () => {
         const samples = simulateR385Current();
         expect(samples.length).toBe(Math.round(T_TOTAL / DT / DECIMATION));
 
-        // (b) Edge device with the synthesized deterministic encoder.
+        // (viscousFriction) Edge device with the synthesized deterministic encoder.
         const device = new MotorwatchDevice({ frameSize: FRAME_SIZE, deviceId: "edge-r385" });
         const encoderBytes = buildEncoderBytes(FRAME_SIZE);
         const encoderReport = device.loadEncoder(encoderBytes, { sha256: sha256Hex(encoderBytes), name: "r385-encoder.onnx" });

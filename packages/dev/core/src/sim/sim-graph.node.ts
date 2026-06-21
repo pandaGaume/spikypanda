@@ -135,7 +135,7 @@ export class SimGraphNode<
     //
     // A Sim.Graph is itself a world object: it accepts a `local` pose
     // (matrix44) within its enclosing scene and exposes its composed
-    // `world` (matrix44). It carries no `parent_world` port of its own:
+    // `world` (matrix44). It carries no `parentWorld` port of its own:
     // the parent frame IS the enclosing scene, inherited through the
     // fractal nesting (see _bindInnerSceneView), so chaining is done by
     // nesting Sim.Graphs rather than by wiring a parallel transform tree
@@ -150,7 +150,7 @@ export class SimGraphNode<
     // `GraphNode` (pose → local → parent × local, via `composeWorldInto`);
     // this node layers the SIM concerns: the wired `local` port OVERRIDE and
     // the enclosing scene as
-    // the (only) parent frame. A Sim.Graph has NO parent_world port — the
+    // the (only) parent frame. A Sim.Graph has NO parentWorld port — the
     // parent frame IS the enclosing scene, inherited through the fractal
     // nesting, so chaining is done by nesting Sim.Graphs rather than wiring
     // a parallel transform tree (which would double-count the scene origin).
@@ -211,7 +211,7 @@ export class SimGraphNode<
             // with no rebuild) and composes this sub-graph's local pose
             // into the chained worldTransform. Scene context thus flows
             // DOWN the fractal hierarchy, exactly as a TransformNode
-            // composes parent_world × local. When the parent has no view
+            // composes parentWorld × local. When the parent has no view
             // yet, the inherited view degrades to Earth-surface defaults.
             view = new InheritedSceneStateView(`__sim_graph_${this.sceneItemId || "unbound"}`, () => parentSession.sceneStateView);
         }
@@ -308,7 +308,7 @@ export class SimGraphNode<
     private _updateTransform(parentSession: ISession): void {
         // Consume the `local` port override via the routing cache (this also
         // keeps _routeInputsFromParent from re-seeing it as a boundary token).
-        // A Sim.Graph has NO parent_world port: the parent frame IS the
+        // A Sim.Graph has NO parentWorld port: the parent frame IS the
         // enclosing scene, wired as this node's `parent` at session bind.
         const localV = this.consumeLatest(parentSession, SimGraphNode.INPUT_LOCAL);
         if (isMatrix44(localV)) {
@@ -334,7 +334,7 @@ export class SimGraphNode<
 
     /** World pose (see IHasTransform): `parent.worldTransform() × local`,
      *  where `parent` is the enclosing scene (wired at bind). A Sim.Graph has
-     *  no parent_world port. With no parent it degrades to the bare local pose. */
+     *  no parentWorld port. With no parent it degrades to the bare local pose. */
     public override worldTransform(): Matrix4 {
         const local = this.localTransform();
         const parent = this.parent;

@@ -14,7 +14,7 @@
  *   4. TransformNode.getScene(session) returns the session's bound
  *      view when set; falls back to a default Earth-surface view
  *      when not set.
- *   5. Motors inherit only `local` + `parent_world` ports (no `scene`
+ *   5. Motors inherit only `local` + `parentWorld` ports (no `scene`
  *      port anymore).
  */
 import type { ISession } from "spikypanda-core";
@@ -149,7 +149,7 @@ describe("SceneItem 3D-tree chain (IHasTransform)", () => {
         expect(w[14]).toBeCloseTo(0, 9);
     });
 
-    it("a parent scale composes into the child's world (T·R·S via the chain)", () => {
+    it("a parent scale composes into the child's world (T·armatureResistance·S via the chain)", () => {
         const parentItem = new SceneItem();
         parentItem.localScale = new Cartesian3(2, 2, 2);
 
@@ -280,23 +280,23 @@ describe("TransformNode.getScene", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Motors inherit only local + parent_world (no scene port any more)
+// Motors inherit only local + parentWorld (no scene port any more)
 // ---------------------------------------------------------------------------
 
 describe("Motor inheritance: transform ports without scene", () => {
-    it("DcMotorDynamicNode exposes local + parent_world, NOT scene", () => {
+    it("DcMotorDynamicNode exposes local + parentWorld, NOT scene", () => {
         const node = new DcMotorDynamicNode();
         const slots = node.inputPorts.map((p) => p.slot);
         expect(slots).toContain("local");
-        expect(slots).toContain("parent_world");
+        expect(slots).toContain("parentWorld");
         expect(slots).not.toContain("scene");
     });
 
-    it("BldcMotorDynamicNode exposes local + parent_world, NOT scene", () => {
+    it("BldcMotorDynamicNode exposes local + parentWorld, NOT scene", () => {
         const node = new BldcMotorDynamicNode();
         const slots = node.inputPorts.map((p) => p.slot);
         expect(slots).toContain("local");
-        expect(slots).toContain("parent_world");
+        expect(slots).toContain("parentWorld");
         expect(slots).not.toContain("scene");
     });
 });

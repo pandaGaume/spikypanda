@@ -16,29 +16,29 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  * α = contact angle.
  *
  * Each defect frequency carries its own amplitude (set to 0 to disable
- * that component). Useful directly on the motor `tau_load` input or on
+ * that component). Useful directly on the motor `loadTorque` input or on
  * a measured vibration channel to inject a known bearing signature.
  *
  * Inputs:
- *   signal_in   additive base (default 0)
- *   omega       shaft mechanical speed [rad/s]
+ *   inputSignal   additive base (default 0)
+ *   angularVelocity       shaft mechanical speed [rad/s]
  *   dt          integration step (optional, falls back to t-lastT)
  *
- * Output: signal_out (signal_in + sum of active fault sinusoids).
+ * Output: outputSignal (inputSignal + sum of active fault sinusoids).
  *
- * Geometry editables: nBalls, ballDiameter, pitchDiameter, contactAngle.
- * Amplitude editables: bpfoAmp, bpfiAmp, bsfAmp, ftfAmp.
+ * Geometry editables: ballCount, ballDiameter, pitchDiameter, contactAngle.
+ * Amplitude editables: outerRaceAmplitude, innerRaceAmplitude, ballSpinAmplitude, cageAmplitude.
  */
 export class BearingFaultNode extends RuntimeNode implements IDeclaresPorts {
-    @cloneable private _nBalls: number = 8;
+    @cloneable private _ballCount: number = 8;
     @cloneable private _ballDiameter: number = 7.94e-3; // [m]
     @cloneable private _pitchDiameter: number = 33.5e-3; // [m]
     @cloneable private _contactAngle: number = 0; // [rad]
 
-    @cloneable private _bpfoAmp: number = 0.005;
-    @cloneable private _bpfiAmp: number = 0;
-    @cloneable private _bsfAmp: number = 0;
-    @cloneable private _ftfAmp: number = 0;
+    @cloneable private _outerRaceAmplitude: number = 0.005;
+    @cloneable private _innerRaceAmplitude: number = 0;
+    @cloneable private _ballSpinAmplitude: number = 0;
+    @cloneable private _cageAmplitude: number = 0;
 
     @cloneable private _phaseBpfo: number = 0;
     @cloneable private _phaseBpfi: number = 0;
@@ -48,28 +48,28 @@ export class BearingFaultNode extends RuntimeNode implements IDeclaresPorts {
     private _lastT: number = -1;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "signal_in", optional: true, type: "float" },
-        { slot: "omega", optional: true, type: "float" },
+        { slot: "inputSignal", optional: true, type: "float" },
+        { slot: "angularVelocity", optional: true, type: "float" },
         { slot: "dt", optional: true, type: "float" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "signal_out", optional: false, type: "float" },
-        { slot: "bpfo_hz", optional: false, type: "float" },
-        { slot: "bpfi_hz", optional: false, type: "float" },
-        { slot: "bsf_hz", optional: false, type: "float" },
-        { slot: "ftf_hz", optional: false, type: "float" },
+        { slot: "outputSignal", optional: false, type: "float" },
+        { slot: "outerRaceDefectFrequencyHz", optional: false, type: "float" },
+        { slot: "innerRaceDefectFrequencyHz", optional: false, type: "float" },
+        { slot: "ballSpinFrequencyHz", optional: false, type: "float" },
+        { slot: "cageFrequencyHz", optional: false, type: "float" },
     ];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
     }
 
-    @editable("number") public get nBalls(): number {
-        return this._nBalls;
+    @editable("number") public get ballCount(): number {
+        return this._ballCount;
     }
-    public set nBalls(v: number) {
-        this.setField("nBalls", this._nBalls, v, (n) => {
-            this._nBalls = n;
+    public set ballCount(v: number) {
+        this.setField("ballCount", this._ballCount, v, (n) => {
+            this._ballCount = n;
         });
     }
     @editable("number") public get ballDiameter(): number {
@@ -96,45 +96,45 @@ export class BearingFaultNode extends RuntimeNode implements IDeclaresPorts {
             this._contactAngle = n;
         });
     }
-    @editable("number") public get bpfoAmp(): number {
-        return this._bpfoAmp;
+    @editable("number") public get outerRaceAmplitude(): number {
+        return this._outerRaceAmplitude;
     }
-    public set bpfoAmp(v: number) {
-        this.setField("bpfoAmp", this._bpfoAmp, v, (n) => {
-            this._bpfoAmp = n;
+    public set outerRaceAmplitude(v: number) {
+        this.setField("outerRaceAmplitude", this._outerRaceAmplitude, v, (n) => {
+            this._outerRaceAmplitude = n;
         });
     }
-    @editable("number") public get bpfiAmp(): number {
-        return this._bpfiAmp;
+    @editable("number") public get innerRaceAmplitude(): number {
+        return this._innerRaceAmplitude;
     }
-    public set bpfiAmp(v: number) {
-        this.setField("bpfiAmp", this._bpfiAmp, v, (n) => {
-            this._bpfiAmp = n;
+    public set innerRaceAmplitude(v: number) {
+        this.setField("innerRaceAmplitude", this._innerRaceAmplitude, v, (n) => {
+            this._innerRaceAmplitude = n;
         });
     }
-    @editable("number") public get bsfAmp(): number {
-        return this._bsfAmp;
+    @editable("number") public get ballSpinAmplitude(): number {
+        return this._ballSpinAmplitude;
     }
-    public set bsfAmp(v: number) {
-        this.setField("bsfAmp", this._bsfAmp, v, (n) => {
-            this._bsfAmp = n;
+    public set ballSpinAmplitude(v: number) {
+        this.setField("ballSpinAmplitude", this._ballSpinAmplitude, v, (n) => {
+            this._ballSpinAmplitude = n;
         });
     }
-    @editable("number") public get ftfAmp(): number {
-        return this._ftfAmp;
+    @editable("number") public get cageAmplitude(): number {
+        return this._cageAmplitude;
     }
-    public set ftfAmp(v: number) {
-        this.setField("ftfAmp", this._ftfAmp, v, (n) => {
-            this._ftfAmp = n;
+    public set cageAmplitude(v: number) {
+        this.setField("cageAmplitude", this._cageAmplitude, v, (n) => {
+            this._cageAmplitude = n;
         });
     }
 
-    @viewable("number") public get signal_out(): number {
+    @viewable("number") public get outputSignal(): number {
         return this._out;
     }
 
     public override reset(_session: ISession): void {
-        this.setField("signal_out", this._out, 0, (n) => {
+        this.setField("outputSignal", this._out, 0, (n) => {
             this._out = n;
         });
         this._phaseBpfo = this._phaseBpfi = this._phaseBsf = this._phaseFtf = 0;
@@ -144,7 +144,7 @@ export class BearingFaultNode extends RuntimeNode implements IDeclaresPorts {
     public override fire(session: ISession, t: number): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
         let inSig = 0,
-            omega = 0,
+            angularVelocity = 0,
             dt = -1;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
@@ -153,17 +153,17 @@ export class BearingFaultNode extends RuntimeNode implements IDeclaresPorts {
             if (idx < 0 || !session.linkStates[idx].ready) continue;
             const value = session.consume(idx);
             if (typeof value !== "number") continue;
-            if (slot === "signal_in") inSig = value;
-            else if (slot === "omega") omega = value;
+            if (slot === "inputSignal") inSig = value;
+            else if (slot === "angularVelocity") angularVelocity = value;
             else if (slot === "dt") dt = value;
         }
         if (dt < 0) dt = this._lastT < 0 ? 0 : Math.max(0, t - this._lastT);
         this._lastT = t;
 
-        const fr = Math.abs(omega) / (2 * Math.PI);
+        const fr = Math.abs(angularVelocity) / (2 * Math.PI);
         const ratio = this._pitchDiameter > 0 ? (this._ballDiameter / this._pitchDiameter) * Math.cos(this._contactAngle) : 0;
-        const bpfoHz = (this._nBalls / 2) * fr * (1 - ratio);
-        const bpfiHz = (this._nBalls / 2) * fr * (1 + ratio);
+        const bpfoHz = (this._ballCount / 2) * fr * (1 - ratio);
+        const bpfiHz = (this._ballCount / 2) * fr * (1 + ratio);
         const bsfHz = this._ballDiameter > 0 ? (this._pitchDiameter / (2 * this._ballDiameter)) * fr * (1 - ratio * ratio) : 0;
         const ftfHz = 0.5 * fr * (1 - ratio);
 
@@ -174,12 +174,12 @@ export class BearingFaultNode extends RuntimeNode implements IDeclaresPorts {
 
         const out =
             inSig +
-            this._bpfoAmp * Math.sin(this._phaseBpfo) +
-            this._bpfiAmp * Math.sin(this._phaseBpfi) +
-            this._bsfAmp * Math.sin(this._phaseBsf) +
-            this._ftfAmp * Math.sin(this._phaseFtf);
+            this._outerRaceAmplitude * Math.sin(this._phaseBpfo) +
+            this._innerRaceAmplitude * Math.sin(this._phaseBpfi) +
+            this._ballSpinAmplitude * Math.sin(this._phaseBsf) +
+            this._cageAmplitude * Math.sin(this._phaseFtf);
 
-        this.setField("signal_out", this._out, out, (n) => {
+        this.setField("outputSignal", this._out, out, (n) => {
             this._out = n;
         });
         const broadcast = (slot: string, val: unknown): void => {
@@ -190,11 +190,11 @@ export class BearingFaultNode extends RuntimeNode implements IDeclaresPorts {
                 session.publish(idx, val);
             }
         };
-        broadcast("signal_out", out);
-        broadcast("bpfo_hz", bpfoHz);
-        broadcast("bpfi_hz", bpfiHz);
-        broadcast("bsf_hz", bsfHz);
-        broadcast("ftf_hz", ftfHz);
+        broadcast("outputSignal", out);
+        broadcast("outerRaceDefectFrequencyHz", bpfoHz);
+        broadcast("innerRaceDefectFrequencyHz", bpfiHz);
+        broadcast("ballSpinFrequencyHz", bsfHz);
+        broadcast("cageFrequencyHz", ftfHz);
     }
 }
 

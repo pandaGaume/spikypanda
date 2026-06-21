@@ -43,9 +43,5 @@ export interface IParticulateMetadata {
 export function isParticulateMetadata(v: unknown): v is IParticulateMetadata {
     if (!v || typeof v !== "object") return false;
     const c = v as Partial<IParticulateMetadata>;
-    return (
-        typeof c.particulateId === "string" &&
-        c.particulateId.length > 0 &&
-        typeof c.displayName === "string"
-    );
+    return typeof c.particulateId === "string" && c.particulateId.length > 0 && typeof c.displayName === "string";
 }

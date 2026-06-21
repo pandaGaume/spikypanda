@@ -4,7 +4,7 @@
  * This is the payoff of the specialized-graph-node pattern: the motor is
  * an ASSEMBLY (FOC + dq machine + gravity payload + resonant housing)
  * whose interior is built AT CONSTRUCTION, embedded as a single node in a
- * parent graph. Driven by a speed setpoint on its `speed_target` boundary
+ * parent graph. Driven by a speed setpoint on its `speedTarget` boundary
  * input, with the Scene inherited from the parent session, it spins up and
  * exposes the machine current + housing vibration on its boundary outputs.
  *
@@ -44,13 +44,13 @@ function rms(xs: ReadonlyArray<number>): number {
 }
 
 interface RunResult {
-    omega: number;
+    angularVelocity: number;
     iqRms: number;
     accelRms: number;
 }
 
-/** Embed the container in a parent, drive speed_target, run under `scene`,
- *  and read its boundary outputs (omega / i_q / accel_y) back through
+/** Embed the container in a parent, drive speedTarget, run under `scene`,
+ *  and read its boundary outputs (angularVelocity / quadratureAxisCurrent / accelerationY) back through
  *  parent consumers. */
 function runContainer(scene: SceneStateView): RunResult {
     const container = createGravityCoupledPmsmGraph();
@@ -62,10 +62,10 @@ function runContainer(scene: SceneStateView): RunResult {
     const parent = new RuntimeGraphBuilder<IRuntimeNode, IChannel>()
         .withMode("dynamic")
         .withNodes(speed, container, omegaSink, iqSink, accelSink)
-        .withChannel(speed, container, "value", "speed_target")
-        .withChannel(container, omegaSink, "omega", "in")
-        .withChannel(container, iqSink, "i_q", "in")
-        .withChannel(container, accelSink, "accel_y", "in")
+        .withChannel(speed, container, "value", "speedTarget")
+        .withChannel(container, omegaSink, "angularVelocity", "in")
+        .withChannel(container, iqSink, "quadratureAxisCurrent", "in")
+        .withChannel(container, accelSink, "accelerationY", "in")
         .build();
 
     const session = new Session(parent);
@@ -81,14 +81,14 @@ function runContainer(scene: SceneStateView): RunResult {
     accelSink.received.length = 0;
     for (let i = 0; i < capture; i++) session.run((settle + i) * DT);
 
-    return { omega: mean(omegaSink.received), iqRms: rms(iqSink.received), accelRms: rms(accelSink.received) };
+    return { angularVelocity: mean(omegaSink.received), iqRms: rms(iqSink.received), accelRms: rms(accelSink.received) };
 }
 
 describe("Physics.Electric.Motor.PMSM:gravity-coupled container", () => {
     it("exposes the assembly's boundary ports (interior built at construction)", () => {
         const container = createGravityCoupledPmsmGraph();
-        expect(container.inputPorts.map((p) => p.slot)).toEqual(["speed_target"]);
-        expect(container.outputPorts.map((p) => p.slot)).toEqual(["i_q", "omega", "force_y", "force_z", "accel_y", "accel_z"]);
+        expect(container.inputPorts.map((p) => p.slot)).toEqual(["speedTarget"]);
+        expect(container.outputPorts.map((p) => p.slot)).toEqual(["quadratureAxisCurrent", "angularVelocity", "forceY", "forceZ", "accelerationY", "accelerationZ"]);
         // The interior is live immediately (not an empty shell awaiting JSON).
         expect(container.nodes.length).toBeGreaterThanOrEqual(4);
     });
@@ -96,7 +96,7 @@ describe("Physics.Electric.Motor.PMSM:gravity-coupled container", () => {
     it("spins to speed and emits gravity-driven vibration under Earth", () => {
         const earth = runContainer(viewWithGravity("earth", { x: 0, y: 0, z: -9.81 }));
         // FOC spun the inner machine near the setpoint, through the container boundary.
-        expect(earth.omega).toBeGreaterThan(0.7 * TARGET);
+        expect(earth.angularVelocity).toBeGreaterThan(0.7 * TARGET);
         // Drive current flows.
         expect(earth.iqRms).toBeGreaterThan(0);
         // Housing acceleration (UMP rotor-sag vibration) is present.
@@ -108,7 +108,7 @@ describe("Physics.Electric.Motor.PMSM:gravity-coupled container", () => {
         const orbital = runContainer(viewWithGravity("orbital", { x: 0, y: 0, z: 0 }));
 
         // The drive still spins the machine in microgravity.
-        expect(orbital.omega).toBeGreaterThan(0.7 * TARGET);
+        expect(orbital.angularVelocity).toBeGreaterThan(0.7 * TARGET);
         // The gravity-driven vibration collapses: Orbital accel is a tiny
         // fraction of Earth's (ideally ~0, since no sag without gravity).
         expect(orbital.accelRms).toBeLessThan(0.01 * earth.accelRms);

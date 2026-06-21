@@ -6,15 +6,15 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  * convention). Faithful port of the legacy `sensors`
  * ThreePhaseTransforms.clarke, the validation oracle.
  *
- *   alpha = (2/3) * (a - b/2 - c/2)
- *   beta  = (2/3) * (sqrt(3)/2) * (b - c)
+ *   alpha = (2/3) * (phaseA - phaseB/2 - phaseC/2)
+ *   beta  = (2/3) * (sqrt(3)/2) * (phaseB - phaseC)
  *
- * Under balanced inputs a = I*cos(theta), b = I*cos(theta - 2pi/3),
- * c = I*cos(theta + 2pi/3): alpha = I*cos(theta), beta = I*sin(theta).
+ * Under balanced inputs phaseA = I*cos(theta), phaseB = I*cos(theta - 2pi/3),
+ * phaseC = I*cos(theta + 2pi/3): alpha = I*cos(theta), beta = I*sin(theta).
  *
  * This is the first stage of the canonical FOC feedback path: wire the
- * machine phase currents i_a/i_b/i_c here, then feed (alpha, beta) into a
- * Park node to obtain (i_d, i_q) for the controller. Stateless, no
+ * machine phase currents phaseCurrentA/phaseCurrentB/phaseCurrentC here, then feed (alpha, beta) into phaseA
+ * Park node to obtain (directAxisCurrent, quadratureAxisCurrent) for the controller. Stateless, no
  * allocation in the hot path.
  */
 export class ClarkeNode extends RuntimeNode implements IDeclaresPorts {
@@ -22,9 +22,9 @@ export class ClarkeNode extends RuntimeNode implements IDeclaresPorts {
     private _beta: number = 0;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "a", optional: true, type: "float" },
-        { slot: "b", optional: true, type: "float" },
-        { slot: "c", optional: true, type: "float" },
+        { slot: "phaseA", optional: true, type: "float" },
+        { slot: "phaseB", optional: true, type: "float" },
+        { slot: "phaseC", optional: true, type: "float" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
         { slot: "alpha", optional: false, type: "float" },
@@ -49,9 +49,9 @@ export class ClarkeNode extends RuntimeNode implements IDeclaresPorts {
 
     public override fire(session: ISession, _t: number): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
-        let a = 0,
-            b = 0,
-            c = 0;
+        let phaseA = 0,
+            phaseB = 0,
+            phaseC = 0;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const slot = inSlotOf(link);
@@ -59,13 +59,13 @@ export class ClarkeNode extends RuntimeNode implements IDeclaresPorts {
             if (idx < 0 || !session.linkStates[idx].ready) continue;
             const value = session.consume(idx);
             if (typeof value !== "number") continue;
-            if (slot === "a") a = value;
-            else if (slot === "b") b = value;
-            else if (slot === "c") c = value;
+            if (slot === "phaseA") phaseA = value;
+            else if (slot === "phaseB") phaseB = value;
+            else if (slot === "phaseC") phaseC = value;
         }
 
-        this._alpha = (2 / 3) * (a - 0.5 * b - 0.5 * c);
-        this._beta = (2 / 3) * (0.5 * Math.sqrt(3)) * (b - c);
+        this._alpha = (2 / 3) * (phaseA - 0.5 * phaseB - 0.5 * phaseC);
+        this._beta = (2 / 3) * (0.5 * Math.sqrt(3)) * (phaseB - phaseC);
 
         for (const link of this.onsc<IChannel>()) {
             if (!link.enabled) continue;

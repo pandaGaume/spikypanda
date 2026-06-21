@@ -62,45 +62,45 @@ describe("plugin-physics nodes opt into IHasSampleRateRequirement", () => {
         expect((gate as IHasSampleRateRequirement).requiredHz).toBe(100);
     });
 
-    it("DcMotorDynamicNode derives from L/R electrical time constant", () => {
+    it("DcMotorDynamicNode derives from armatureInductance/armatureResistance electrical time constant", () => {
         const motor = new DcMotorDynamicNode();
         expect(hasSampleRateRequirement(motor)).toBe(true);
-        // Default params: L=1e-3 H, R=1 Ω → τ_e = 1 ms → 10/τ = 10 kHz.
-        // J=1e-5, b=1e-4 → τ_m = 0.1 s = much slower; τ_e dominates.
+        // Default params: armatureInductance=1e-3 H, armatureResistance=1 Ω → τ_e = 1 ms → 10/τ = 10 kHz.
+        // rotorInertia=1e-5, viscousFriction=1e-4 → τ_m = 0.1 s = much slower; τ_e dominates.
         expect((motor as IHasSampleRateRequirement).requiredHz).toBe(10_000);
     });
 
-    it("DcMotorDynamicNode requiredHz follows L / R changes (not pinned)", () => {
+    it("DcMotorDynamicNode requiredHz follows armatureInductance / armatureResistance changes (not pinned)", () => {
         const motor = new DcMotorDynamicNode();
-        motor.L = 10e-3; // 10× slower τ_e → 1 kHz
+        motor.armatureInductance = 10e-3; // 10× slower τ_e → 1 kHz
         expect(motor.requiredHz).toBe(1000);
-        motor.R = 10; // back to τ_e = 1 ms → 10 kHz
+        motor.armatureResistance = 10; // back to τ_e = 1 ms → 10 kHz
         expect(motor.requiredHz).toBe(10_000);
     });
 
     it("DcMotorDynamicNode requiredHz user-pin overrides computed value", () => {
         const motor = new DcMotorDynamicNode();
-        motor.required_hz = 2000;
+        motor.requiredSampleRateHz = 2000;
         expect(motor.requiredHz).toBe(2000);
-        expect(motor.required_hz_user_defined).toBe(true);
-        // Changing L / R no longer affects the displayed value while pinned.
-        motor.L = 50e-3;
+        expect(motor.requiredSampleRateHzUserDefined).toBe(true);
+        // Changing armatureInductance / armatureResistance no longer affects the displayed value while pinned.
+        motor.armatureInductance = 50e-3;
         expect(motor.requiredHz).toBe(2000);
         // Setting 0 / negative unpins and falls back to computed.
-        motor.required_hz = 0;
-        expect(motor.required_hz_user_defined).toBe(false);
-        // After L=50e-3 R=1: τ_e = 50ms → 10/τ = 200 Hz (above the 60 Hz floor).
+        motor.requiredSampleRateHz = 0;
+        expect(motor.requiredSampleRateHzUserDefined).toBe(false);
+        // After armatureInductance=50e-3 armatureResistance=1: τ_e = 50ms → 10/τ = 200 Hz (above the 60 Hz floor).
         expect(motor.requiredHz).toBe(200);
     });
 
     it("the editable accessor reflects + clamps values", () => {
         const layer = new AtmosphereLayerNode();
-        layer.required_hz = 250;
+        layer.requiredSampleRateHz = 250;
         expect(layer.requiredHz).toBe(250);
         // Negative / non-finite values fall back to a positive default.
-        layer.required_hz = -10;
+        layer.requiredSampleRateHz = -10;
         expect(layer.requiredHz).toBe(100);
-        layer.required_hz = NaN;
+        layer.requiredSampleRateHz = NaN;
         expect(layer.requiredHz).toBe(100);
     });
 });
@@ -185,7 +185,7 @@ describe("SimGraphNode aggregation with concrete plugin-physics nodes", () => {
 
     it("user override on motor flows through aggregation", () => {
         const motor = new DcMotorDynamicNode();
-        motor.required_hz = 5000;
+        motor.requiredSampleRateHz = 5000;
         const session = fakeSession([new AtmosphereLayerNode(), motor]);
         expect(SimGraphNode._aggregateRequiredHzFromSession(session as never)).toBe(5000);
     });

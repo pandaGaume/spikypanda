@@ -12,8 +12,8 @@ import { TransformNode } from "./transform.node";
  *            "flux" → multiplicative magnet-flux modulation (sag, eccentricity)
  *            "R"    → stator/armature resistance multiplicative delta
  *            "L"    → inductance multiplicative delta
- *            "Ke"   → back-EMF constant multiplicative delta (demag)
- *            "Kt"   → torque constant multiplicative delta
+ *            "backEmfConstant"   → back-EMF constant multiplicative delta (demag)
+ *            "torqueConstant"   → torque constant multiplicative delta
  *            "b"    → viscous friction additive delta [Nm·s/rad]
  *            "J"    → inertia additive delta [kg·m²]
  *            "broken_bar" → induction-machine rotor-bar asymmetry, ...
@@ -62,7 +62,7 @@ function isFaultSlot(slot: string): boolean {
  *                                                 → ...
  *
  * On every fire(): `super.fire()` (the TransformNode hop) consumes
- * local/parent_world and publishes the world matrix, then this class
+ * local/parentWorld and publishes the world matrix, then this class
  * iterates opsc again, consumes every wired `fault_N` token, and routes
  * it through `acceptFault()` before accumulating. Plain numbers auto-wrap
  * to target "tau"; structured `{ target, value }` tokens flow through.
@@ -132,7 +132,7 @@ export class FaultableNode extends TransformNode implements IDeclaresPorts {
     }
 
     public override fire(session: ISession, t: number): void {
-        // 1) TransformNode hop: consume local/parent_world, publish world.
+        // 1) TransformNode hop: consume local/parentWorld, publish world.
         super.fire(session, t);
 
         // 2) Reset the accumulator and scan fault_N tokens.

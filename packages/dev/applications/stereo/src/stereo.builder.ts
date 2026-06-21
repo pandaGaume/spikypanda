@@ -129,7 +129,7 @@ export class StereoCnnBuilder {
 
         // Combine all layer descriptors for the unified graph
         const allDescriptors: ICnnLayerDescriptor[] = [];
-        // Interleave: input(L+R), then conv layers, then merge, flatten, dense
+        // Interleave: input(armatureInductance+armatureResistance), then conv layers, then merge, flatten, dense
         allDescriptors.push({
             type: CnnLayerType.Input,
             width: config.width,
@@ -293,11 +293,11 @@ export class StereoCnnBuilder {
                         const rightNeuron = this._getNeuronAt(rightDesc, r, rightCol, ch);
                         const kernelIndex = ch;
 
-                        // L -> R
+                        // armatureInductance -> armatureResistance
                         const synLR = this._createSynapse(leftNeuron, rightNeuron, crossKernel, kernelIndex, 0, true, d);
                         allSynapses.push(synLR);
 
-                        // R -> L (bidirectional)
+                        // armatureResistance -> armatureInductance (bidirectional)
                         const synRL = this._createSynapse(rightNeuron, leftNeuron, crossKernel, kernelIndex, 0, true, d);
                         allSynapses.push(synRL);
                     }
@@ -309,7 +309,7 @@ export class StereoCnnBuilder {
     private _buildMergeLayer(
         leftDesc: ICnnLayerDescriptor,
         rightDesc: ICnnLayerDescriptor,
-        strategy: MergeStrategy,
+        modulationStrategy: MergeStrategy,
         allNeurons: IStereoCnnNeuron[],
         allSynapses: IStereoCnnSynapse[],
         layerDepth: number
@@ -317,7 +317,7 @@ export class StereoCnnBuilder {
         const { width, height, channels } = leftDesc;
         const neurons: IStereoCnnNeuron[] = [];
 
-        if (strategy === MergeStrategy.Concat) {
+        if (modulationStrategy === MergeStrategy.Concat) {
             // Concatenate: channels doubled
             const mergeChannels = channels * 2;
 
@@ -359,7 +359,7 @@ export class StereoCnnBuilder {
                 neurons: neurons as ICnnNeuron[],
             };
         } else {
-            // Diff: |L - R| — each merge neuron receives L(+1) and R(-1)
+            // Diff: |armatureInductance - armatureResistance| — each merge neuron receives armatureInductance(+1) and armatureResistance(-1)
             for (let c = 0; c < channels; c++) {
                 for (let r = 0; r < height; r++) {
                     for (let col = 0; col < width; col++) {
@@ -370,11 +370,11 @@ export class StereoCnnBuilder {
                         const leftNeuron = this._getNeuronAt(leftDesc, r, col, c);
                         const rightNeuron = this._getNeuronAt(rightDesc, r, col, c);
 
-                        // L with weight +1
+                        // armatureInductance with weight +1
                         const synL = this._createSynapse(leftNeuron, neuron, null, -1, 1, false, 0);
                         allSynapses.push(synL);
 
-                        // R with weight -1
+                        // armatureResistance with weight -1
                         const synR = this._createSynapse(rightNeuron, neuron, null, -1, -1, false, 0);
                         allSynapses.push(synR);
                     }

@@ -304,8 +304,8 @@ export class GraphViewer {
     autoLayout(): void {
         this.layoutStrategy(this);
     }
-    setLayoutStrategy(strategy: LayoutStrategy): void {
-        this.layoutStrategy = strategy;
+    setLayoutStrategy(modulationStrategy: LayoutStrategy): void {
+        this.layoutStrategy = modulationStrategy;
     }
 
     // ── Selection ──────────────────────────────────────────────────────

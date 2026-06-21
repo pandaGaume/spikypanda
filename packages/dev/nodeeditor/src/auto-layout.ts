@@ -4,7 +4,7 @@ import type { Port } from "./port";
 import type { NodeDef } from "./types";
 
 /**
- * Minimal surface a layout strategy needs from its target editor. Both
+ * Minimal surface a layout modulationStrategy needs from its target editor. Both
  * NodeEditor (legacy, all-in-one) and GraphViewer (standalone canvas)
  * satisfy this interface, so layout code is reusable across either.
  */

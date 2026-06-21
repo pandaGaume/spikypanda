@@ -13,16 +13,16 @@ export const bearingSubPlugin: IPlugin = {
             category: "Physics.Mechanical.Bearing",
             docPath: ctx.assetUrl("docs/physics/bearing/fault.md"),
             inputPorts: [
-                { slot: "signal_in", ...FLOAT_IN },
-                { slot: "omega", ...FLOAT_IN },
+                { slot: "inputSignal", ...FLOAT_IN },
+                { slot: "angularVelocity", ...FLOAT_IN },
                 { slot: "dt", ...FLOAT_IN },
             ],
             outputPorts: [
-                { slot: "signal_out", ...FLOAT_OUT },
-                { slot: "bpfo_hz", ...FLOAT_OUT },
-                { slot: "bpfi_hz", ...FLOAT_OUT },
-                { slot: "bsf_hz", ...FLOAT_OUT },
-                { slot: "ftf_hz", ...FLOAT_OUT },
+                { slot: "outputSignal", ...FLOAT_OUT },
+                { slot: "outerRaceDefectFrequencyHz", ...FLOAT_OUT },
+                { slot: "innerRaceDefectFrequencyHz", ...FLOAT_OUT },
+                { slot: "ballSpinFrequencyHz", ...FLOAT_OUT },
+                { slot: "cageFrequencyHz", ...FLOAT_OUT },
             ],
         });
     },

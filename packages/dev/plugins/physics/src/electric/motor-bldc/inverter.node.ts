@@ -4,12 +4,12 @@ import { hallSector } from "./back-emf.js";
 
 /**
  * 6-step BLDC inverter — produces 3-phase line-to-neutral voltages from
- * a DC bus, a duty (0..1), and the rotor's electrical angle (via Hall
+ * a DC bus, a dutyCycle (0..1), and the rotor's electrical angle (via Hall
  * sensors in real hardware, simulated here as a direct θ_e input).
  *
  * Standard commutation table indexed by 60° sector (0..5):
  *
- *     sector | V_a       | V_b       | V_c
+ *     sector | phaseVoltageA       | phaseVoltageB       | phaseVoltageC
  *     -------|-----------|-----------|----------
  *     0      | +V        | -V        | 0
  *     1      | +V        | 0         | -V
@@ -18,18 +18,18 @@ import { hallSector } from "./back-emf.js";
  *     4      | -V        | 0         | +V
  *     5      | 0         | -V        | +V
  *
- * where V = duty · V_dc / 2 (line-to-neutral after Y-connection split).
+ * where V = dutyCycle · dcBusVoltage / 2 (line-to-neutral after Y-connection split).
  * PWM is modeled as average voltage (no individual switching cycle —
  * appropriate for a 100 µs sim step against a 20 kHz PWM carrier).
  *
  * Inputs:
- *   V_dc      DC bus voltage [V]
- *   duty      [0..1] (clamped); negative duty reverses rotation
- *   theta_e   electrical angle [rad] — usually fed by the motor's
- *             `theta_m` output multiplied by P (pole pairs). When unwired
+ *   dcBusVoltage      DC bus voltage [V]
+ *   dutyCycle      [0..1] (clamped); negative dutyCycle reverses rotation
+ *   electricalAngle   electrical angle [rad] — usually fed by the motor's
+ *             `rotorAngle` output multiplied by polePairs (pole pairs). When unwired
  *             defaults to 0, locking the inverter to sector 0.
  *
- * Outputs: V_a, V_b, V_c, sector (informational).
+ * Outputs: phaseVoltageA, phaseVoltageB, phaseVoltageC, sector (informational).
  */
 export class BldcInverterNode extends IntegrableRuntimeNode implements IDeclaresPorts, IHasSampleRateRequirement {
     /** 6-step commutation against a documented 20 kHz PWM carrier:
@@ -41,7 +41,7 @@ export class BldcInverterNode extends IntegrableRuntimeNode implements IDeclares
         return 10_000;
     }
 
-    @cloneable private _VdcDefault: number = 24;
+    @cloneable private _defaultDcBusVoltage: number = 24;
 
     @cloneable private _Va: number = 0;
     @cloneable private _Vb: number = 0;
@@ -49,14 +49,14 @@ export class BldcInverterNode extends IntegrableRuntimeNode implements IDeclares
     @cloneable private _sector: number = 0;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "V_dc", optional: true, type: "float" },
-        { slot: "duty", optional: true, type: "float" },
-        { slot: "theta_e", optional: true, type: "float" },
+        { slot: "dcBusVoltage", optional: true, type: "float" },
+        { slot: "dutyCycle", optional: true, type: "float" },
+        { slot: "electricalAngle", optional: true, type: "float" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: "V_a", optional: false, type: "float" },
-        { slot: "V_b", optional: false, type: "float" },
-        { slot: "V_c", optional: false, type: "float" },
+        { slot: "phaseVoltageA", optional: false, type: "float" },
+        { slot: "phaseVoltageB", optional: false, type: "float" },
+        { slot: "phaseVoltageC", optional: false, type: "float" },
         { slot: "sector", optional: false, type: "float" },
     ];
 
@@ -64,22 +64,22 @@ export class BldcInverterNode extends IntegrableRuntimeNode implements IDeclares
         super(onsc, opsc, position);
     }
 
-    @editable("number") public get V_dc_default(): number {
-        return this._VdcDefault;
+    @editable("number") public get defaultDcBusVoltage(): number {
+        return this._defaultDcBusVoltage;
     }
-    public set V_dc_default(v: number) {
-        this.setField("V_dc_default", this._VdcDefault, v, (n) => {
-            this._VdcDefault = n;
+    public set defaultDcBusVoltage(v: number) {
+        this.setField("defaultDcBusVoltage", this._defaultDcBusVoltage, v, (n) => {
+            this._defaultDcBusVoltage = n;
         });
     }
 
-    @viewable("number") public get V_a(): number {
+    @viewable("number") public get phaseVoltageA(): number {
         return this._Va;
     }
-    @viewable("number") public get V_b(): number {
+    @viewable("number") public get phaseVoltageB(): number {
         return this._Vb;
     }
-    @viewable("number") public get V_c(): number {
+    @viewable("number") public get phaseVoltageC(): number {
         return this._Vc;
     }
     @viewable("number") public get sector(): number {
@@ -88,8 +88,8 @@ export class BldcInverterNode extends IntegrableRuntimeNode implements IDeclares
 
     public override fire(session: ISession, _t: number): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
-        let Vdc = this._VdcDefault,
-            duty = 0,
+        let dcBusVoltage = this._defaultDcBusVoltage,
+            dutyCycle = 0,
             thetaE = 0;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
@@ -98,14 +98,14 @@ export class BldcInverterNode extends IntegrableRuntimeNode implements IDeclares
             if (idx < 0 || !session.linkStates[idx].ready) continue;
             const value = session.consume(idx);
             if (typeof value !== "number") continue;
-            if (slot === "V_dc") Vdc = value;
-            else if (slot === "duty") duty = value;
-            else if (slot === "theta_e") thetaE = value;
+            if (slot === "dcBusVoltage") dcBusVoltage = value;
+            else if (slot === "dutyCycle") dutyCycle = value;
+            else if (slot === "electricalAngle") thetaE = value;
         }
 
         const sector = hallSector(thetaE);
-        const sign = duty >= 0 ? 1 : -1;
-        const V = (sign * Math.min(Math.abs(duty), 1) * Vdc) / 2;
+        const sign = dutyCycle >= 0 ? 1 : -1;
+        const V = (sign * Math.min(Math.abs(dutyCycle), 1) * dcBusVoltage) / 2;
 
         let Va = 0,
             Vb = 0,
@@ -145,13 +145,13 @@ export class BldcInverterNode extends IntegrableRuntimeNode implements IDeclares
                 break;
         }
 
-        this.setField("V_a", this._Va, Va, (n) => {
+        this.setField("phaseVoltageA", this._Va, Va, (n) => {
             this._Va = n;
         });
-        this.setField("V_b", this._Vb, Vb, (n) => {
+        this.setField("phaseVoltageB", this._Vb, Vb, (n) => {
             this._Vb = n;
         });
-        this.setField("V_c", this._Vc, Vc, (n) => {
+        this.setField("phaseVoltageC", this._Vc, Vc, (n) => {
             this._Vc = n;
         });
         this.setField("sector", this._sector, sector, (n) => {
@@ -166,9 +166,9 @@ export class BldcInverterNode extends IntegrableRuntimeNode implements IDeclares
                 session.publish(idx, val);
             }
         };
-        broadcast("V_a", Va);
-        broadcast("V_b", Vb);
-        broadcast("V_c", Vc);
+        broadcast("phaseVoltageA", Va);
+        broadcast("phaseVoltageB", Vb);
+        broadcast("phaseVoltageC", Vc);
         broadcast("sector", sector);
     }
 }

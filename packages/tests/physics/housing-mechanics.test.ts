@@ -6,7 +6,7 @@
  *      DC gain x_ss = F/k, ring frequency ~ fn, free decay loses energy.
  *   2. Validate the PORTED plugin node AGAINST the oracle: under an
  *      identical constant-force step and dt grid, the node's published
- *      accel_x equals the legacy acceleration(0) trajectory.
+ *      accelerationX equals the legacy acceleration(0) trajectory.
  * Plus passivity (no force -> no acceleration).
  */
 import { Channel, RuntimeGraphBuilder, RuntimeNode, Session } from "spikypanda-core";
@@ -53,16 +53,16 @@ class ConstSource extends RuntimeNode {
 }
 
 // Drive the plugin node through a real Session with a constant force on
-// force_x, return the accel_x trajectory sampled at i*DT for i in [0, n].
+// forceX, return the accelerationX trajectory sampled at i*DT for i in [0, n].
 function runNode(force: number, n: number): number[] {
     const node = createHousingMechanicsNode();
     const src = new ConstSource(force);
-    const builder = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic").withNodes(src, node).withChannel(src, node, "out", "force_x");
+    const builder = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic").withNodes(src, node).withChannel(src, node, "out", "forceX");
     const session = new Session(builder.build());
     const accel: number[] = [];
     for (let i = 0; i <= n; i++) {
         session.run(i * DT);
-        accel.push(node.accel_x);
+        accel.push(node.accelerationX);
     }
     return accel;
 }
@@ -86,7 +86,7 @@ describe("Housing mechanics : physics on the ported node", () => {
 });
 
 describe("Housing mechanics : ported node equals the legacy oracle", () => {
-    it("accel_x trajectory matches legacy under a constant-force step", () => {
+    it("accelerationX trajectory matches legacy under a constant-force step", () => {
         const F = 0.1;
         const n = 4000;
         const nodeAccel = runNode(F, n);

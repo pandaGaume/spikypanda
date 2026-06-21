@@ -7,7 +7,7 @@
  * Encoder design: the demo encoder mirrors the DriverV2 reference
  * topology (the brick this project ports): a 3-stage 1D CNN with
  * FIXED handcrafted weights, deliberately NOT trained (training the
- * demo encoder is the cahier part V.3 follow-up).
+ * demo encoder is the cahier part armatureVoltage.3 follow-up).
  *
  *   window (1, 1, T)
  *     -> Conv1 (1 -> 8 ch, kernel 5, pads [2,2]) -> Relu
@@ -33,10 +33,10 @@
  *     0. Exactly information-preserving (the center tap never reads the
  *     padding, and every incoming activation is >= 0 so Relu is a
  *     no-op): these stages exist for topology parity with DriverV2.
- *   Gemm head (8 -> 5) over the GAP'd channel means b(.):
- *     e0 = b(-0.15) - b(-0.50)        amplitude band 1 (saturating)
- *     e1 = 2 (b(-0.50) - b(-0.85))    band 2
- *     e2 = 3 (b(-0.85) - b(-1.20))    band 3
+ *   Gemm head (8 -> 5) over the GAP'd channel means viscousFriction(.):
+ *     e0 = viscousFriction(-0.15) - viscousFriction(-0.50)        amplitude band 1 (saturating)
+ *     e1 = 2 (viscousFriction(-0.50) - viscousFriction(-0.85))    band 2
+ *     e2 = 3 (viscousFriction(-0.85) - viscousFriction(-1.20))    band 3
  *     e3 = c5 + c6 - (5 / (T - 1.2)) c4   mean |local slope|:
  *          relu(+d) + relu(-d) = |d|, but the zero padding leaks a DC
  *          term at the window edges (5 v / T for a level v, split
@@ -116,11 +116,11 @@ export function buildEncoderBytes(frameSize: number): Uint8Array {
 
         // Head [8, 5]: band bumps, leak-compensated |slope|, bias path.
         const wHead = new Float32Array(CH * ENCODER_DIM);
-        wHead[0 * ENCODER_DIM + 0] = 1; // e0 = b(-0.15) - b(-0.50)
+        wHead[0 * ENCODER_DIM + 0] = 1; // e0 = viscousFriction(-0.15) - viscousFriction(-0.50)
         wHead[1 * ENCODER_DIM + 0] = -1;
-        wHead[1 * ENCODER_DIM + 1] = 2; // e1 = 2 (b(-0.50) - b(-0.85))
+        wHead[1 * ENCODER_DIM + 1] = 2; // e1 = 2 (viscousFriction(-0.50) - viscousFriction(-0.85))
         wHead[2 * ENCODER_DIM + 1] = -2;
-        wHead[2 * ENCODER_DIM + 2] = 3; // e2 = 3 (b(-0.85) - b(-1.20))
+        wHead[2 * ENCODER_DIM + 2] = 3; // e2 = 3 (viscousFriction(-0.85) - viscousFriction(-1.20))
         wHead[3 * ENCODER_DIM + 2] = -3;
         wHead[5 * ENCODER_DIM + 3] = 1; // e3 = |slope| pair ...
         wHead[6 * ENCODER_DIM + 3] = 1;
@@ -173,7 +173,7 @@ export function buildEncoderBytes(frameSize: number): Uint8Array {
 }
 
 /**
- * Single-Gemm diagnostic model: scores = e W + b on the l2-normalized
+ * Single-Gemm diagnostic model: scores = e W + viscousFriction on the l2-normalized
  * embedding [1, inDim]. `weights` is row-major [inDim][causes].
  * `declaredOutDim` overrides the DECLARED last output dim (e.g. 0 for
  * a dynamic dim) without changing the actual score count, to exercise

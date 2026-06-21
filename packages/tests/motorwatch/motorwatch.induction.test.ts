@@ -21,7 +21,7 @@
  *     here) with depth ~k/N, which the encoder's slope/band features
  *     can separate, while raw 60 Hz would alias through the level-band
  *     encoder. The harness chain is the classic AM detector:
- *       i_a -> sliding RMS over one supply period (carrier removal,
+ *       phaseCurrentA -> sliding RMS over one supply period (carrier removal,
  *       hop 28 -> 180 Hz envelope rate)
  *           -> |env - ENV_REF| (AC coupling against the healthy
  *              commissioning baseline + rectification)
@@ -63,7 +63,7 @@ const TWO_PI = 2 * Math.PI;
 const F_SUPPLY = 60; // Hz
 const SAMPLES_PER_PERIOD = 84; // exact carrier period in solver samples
 const DT = 1 / (F_SUPPLY * SAMPLES_PER_PERIOD); // ~1.984e-4 s (5040 Hz)
-const V_PEAK = 80; // V phase peak (node calibration point)
+const V_PEAK = 80; // armatureVoltage phase peak (node calibration point)
 const TAU_NOMINAL = 1.5; // Nm
 const TAU_STEP = 2.0; // Nm (negative control; 3.0 would stall: breakdown)
 const NOISE_STD = 0.003; // 3 mA sensor noise, deterministic seed
@@ -110,32 +110,32 @@ const DIAG_B = [0, 0, 0];
 interface InductionRun {
     /** Noisy sensed phase-a current at the solver rate. */
     ia: Float64Array;
-    omega: Float64Array;
+    angularVelocity: Float64Array;
     node: InductionMotorDynamicNode;
 }
 
 function runDirectOnLine(seconds: number, seed: number, control: (node: InductionMotorDynamicNode, t: number) => number): InductionRun {
     const node = new InductionMotorDynamicNode();
-    node.f_supply = F_SUPPLY;
+    node.supplyFrequency = F_SUPPLY;
     node.reset(emptySession());
-    const drv = bindDrivenInputs(node, ["V_a", "V_b", "V_c", "tau_load"]);
+    const drv = bindDrivenInputs(node, ["phaseVoltageA", "phaseVoltageB", "phaseVoltageC", "loadTorque"]);
     const gauss = makeGaussian(seed);
     const n = Math.round(seconds / DT);
     const ia = new Float64Array(n);
-    const omega = new Float64Array(n);
+    const angularVelocity = new Float64Array(n);
     const w = TWO_PI * F_SUPPLY;
     for (let k = 0; k < n; k++) {
         const t = k * DT;
-        drv.set("V_a", V_PEAK * Math.sin(w * t));
-        drv.set("V_b", V_PEAK * Math.sin(w * t - TWO_PI / 3));
-        drv.set("V_c", V_PEAK * Math.sin(w * t + TWO_PI / 3));
-        drv.set("tau_load", control(node, t));
+        drv.set("phaseVoltageA", V_PEAK * Math.sin(w * t));
+        drv.set("phaseVoltageB", V_PEAK * Math.sin(w * t - TWO_PI / 3));
+        drv.set("phaseVoltageC", V_PEAK * Math.sin(w * t + TWO_PI / 3));
+        drv.set("loadTorque", control(node, t));
         drv.arm();
         node.fire(drv.session, t);
-        ia[k] = node.i_a + NOISE_STD * gauss();
-        omega[k] = node.omega;
+        ia[k] = node.phaseCurrentA + NOISE_STD * gauss();
+        angularVelocity[k] = node.angularVelocity;
     }
-    return { ia, omega, node };
+    return { ia, angularVelocity, node };
 }
 
 /** Envelope-sample index of solver time t (slidingRms output space). */
@@ -150,8 +150,8 @@ function mean(x: Float64Array, from: number, to: number): number {
 }
 
 function meanSlip(run: InductionRun, fromT: number, toT: number): number {
-    const omegaMean = mean(run.omega, Math.round(fromT / DT), Math.round(toT / DT));
-    return (TWO_PI * F_SUPPLY - run.node.P * omegaMean) / (TWO_PI * F_SUPPLY);
+    const omegaMean = mean(run.angularVelocity, Math.round(fromT / DT), Math.round(toT / DT));
+    return (TWO_PI * F_SUPPLY - run.node.polePairs * omegaMean) / (TWO_PI * F_SUPPLY);
 }
 
 // ─── Precomputed streams (one sim each, reused across every assertion) ──────
@@ -170,16 +170,16 @@ interface Streams {
 }
 
 function buildStreams(): Streams {
-    // Stream 1: ONE continuous run; broken_bars is flipped LIVE at
+    // Stream 1: ONE continuous run; brokenBarCount is flipped LIVE at
     // T_FAULT (editable, the motor keeps running through the change).
     const fault = runDirectOnLine(T_END_FAULT, 0x51ca1, (node, t) => {
-        if (t >= T_FAULT && node.broken_bars === 0) {
-            node.broken_bars = BROKEN_BARS;
-            node.bar_severity = BAR_SEVERITY;
+        if (t >= T_FAULT && node.brokenBarCount === 0) {
+            node.brokenBarCount = BROKEN_BARS;
+            node.barFaultSeverity = BAR_SEVERITY;
         }
         return TAU_NOMINAL;
     });
-    // Stream 2 (negative control): healthy motor, tau_load raised.
+    // Stream 2 (negative control): healthy motor, loadTorque raised.
     const load = runDirectOnLine(T_END_LOAD, 0x10ad, (_node, t) => (t < T_LOAD ? TAU_NOMINAL : TAU_STEP));
 
     const faultEnv = slidingRms(fault.ia, SAMPLES_PER_PERIOD, ENV_HOP);
@@ -254,7 +254,7 @@ describe("motorwatch induction motor end-to-end (SP2, MCSA flagship)", () => {
         const loadTail = mean(s.loadFeed, s.loadFeed.length - 200, s.loadFeed.length);
         expect(loadTail).toBeGreaterThan(1.4); // saturates every band
 
-        // (b) Edge device + central station wired BEFORE the data flows.
+        // (viscousFriction) Edge device + central station wired BEFORE the data flows.
         const device = new MotorwatchDevice({ frameSize: FRAME_SIZE, deviceId: "edge-induction", gate: { epsilon: 0.12 } });
         const encoderBytes = buildEncoderBytes(FRAME_SIZE);
         const encoderReport = device.loadEncoder(encoderBytes, { sha256: sha256Hex(encoderBytes), name: "induction-encoder.onnx" });
@@ -343,7 +343,7 @@ describe("motorwatch induction motor end-to-end (SP2, MCSA flagship)", () => {
 
         // A site-B device referencing the merged catalog resolves a
         // similar fault embedding locally, no diagnostic round needed.
-        const deviceB = new MotorwatchDevice({ frameSize: FRAME_SIZE, deviceId: "edge-induction-b" });
+        const deviceB = new MotorwatchDevice({ frameSize: FRAME_SIZE, deviceId: "edge-induction-viscousFriction" });
         for (const entry of merged.entries) {
             deviceB.applyLabel(entry.label, entry.centroid);
         }

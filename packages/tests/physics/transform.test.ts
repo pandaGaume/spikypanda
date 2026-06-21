@@ -2,7 +2,7 @@
  * Unit tests for `Physics.Transform`. Validate:
  *
  *   1. The standalone TransformNode produces identity by default and
- *      composes parent_world × local correctly (column-major).
+ *      composes parentWorld × local correctly (column-major).
  *   2. The matrix-multiply helper is associative-correct on a non-trivial
  *      pair (translation × rotation).
  *   3. Motor classes inherit the transform inputs/outputs and the world
@@ -122,12 +122,12 @@ describe("TransformNode", () => {
 
     it("declares matrix44 input ports with the canonical slot names (scene moved to session)", () => {
         const node = new TransformNode();
-        expect(node.inputPorts.map((p) => p.slot)).toEqual(["local", "parent_world"]);
+        expect(node.inputPorts.map((p) => p.slot)).toEqual(["local", "parentWorld"]);
         expect(node.outputPorts.map((p) => p.slot)).toEqual(["world"]);
         // Both transform inputs are matrix44 now; scene context is read
         // from `session.sceneStateView`, not from a runtime cable.
         expect(node.inputPorts.find((p) => p.slot === "local")?.type).toBe("matrix44");
-        expect(node.inputPorts.find((p) => p.slot === "parent_world")?.type).toBe("matrix44");
+        expect(node.inputPorts.find((p) => p.slot === "parentWorld")?.type).toBe("matrix44");
         for (const p of node.outputPorts) expect(p.type).toBe("matrix44");
     });
 });
@@ -146,17 +146,17 @@ describe("Motor TransformNode inheritance", () => {
         // and the Session's attached solver owns the timebase.
         // The scene port was dropped in P2 — scene context is now
         // read from `session.sceneStateView`, not from a cable.
-        expect(inSlots.slice(0, 3)).toEqual(["local", "parent_world", "fault_0"]);
-        expect(inSlots).toEqual(["local", "parent_world", "fault_0", "V", "tau_load"]);
-        expect(outSlots).toEqual(["world", "i", "omega", "tau_em"]);
+        expect(inSlots.slice(0, 3)).toEqual(["local", "parentWorld", "fault_0"]);
+        expect(inSlots).toEqual(["local", "parentWorld", "fault_0", "armatureVoltage", "loadTorque"]);
+        expect(outSlots).toEqual(["world", "armatureCurrent", "angularVelocity", "electromagneticTorque"]);
     });
 
     it("BldcMotorDynamicNode exposes transform + fault ports alongside its own (scene moved to session)", () => {
         const node = new BldcMotorDynamicNode();
         const inSlots = node.inputPorts.map((p) => p.slot);
         const outSlots = node.outputPorts.map((p) => p.slot);
-        expect(inSlots).toEqual(["local", "parent_world", "fault_0", "V_a", "V_b", "V_c", "tau_load", "dt"]);
-        expect(outSlots).toEqual(["world", "i_a", "i_b", "i_c", "omega", "theta_m", "tau_em"]);
+        expect(inSlots).toEqual(["local", "parentWorld", "fault_0", "phaseVoltageA", "phaseVoltageB", "phaseVoltageC", "loadTorque", "dt"]);
+        expect(outSlots).toEqual(["world", "phaseCurrentA", "phaseCurrentB", "phaseCurrentC", "angularVelocity", "rotorAngle", "electromagneticTorque"]);
     });
 
     it("Motor world transform stays at identity when nothing is wired (super.fire chain works)", () => {
@@ -175,19 +175,19 @@ describe("Motor TransformNode inheritance", () => {
         // here and call solver.step directly to exercise the IIntegrable
         // contract end-to-end (gatherState → rhs → writeState).
         const node = new DcMotorDynamicNode();
-        node.i0 = 5;
-        node.omega0 = 200;
+        node.initialArmatureCurrent = 5;
+        node.initialAngularVelocity = 200;
         node.reset(makeSession());
         const solver = new RK4AdaptiveSolver({ tolerance: 1e-6, maxStep: 1e-4 });
         solver.initialize([node], 0);
         const session = makeSession();
         for (let k = 0; k < 1000; k++) solver.step(1e-4, session);
-        // Decay assertion: with V=0 and tau_load=0, the motor must
-        // damp toward rest (b > 0). The RK4 solver should track this
+        // Decay assertion: with armatureVoltage=0 and loadTorque=0, the motor must
+        // damp toward rest (viscousFriction > 0). The RK4 solver should track this
         // strictly better than the previous inline Euler did.
-        expect(Math.abs(node.i)).toBeLessThan(5);
-        expect(Math.abs(node.omega)).toBeLessThan(200);
-        expect(Number.isFinite(node.i)).toBe(true);
-        expect(Number.isFinite(node.omega)).toBe(true);
+        expect(Math.abs(node.armatureCurrent)).toBeLessThan(5);
+        expect(Math.abs(node.angularVelocity)).toBeLessThan(200);
+        expect(Number.isFinite(node.armatureCurrent)).toBe(true);
+        expect(Number.isFinite(node.angularVelocity)).toBe(true);
     });
 });

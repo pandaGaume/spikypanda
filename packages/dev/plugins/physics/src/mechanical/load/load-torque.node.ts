@@ -10,44 +10,44 @@ import type { ICartesian, Nullable } from "spikypanda-core";
 export type LoadProfile = "constant" | "step" | "ramp" | "quadratic" | "periodic";
 
 /**
- * Load torque source: the missing tau_load generator for motor
- * simulation graphs. Every motor node accepts a `tau_load` input but
+ * Load torque source: the missing loadTorque generator for motor
+ * simulation graphs. Every motor node accepts a `loadTorque` input but
  * nothing in the catalog produced one, so demo graphs either left it
  * unwired (no-load run) or hand-built the law from Logic primitives.
  *
  * The profiles model operating-regime changes:
  *
- *     constant   tau = tau0                          (baseline regime)
- *     step       tau = t < tStep ? tau0 : tau1       (new regime at tStep)
- *     ramp       tau drifts tau0 -> tau1 at
- *                |rampRate|, then holds at tau1      (slow regime drift)
- *     quadratic  tau = k * omega * |omega|           (fan / pump load)
- *     periodic   tau = tau0 + A * sin(2*pi*f*t)      (mechanical modulation)
+ *     constant   tau = baseTorque                          (baseline regime)
+ *     step       tau = t < stepTime ? baseTorque : targetTorque       (new regime at stepTime)
+ *     ramp       tau drifts baseTorque -> targetTorque at
+ *                |rampRate|, then holds at targetTorque      (slow regime drift)
+ *     quadratic  tau = k * angularVelocity * |angularVelocity|           (fan / pump load)
+ *     periodic   tau = baseTorque + A * sin(2*pi*f*t)      (mechanical modulation)
  *
  * The ramp is BOUNDED on purpose: it models a slow drift INTO a new
- * operating regime, so the torque settles on the tau1 plateau where a
+ * operating regime, so the torque settles on the targetTorque plateau where a
  * downstream steady-state gate can re-open. An unbounded ramp would
  * grow past any real motor's stall torque (~45 mN.m at 6.7 V on the
  * R385 bench) and the signal would never stabilise. The direction
- * comes from sign(tau1 - tau0), so tau1 below tau0 gives a downward
+ * comes from sign(targetTorque - baseTorque), so targetTorque below baseTorque gives a downward
  * drift; rampRate only contributes its magnitude.
  *
  * Passivity invariant: the published torque never DRIVES the motor.
- * The omega-dependent profiles (quadratic) use a signed law that always
- * opposes the actual rotation: tau carries the sign of omega (negative
+ * The angularVelocity-dependent profiles (quadratic) use a signed law that always
+ * opposes the actual rotation: tau carries the sign of angularVelocity (negative
  * under reverse rotation, with the motor convention
- * J*domega/dt = Te - b*omega - tau_load), and the output is clamped so
- * that sign(tau) == sign(omega). The time-only profiles (constant,
+ * J*domega/dt = Te - b*angularVelocity - loadTorque), and the output is clamped so
+ * that sign(tau) == sign(angularVelocity). The time-only profiles (constant,
  * step, ramp, periodic) are braking torques by convention and clamp at
  * >= 0. For custom laws the hand-composition alternative (a Feedback
- * channel on omega plus Multiply / Add nodes) remains possible; this
+ * channel on angularVelocity plus Multiply / Add nodes) remains possible; this
  * node only packages the common cases.
  */
 export class LoadTorqueNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _profile: LoadProfile = "constant";
-    @cloneable private _tau0: number = 0.01; // Base torque [N.m]
-    @cloneable private _tau1: number = 0.02; // Step / ramp target torque [N.m]
-    @cloneable private _tStep: number = 5; // Step time [s]
+    @cloneable private _baseTorque: number = 0.01; // Base torque [N.m]
+    @cloneable private _targetTorque: number = 0.02; // Step / ramp target torque [N.m]
+    @cloneable private _stepTime: number = 5; // Step time [s]
     @cloneable private _rampRate: number = 0.001; // Ramp slope magnitude [N.m/s]
     @cloneable private _k: number = 1.5e-7; // Quadratic coefficient [N.m.s^2/rad^2]
     @cloneable private _amplitude: number = 0.005; // Periodic amplitude [N.m]
@@ -55,8 +55,8 @@ export class LoadTorqueNode extends RuntimeNode implements IDeclaresPorts {
 
     @cloneable private _tau: number = 0;
 
-    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "omega", optional: true, type: "float" }];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "tau_load", optional: false, type: "float" }];
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "angularVelocity", optional: true, type: "float" }];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "loadTorque", optional: false, type: "float" }];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
@@ -77,28 +77,28 @@ export class LoadTorqueNode extends RuntimeNode implements IDeclaresPorts {
             this._profile = n as LoadProfile;
         });
     }
-    @editable("number") public get tau0(): number {
-        return this._tau0;
+    @editable("number") public get baseTorque(): number {
+        return this._baseTorque;
     }
-    public set tau0(v: number) {
-        this.setField("tau0", this._tau0, v, (n) => {
-            this._tau0 = n;
+    public set baseTorque(v: number) {
+        this.setField("baseTorque", this._baseTorque, v, (n) => {
+            this._baseTorque = n;
         });
     }
-    @editable("number") public get tau1(): number {
-        return this._tau1;
+    @editable("number") public get targetTorque(): number {
+        return this._targetTorque;
     }
-    public set tau1(v: number) {
-        this.setField("tau1", this._tau1, v, (n) => {
-            this._tau1 = n;
+    public set targetTorque(v: number) {
+        this.setField("targetTorque", this._targetTorque, v, (n) => {
+            this._targetTorque = n;
         });
     }
-    @editable("number") public get tStep(): number {
-        return this._tStep;
+    @editable("number") public get stepTime(): number {
+        return this._stepTime;
     }
-    public set tStep(v: number) {
-        this.setField("tStep", this._tStep, v, (n) => {
-            this._tStep = n;
+    public set stepTime(v: number) {
+        this.setField("stepTime", this._stepTime, v, (n) => {
+            this._stepTime = n;
         });
     }
     @editable("number") public get rampRate(): number {
@@ -146,7 +146,7 @@ export class LoadTorqueNode extends RuntimeNode implements IDeclaresPorts {
 
     public override fire(session: ISession, t: number): void {
         const links = session.graph.links as ReadonlyArray<IChannel>;
-        let omega = 0;
+        let angularVelocity = 0;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
             const slot = inSlotOf(link);
@@ -154,44 +154,44 @@ export class LoadTorqueNode extends RuntimeNode implements IDeclaresPorts {
             if (idx < 0 || !session.linkStates[idx].ready) continue;
             const value = session.consume(idx);
             if (typeof value !== "number") continue;
-            if (slot === "omega") omega = value;
+            if (slot === "angularVelocity") angularVelocity = value;
         }
 
         let tau: number;
         let omegaDependent = false;
         switch (this._profile) {
             case "step":
-                tau = t < this._tStep ? this._tau0 : this._tau1;
+                tau = t < this._stepTime ? this._baseTorque : this._targetTorque;
                 break;
             case "ramp": {
-                // Bounded drift: tau moves from tau0 toward tau1 at
-                // |rampRate| and HOLDS at tau1 once reached, so the
+                // Bounded drift: tau moves from baseTorque toward targetTorque at
+                // |rampRate| and HOLDS at targetTorque once reached, so the
                 // load settles on a new plateau instead of growing
                 // forever past the motor's stall torque.
                 const drift = Math.abs(this._rampRate) * t;
-                const span = Math.abs(this._tau1 - this._tau0);
-                tau = drift >= span ? this._tau1 : this._tau0 + Math.sign(this._tau1 - this._tau0) * drift;
+                const span = Math.abs(this._targetTorque - this._baseTorque);
+                tau = drift >= span ? this._targetTorque : this._baseTorque + Math.sign(this._targetTorque - this._baseTorque) * drift;
                 break;
             }
             case "quadratic":
-                // Signed opposing law: |tau| = k*omega^2, sign follows
-                // omega so the load brakes in BOTH rotation directions.
-                tau = this._k * omega * Math.abs(omega);
+                // Signed opposing law: |tau| = k*angularVelocity^2, sign follows
+                // angularVelocity so the load brakes in BOTH rotation directions.
+                tau = this._k * angularVelocity * Math.abs(angularVelocity);
                 omegaDependent = true;
                 break;
             case "periodic":
-                tau = this._tau0 + this._amplitude * Math.sin(2 * Math.PI * this._frequency * t);
+                tau = this._baseTorque + this._amplitude * Math.sin(2 * Math.PI * this._frequency * t);
                 break;
             default: // constant
-                tau = this._tau0;
+                tau = this._baseTorque;
                 break;
         }
         // Passivity clamp: a passive load never drives the motor. The
-        // omega-dependent profiles must oppose the actual rotation, so
-        // the published torque keeps the sign of omega (tau*omega >= 0);
+        // angularVelocity-dependent profiles must oppose the actual rotation, so
+        // the published torque keeps the sign of angularVelocity (tau*angularVelocity >= 0);
         // the time-only profiles are braking torques and clamp at >= 0.
         if (omegaDependent) {
-            if (omega === 0 || tau * omega < 0) tau = 0;
+            if (angularVelocity === 0 || tau * angularVelocity < 0) tau = 0;
         } else if (tau < 0) {
             tau = 0;
         }
@@ -200,7 +200,7 @@ export class LoadTorqueNode extends RuntimeNode implements IDeclaresPorts {
             this._tau = n;
         });
         for (const link of this.onsc<IChannel>()) {
-            if (link.slot !== "tau_load" || !link.enabled) continue;
+            if (link.slot !== "loadTorque" || !link.enabled) continue;
             const idx = links.indexOf(link);
             if (idx < 0) continue;
             session.publish(idx, tau);

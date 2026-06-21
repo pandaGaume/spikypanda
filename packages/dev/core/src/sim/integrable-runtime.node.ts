@@ -32,14 +32,14 @@ import type { IHasSampleRateRequirement } from "./sim.interfaces";
  *        so the editor's effectiveHz tracks the user's parameter edits
  *        automatically.
  *
- *      - The user can PIN a manual value via the `required_hz` editable.
+ *      - The user can PIN a manual value via the `requiredSampleRateHz` editable.
  *        While pinned, `requiredHz` returns the manual value regardless
  *        of what `computeRequiredHz()` would say. To unpin, the user
- *        enters 0 (or any non-positive / NaN value): `required_hz` then
+ *        enters 0 (or any non-positive / NaN value): `requiredSampleRateHz` then
  *        reverts to the computed value, and the panel will track it as
  *        parameters change.
  *
- *        The `required_hz_user_defined` viewable surfaces the pinned
+ *        The `requiredSampleRateHzUserDefined` viewable surfaces the pinned
  *        state to the property panel so the user knows whether the
  *        displayed value is locked.
  *
@@ -87,17 +87,17 @@ export class IntegrableRuntimeNode<B = unknown> extends RuntimeNode<B> implement
      * unpins (when a non-positive / NaN value is entered).
      */
     @editable("number", { unit: "Hz" })
-    public get required_hz(): number {
+    public get requiredSampleRateHz(): number {
         return this.requiredHz;
     }
-    public set required_hz(v: number) {
+    public set requiredSampleRateHz(v: number) {
         if (!Number.isFinite(v) || v <= 0) {
             // Unpin: revert to computed.
             if (this._requiredHzUserDefined || this._requiredHzValue !== 0) {
                 const prev = this.requiredHz;
                 this._requiredHzUserDefined = false;
                 this._requiredHzValue = 0;
-                this.notifyPropertyChanged("required_hz", prev, this.requiredHz);
+                this.notifyPropertyChanged("requiredSampleRateHz", prev, this.requiredHz);
             }
             return;
         }
@@ -105,17 +105,17 @@ export class IntegrableRuntimeNode<B = unknown> extends RuntimeNode<B> implement
         if (this._requiredHzValue !== v || !this._requiredHzUserDefined) {
             this._requiredHzValue = v;
             this._requiredHzUserDefined = true;
-            this.notifyPropertyChanged("required_hz", prev, v);
+            this.notifyPropertyChanged("requiredSampleRateHz", prev, v);
         }
     }
 
     /**
      * Panel-only flag: true when the user has pinned a manual value.
      * Lets the panel render a "(pinned)" badge or a reset button next
-     * to required_hz.
+     * to requiredSampleRateHz.
      */
     @viewable("boolean")
-    public get required_hz_user_defined(): boolean {
+    public get requiredSampleRateHzUserDefined(): boolean {
         return this._requiredHzUserDefined;
     }
 
@@ -127,6 +127,6 @@ export class IntegrableRuntimeNode<B = unknown> extends RuntimeNode<B> implement
      */
     protected notifyComputedRequiredHzMayHaveChanged(): void {
         if (this._requiredHzUserDefined && this._requiredHzValue > 0) return;
-        this.notifyPropertyChanged("required_hz", null, this.requiredHz);
+        this.notifyPropertyChanged("requiredSampleRateHz", null, this.requiredHz);
     }
 }

@@ -1,11 +1,11 @@
 /**
  * Physics.Electric.Motor.PMSM:foc validation.
  *
- *   1. NODE == ORACLE: same feedback / setpoint / v_bus / dt give
- *      V_alpha/V_beta equal to the legacy FocController.references().
- *   2. CLOSED LOOP: FOC + PMSM machine wired in a loop, omega converges
- *      to speed_target (the controller actually commands the machine).
- *   3. Saturations: i_q_ref bounded by iMax; |(v_d,v_q)| <= v_bus/sqrt(3).
+ *   1. NODE == ORACLE: same feedback / setpoint / dcBusVoltage / dt give
+ *      voltageAlpha/voltageBeta equal to the legacy FocController.references().
+ *   2. CLOSED LOOP: FOC + PMSM machine wired in a loop, angularVelocity converges
+ *      to speedTarget (the controller actually commands the machine).
+ *   3. Saturations: i_q_ref bounded by maxCurrent; |(directAxisVoltage,quadratureAxisVoltage)| <= dcBusVoltage/sqrt(3).
  */
 import { Channel, RuntimeGraphBuilder, RuntimeNode, Session } from "spikypanda-core";
 import type { IChannel, ISession } from "spikypanda-core";
@@ -38,7 +38,7 @@ class FuncSource extends RuntimeNode {
 }
 
 describe("PMSM FOC : node equals the legacy oracle", () => {
-    it("V_alpha / V_beta match legacy FocController under a feedback sequence", () => {
+    it("voltageAlpha / voltageBeta match legacy FocController under a feedback sequence", () => {
         const iD = (t: number) => 0.1 * Math.sin(2 * Math.PI * 30 * t);
         const iQ = (t: number) => 0.3 * Math.cos(2 * Math.PI * 25 * t);
         const om = (t: number) => 50 + 40 * Math.sin(2 * Math.PI * 5 * t);
@@ -46,7 +46,7 @@ describe("PMSM FOC : node equals the legacy oracle", () => {
         const sp = (_t: number) => 100;
         const n = 400;
 
-        const node = createPmsmFocNode(); // defaults, P=2
+        const node = createPmsmFocNode(); // defaults, polePairs=2
         const builder = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
         const sId = new FuncSource(iD),
             sIq = new FuncSource(iQ),
@@ -55,19 +55,19 @@ describe("PMSM FOC : node equals the legacy oracle", () => {
             sSp = new FuncSource(sp);
         builder
             .withNodes(node, sId, sIq, sOm, sTh, sSp)
-            .withChannel(sId, node, "out", "i_d")
-            .withChannel(sIq, node, "out", "i_q")
-            .withChannel(sOm, node, "out", "omega")
-            .withChannel(sTh, node, "out", "theta_m")
-            .withChannel(sSp, node, "out", "speed_target");
+            .withChannel(sId, node, "out", "directAxisCurrent")
+            .withChannel(sIq, node, "out", "quadratureAxisCurrent")
+            .withChannel(sOm, node, "out", "angularVelocity")
+            .withChannel(sTh, node, "out", "rotorAngle")
+            .withChannel(sSp, node, "out", "speedTarget");
         const session = new Session(builder.build());
         node.reset(session);
         const nA: number[] = [],
             nB: number[] = [];
         for (let i = 0; i <= n; i++) {
             session.run(i * DT);
-            nA.push(node.V_alpha);
-            nB.push(node.V_beta);
+            nA.push(node.voltageAlpha);
+            nB.push(node.voltageBeta);
         }
 
         const oracle = loadFixture<{ a: number[]; b: number[] }>("pmsm-foc");
@@ -89,22 +89,22 @@ describe("PMSM FOC : node equals the legacy oracle", () => {
 });
 
 describe("PMSM FOC : closed loop commands the machine", () => {
-    it("omega converges to the speed setpoint", () => {
+    it("angularVelocity converges to the speed setpoint", () => {
         // Consistent ECX-ish drive: gains tuned for the machine defaults
-        // (R=2, L=3e-4, lambda=2e-3, P=1, J=1e-6, b=1e-7).
-        const machine: PmsmMachineDqNode = createPmsmMachineDqNode(); // P=1 default
+        // (armatureResistance=2, armatureInductance=3e-4, lambda=2e-3, polePairs=1, rotorInertia=1e-6, b=1e-7).
+        const machine: PmsmMachineDqNode = createPmsmMachineDqNode(); // polePairs=1 default
         const foc: PmsmFocNode = createPmsmFocNode();
         const kt = 1.5 * 1 * 2e-3;
         const wI = 2 * Math.PI * 1000,
             wW = 2 * Math.PI * 100;
-        foc.P = 1;
-        foc.currentKp = wI * 3e-4;
-        foc.currentKi = wI * 2;
-        foc.speedKp = (wW * 1e-6) / kt;
-        foc.speedKi = (wW * 1e-7) / kt;
-        foc.iMax = 5;
-        foc.vMaxPerAxis = 12;
-        foc.vBus = 24;
+        foc.polePairs = 1;
+        foc.currentProportionalGain = wI * 3e-4;
+        foc.currentIntegralGain = wI * 2;
+        foc.speedProportionalGain = (wW * 1e-6) / kt;
+        foc.speedIntegralGain = (wW * 1e-7) / kt;
+        foc.maxCurrent = 5;
+        foc.maxVoltagePerAxis = 12;
+        foc.dcBusVoltage = 24;
 
         const target = 100; // rad/s
         // Break the FOC<->machine cycle with one-tick-lagged source nodes
@@ -113,58 +113,58 @@ describe("PMSM FOC : closed loop commands the machine", () => {
         // Session cycle overflows the capacity-1 slots).
         const sSp = new FuncSource(() => target);
         const builder = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
-        const fVa = new FuncSource(() => foc.V_a),
-            fVb = new FuncSource(() => foc.V_b),
-            fVc = new FuncSource(() => foc.V_c);
-        const mId = new FuncSource(() => machine.i_d),
-            mIq = new FuncSource(() => machine.i_q),
-            mOm = new FuncSource(() => machine.omega),
-            mTh = new FuncSource(() => machine.theta_m);
+        const fVa = new FuncSource(() => foc.phaseVoltageA),
+            fVb = new FuncSource(() => foc.phaseVoltageB),
+            fVc = new FuncSource(() => foc.phaseVoltageC);
+        const mId = new FuncSource(() => machine.directAxisCurrent),
+            mIq = new FuncSource(() => machine.quadratureAxisCurrent),
+            mOm = new FuncSource(() => machine.angularVelocity),
+            mTh = new FuncSource(() => machine.rotorAngle);
         builder
             .withNodes(foc, machine, sSp, fVa, fVb, fVc, mId, mIq, mOm, mTh)
-            .withChannel(sSp, foc, "out", "speed_target")
-            .withChannel(mId, foc, "out", "i_d")
-            .withChannel(mIq, foc, "out", "i_q")
-            .withChannel(mOm, foc, "out", "omega")
-            .withChannel(mTh, foc, "out", "theta_m")
-            .withChannel(fVa, machine, "out", "V_a")
-            .withChannel(fVb, machine, "out", "V_b")
-            .withChannel(fVc, machine, "out", "V_c");
+            .withChannel(sSp, foc, "out", "speedTarget")
+            .withChannel(mId, foc, "out", "directAxisCurrent")
+            .withChannel(mIq, foc, "out", "quadratureAxisCurrent")
+            .withChannel(mOm, foc, "out", "angularVelocity")
+            .withChannel(mTh, foc, "out", "rotorAngle")
+            .withChannel(fVa, machine, "out", "phaseVoltageA")
+            .withChannel(fVb, machine, "out", "phaseVoltageB")
+            .withChannel(fVc, machine, "out", "phaseVoltageC");
         const session = new Session(builder.build());
         foc.reset(session);
         machine.reset(session);
 
         for (let i = 0; i <= 8000; i++) session.run(i * DT); // 0.4 s
         // The closed loop drives the machine to the commanded speed.
-        expect(Math.abs(machine.omega - target)).toBeLessThan(0.1 * target);
+        expect(Math.abs(machine.angularVelocity - target)).toBeLessThan(0.1 * target);
     });
 });
 
 describe("PMSM FOC : saturations", () => {
     function runWith(target: number, n: number): PmsmFocNode {
         const node = createPmsmFocNode();
-        // Low bus so the joint v_bus/sqrt(3) cap (~5.8 V) binds below the
-        // per-axis cap (12 V), forcing the joint-saturation path.
-        node.vBus = 10;
+        // Low bus so the joint dcBusVoltage/sqrt(3) cap (~5.8 armatureVoltage) binds below the
+        // per-axis cap (12 armatureVoltage), forcing the joint-saturation path.
+        node.dcBusVoltage = 10;
         const sSp = new FuncSource(() => target);
-        const sOm = new FuncSource(() => 0); // huge error: omega stuck at 0
+        const sOm = new FuncSource(() => 0); // huge error: angularVelocity stuck at 0
         const builder = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
-        builder.withNodes(node, sSp, sOm).withChannel(sSp, node, "out", "speed_target").withChannel(sOm, node, "out", "omega");
+        builder.withNodes(node, sSp, sOm).withChannel(sSp, node, "out", "speedTarget").withChannel(sOm, node, "out", "angularVelocity");
         const session = new Session(builder.build());
         node.reset(session);
         for (let i = 0; i <= n; i++) session.run(i * DT);
         return node;
     }
 
-    it("i_q_ref is bounded by +/- iMax under a large speed error", () => {
+    it("i_q_ref is bounded by +/- maxCurrent under a large speed error", () => {
         const node = runWith(1e6, 500);
-        expect(Math.abs(node.iq_ref)).toBeLessThanOrEqual(node.iMax + 1e-9);
+        expect(Math.abs(node.quadratureCurrentReference)).toBeLessThanOrEqual(node.maxCurrent + 1e-9);
     });
 
-    it("the voltage vector is clamped to v_bus/sqrt(3) and flags saturation", () => {
+    it("the voltage vector is clamped to dcBusVoltage/sqrt(3) and flags saturation", () => {
         const node = runWith(1e6, 500);
         const vMag = Math.sqrt(node.vd_ref * node.vd_ref + node.vq_ref * node.vq_ref);
-        expect(vMag).toBeLessThanOrEqual(node.vBus / Math.sqrt(3) + 1e-9);
+        expect(vMag).toBeLessThanOrEqual(node.dcBusVoltage / Math.sqrt(3) + 1e-9);
         expect(node.saturated_voltage).toBe(true);
     });
 });
@@ -173,13 +173,17 @@ describe("PMSM FOC : torque mode bypasses the speed PI", () => {
     function runTorque(iqCmd: number): PmsmFocNode {
         const node = createPmsmFocNode();
         node.torqueMode = true;
-        // A huge speed error would slam the speed PI to +/- iMax; torque
-        // mode must ignore it and use iq_ref directly instead.
+        // A huge speed error would slam the speed PI to +/- maxCurrent; torque
+        // mode must ignore it and use quadratureCurrentReference directly instead.
         const sCmd = new FuncSource(() => iqCmd);
         const sSp = new FuncSource(() => 1e6);
         const sOm = new FuncSource(() => 0);
         const builder = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
-        builder.withNodes(node, sCmd, sSp, sOm).withChannel(sCmd, node, "out", "iq_ref").withChannel(sSp, node, "out", "speed_target").withChannel(sOm, node, "out", "omega");
+        builder
+            .withNodes(node, sCmd, sSp, sOm)
+            .withChannel(sCmd, node, "out", "quadratureCurrentReference")
+            .withChannel(sSp, node, "out", "speedTarget")
+            .withChannel(sOm, node, "out", "angularVelocity");
         const session = new Session(builder.build());
         node.reset(session);
         for (let i = 0; i <= 200; i++) session.run(i * DT);
@@ -188,11 +192,11 @@ describe("PMSM FOC : torque mode bypasses the speed PI", () => {
 
     it("i_q_ref equals the commanded torque current, ignoring the speed loop", () => {
         const node = runTorque(2.5);
-        expect(node.iq_ref).toBeCloseTo(2.5, 9);
+        expect(node.quadratureCurrentReference).toBeCloseTo(2.5, 9);
     });
 
-    it("the torque command is bounded by +/- iMax", () => {
+    it("the torque command is bounded by +/- maxCurrent", () => {
         const node = runTorque(1e3);
-        expect(node.iq_ref).toBeCloseTo(node.iMax, 9);
+        expect(node.quadratureCurrentReference).toBeCloseTo(node.maxCurrent, 9);
     });
 });

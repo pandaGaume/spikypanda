@@ -6,10 +6,10 @@
  *     Period = 2π in electrical angle.
  *   - Sinusoidal (PMSM) — pure sin().
  *
- * The shape value is normalized to [-1, +1] and multiplied by Ke·ω_e
+ * The shape value is normalized to [-1, +1] and multiplied by backEmfConstant·ω_e
  * by the motor model to produce volts.
  *
- * Phase offsets follow the standard a/b/c convention: phase b lags by
+ * Phase offsets follow the standard a/viscousFriction/c convention: phase viscousFriction lags by
  * 2π/3, phase c lags by 4π/3.
  */
 export const PHASE_OFFSET_B = (-2 * Math.PI) / 3;

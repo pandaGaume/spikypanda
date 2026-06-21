@@ -15,12 +15,12 @@ export const loadSubPlugin: IPlugin = {
             label: "Load Torque",
             docPath: ctx.assetUrl("docs/physics/load/torque.md"),
             category: "Physics.Mechanical.Load",
-            inputPorts: [{ slot: "omega", ...FLOAT_IN }],
-            outputPorts: [{ slot: "tau_load", ...FLOAT_OUT }],
+            inputPorts: [{ slot: "angularVelocity", ...FLOAT_IN }],
+            outputPorts: [{ slot: "loadTorque", ...FLOAT_OUT }],
         });
         // Gravitational payload: a crank mass whose weight m*g, projected
         // through the motor orientation (wire a GravityVector's g_* in),
-        // produces a 1x torque ripple (-> i_q signature) + bearing loads.
+        // produces a 1x torque ripple (-> quadratureAxisCurrent signature) + bearing loads.
         // Scales with g (0 in microgravity) and shaft tilt; the load the
         // gravity-signature atlas needs.
         ctx.nodes.register("Physics.Mechanical.Load:gravity-payload", () => createGravityPayloadLoadNode() as never, {
@@ -29,15 +29,15 @@ export const loadSubPlugin: IPlugin = {
             category: "Physics.Mechanical.Load",
             inputPorts: [
                 { slot: "local", optional: true, type: "matrix44" },
-                { slot: "parent_world", optional: true, type: "matrix44" },
+                { slot: "parentWorld", optional: true, type: "matrix44" },
                 { slot: "scene", optional: true, type: "scene" },
-                { slot: "theta_m", ...FLOAT_IN },
+                { slot: "rotorAngle", ...FLOAT_IN },
             ],
             outputPorts: [
                 { slot: "world", optional: false, type: "matrix44" },
-                { slot: "tau_load", ...FLOAT_OUT },
-                { slot: "force_axial", ...FLOAT_OUT },
-                { slot: "force_radial", ...FLOAT_OUT },
+                { slot: "loadTorque", ...FLOAT_OUT },
+                { slot: "axialForce", ...FLOAT_OUT },
+                { slot: "radialForce", ...FLOAT_OUT },
             ],
         });
     },

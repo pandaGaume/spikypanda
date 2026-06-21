@@ -8,28 +8,28 @@ import type { ICartesian, Nullable } from "spikypanda-core";
  * The rotor sits off the magnetic axis by a fixed fraction of the air
  * gap; the resulting air-gap flux modulation, at the rotor angle, is:
  *
- *   epsilon = severity * epsilonMax            (fractional gap modulation)
- *   flux delta(theta_m) = epsilon * cos(theta_m - thetaOffset)
+ *   epsilon = severity * maxEccentricity            (fractional gap modulation)
+ *   flux delta(rotorAngle) = epsilon * cos(rotorAngle - eccentricityPhase)
  *
  * The `flux` output emits a fault descriptor `{ target: "flux", value:
  * delta }` for the PMSM machine's variadic fault bank (wire flux ->
  * machine fault_N). The machine forms lambda_m_eff = lambda_m * (1 + sum
  * of flux faults), so the 1x f_mech envelope variation produces sidebands
- * at f_e +/- f_mech in i_d / i_q after the controller reacts. Any other flux
+ * at f_e +/- f_mech in directAxisCurrent / quadratureAxisCurrent after the controller reacts. Any other flux
  * fault feeding the same bank composes additively in the machine's flux
  * accumulator.
  *
- * Source node (RuntimeNode): reads only the rotor angle theta_m from the
+ * Source node (RuntimeNode): reads only the rotor angle rotorAngle from the
  * machine. Stateless, no allocation in the hot path.
  */
 export class EccentricityFaultNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _severity: number = 0; // [0, 1]
-    @cloneable private _epsilonMax: number = 0.5; // fractional gap at severity 1
-    @cloneable private _thetaOffset: number = 0; // rad
+    @cloneable private _maxEccentricity: number = 0.5; // fractional gap at severity 1
+    @cloneable private _eccentricityPhase: number = 0; // rad
 
     private _fluxDelta: number = 0;
 
-    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "theta_m", optional: true, type: "float" }];
+    public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "rotorAngle", optional: true, type: "float" }];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "flux", optional: false, type: "any" }];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
@@ -42,17 +42,17 @@ export class EccentricityFaultNode extends RuntimeNode implements IDeclaresPorts
     public set severity(v: number) {
         this.setField("severity", this._severity, v, (n) => (this._severity = n));
     }
-    @editable("number") public get epsilonMax(): number {
-        return this._epsilonMax;
+    @editable("number") public get maxEccentricity(): number {
+        return this._maxEccentricity;
     }
-    public set epsilonMax(v: number) {
-        this.setField("epsilonMax", this._epsilonMax, v, (n) => (this._epsilonMax = n));
+    public set maxEccentricity(v: number) {
+        this.setField("maxEccentricity", this._maxEccentricity, v, (n) => (this._maxEccentricity = n));
     }
-    @editable("number", { unit: "rad" }) public get thetaOffset(): number {
-        return this._thetaOffset;
+    @editable("number", { unit: "rad" }) public get eccentricityPhase(): number {
+        return this._eccentricityPhase;
     }
-    public set thetaOffset(v: number) {
-        this.setField("thetaOffset", this._thetaOffset, v, (n) => (this._thetaOffset = n));
+    public set eccentricityPhase(v: number) {
+        this.setField("eccentricityPhase", this._eccentricityPhase, v, (n) => (this._eccentricityPhase = n));
     }
 
     @viewable("number") public get flux_envelope(): number {
@@ -76,12 +76,12 @@ export class EccentricityFaultNode extends RuntimeNode implements IDeclaresPorts
             if (idx < 0 || !session.linkStates[idx].ready) continue;
             const value = session.consume(idx);
             if (typeof value !== "number") continue;
-            if (slot === "theta_m") thetaM = value;
+            if (slot === "rotorAngle") thetaM = value;
         }
 
         const severity = this._severity < 0 ? 0 : this._severity > 1 ? 1 : this._severity;
-        const epsilon = severity * this._epsilonMax;
-        this._fluxDelta = epsilon <= 0 ? 0 : epsilon * Math.cos(thetaM - this._thetaOffset);
+        const epsilon = severity * this._maxEccentricity;
+        this._fluxDelta = epsilon <= 0 ? 0 : epsilon * Math.cos(thetaM - this._eccentricityPhase);
 
         for (const link of this.onsc<IChannel>()) {
             if (!link.enabled) continue;

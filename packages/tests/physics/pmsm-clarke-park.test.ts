@@ -3,7 +3,7 @@
  *
  *   1. NODE == ORACLE: the Clarke node (abc -> alpha-beta) equals the
  *      legacy ThreePhaseTransforms.clarke.
- *   2. NODE == ORACLE: the Park node (alpha-beta -> dq at P*theta_m)
+ *   2. NODE == ORACLE: the Park node (alpha-beta -> dq at polePairs*rotorAngle)
  *      equals the legacy ThreePhaseTransforms.park.
  *   3. CHAIN: Clarke -> Park on balanced phase currents recovers the
  *      legacy abcToDq pipeline (the canonical FOC feedback path).
@@ -14,7 +14,7 @@ import { createClarkeNode, createParkNode, ClarkeNode, ParkNode } from "../../de
 
 const DT = 5e-5;
 
-// Load a committed golden fixture (captured from the now-removed legacy oracle).
+// Load phaseA committed golden fixture (captured from the now-removed legacy oracle).
 function loadFixture<T>(name: string): T {
     const fs = require("fs");
     const p = require("path").join(__dirname, "__fixtures__", name + ".json");
@@ -40,17 +40,17 @@ class FuncSource extends RuntimeNode {
 
 describe("PMSM Clarke : node equals the legacy oracle", () => {
     it("alpha / beta match ThreePhaseTransforms.clarke", () => {
-        const a = (t: number) => 3 * Math.cos(2 * Math.PI * 50 * t);
-        const b = (t: number) => 3 * Math.cos(2 * Math.PI * 50 * t - (2 * Math.PI) / 3);
-        const c = (t: number) => 3 * Math.cos(2 * Math.PI * 50 * t + (2 * Math.PI) / 3);
+        const phaseA = (t: number) => 3 * Math.cos(2 * Math.PI * 50 * t);
+        const phaseB = (t: number) => 3 * Math.cos(2 * Math.PI * 50 * t - (2 * Math.PI) / 3);
+        const phaseC = (t: number) => 3 * Math.cos(2 * Math.PI * 50 * t + (2 * Math.PI) / 3);
         const n = 300;
 
         const node: ClarkeNode = createClarkeNode();
-        const sA = new FuncSource(a),
-            sB = new FuncSource(b),
-            sC = new FuncSource(c);
+        const sA = new FuncSource(phaseA),
+            sB = new FuncSource(phaseB),
+            sC = new FuncSource(phaseC);
         const builder = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
-        builder.withNodes(node, sA, sB, sC).withChannel(sA, node, "out", "a").withChannel(sB, node, "out", "b").withChannel(sC, node, "out", "c");
+        builder.withNodes(node, sA, sB, sC).withChannel(sA, node, "out", "phaseA").withChannel(sB, node, "out", "phaseB").withChannel(sC, node, "out", "phaseC");
         const session = new Session(builder.build());
         node.reset(session);
 
@@ -66,20 +66,20 @@ describe("PMSM Clarke : node equals the legacy oracle", () => {
 });
 
 describe("PMSM Park : node equals the legacy oracle", () => {
-    it("d / q match ThreePhaseTransforms.park at theta_e = P*theta_m", () => {
-        const P = 3;
+    it("directAxis / quadratureAxis match ThreePhaseTransforms.park at electricalAngle = polePairs*rotorAngle", () => {
+        const polePairs = 3;
         const al = (t: number) => 2 * Math.cos(2 * Math.PI * 30 * t);
         const be = (t: number) => 2 * Math.sin(2 * Math.PI * 30 * t);
         const th = (t: number) => 120 * t;
         const n = 300;
 
         const node: ParkNode = createParkNode();
-        node.P = P;
+        node.polePairs = polePairs;
         const sAl = new FuncSource(al),
             sBe = new FuncSource(be),
             sTh = new FuncSource(th);
         const builder = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
-        builder.withNodes(node, sAl, sBe, sTh).withChannel(sAl, node, "out", "alpha").withChannel(sBe, node, "out", "beta").withChannel(sTh, node, "out", "theta_m");
+        builder.withNodes(node, sAl, sBe, sTh).withChannel(sAl, node, "out", "alpha").withChannel(sBe, node, "out", "beta").withChannel(sTh, node, "out", "rotorAngle");
         const session = new Session(builder.build());
         node.reset(session);
 
@@ -87,8 +87,8 @@ describe("PMSM Park : node equals the legacy oracle", () => {
         let maxErr = 0;
         for (let i = 0; i <= n; i++) {
             session.run(i * DT);
-            const [d, q] = oracle[i];
-            maxErr = Math.max(maxErr, Math.abs(node.d - d), Math.abs(node.q - q));
+            const [directAxis, quadratureAxis] = oracle[i];
+            maxErr = Math.max(maxErr, Math.abs(node.directAxis - directAxis), Math.abs(node.quadratureAxis - quadratureAxis));
         }
         expect(maxErr).toBeLessThan(1e-12);
     });
@@ -96,29 +96,29 @@ describe("PMSM Park : node equals the legacy oracle", () => {
 
 describe("PMSM Clarke -> Park chain : canonical FOC feedback path", () => {
     it("abc currents through Clarke then Park recover the legacy abcToDq", () => {
-        const P = 2;
-        const a = (t: number) => 4 * Math.cos(2 * Math.PI * 60 * t);
-        const b = (t: number) => 4 * Math.cos(2 * Math.PI * 60 * t - (2 * Math.PI) / 3);
-        const c = (t: number) => 4 * Math.cos(2 * Math.PI * 60 * t + (2 * Math.PI) / 3);
+        const polePairs = 2;
+        const phaseA = (t: number) => 4 * Math.cos(2 * Math.PI * 60 * t);
+        const phaseB = (t: number) => 4 * Math.cos(2 * Math.PI * 60 * t - (2 * Math.PI) / 3);
+        const phaseC = (t: number) => 4 * Math.cos(2 * Math.PI * 60 * t + (2 * Math.PI) / 3);
         const th = (t: number) => 80 * t;
         const n = 300;
 
         const clarke: ClarkeNode = createClarkeNode();
         const park: ParkNode = createParkNode();
-        park.P = P;
-        const sA = new FuncSource(a),
-            sB = new FuncSource(b),
-            sC = new FuncSource(c),
+        park.polePairs = polePairs;
+        const sA = new FuncSource(phaseA),
+            sB = new FuncSource(phaseB),
+            sC = new FuncSource(phaseC),
             sTh = new FuncSource(th);
         const builder = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
         builder
             .withNodes(clarke, park, sA, sB, sC, sTh)
-            .withChannel(sA, clarke, "out", "a")
-            .withChannel(sB, clarke, "out", "b")
-            .withChannel(sC, clarke, "out", "c")
+            .withChannel(sA, clarke, "out", "phaseA")
+            .withChannel(sB, clarke, "out", "phaseB")
+            .withChannel(sC, clarke, "out", "phaseC")
             .withChannel(clarke, park, "alpha", "alpha")
             .withChannel(clarke, park, "beta", "beta")
-            .withChannel(sTh, park, "out", "theta_m");
+            .withChannel(sTh, park, "out", "rotorAngle");
         const session = new Session(builder.build());
         clarke.reset(session);
         park.reset(session);
@@ -127,8 +127,8 @@ describe("PMSM Clarke -> Park chain : canonical FOC feedback path", () => {
         let maxErr = 0;
         for (let i = 0; i <= n; i++) {
             session.run(i * DT);
-            const [d, q] = oracle[i];
-            maxErr = Math.max(maxErr, Math.abs(park.d - d), Math.abs(park.q - q));
+            const [directAxis, quadratureAxis] = oracle[i];
+            maxErr = Math.max(maxErr, Math.abs(park.directAxis - directAxis), Math.abs(park.quadratureAxis - quadratureAxis));
         }
         expect(maxErr).toBeLessThan(1e-9);
     });

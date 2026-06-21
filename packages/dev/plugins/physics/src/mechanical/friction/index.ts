@@ -13,11 +13,11 @@ export const frictionSubPlugin: IPlugin = {
             category: "Physics.Mechanical.Friction",
             docPath: ctx.assetUrl("docs/physics/friction/coulomb.md"),
             inputPorts: [
-                { slot: "omega", ...FLOAT_IN },
-                { slot: "tau_c", ...FLOAT_IN },
-                { slot: "tau_s", ...FLOAT_IN },
+                { slot: "angularVelocity", ...FLOAT_IN },
+                { slot: "coulombTorque", ...FLOAT_IN },
+                { slot: "stribeckTorque", ...FLOAT_IN },
             ],
-            outputPorts: [{ slot: "tau_friction", ...FLOAT_OUT }],
+            outputPorts: [{ slot: "frictionTorque", ...FLOAT_OUT }],
         });
     },
 };

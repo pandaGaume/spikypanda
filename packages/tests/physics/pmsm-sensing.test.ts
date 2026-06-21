@@ -3,7 +3,7 @@
  * ideal-adapter port):
  *
  *   1. Current sensor (Physics.Electric.Sensor:current) on the PMSM phase
- *      current: ideal bypass measures i_a exactly; quantization snaps to
+ *      current: ideal bypass measures phaseCurrentA exactly; quantization snaps to
  *      the ADC step. The machine's per-tick stream output feeds the
  *      sensor's signal-kind input transparently.
  *   2. Vibration chain: an Imbalance fault force -> Housing Mechanics ->
@@ -40,10 +40,10 @@ class FuncSource extends RuntimeNode {
 describe("Current sensor on a PMSM phase current", () => {
     function run(resolution: number): { ia: number[]; meas: number[] } {
         const m = createPmsmMachineDqNode();
-        m.omega0 = 250;
+        m.initialAngularVelocity = 250;
         const cs = createCurrentSensorNode();
         cs.bandwidthHz = 0; // ideal LPF bypass
-        cs.noiseStd = 0;
+        cs.noiseStdDev = 0;
         cs.resolution = resolution;
         const va = (t: number) => 0.3 * Math.cos(250 * t),
             vb = (t: number) => 0.3 * Math.cos(250 * t - (2 * Math.PI) / 3),
@@ -51,17 +51,22 @@ describe("Current sensor on a PMSM phase current", () => {
         const sA = new FuncSource(va),
             sB = new FuncSource(vb),
             sC = new FuncSource(vc);
-        const b = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
-        b.withNodes(m, cs, sA, sB, sC).withChannel(sA, m, "out", "V_a").withChannel(sB, m, "out", "V_b").withChannel(sC, m, "out", "V_c").withChannel(m, cs, "i_a", "i");
-        const session = new Session(b.build());
+        const builder = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
+        builder
+            .withNodes(m, cs, sA, sB, sC)
+            .withChannel(sA, m, "out", "phaseVoltageA")
+            .withChannel(sB, m, "out", "phaseVoltageB")
+            .withChannel(sC, m, "out", "phaseVoltageC")
+            .withChannel(m, cs, "phaseCurrentA", "armatureCurrent");
+        const session = new Session(builder.build());
         m.reset(session);
         cs.reset(session);
         const ia: number[] = [],
             meas: number[] = [];
         for (let i = 0; i <= 200; i++) {
             session.run(i * DT);
-            ia.push(m.i_a);
-            meas.push(cs.i_measured);
+            ia.push(m.phaseCurrentA);
+            meas.push(cs.measuredCurrent);
         }
         return { ia, meas };
     }
@@ -98,25 +103,26 @@ describe("Vibration chain : Imbalance -> Housing -> Accelerometer", () => {
     }
 
     function measuredVibration(severity: number): number[] {
-        const omega = 200;
+        const angularVelocity = 200;
         const imb = createImbalanceFaultNode();
         imb.severity = severity;
-        imb.kImbalanceMax = 1e-3; // exaggerate for a clearly visible bench signal
+        imb.maxUnbalanceProduct = 1e-3; // exaggerate for a clearly visible bench signal
         const housing = createHousingMechanicsNode();
         const accel = createAccelerometerNode();
-        accel.noiseStd = 0;
+        accel.noiseStdDev = 0;
         accel.resolution = 0;
         accel.bandwidthHz = 0; // ideal: read the housing acceleration directly
 
-        const sOm = new FuncSource(() => omega);
-        const sTh = new FuncSource((t) => omega * t);
-        const b = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
-        b.withNodes(imb, housing, accel, sOm, sTh)
-            .withChannel(sOm, imb, "out", "omega")
-            .withChannel(sTh, imb, "out", "theta_m")
-            .withChannel(imb, housing, "force_y", "force_y")
-            .withChannel(housing, accel, "accel_y", "vibration");
-        const session = new Session(b.build());
+        const sOm = new FuncSource(() => angularVelocity);
+        const sTh = new FuncSource((t) => angularVelocity * t);
+        const builder = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
+        builder
+            .withNodes(imb, housing, accel, sOm, sTh)
+            .withChannel(sOm, imb, "out", "angularVelocity")
+            .withChannel(sTh, imb, "out", "rotorAngle")
+            .withChannel(imb, housing, "forceY", "forceY")
+            .withChannel(housing, accel, "accelerationY", "vibration");
+        const session = new Session(builder.build());
         imb.reset(session);
         housing.reset(session);
         accel.reset(session);
@@ -124,7 +130,7 @@ describe("Vibration chain : Imbalance -> Housing -> Accelerometer", () => {
         const n = 4000;
         for (let i = 0; i <= n; i++) {
             session.run(i * DT);
-            if (i > n / 2) out.push(accel.vibration_measured);
+            if (i > n / 2) out.push(accel.measuredVibration);
         }
         return out;
     }

@@ -24,7 +24,7 @@ export function createTransformNode(): TransformNode {
  * Environmental context (gravity, T, P, atmosphere) lives on the session
  * (`ISession.sceneStateView`), populated by the enclosing Sim.Graph from a
  * wired SceneItem (see plugins/physics/src/scene). The TransformNode
- * exposes only `local` + `parent_world` here.
+ * exposes only `local` + `parentWorld` here.
  */
 export const transformSubPlugin: IPlugin = {
     activate(ctx: IPluginContext): void {

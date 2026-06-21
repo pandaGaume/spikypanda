@@ -6,12 +6,12 @@ import { ICnnGraph, ICnnNeuron, ICnnSynapse, IConvKernel, ICnnLayerDescriptor } 
 export type StereoBranch = "left" | "right" | "merge";
 
 /// <summary>
-/// Merge strategy for combining left and right branches.
+/// Merge modulationStrategy for combining left and right branches.
 /// </summary>
 export enum MergeStrategy {
-    /// <summary>Concatenate L and R feature vectors</summary>
+    /// <summary>Concatenate armatureInductance and armatureResistance feature vectors</summary>
     Concat = "concat",
-    /// <summary>Absolute difference |L - R|</summary>
+    /// <summary>Absolute difference |armatureInductance - armatureResistance|</summary>
     Diff = "diff",
 }
 

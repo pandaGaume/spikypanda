@@ -1,8 +1,8 @@
 /**
  * Physics.Electric.Sensor:power validation (analytic, no legacy oracle).
  *
- * Balanced 3-phase sinusoids v_k = V cos(theta+k), i_k = I cos(theta-phi+k):
- *   P  -> 1.5 V I cos(phi)     S -> 1.5 V I     Q -> 1.5 V I |sin(phi)|
+ * Balanced 3-phase sinusoids v_k = armatureVoltage cos(theta+k), i_k = I cos(theta-phi+k):
+ *   activePower  -> 1.5 armatureVoltage I cos(phi)     apparentPower -> 1.5 armatureVoltage I     reactivePower -> 1.5 armatureVoltage I |sin(phi)|
  *   PF -> cos(phi)
  * dq channel is exact and instantaneous.
  */
@@ -29,7 +29,7 @@ class FuncSource extends RuntimeNode {
     }
 }
 
-const V = 10,
+const armatureVoltage = 10,
     I = 2,
     F = 50,
     W = 2 * Math.PI * F;
@@ -37,83 +37,83 @@ const TWO3 = (2 * Math.PI) / 3;
 
 function runAbc(phi: number): PowerMeterNode {
     const node = createPowerMeterNode();
-    node.averagingHz = 5; // well below the 50 Hz fundamental
-    const va = (t: number) => V * Math.cos(W * t),
-        vb = (t: number) => V * Math.cos(W * t - TWO3),
-        vc = (t: number) => V * Math.cos(W * t + TWO3);
+    node.averagingFrequencyHz = 5; // well below the 50 Hz fundamental
+    const va = (t: number) => armatureVoltage * Math.cos(W * t),
+        vb = (t: number) => armatureVoltage * Math.cos(W * t - TWO3),
+        vc = (t: number) => armatureVoltage * Math.cos(W * t + TWO3);
     const ia = (t: number) => I * Math.cos(W * t - phi),
         ib = (t: number) => I * Math.cos(W * t - phi - TWO3),
         ic = (t: number) => I * Math.cos(W * t - phi + TWO3);
     const srcs: Array<[FuncSource, string]> = [
-        [new FuncSource(va), "v_a"],
-        [new FuncSource(vb), "v_b"],
-        [new FuncSource(vc), "v_c"],
-        [new FuncSource(ia), "i_a"],
-        [new FuncSource(ib), "i_b"],
-        [new FuncSource(ic), "i_c"],
+        [new FuncSource(va), "phaseVoltageA"],
+        [new FuncSource(vb), "phaseVoltageB"],
+        [new FuncSource(vc), "phaseVoltageC"],
+        [new FuncSource(ia), "phaseCurrentA"],
+        [new FuncSource(ib), "phaseCurrentB"],
+        [new FuncSource(ic), "phaseCurrentC"],
     ];
-    const b = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
-    b.withNodes(node, ...srcs.map((s) => s[0]));
-    for (const [s, slot] of srcs) b.withChannel(s, node, "out", slot);
-    const session = new Session(b.build());
+    const builder = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
+    builder.withNodes(node, ...srcs.map((s) => s[0]));
+    for (const [s, slot] of srcs) builder.withChannel(s, node, "out", slot);
+    const session = new Session(builder.build());
     node.reset(session);
     for (let i = 0; i <= 8000; i++) session.run(i * DT); // 0.4 s, settle the averaging
     return node;
 }
 
 describe("Power meter : abc indicators", () => {
-    const S0 = 1.5 * V * I; // 30 VA
+    const S0 = 1.5 * armatureVoltage * I; // 30 VA
 
-    it("unity power factor (phi = 0): P = S, Q ~ 0, PF ~ 1", () => {
+    it("unity power factor (phi = 0): activePower = apparentPower, reactivePower ~ 0, PF ~ 1", () => {
         const n = runAbc(0);
-        expect(n.S).toBeCloseTo(S0, 0);
-        expect(n.P).toBeGreaterThan(0.97 * S0);
-        expect(n.Q).toBeLessThan(0.06 * S0);
-        expect(n.power_factor).toBeGreaterThan(0.97);
+        expect(n.apparentPower).toBeCloseTo(S0, 0);
+        expect(n.activePower).toBeGreaterThan(0.97 * S0);
+        expect(n.reactivePower).toBeLessThan(0.06 * S0);
+        expect(n.powerFactor).toBeGreaterThan(0.97);
     });
 
-    it("phi = 60 deg: PF ~ 0.5, P ~ S/2, Q ~ S*sin60", () => {
+    it("phi = 60 deg: PF ~ 0.5, activePower ~ apparentPower/2, reactivePower ~ apparentPower*sin60", () => {
         const n = runAbc(Math.PI / 3);
-        expect(n.power_factor).toBeCloseTo(0.5, 1);
-        expect(n.P).toBeCloseTo(S0 * 0.5, 0);
-        expect(n.Q).toBeCloseTo(S0 * Math.sin(Math.PI / 3), 0);
+        expect(n.powerFactor).toBeCloseTo(0.5, 1);
+        expect(n.activePower).toBeCloseTo(S0 * 0.5, 0);
+        expect(n.reactivePower).toBeCloseTo(S0 * Math.sin(Math.PI / 3), 0);
     });
 
-    it("purely reactive (phi = 90 deg): P ~ 0, Q ~ S, PF ~ 0", () => {
+    it("purely reactive (phi = 90 deg): activePower ~ 0, reactivePower ~ apparentPower, PF ~ 0", () => {
         const n = runAbc(Math.PI / 2);
-        expect(Math.abs(n.P)).toBeLessThan(0.06 * S0);
-        expect(n.Q).toBeGreaterThan(0.94 * S0);
-        expect(Math.abs(n.power_factor)).toBeLessThan(0.06);
+        expect(Math.abs(n.activePower)).toBeLessThan(0.06 * S0);
+        expect(n.reactivePower).toBeGreaterThan(0.94 * S0);
+        expect(Math.abs(n.powerFactor)).toBeLessThan(0.06);
     });
 
     it("active energy accumulates at the active-power rate", () => {
         const n = runAbc(0);
-        // E_active ~ P * total_time over the run (P ~ S0 at PF 1).
-        expect(n.E_active / 0.4).toBeCloseTo(S0, 0);
+        // activeEnergy ~ activePower * total_time over the run (activePower ~ S0 at PF 1).
+        expect(n.activeEnergy / 0.4).toBeCloseTo(S0, 0);
     });
 });
 
 describe("Power meter : dq channel is exact", () => {
-    it("P_dq / Q_dq match the instantaneous dq power formulas", () => {
+    it("activePowerDq / reactivePowerDq match the instantaneous dq power formulas", () => {
         const node = createPowerMeterNode();
         const vd = 12,
             vq = 5,
             idc = 3,
             iqc = 7;
         const srcs: Array<[FuncSource, string]> = [
-            [new FuncSource(() => vd), "v_d"],
-            [new FuncSource(() => vq), "v_q"],
-            [new FuncSource(() => idc), "i_d"],
-            [new FuncSource(() => iqc), "i_q"],
+            [new FuncSource(() => vd), "directAxisVoltage"],
+            [new FuncSource(() => vq), "quadratureAxisVoltage"],
+            [new FuncSource(() => idc), "directAxisCurrent"],
+            [new FuncSource(() => iqc), "quadratureAxisCurrent"],
         ];
-        const b = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
-        b.withNodes(node, ...srcs.map((s) => s[0]));
-        for (const [s, slot] of srcs) b.withChannel(s, node, "out", slot);
-        const session = new Session(b.build());
+        const builder = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
+        builder.withNodes(node, ...srcs.map((s) => s[0]));
+        for (const [s, slot] of srcs) builder.withChannel(s, node, "out", slot);
+        const session = new Session(builder.build());
         node.reset(session);
         session.run(0);
         session.run(DT);
-        expect(node.P_dq).toBeCloseTo(1.5 * (vd * idc + vq * iqc), 9);
-        expect(node.Q_dq).toBeCloseTo(1.5 * (vq * idc - vd * iqc), 9);
+        expect(node.activePowerDq).toBeCloseTo(1.5 * (vd * idc + vq * iqc), 9);
+        expect(node.reactivePowerDq).toBeCloseTo(1.5 * (vq * idc - vd * iqc), 9);
     });
 });

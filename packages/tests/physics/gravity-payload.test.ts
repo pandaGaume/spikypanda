@@ -4,7 +4,7 @@
  * The payload is a world object: it reads the BOUND scene's gravity and
  * projects it through its own world (identity here) -> g_radial / g_angle,
  * then a crank mass m at arm r reacts as a 1x f_mech torque ripple
- *   tau = m * g_radial * r * sin((theta_m + phi0) - g_angle)
+ *   tau = m * g_radial * r * sin((rotorAngle + phi0) - g_angle)
  * plus axial/radial bearing loads. With identity pose and Earth gravity
  * (0,0,-9.81): g_radial = 9.81, g_angle = -pi/2, ripple amplitude
  * m*9.81*r. It vanishes with no scene or in microgravity (g = 0).
@@ -39,20 +39,20 @@ class FuncSource extends RuntimeNode {
     }
 }
 
-/** Bind the scene, sweep theta_m over one turn, return node + tau series. */
+/** Bind the scene, sweep rotorAngle over one turn, return node + tau series. */
 function sweep(scene: SceneStateView | null, n: number): { node: GravityPayloadLoadNode; tau: number[] } {
     const node = createGravityPayloadLoadNode();
     const dTheta = (2 * Math.PI) / n;
     const sTh = new FuncSource((t) => t * dTheta);
-    const b = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
-    b.withNodes(node, sTh).withChannel(sTh, node, "out", "theta_m");
-    const session = new Session(b.build());
+    const builder = new RuntimeGraphBuilder<RuntimeNode, Channel>().withMode("dynamic");
+    builder.withNodes(node, sTh).withChannel(sTh, node, "out", "rotorAngle");
+    const session = new Session(builder.build());
     if (scene) session.sceneStateView = scene;
     node.reset(session);
     const tau: number[] = [];
     for (let i = 0; i <= n; i++) {
         session.run(i);
-        tau.push(node.tau_load);
+        tau.push(node.loadTorque);
     }
     return { node, tau };
 }
@@ -83,7 +83,7 @@ describe("Gravity payload load (scene-aware)", () => {
 
     it("bearing loads track the gravity projection (identity pose)", () => {
         const { node } = sweep(viewWithGravity("earth", EARTH), 10);
-        expect(node.force_radial).toBeCloseTo(node.payloadMass * 9.81, 6);
-        expect(node.force_axial).toBeCloseTo(0, 6); // gravity is body-radial at identity
+        expect(node.radialForce).toBeCloseTo(node.payloadMass * 9.81, 6);
+        expect(node.axialForce).toBeCloseTo(0, 6); // gravity is body-radial at identity
     });
 });

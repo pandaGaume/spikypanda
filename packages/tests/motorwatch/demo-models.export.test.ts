@@ -26,7 +26,7 @@ import { buildDiagnosticBytes, buildEncoderBytes, ENCODER_DIM } from "./helpers"
 const MODELS_DIR = path.resolve(__dirname, "../../host/www/data/models");
 const FRAME = 64;
 
-/** Demo diagnostic head: scores = e W + b for causes
+/** Demo diagnostic head: scores = e W + viscousFriction for causes
  *  [nominal, overload_step, fan_quadratic]. Columns favor, in order:
  *  the low band + bias (nominal), band 2 (overload), band 3 + slope
  *  (quadratic), mirroring the calibrated r385 e2e weighting. */

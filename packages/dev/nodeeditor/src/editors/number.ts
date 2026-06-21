@@ -23,7 +23,7 @@ export const numberEditor: EditorFactory = (host, model, propertyName, options, 
 
     const opts = options && typeof options === "object" ? (options as INumberOptions) : {};
 
-    // Layout strategy: short unit strings (≤ 8 chars, e.g. "K", "Hz",
+    // Layout modulationStrategy: short unit strings (≤ 8 chars, e.g. "K", "Hz",
     // "samples") stay inline next to the input — compact, scans well.
     // Longer descriptive units (enum legends like "0=hann 1=hamm ...")
     // wrap to a second row BELOW the input as a caption — keeps the

@@ -125,9 +125,7 @@ export class AtmosphereGateNode extends IntegrableRuntimeNode implements IDeclar
         { slot: GATE_IN_ATMOSPHERE_A, optional: true, type: "atmosphere" },
         { slot: GATE_IN_ATMOSPHERE_B, optional: true, type: "atmosphere" },
     ];
-    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [
-        { slot: GATE_OUT_FLOW_RATE, optional: true, type: "float" },
-    ];
+    public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: GATE_OUT_FLOW_RATE, optional: true, type: "float" }];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
@@ -140,8 +138,7 @@ export class AtmosphereGateNode extends IntegrableRuntimeNode implements IDeclar
         return this._mode;
     }
     public set mode(v: AtmosphereGateMode) {
-        const next: AtmosphereGateMode =
-            v === "closed" || v === "open_passive" || v === "hvac_forced" ? v : "open_passive";
+        const next: AtmosphereGateMode = v === "closed" || v === "open_passive" || v === "hvac_forced" ? v : "open_passive";
         this.setField("mode", this._mode, next, (n) => {
             this._mode = n;
         });

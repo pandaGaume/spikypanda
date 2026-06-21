@@ -13,13 +13,13 @@ export const gearSubPlugin: IPlugin = {
             category: "Physics.Mechanical.Gear",
             docPath: ctx.assetUrl("docs/physics/gear/mesh.md"),
             inputPorts: [
-                { slot: "signal_in", ...FLOAT_IN },
-                { slot: "omega", ...FLOAT_IN },
+                { slot: "inputSignal", ...FLOAT_IN },
+                { slot: "angularVelocity", ...FLOAT_IN },
                 { slot: "dt", ...FLOAT_IN },
             ],
             outputPorts: [
-                { slot: "signal_out", ...FLOAT_OUT },
-                { slot: "mesh_hz", ...FLOAT_OUT },
+                { slot: "outputSignal", ...FLOAT_OUT },
+                { slot: "meshFrequencyHz", ...FLOAT_OUT },
             ],
         });
     },
