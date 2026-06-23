@@ -157,6 +157,13 @@ export class SceneItem extends GraphNode implements ILiveInScene {
     @cloneable private _localPositionSourceId: string = "";
     @cloneable private _localRotationSourceId: string = "";
     @cloneable private _localScaleSourceId: string = "";
+    // Matrix44 transform overrides (wire a geometry Transform's `matrix` into the
+    // scene's `local` / `parentWorld` ports, like a TransformNode-derived node).
+    @cloneable private _localMatrixSourceId: string = "";
+    @cloneable private _parentWorldMatrixSourceId: string = "";
+    private _localMatrixScratch?: Matrix4;
+    private _parentMatrixScratch?: Matrix4;
+    private _worldMatrixScratch?: Matrix4;
 
     // ── Referenced collections (resolved at bind via SceneSourceResolver) ─
 
@@ -270,6 +277,12 @@ export class SceneItem extends GraphNode implements ILiveInScene {
     }
     @viewable("boolean") public get is_local_scale_wired(): boolean {
         return this._propertyProviders.has("localScale") || this._localScaleSourceId.length > 0;
+    }
+    @viewable("boolean") public get is_local_matrix_wired(): boolean {
+        return this._propertyProviders.has("localMatrix") || this._localMatrixSourceId.length > 0;
+    }
+    @viewable("boolean") public get is_parent_world_wired(): boolean {
+        return this._propertyProviders.has("parentWorldMatrix") || this._parentWorldMatrixSourceId.length > 0;
     }
 
     /** Ambient temperature in kelvin (canonical storage unit). The
@@ -440,8 +453,32 @@ export class SceneItem extends GraphNode implements ILiveInScene {
      *  `parent.worldTransform() × this`, with the enclosing scene wired as
      *  `parent` at session bind (root scene has no parent => world = local). */
     public override localTransform(): Matrix4 {
+        // A wired `local` matrix44 (a geometry Transform's `matrix`) overrides the
+        // composed T·R·S pose, so the scene is placed exactly like a
+        // TransformNode-derived node. Constant-placement case is the norm; a
+        // dynamic wired matrix is read live here but descendants cache the world.
+        const m = this._readProvided("localMatrix", SceneItem._isMatrix16);
+        if (m) return (this._localMatrixScratch ??= new Matrix4()).setFromArray(m);
         // Babylon-aligned arg order: Compose(scale, rotation, translation).
         return Matrix4.Compose(this._localScale, this._localRotation, this._localPosition);
+    }
+
+    /** World pose. A wired `parentWorld` matrix44 sets the scene's parent frame
+     *  (parentWorld × local), mirroring a TransformNode's `parentWorld` override;
+     *  otherwise the inherited GraphNode chain (structural parent × local). */
+    public override worldTransform(): Matrix4 {
+        const pw = this._readProvided("parentWorldMatrix", SceneItem._isMatrix16);
+        if (pw) {
+            const parent = (this._parentMatrixScratch ??= new Matrix4()).setFromArray(pw);
+            return this.composeWorldInto(this.localTransform(), parent, (this._worldMatrixScratch ??= new Matrix4()));
+        }
+        return super.worldTransform();
+    }
+
+    /** Guard: a column-major 4×4 as a 16-number array (a geometry Transform's
+     *  `matrix` getter / any matrix44 publisher). */
+    private static _isMatrix16(v: unknown): v is ArrayLike<number> {
+        return !!v && typeof v === "object" && (v as ArrayLike<number>).length === 16 && typeof (v as ArrayLike<number>)[0] === "number";
     }
 
     /** Manual sample-rate override in hertz (canonical storage). 0

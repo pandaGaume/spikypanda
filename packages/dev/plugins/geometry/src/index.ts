@@ -2,9 +2,10 @@ import type { IPlugin, IPluginContext } from "spikypanda-nodeeditor";
 import { Transform } from "./nodes/transform.js";
 import { Attitude } from "./nodes/attitude.js";
 import { Cartesian3Node } from "./nodes/cartesian3.js";
+import { Cartesian3SplitNode } from "./nodes/cartesian3-split.js";
 import { attitude3DEditor } from "./editors/attitude-3d.js";
 
-export { Transform, Attitude, Cartesian3Node };
+export { Transform, Attitude, Cartesian3Node, Cartesian3SplitNode };
 
 const plugin: IPlugin = {
     activate(ctx: IPluginContext): void {
@@ -43,6 +44,20 @@ const plugin: IPlugin = {
                 { slot: "z", optional: true, type: "float" },
             ],
             outputPorts: [{ slot: "vec3", optional: false, type: "vec3" }],
+            standards: ["ue5"],
+        });
+
+        // Inverse of Cartesian3: split a vec3 stream into x / y / z float
+        // outputs (e.g. IMU.measuredAcceleration -> per-axis buffer/FFT chains).
+        ctx.nodes.register("spk.geometry:cartesian3-split", () => new Cartesian3SplitNode(), {
+            label: "Cartesian3 Split",
+            category: "geometry",
+            inputPorts: [{ slot: "vec3", optional: true, type: "vec3" }],
+            outputPorts: [
+                { slot: "x", optional: false, type: "float" },
+                { slot: "y", optional: false, type: "float" },
+                { slot: "z", optional: false, type: "float" },
+            ],
             standards: ["ue5"],
         });
 

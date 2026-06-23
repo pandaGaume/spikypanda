@@ -262,6 +262,12 @@ export interface SerializedConnection {
     fromPortIndex: number;
     toNodeId: string;
     toPortIndex: number;
+    // When set, the endpoint is a CONTROL-plane port and its index addresses
+    // the node's controlOutputs / controlInputs array (not outputs / inputs).
+    // Omitted (undefined) for ordinary data-port wires, so existing saves and
+    // the common case stay byte-identical.
+    fromControl?: boolean;
+    toControl?: boolean;
 }
 
 export interface SerializedGraph {

@@ -96,6 +96,11 @@ export const sceneSubPlugin: IPlugin = {
             { slot: "local_position_in", optional: true, type: "vec3" },
             { slot: "local_rotation_in", optional: true, type: "vec4" },
             { slot: "local_scale_in", optional: true, type: "vec3" },
+            // Matrix44 transform ports, like a TransformNode-derived node: wire a
+            // geometry Transform's `matrix` to place/orient the scene (`local`
+            // overrides the composed T·R·S; `parentWorld` sets the parent frame).
+            { slot: "local", optional: true, type: "matrix44" },
+            { slot: "parentWorld", optional: true, type: "matrix44" },
         ] as const;
         const sceneOutputPorts = [{ slot: "scene_out", optional: true, type: "scene" }] as const;
         const sceneVariadicInput = [

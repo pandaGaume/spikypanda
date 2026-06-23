@@ -117,6 +117,17 @@ export class Dashboard {
         this._host = host;
         this._host.classList.add("ne-dashboard");
 
+        // GridStack mounts on an INNER element, not the host directly: the host
+        // is a fixed-height scroll WRAPPER sized by the dashboard splitter
+        // (`--nev2-dash-h`), while GridStack sizes this inner grid to its own
+        // content (rows x cellHeight). Forcing a height/overflow on the
+        // GridStack ROOT breaks its tile layout math (tiles collapse to 1x1);
+        // separating the two lets the panel be resizable + scrollable WITHOUT
+        // constraining GridStack.
+        const gridEl = document.createElement("div");
+        gridEl.className = "ne-dashboard-grid";
+        this._host.appendChild(gridEl);
+
         // GridStack init: 12-column grid (industry-standard, lots of room
         // for asymmetric layouts), float = true so tiles don't auto-pack
         // to the top (better UX for free-form dashboards).
@@ -128,7 +139,7 @@ export class Dashboard {
                 margin: 6,
                 animate: true,
             },
-            this._host
+            gridEl
         );
 
         // GridStack's own resizestop event isn't used: we let a per-tile

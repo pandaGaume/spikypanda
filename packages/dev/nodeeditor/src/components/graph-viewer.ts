@@ -12,7 +12,7 @@ import { darkSkin } from "../styles/skins/dark";
 import { heliosSkin } from "../styles/skins/helios";
 import { lightSkin } from "../styles/skins/light";
 import { transparentDarkSkin, transparentLightSkin } from "../styles/skins/transparent";
-import { arePortTypesCompatible, ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedGraph } from "../types";
+import { arePortTypesCompatible, ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedConnection, SerializedGraph } from "../types";
 import { DebugBus } from "../debug-bus";
 import type { INodeRegistry, IRuntimeNode } from "spikypanda-core";
 import type { Dashboard, ISerializedDashboard } from "../dashboard";
@@ -247,6 +247,34 @@ export class GraphViewer {
         return conn;
     }
 
+    /** Owning node of a connection's source / destination port. Checks the
+     *  control arrays too, so a wire on a `_completed`/`_start` control port is
+     *  resolved like a data wire. */
+    private _fromNodeOf(c: Connection): NodeUI {
+        return this.nodes.find((n) => n.outputs.includes(c.from) || n.controlOutputs.includes(c.from))!;
+    }
+    private _toNodeOf(c: Connection): NodeUI {
+        return this.nodes.find((n) => n.inputs.includes(c.to) || n.controlInputs.includes(c.to))!;
+    }
+
+    /** Serialize a connection's endpoints. Control-plane ports index their
+     *  controlOutputs/controlInputs array and carry a `*Control` flag; data
+     *  ports keep the legacy outputs/inputs index with no flag. */
+    private _serializeConnEndpoints(c: Connection): Pick<SerializedConnection, "fromNodeId" | "fromPortIndex" | "toNodeId" | "toPortIndex" | "fromControl" | "toControl"> {
+        const fromNode = this._fromNodeOf(c);
+        const toNode = this._toNodeOf(c);
+        const fromControl = fromNode.controlOutputs.includes(c.from);
+        const toControl = toNode.controlInputs.includes(c.to);
+        return {
+            fromNodeId: fromNode.id,
+            fromPortIndex: (fromControl ? fromNode.controlOutputs : fromNode.outputs).indexOf(c.from),
+            toNodeId: toNode.id,
+            toPortIndex: (toControl ? toNode.controlInputs : toNode.inputs).indexOf(c.to),
+            ...(fromControl ? { fromControl: true } : {}),
+            ...(toControl ? { toControl: true } : {}),
+        };
+    }
+
     /** Surface a connection refusal both in the browser console (for
      *  developers) and in the in-app DebugConsole (for end users). */
     private _reportRejection(from: Port, to: Port, reason: string): void {
@@ -447,25 +475,12 @@ export class GraphViewer {
                 inputs: n.inputs.map((p) => ({ name: p.name, type: p.type, direction: p.direction })),
                 outputs: n.outputs.map((p) => ({ name: p.name, type: p.type, direction: p.direction })),
             })),
-            connections: this.connections.map((c) => {
-                const fromNode = this.nodes.find((n) => n.outputs.includes(c.from))!;
-                const toNode = this.nodes.find((n) => n.inputs.includes(c.to))!;
-                return {
-                    fromNodeId: fromNode.id,
-                    fromPortIndex: fromNode.outputs.indexOf(c.from),
-                    toNodeId: toNode.id,
-                    toPortIndex: toNode.inputs.indexOf(c.to),
-                };
-            }),
+            connections: this.connections.map((c) => this._serializeConnEndpoints(c)),
         };
     }
 
     save(): string {
-        const connId = (c: Connection): string => {
-            const fromNode = this.nodes.find((n) => n.outputs.includes(c.from))!;
-            const toNode = this.nodes.find((n) => n.inputs.includes(c.to))!;
-            return `${fromNode.id}:${c.from.name}->${toNode.id}:${c.to.name}`;
-        };
+        const connId = (c: Connection): string => `${this._fromNodeOf(c).id}:${c.from.name}->${this._toNodeOf(c).id}:${c.to.name}`;
         const data = {
             // v3 adds `typeId` per node in BOTH layout and model so load()
             // can rebind every node to a fresh runtime IRuntimeNode via
@@ -491,17 +506,7 @@ export class GraphViewer {
                     inputs: n.inputs.map((p) => ({ name: p.name, type: p.type, direction: p.direction })),
                     outputs: n.outputs.map((p) => ({ name: p.name, type: p.type, direction: p.direction })),
                 })),
-                connections: this.connections.map((c) => {
-                    const fromNode = this.nodes.find((n) => n.outputs.includes(c.from))!;
-                    const toNode = this.nodes.find((n) => n.inputs.includes(c.to))!;
-                    return {
-                        id: connId(c),
-                        fromNodeId: fromNode.id,
-                        fromPortIndex: fromNode.outputs.indexOf(c.from),
-                        toNodeId: toNode.id,
-                        toPortIndex: toNode.inputs.indexOf(c.to),
-                    };
-                }),
+                connections: this.connections.map((c) => ({ id: connId(c), ...this._serializeConnEndpoints(c) })),
             },
             model: {
                 nodes: this.nodes.map((n) => ({
@@ -510,15 +515,11 @@ export class GraphViewer {
                     typeId: n.typeId,
                     data: n.item.serialize(),
                 })),
-                connections: this.connections.map((c) => {
-                    const fromNode = this.nodes.find((nd) => nd.outputs.includes(c.from))!;
-                    const toNode = this.nodes.find((nd) => nd.inputs.includes(c.to))!;
-                    return {
-                        id: connId(c),
-                        from: { node: fromNode.id, port: c.from.name },
-                        to: { node: toNode.id, port: c.to.name },
-                    };
-                }),
+                connections: this.connections.map((c) => ({
+                    id: connId(c),
+                    from: { node: this._fromNodeOf(c).id, port: c.from.name },
+                    to: { node: this._toNodeOf(c).id, port: c.to.name },
+                })),
             },
             // Dashboards array is plural-shaped from V1 so the on-disk
             // format stays stable when multi-dashboard (tabs) lands.
@@ -642,8 +643,11 @@ export class GraphViewer {
             const fromNode = nodeMap.get(sc.fromNodeId);
             const toNode = nodeMap.get(sc.toNodeId);
             if (fromNode && toNode) {
-                const fromPort = fromNode.outputs[sc.fromPortIndex];
-                const toPort = toNode.inputs[sc.toPortIndex];
+                // Control-plane endpoints index the control arrays (re-applied
+                // from the registry meta by enrichNodeDefFromMeta above); data
+                // endpoints keep the legacy outputs/inputs index.
+                const fromPort = (sc.fromControl ? fromNode.controlOutputs : fromNode.outputs)[sc.fromPortIndex];
+                const toPort = (sc.toControl ? toNode.controlInputs : toNode.inputs)[sc.toPortIndex];
                 if (fromPort && toPort) this.connect(fromPort, toPort);
             }
         }

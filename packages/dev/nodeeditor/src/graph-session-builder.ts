@@ -403,6 +403,8 @@ interface SceneItemLike {
     localPositionSourceId?: string;
     localRotationSourceId?: string;
     localScaleSourceId?: string;
+    localMatrixSourceId?: string;
+    parentWorldMatrixSourceId?: string;
 }
 
 /** Mapping from a Scene's data input slot name to the corresponding
@@ -417,6 +419,8 @@ const SCENE_INPUT_SLOT_TO_SOURCE_ID: Readonly<Record<string, keyof SceneItemLike
     local_position_in: "localPositionSourceId",
     local_rotation_in: "localRotationSourceId",
     local_scale_in: "localScaleSourceId",
+    local: "localMatrixSourceId",
+    parentWorld: "parentWorldMatrixSourceId",
 };
 
 /** Mapping from a Scene's data input slot name to the SceneItem
@@ -431,6 +435,8 @@ const SCENE_INPUT_SLOT_TO_PROPERTY: Readonly<Record<string, string>> = {
     local_position_in: "localPosition",
     local_rotation_in: "localRotation",
     local_scale_in: "localScale",
+    local: "localMatrix",
+    parentWorld: "parentWorldMatrix",
 };
 
 /** Minimal IAtmosphereAggregator-shaped object. The atmosphere node
@@ -950,6 +956,22 @@ function _findRuntimeNodeByPort(viewer: GraphViewer, port: unknown, direction: "
         if (typeof (data as IRuntimeNode).fire !== "function") {
             // eslint-disable-next-line no-console
             console.warn(`[graph-session-builder] connection endpoint "${n.label}" (${n.typeId ?? "no typeId"}) is layout-only (no runtime instance); skipping its wire`);
+            return null;
+        }
+        // A channel endpoint must also be a GRAPH node: the Channel ctor
+        // registers itself on each end via `node.add(channel)` (set oini /
+        // set ofin in graph.olink), and the scheduler later reads the
+        // node's `opsc`. A node that implements fire() but is NOT a
+        // GraphNode (e.g. an out-of-date plugin bundle whose op node
+        // predates the core-Kernel refactor) lacks these, and wiring it
+        // throws `this._ofin?.add is not a function`, killing Play. Skip +
+        // name the node so a stale bundle is diagnosable, not fatal.
+        const graphNode = data as { add?: unknown; opsc?: unknown };
+        if (typeof graphNode.add !== "function" || typeof graphNode.opsc !== "function") {
+            // eslint-disable-next-line no-console
+            console.warn(
+                `[graph-session-builder] endpoint "${n.label}" (${n.typeId ?? "no typeId"}) has fire() but is not a graph node (no add/opsc) — likely a stale plugin bundle; skipping its wire. Rebuild + redeploy that plugin's bundle.`
+            );
             return null;
         }
         return data as IRuntimeNode;

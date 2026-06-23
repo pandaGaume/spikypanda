@@ -25,6 +25,8 @@ export const housingSubPlugin: IPlugin = {
                 { slot: "accelerationX", ...FLOAT_OUT },
                 { slot: "accelerationY", ...FLOAT_OUT },
                 { slot: "accelerationZ", ...FLOAT_OUT },
+                // The same acceleration as one vec3, for a 3-axis IMU sensor.
+                { slot: "acceleration", optional: false, type: "vec3" },
             ],
         });
     },

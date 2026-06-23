@@ -31,6 +31,12 @@ import logicPlugin from "../../dev/plugins/logic/src/index";
 import controlPlugin from "../../dev/plugins/control/src/index";
 import onnxPlugin from "../../dev/plugins/onnx/src/index";
 import { registerLifecycleNodes } from "../../dev/nodeeditor/src/lifecycle-nodes";
+// Geometry NODE classes only (NOT the plugin index, which pulls the
+// @babylonjs-backed attitude-3d editor that jest can't transform).
+import { Cartesian3Node } from "../../dev/plugins/geometry/src/nodes/cartesian3";
+import { Cartesian3SplitNode } from "../../dev/plugins/geometry/src/nodes/cartesian3-split";
+import { Transform as GeometryTransform } from "../../dev/plugins/geometry/src/nodes/transform";
+import { Attitude as GeometryAttitude } from "../../dev/plugins/geometry/src/nodes/attitude";
 
 export const GRAPHS_DIR = path.resolve(__dirname, "../../host/www/data/graphs");
 
@@ -100,11 +106,61 @@ export function buildHeadlessRegistry(): NodeRegistry {
     // Lifecycle Start / Stop: registry-backed since the typeId fix (a
     // save without typeId lost them to layout-only blobs at load).
     registerLifecycleNodes(registry);
-    for (const typeId of ["Viz.Plot:line", "Viz.Plot:spectrum", "Viz.Plot:waterfall"]) {
+
+    // Geometry nodes, registered from their classes (the plugin index pulls the
+    // @babylonjs attitude-3d editor, which jest can't transform). Ports mirror
+    // the geometry plugin's registration so generated graphs resolve identically.
+    const FLOAT_IN = { optional: true, type: "float" } as const;
+    registry.register("spk.geometry:cartesian3", () => new Cartesian3Node() as never, {
+        label: "Cartesian3",
+        category: "geometry",
+        inputPorts: [
+            { slot: "x", ...FLOAT_IN },
+            { slot: "y", ...FLOAT_IN },
+            { slot: "z", ...FLOAT_IN },
+        ],
+        outputPorts: [{ slot: "vec3", optional: false, type: "vec3" }],
+    });
+    registry.register("spk.geometry:cartesian3-split", () => new Cartesian3SplitNode() as never, {
+        label: "Cartesian3 Split",
+        category: "geometry",
+        inputPorts: [{ slot: "vec3", optional: true, type: "vec3" }],
+        outputPorts: [
+            { slot: "x", optional: false, type: "float" },
+            { slot: "y", optional: false, type: "float" },
+            { slot: "z", optional: false, type: "float" },
+        ],
+    });
+    registry.register("spk.geometry:transform", () => new GeometryTransform() as never, {
+        label: "Transform",
+        category: "geometry",
+        inputPorts: [
+            { slot: "translation", optional: true, type: "vec3" },
+            { slot: "rotation", optional: true, type: "vec4" },
+        ],
+        outputPorts: [{ slot: "matrix", optional: false, type: "matrix44" }],
+    });
+    registry.register("spk.geometry:attitude", () => new GeometryAttitude() as never, {
+        label: "Attitude",
+        category: "geometry",
+        inputPorts: [
+            { slot: "yaw", ...FLOAT_IN },
+            { slot: "pitch", ...FLOAT_IN },
+            { slot: "roll", ...FLOAT_IN },
+        ],
+        outputPorts: [{ slot: "rotation", optional: false, type: "vec4" }],
+    });
+
+    // Viz tiles: headless stubs that DRAIN their input. Port slot per type
+    // matches the real viz plugin so generated graphs wire correctly:
+    // line consumes `value` (a scalar f(t)); spectrum / waterfall consume
+    // `magnitudes` (an FFT frame).
+    const vizPorts: Record<string, string> = { "Viz.Plot:line": "value", "Viz.Plot:spectrum": "magnitudes", "Viz.Plot:waterfall": "magnitudes" };
+    for (const [typeId, slot] of Object.entries(vizPorts)) {
         registry.register(typeId, () => new VizStubNode() as never, {
             label: `${typeId} (headless stub)`,
             category: "Viz.Plot",
-            inputPorts: [{ slot: "value", optional: true, type: "any" }],
+            inputPorts: [{ slot, optional: true, type: "any" }],
             outputPorts: [],
         });
     }

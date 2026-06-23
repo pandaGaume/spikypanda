@@ -15,14 +15,27 @@ export type LoadProfile = "constant" | "step" | "ramp" | "quadratic" | "periodic
  * nothing in the catalog produced one, so demo graphs either left it
  * unwired (no-load run) or hand-built the law from Logic primitives.
  *
- * The profiles model operating-regime changes:
+ * The profiles model operating-regime changes (against the node's LOCAL
+ * clock — time since the segment was armed, not session time):
  *
  *     constant   tau = baseTorque                          (baseline regime)
- *     step       tau = t < stepTime ? baseTorque : targetTorque       (new regime at stepTime)
+ *     step       tau = localT < stepTime ? baseTorque : targetTorque    (new regime at stepTime)
  *     ramp       tau drifts baseTorque -> targetTorque at
  *                |rampRate|, then holds at targetTorque      (slow regime drift)
  *     quadratic  tau = k * angularVelocity * |angularVelocity|           (fan / pump load)
- *     periodic   tau = baseTorque + A * sin(2*pi*f*t)      (mechanical modulation)
+ *     periodic   tau = baseTorque + A * sin(2*pi*f*localT)  (mechanical modulation)
+ *
+ * SCHEDULER CHAIN (lifecycle): a LoadTorque is a chainable timed SEGMENT.
+ * It drives the motor only while ACTIVE — armed by a `_start` trigger (or
+ * `autoStart` at session start), it runs its profile for `duration`
+ * seconds, then pulses `_completed` ONCE and goes silent. Wire
+ * `segment[i]._completed -> segment[i+1]._start` and the sequence advances
+ * itself: each segment signals the end of its profile (the "reached"
+ * event), which starts the next. `duration <= 0` runs open-ended (never
+ * completes) — the baseline / last segment. An inactive segment publishes
+ * nothing, so exactly one segment drives `loadTorque` at a time. Mirrors
+ * the Logic TimerNode armed-producer pattern. Defaults (autoStart=true,
+ * duration=0) reproduce the legacy always-on behaviour.
  *
  * The ramp is BOUNDED on purpose: it models a slow drift INTO a new
  * operating regime, so the torque settles on the targetTorque plateau where a
@@ -47,16 +60,48 @@ export class LoadTorqueNode extends RuntimeNode implements IDeclaresPorts {
     @cloneable private _profile: LoadProfile = "constant";
     @cloneable private _baseTorque: number = 0.01; // Base torque [N.m]
     @cloneable private _targetTorque: number = 0.02; // Step / ramp target torque [N.m]
-    @cloneable private _stepTime: number = 5; // Step time [s]
+    @cloneable private _stepTime: number = 5; // Step time [s] (local)
     @cloneable private _rampRate: number = 0.001; // Ramp slope magnitude [N.m/s]
     @cloneable private _k: number = 1.5e-7; // Quadratic coefficient [N.m.s^2/rad^2]
     @cloneable private _amplitude: number = 0.005; // Periodic amplitude [N.m]
     @cloneable private _frequency: number = 1; // Periodic frequency [Hz]
+    // Scheduler-chain lifecycle. duration<=0 = open-ended (never completes);
+    // autoStart=true arms at session start (legacy always-on default), false
+    // waits for a `_start` trigger (downstream segments in a chain).
+    @cloneable private _duration: number = 0; // Segment length [s]
+    @cloneable private _autoStart: boolean = true;
 
     @cloneable private _tau: number = 0;
 
+    // Runtime lifecycle state (not serialised): armed flag, the sim-time origin
+    // of the local profile clock, a pending-arm latch (the `_start` t is read in
+    // fire, where the timestamp is available), and a once-only completion latch.
+    private _active: boolean = true;
+    private _armT: number = 0; // sim time the active window started; 0 = session start (autoStart)
+    private _armPending: boolean = false;
+    private _wasCompleted: boolean = false;
+
+    // angularVelocity is the live speed (the motor's signal): only the
+    // speed-dependent (quadratic) law wires it. A timed segment leaves it
+    // UNWIRED so it stays a "true source" the scheduler ticks every SIM
+    // dispatch — that is what keeps its `duration` clock advancing (and
+    // reaching `_completed`) even when the speed has settled to a constant.
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "angularVelocity", optional: true, type: "float" }];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: "loadTorque", optional: false, type: "float" }];
+    // Control plane: `_start` arms the segment (the previous segment's
+    // `_completed` wires here), `_reset` returns it to its autoStart state;
+    // `_completed` pulses ONCE at the end of the profile (the "reached" event).
+    // Control-slot wires don't gate firing and don't disqualify the
+    // true-source seeding, so a timed segment fires every sim tick.
+    public override readonly controlInputPorts: ReadonlyArray<IPortDescriptor> = [
+        { slot: "_enable", optional: true, type: "boolean" },
+        { slot: "_start", optional: true, type: "trigger" },
+        { slot: "_reset", optional: true, type: "trigger" },
+    ];
+    public override readonly controlOutputPorts: ReadonlyArray<IPortDescriptor> = [
+        { slot: "_enabled", optional: true, type: "boolean" },
+        { slot: "_completed", optional: true, type: "trigger" },
+    ];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
@@ -133,15 +178,69 @@ export class LoadTorqueNode extends RuntimeNode implements IDeclaresPorts {
             this._frequency = n;
         });
     }
+    @editable("number", { unit: "s" }) public get duration(): number {
+        return this._duration;
+    }
+    public set duration(v: number) {
+        this.setField("duration", this._duration, v, (n) => {
+            this._duration = n;
+        });
+    }
+    @editable("boolean") public get autoStart(): boolean {
+        return this._autoStart;
+    }
+    public set autoStart(v: boolean) {
+        this.setField("autoStart", this._autoStart, v, (n) => {
+            this._autoStart = n;
+        });
+    }
 
     @viewable("number") public get tau(): number {
         return this._tau;
     }
+    @viewable("boolean") public get active(): boolean {
+        return this._active;
+    }
 
     public override reset(_session: ISession): void {
+        this._active = this._autoStart;
+        // autoStart arms at session start, so its clock origin is t = 0 and the
+        // profile runs against absolute sim time (legacy single-segment
+        // behaviour). A `_start`-armed segment captures its origin in fire().
+        this._armT = 0;
+        this._armPending = false;
+        this._wasCompleted = false;
         this.setField("tau", this._tau, 0, (n) => {
             this._tau = n;
         });
+    }
+
+    /** Drain control triggers before fire() (the scheduler calls this first):
+     *  `_start` arms the segment from a fresh local clock — the chain hand-off,
+     *  the previous segment's `_completed` wires here. `_reset` returns it to
+     *  its autoStart state. Control slots don't gate firing nor disqualify the
+     *  true-source seeding, so the segment keeps ticking every sim step. */
+    public override processControlInputs(session: ISession): void {
+        super.processControlInputs(session);
+        const links = session.graph.links as ReadonlyArray<IChannel>;
+        for (const link of this.opsc<IChannel>()) {
+            if (!link.enabled) continue;
+            const slot = inSlotOf(link);
+            const idx = links.indexOf(link);
+            if (idx < 0 || !session.linkStates[idx].ready) continue;
+            if (slot === "_start") {
+                session.consume(idx);
+                this._active = true;
+                this._armPending = true; // capture the origin t in the next fire()
+                this._wasCompleted = false;
+            } else if (slot === "_reset") {
+                session.consume(idx);
+                this._active = this._autoStart;
+                this._armT = 0;
+                this._armPending = false;
+                this._wasCompleted = false;
+            }
+        }
     }
 
     public override fire(session: ISession, t: number): void {
@@ -149,26 +248,46 @@ export class LoadTorqueNode extends RuntimeNode implements IDeclaresPorts {
         let angularVelocity = 0;
         for (const link of this.opsc<IChannel>()) {
             if (!link.enabled) continue;
-            const slot = inSlotOf(link);
+            if (inSlotOf(link) !== "angularVelocity") continue;
             const idx = links.indexOf(link);
             if (idx < 0 || !session.linkStates[idx].ready) continue;
-            const value = session.consume(idx);
-            if (typeof value !== "number") continue;
-            if (slot === "angularVelocity") angularVelocity = value;
+            const v = session.consume(idx);
+            if (typeof v === "number") angularVelocity = v;
         }
+
+        // Inactive segment drives nothing: it stays silent (no publish) until
+        // `_start` arms it, so a chained sequence has exactly one segment
+        // driving the motor at a time (the active one's torque wins the
+        // loadTorque signal; the rest hold their last value through the
+        // single-tick handover). An inactive segment that DOES read the speed
+        // signal simply ignores it here.
+        if (!this._active) return;
+
+        // Local profile clock = sim time since the active window opened. A
+        // `_start`-armed segment captures its origin on the first fire (the
+        // timestamp `t` lives here, not in processControlInputs); autoStart
+        // keeps origin 0 so it runs against absolute sim time. step / ramp /
+        // periodic time is RELATIVE to activation, so each segment is
+        // self-contained — and being sim-time based it is robust to
+        // pause/resume + play-speed without a per-fire accumulator.
+        if (this._armPending) {
+            this._armT = t;
+            this._armPending = false;
+        }
+        const localT = t - this._armT;
 
         let tau: number;
         let omegaDependent = false;
         switch (this._profile) {
             case "step":
-                tau = t < this._stepTime ? this._baseTorque : this._targetTorque;
+                tau = localT < this._stepTime ? this._baseTorque : this._targetTorque;
                 break;
             case "ramp": {
                 // Bounded drift: tau moves from baseTorque toward targetTorque at
                 // |rampRate| and HOLDS at targetTorque once reached, so the
                 // load settles on a new plateau instead of growing
                 // forever past the motor's stall torque.
-                const drift = Math.abs(this._rampRate) * t;
+                const drift = Math.abs(this._rampRate) * localT;
                 const span = Math.abs(this._targetTorque - this._baseTorque);
                 tau = drift >= span ? this._targetTorque : this._baseTorque + Math.sign(this._targetTorque - this._baseTorque) * drift;
                 break;
@@ -180,7 +299,7 @@ export class LoadTorqueNode extends RuntimeNode implements IDeclaresPorts {
                 omegaDependent = true;
                 break;
             case "periodic":
-                tau = this._baseTorque + this._amplitude * Math.sin(2 * Math.PI * this._frequency * t);
+                tau = this._baseTorque + this._amplitude * Math.sin(2 * Math.PI * this._frequency * localT);
                 break;
             default: // constant
                 tau = this._baseTorque;
@@ -204,6 +323,20 @@ export class LoadTorqueNode extends RuntimeNode implements IDeclaresPorts {
             const idx = links.indexOf(link);
             if (idx < 0) continue;
             session.publish(idx, tau);
+        }
+
+        // Profile end: pulse `_completed` ONCE (the "reached" event the next
+        // segment's `_start` consumes), then go silent so the next segment
+        // takes over. duration<=0 = open-ended, never completes.
+        if (this._duration > 0 && localT >= this._duration && !this._wasCompleted) {
+            this._wasCompleted = true;
+            this._active = false;
+            for (const link of this.onsc<IChannel>()) {
+                if (link.slot !== "_completed" || !link.enabled) continue;
+                const idx = links.indexOf(link);
+                if (idx < 0) continue;
+                session.publish(idx, true);
+            }
         }
     }
 }

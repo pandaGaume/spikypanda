@@ -1,4 +1,4 @@
-import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IPortDescriptor, ISession, TransformNode, inSlotOf } from "spikypanda-core";
+import { cloneable, editable, viewable, Cartesian3, IChannel, IDeclaresPorts, IPortDescriptor, ISession, TransformNode, inSlotOf } from "spikypanda-core";
 import type { IOlink, ICartesian, Nullable, IHasSampleRateRequirement } from "spikypanda-core";
 
 /**
@@ -75,6 +75,9 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
         { slot: "accelerationX", optional: false, type: "float" },
         { slot: "accelerationY", optional: false, type: "float" },
         { slot: "accelerationZ", optional: false, type: "float" },
+        // The same bracket acceleration as ONE vec3 (ICartesian3), for an IMU /
+        // 3-axis sensor that consumes a single vector instead of three floats.
+        { slot: "acceleration", optional: false, type: "vec3" },
     ];
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
@@ -319,6 +322,7 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
             if (link.slot === "accelerationX") session.publish(idx, this._accelX);
             else if (link.slot === "accelerationY") session.publish(idx, this._accelY);
             else if (link.slot === "accelerationZ") session.publish(idx, this._accelZ);
+            else if (link.slot === "acceleration") session.publish(idx, new Cartesian3(this._accelX, this._accelY, this._accelZ));
         }
     }
 }

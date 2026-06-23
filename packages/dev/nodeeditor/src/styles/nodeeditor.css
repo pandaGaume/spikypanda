@@ -1737,12 +1737,17 @@
 /* ──────────────────────────────────────────────────────────────────────
    Dashboard panel (GridStack tiles for IRenderable nodes)
    ────────────────────────────────────────────────────────────────────── */
+/* The dashboard host is now a scroll WRAPPER (height + overflow set by the
+   host page's .nev2-dashboard-host, sized by the splitter). GridStack mounts in
+   the inner .ne-dashboard-grid and sizes ITSELF to its tile content — never
+   constrain its height/overflow here or the tile layout collapses to 1x1. */
 .ne-dashboard {
     background: var(--ne-color-bg);
     color:      var(--ne-color-text);
-    overflow:   auto;
-    height:     100%;
     box-sizing: border-box;
+}
+.ne-dashboard-grid {
+    width: 100%;
 }
 
 /* GridStack item content: the box that holds our tile chrome. We
