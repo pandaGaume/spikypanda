@@ -2,8 +2,9 @@ import type { IPlugin, IPluginContext } from "spikypanda-nodeeditor";
 import { createLoadTorqueNode, LoadTorqueNode } from "./load-torque.node.js";
 import type { LoadProfile } from "./load-torque.node.js";
 import { createGravityPayloadLoadNode, GravityPayloadLoadNode } from "./gravity-payload.node.js";
+import { createTurbinePayloadNode, TurbinePayloadNode } from "./turbine-payload.node.js";
 
-export { LoadTorqueNode, createLoadTorqueNode, GravityPayloadLoadNode, createGravityPayloadLoadNode };
+export { LoadTorqueNode, createLoadTorqueNode, GravityPayloadLoadNode, createGravityPayloadLoadNode, TurbinePayloadNode, createTurbinePayloadNode };
 export type { LoadProfile };
 
 const FLOAT_IN = { optional: true, type: "float" } as const;
@@ -55,6 +56,28 @@ export const loadSubPlugin: IPlugin = {
                 { slot: "loadTorque", ...FLOAT_OUT },
                 { slot: "axialForce", ...FLOAT_OUT },
                 { slot: "radialForce", ...FLOAT_OUT },
+            ],
+        });
+        // Turbine / scrubber payload: the fan-law aerodynamic load AND a fault
+        // COMPOSER. Imbalance / eccentricity faults wire into its fault_N bank;
+        // it reads its own mass + the scene gravity, adds the k*omega^2 aero load
+        // + the payload weight, and forwards the composed fault to the motor via
+        // `applyTo` (-> motor.fault_0). Speed feeds back from the motor.
+        ctx.nodes.register("Physics.Mechanical.Load:turbine", () => createTurbinePayloadNode() as never, {
+            label: "Turbine Payload",
+            category: "Physics.Mechanical.Load",
+            inputPorts: [
+                { slot: "local", optional: true, type: "matrix44" },
+                { slot: "parentWorld", optional: true, type: "matrix44" },
+                { slot: "scene", optional: true, type: "scene" },
+                { slot: "fault_0", optional: true, type: "any" },
+                { slot: "fault_1", optional: true, type: "any" },
+                { slot: "angularVelocity", ...FLOAT_IN },
+            ],
+            outputPorts: [
+                { slot: "world", optional: false, type: "matrix44" },
+                { slot: "applyTo", optional: false, type: "fault" },
+                { slot: "loadTorque", ...FLOAT_OUT },
             ],
         });
     },

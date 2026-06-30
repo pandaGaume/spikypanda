@@ -1,0 +1,39 @@
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+<rect x="0" y="0" width="760" height="300" fill="#ffffff"/>
+<line x1="62" y1="250.0" x2="728" y2="250.0" stroke="#eeeeee"/>
+<text x="56" y="253.0" font-size="10" fill="#534AB7" text-anchor="end">0</text>
+<line x1="62" y1="213.5" x2="728" y2="213.5" stroke="#eeeeee"/>
+<text x="56" y="216.5" font-size="10" fill="#534AB7" text-anchor="end">0.50</text>
+<line x1="62" y1="177.0" x2="728" y2="177.0" stroke="#eeeeee"/>
+<text x="56" y="180.0" font-size="10" fill="#534AB7" text-anchor="end">1</text>
+<line x1="62" y1="140.5" x2="728" y2="140.5" stroke="#eeeeee"/>
+<text x="56" y="143.5" font-size="10" fill="#534AB7" text-anchor="end">1.5</text>
+<line x1="62" y1="104.0" x2="728" y2="104.0" stroke="#eeeeee"/>
+<text x="56" y="107.0" font-size="10" fill="#534AB7" text-anchor="end">2</text>
+<line x1="62" y1="67.5" x2="728" y2="67.5" stroke="#eeeeee"/>
+<text x="56" y="70.5" font-size="10" fill="#534AB7" text-anchor="end">2.5</text>
+<line x1="128.6" y1="250" x2="128.6" y2="254" stroke="#888"/>
+<text x="128.6" y="266" font-size="10" fill="#444" text-anchor="middle">2</text>
+<line x1="261.8" y1="250" x2="261.8" y2="254" stroke="#888"/>
+<text x="261.8" y="266" font-size="10" fill="#444" text-anchor="middle">4</text>
+<line x1="395.0" y1="250" x2="395.0" y2="254" stroke="#888"/>
+<text x="395.0" y="266" font-size="10" fill="#444" text-anchor="middle">6</text>
+<line x1="528.2" y1="250" x2="528.2" y2="254" stroke="#888"/>
+<text x="528.2" y="266" font-size="10" fill="#444" text-anchor="middle">8</text>
+<line x1="661.4" y1="250" x2="661.4" y2="254" stroke="#888"/>
+<text x="661.4" y="266" font-size="10" fill="#444" text-anchor="middle">10</text>
+<line x1="62" y1="48" x2="62" y2="250" stroke="#888"/>
+<line x1="62" y1="250" x2="728" y2="250" stroke="#888"/>
+<polyline points="62.0,48.0 128.6,78.5 195.2,105.7 261.8,129.3 328.4,149.9 395.0,167.6 461.6,183.0 528.2,196.1 594.8,207.2 661.4,215.6 728.0,216.8" fill="none" stroke="#534AB7" stroke-width="1.8"/>
+<polyline points="62.0,48.0 128.6,66.3 195.2,83.7 261.8,100.2 328.4,115.9 395.0,130.7 461.6,144.7 528.2,157.7 594.8,170.0 661.4,180.0 728.0,181.4" fill="none" stroke="#888780" stroke-width="1.3" stroke-dasharray="6 4"/>
+<polyline points="62.0,48.0 128.6,82.9 195.2,113.1 261.8,139.0 328.4,161.0 395.0,179.6 461.6,195.1 528.2,207.9 594.8,218.3 661.4,225.7 728.0,226.7" fill="none" stroke="#D85A30" stroke-width="1.3" stroke-dasharray="2 3"/>
+<text x="395.0" y="18" font-size="12" fill="#222" text-anchor="middle">Measured 1x (~ω^3.3) sits between the ω² force law and the ideal ω⁴</text>
+<line x1="66" y1="34" x2="82" y2="34" stroke="#534AB7" stroke-width="2"/>
+<text x="86" y="37.5" font-size="10" fill="#444">measured 1x</text>
+<line x1="153.6" y1="34" x2="169.6" y2="34" stroke="#888780" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="173.6" y="37.5" font-size="10" fill="#444">ω² force law</text>
+<line x1="246.79999999999998" y1="34" x2="262.79999999999995" y2="34" stroke="#D85A30" stroke-width="2" stroke-dasharray="2 3"/>
+<text x="266.79999999999995" y="37.5" font-size="10" fill="#444">ideal ω⁴</text>
+<text x="395.0" y="296" font-size="11" fill="#333" text-anchor="middle">t [s]</text>
+<text x="13" y="149.0" font-size="11" fill="#534AB7" transform="rotate(-90 13 149.0)" text-anchor="middle">1x amplitude [m/s²]</text>
+</svg>

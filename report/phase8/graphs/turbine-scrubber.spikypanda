@@ -1,0 +1,1918 @@
+{
+  "version": 3,
+  "layout": {
+    "nodes": [
+      {
+        "id": "scene",
+        "x": 40,
+        "y": 40,
+        "typeId": "Physics.Scene:earth",
+        "inputs": [
+          {
+            "name": "atmosphere_in",
+            "type": "atmosphere",
+            "direction": "input"
+          },
+          {
+            "name": "solver_in_0",
+            "type": "solver",
+            "direction": "input"
+          },
+          {
+            "name": "shared_in_0",
+            "type": "shared",
+            "direction": "input"
+          },
+          {
+            "name": "gravity_in",
+            "type": "vec3",
+            "direction": "input"
+          },
+          {
+            "name": "temperature_in",
+            "type": "float",
+            "direction": "input"
+          },
+          {
+            "name": "pressure_in",
+            "type": "float",
+            "direction": "input"
+          },
+          {
+            "name": "density_in",
+            "type": "float",
+            "direction": "input"
+          },
+          {
+            "name": "time_scale_in",
+            "type": "float",
+            "direction": "input"
+          },
+          {
+            "name": "local_position_in",
+            "type": "vec3",
+            "direction": "input"
+          },
+          {
+            "name": "local_rotation_in",
+            "type": "vec4",
+            "direction": "input"
+          },
+          {
+            "name": "local_scale_in",
+            "type": "vec3",
+            "direction": "input"
+          },
+          {
+            "name": "local",
+            "type": "matrix44",
+            "direction": "input"
+          },
+          {
+            "name": "parentWorld",
+            "type": "matrix44",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "scene_out",
+            "type": "scene",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "drive",
+        "x": 40,
+        "y": 240,
+        "typeId": "Logic.Input:slider",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "value",
+            "type": "float",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "motor",
+        "x": 360,
+        "y": 120,
+        "typeId": "Physics.Electric.Motor.DC:dynamic",
+        "inputs": [
+          {
+            "name": "local",
+            "type": "matrix44",
+            "direction": "input"
+          },
+          {
+            "name": "parentWorld",
+            "type": "matrix44",
+            "direction": "input"
+          },
+          {
+            "name": "scene",
+            "type": "scene",
+            "direction": "input"
+          },
+          {
+            "name": "fault_0",
+            "type": "any",
+            "direction": "input"
+          },
+          {
+            "name": "armatureVoltage",
+            "type": "float",
+            "direction": "input"
+          },
+          {
+            "name": "loadTorque",
+            "type": "float",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "world",
+            "type": "matrix44",
+            "direction": "output"
+          },
+          {
+            "name": "armatureCurrent",
+            "type": "float",
+            "direction": "output"
+          },
+          {
+            "name": "angularVelocity",
+            "type": "float",
+            "direction": "output"
+          },
+          {
+            "name": "electromagneticTorque",
+            "type": "float",
+            "direction": "output"
+          },
+          {
+            "name": "forceY",
+            "type": "float",
+            "direction": "output"
+          },
+          {
+            "name": "forceZ",
+            "type": "float",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "turbine",
+        "x": 40,
+        "y": 440,
+        "typeId": "Physics.Mechanical.Load:turbine",
+        "inputs": [
+          {
+            "name": "local",
+            "type": "matrix44",
+            "direction": "input"
+          },
+          {
+            "name": "parentWorld",
+            "type": "matrix44",
+            "direction": "input"
+          },
+          {
+            "name": "scene",
+            "type": "scene",
+            "direction": "input"
+          },
+          {
+            "name": "fault_0",
+            "type": "any",
+            "direction": "input"
+          },
+          {
+            "name": "fault_1",
+            "type": "any",
+            "direction": "input"
+          },
+          {
+            "name": "angularVelocity",
+            "type": "float",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "world",
+            "type": "matrix44",
+            "direction": "output"
+          },
+          {
+            "name": "applyTo",
+            "type": "fault",
+            "direction": "output"
+          },
+          {
+            "name": "loadTorque",
+            "type": "float",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "imbalance",
+        "x": 40,
+        "y": 640,
+        "typeId": "Physics.Mechanical.Fault:rotor-imbalance",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "applyTo",
+            "type": "fault",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "eccentricity",
+        "x": 280,
+        "y": 640,
+        "typeId": "Physics.Mechanical.Fault:rotor-eccentricity",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "applyTo",
+            "type": "fault",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "feedback",
+        "x": 360,
+        "y": 440,
+        "typeId": "Control.Feedback:channel",
+        "inputs": [
+          {
+            "name": "input",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "type": "any",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "housing",
+        "x": 700,
+        "y": 320,
+        "typeId": "Physics.Mechanical.Housing:mechanics",
+        "inputs": [
+          {
+            "name": "local",
+            "type": "matrix44",
+            "direction": "input"
+          },
+          {
+            "name": "parentWorld",
+            "type": "matrix44",
+            "direction": "input"
+          },
+          {
+            "name": "forceX",
+            "type": "float",
+            "direction": "input"
+          },
+          {
+            "name": "forceY",
+            "type": "float",
+            "direction": "input"
+          },
+          {
+            "name": "forceZ",
+            "type": "float",
+            "direction": "input"
+          },
+          {
+            "name": "dt",
+            "type": "float",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "world",
+            "type": "matrix44",
+            "direction": "output"
+          },
+          {
+            "name": "accelerationX",
+            "type": "float",
+            "direction": "output"
+          },
+          {
+            "name": "accelerationY",
+            "type": "float",
+            "direction": "output"
+          },
+          {
+            "name": "accelerationZ",
+            "type": "float",
+            "direction": "output"
+          },
+          {
+            "name": "acceleration",
+            "type": "vec3",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "imu",
+        "x": 1000,
+        "y": 320,
+        "typeId": "Physics.Mechanical.Vibration:imu",
+        "inputs": [
+          {
+            "name": "local",
+            "type": "matrix44",
+            "direction": "input"
+          },
+          {
+            "name": "parentWorld",
+            "type": "matrix44",
+            "direction": "input"
+          },
+          {
+            "name": "acceleration",
+            "type": "vec3",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "world",
+            "type": "matrix44",
+            "direction": "output"
+          },
+          {
+            "name": "measuredAcceleration",
+            "type": "vec3",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "split",
+        "x": 1300,
+        "y": 320,
+        "typeId": "spk.geometry:cartesian3-split",
+        "inputs": [
+          {
+            "name": "vec3",
+            "type": "vec3",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "x",
+            "type": "float",
+            "direction": "output"
+          },
+          {
+            "name": "y",
+            "type": "float",
+            "direction": "output"
+          },
+          {
+            "name": "z",
+            "type": "float",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "sensor",
+        "x": 700,
+        "y": 120,
+        "typeId": "Physics.Electric.Motor.DC:currentSensor",
+        "inputs": [
+          {
+            "name": "armatureCurrent",
+            "type": "float",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "measuredCurrent",
+            "type": "float",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "line_current",
+        "x": 1700,
+        "y": 40,
+        "typeId": "Viz.Plot:line",
+        "inputs": [
+          {
+            "name": "value",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": []
+      },
+      {
+        "id": "line_accX",
+        "x": 1700,
+        "y": 160,
+        "typeId": "Viz.Plot:line",
+        "inputs": [
+          {
+            "name": "value",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": []
+      },
+      {
+        "id": "line_accY",
+        "x": 1700,
+        "y": 280,
+        "typeId": "Viz.Plot:line",
+        "inputs": [
+          {
+            "name": "value",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": []
+      },
+      {
+        "id": "line_accZ",
+        "x": 1700,
+        "y": 400,
+        "typeId": "Viz.Plot:line",
+        "inputs": [
+          {
+            "name": "value",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": []
+      },
+      {
+        "id": "line_speed",
+        "x": 1700,
+        "y": 520,
+        "typeId": "Viz.Plot:line",
+        "inputs": [
+          {
+            "name": "value",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": []
+      },
+      {
+        "id": "line_load",
+        "x": 1700,
+        "y": 640,
+        "typeId": "Viz.Plot:line",
+        "inputs": [
+          {
+            "name": "value",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": []
+      },
+      {
+        "id": "buf_current",
+        "x": 1700,
+        "y": 820,
+        "typeId": "DSP.Stream:buffer",
+        "inputs": [
+          {
+            "name": "value",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "frame",
+            "type": "tensor",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "win_current",
+        "x": 1940,
+        "y": 820,
+        "typeId": "DSP.Window:window",
+        "inputs": [
+          {
+            "name": "signal",
+            "type": "tensor",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "windowed",
+            "type": "tensor",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "fft_current",
+        "x": 2180,
+        "y": 820,
+        "typeId": "DSP.Transform:fft",
+        "inputs": [
+          {
+            "name": "signal",
+            "type": "tensor",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "spectrum",
+            "type": "tensor",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "spec_current",
+        "x": 2420,
+        "y": 820,
+        "typeId": "Viz.Plot:spectrum",
+        "inputs": [
+          {
+            "name": "magnitudes",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": []
+      },
+      {
+        "id": "buf_accX",
+        "x": 1700,
+        "y": 1020,
+        "typeId": "DSP.Stream:buffer",
+        "inputs": [
+          {
+            "name": "value",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "frame",
+            "type": "tensor",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "win_accX",
+        "x": 1940,
+        "y": 1020,
+        "typeId": "DSP.Window:window",
+        "inputs": [
+          {
+            "name": "signal",
+            "type": "tensor",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "windowed",
+            "type": "tensor",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "fft_accX",
+        "x": 2180,
+        "y": 1020,
+        "typeId": "DSP.Transform:fft",
+        "inputs": [
+          {
+            "name": "signal",
+            "type": "tensor",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "spectrum",
+            "type": "tensor",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "spec_accX",
+        "x": 2420,
+        "y": 1020,
+        "typeId": "Viz.Plot:spectrum",
+        "inputs": [
+          {
+            "name": "magnitudes",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": []
+      },
+      {
+        "id": "buf_accY",
+        "x": 1700,
+        "y": 1220,
+        "typeId": "DSP.Stream:buffer",
+        "inputs": [
+          {
+            "name": "value",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "frame",
+            "type": "tensor",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "win_accY",
+        "x": 1940,
+        "y": 1220,
+        "typeId": "DSP.Window:window",
+        "inputs": [
+          {
+            "name": "signal",
+            "type": "tensor",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "windowed",
+            "type": "tensor",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "fft_accY",
+        "x": 2180,
+        "y": 1220,
+        "typeId": "DSP.Transform:fft",
+        "inputs": [
+          {
+            "name": "signal",
+            "type": "tensor",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "spectrum",
+            "type": "tensor",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "spec_accY",
+        "x": 2420,
+        "y": 1220,
+        "typeId": "Viz.Plot:spectrum",
+        "inputs": [
+          {
+            "name": "magnitudes",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": []
+      },
+      {
+        "id": "buf_accZ",
+        "x": 1700,
+        "y": 1420,
+        "typeId": "DSP.Stream:buffer",
+        "inputs": [
+          {
+            "name": "value",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "frame",
+            "type": "tensor",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "win_accZ",
+        "x": 1940,
+        "y": 1420,
+        "typeId": "DSP.Window:window",
+        "inputs": [
+          {
+            "name": "signal",
+            "type": "tensor",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "windowed",
+            "type": "tensor",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "fft_accZ",
+        "x": 2180,
+        "y": 1420,
+        "typeId": "DSP.Transform:fft",
+        "inputs": [
+          {
+            "name": "signal",
+            "type": "tensor",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "spectrum",
+            "type": "tensor",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "spec_accZ",
+        "x": 2420,
+        "y": 1420,
+        "typeId": "Viz.Plot:spectrum",
+        "inputs": [
+          {
+            "name": "magnitudes",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": []
+      }
+    ],
+    "connections": [
+      {
+        "id": "drive:value->motor:armatureVoltage",
+        "fromNodeId": "drive",
+        "fromPortIndex": 0,
+        "toNodeId": "motor",
+        "toPortIndex": 4
+      },
+      {
+        "id": "imbalance:applyTo->turbine:fault_0",
+        "fromNodeId": "imbalance",
+        "fromPortIndex": 0,
+        "toNodeId": "turbine",
+        "toPortIndex": 3
+      },
+      {
+        "id": "eccentricity:applyTo->turbine:fault_1",
+        "fromNodeId": "eccentricity",
+        "fromPortIndex": 0,
+        "toNodeId": "turbine",
+        "toPortIndex": 4
+      },
+      {
+        "id": "turbine:applyTo->motor:fault_0",
+        "fromNodeId": "turbine",
+        "fromPortIndex": 1,
+        "toNodeId": "motor",
+        "toPortIndex": 3
+      },
+      {
+        "id": "motor:angularVelocity->feedback:input",
+        "fromNodeId": "motor",
+        "fromPortIndex": 2,
+        "toNodeId": "feedback",
+        "toPortIndex": 0
+      },
+      {
+        "id": "feedback:output->turbine:angularVelocity",
+        "fromNodeId": "feedback",
+        "fromPortIndex": 0,
+        "toNodeId": "turbine",
+        "toPortIndex": 5
+      },
+      {
+        "id": "motor:forceY->housing:forceY",
+        "fromNodeId": "motor",
+        "fromPortIndex": 4,
+        "toNodeId": "housing",
+        "toPortIndex": 3
+      },
+      {
+        "id": "motor:forceZ->housing:forceZ",
+        "fromNodeId": "motor",
+        "fromPortIndex": 5,
+        "toNodeId": "housing",
+        "toPortIndex": 4
+      },
+      {
+        "id": "housing:acceleration->imu:acceleration",
+        "fromNodeId": "housing",
+        "fromPortIndex": 4,
+        "toNodeId": "imu",
+        "toPortIndex": 2
+      },
+      {
+        "id": "imu:measuredAcceleration->split:vec3",
+        "fromNodeId": "imu",
+        "fromPortIndex": 1,
+        "toNodeId": "split",
+        "toPortIndex": 0
+      },
+      {
+        "id": "motor:armatureCurrent->sensor:armatureCurrent",
+        "fromNodeId": "motor",
+        "fromPortIndex": 1,
+        "toNodeId": "sensor",
+        "toPortIndex": 0
+      },
+      {
+        "id": "scene:scene_out->motor:scene",
+        "fromNodeId": "scene",
+        "fromPortIndex": 0,
+        "toNodeId": "motor",
+        "toPortIndex": 2
+      },
+      {
+        "id": "sensor:measuredCurrent->line_current:value",
+        "fromNodeId": "sensor",
+        "fromPortIndex": 0,
+        "toNodeId": "line_current",
+        "toPortIndex": 0
+      },
+      {
+        "id": "split:x->line_accX:value",
+        "fromNodeId": "split",
+        "fromPortIndex": 0,
+        "toNodeId": "line_accX",
+        "toPortIndex": 0
+      },
+      {
+        "id": "split:y->line_accY:value",
+        "fromNodeId": "split",
+        "fromPortIndex": 1,
+        "toNodeId": "line_accY",
+        "toPortIndex": 0
+      },
+      {
+        "id": "split:z->line_accZ:value",
+        "fromNodeId": "split",
+        "fromPortIndex": 2,
+        "toNodeId": "line_accZ",
+        "toPortIndex": 0
+      },
+      {
+        "id": "motor:angularVelocity->line_speed:value",
+        "fromNodeId": "motor",
+        "fromPortIndex": 2,
+        "toNodeId": "line_speed",
+        "toPortIndex": 0
+      },
+      {
+        "id": "turbine:loadTorque->line_load:value",
+        "fromNodeId": "turbine",
+        "fromPortIndex": 2,
+        "toNodeId": "line_load",
+        "toPortIndex": 0
+      },
+      {
+        "id": "sensor:measuredCurrent->buf_current:value",
+        "fromNodeId": "sensor",
+        "fromPortIndex": 0,
+        "toNodeId": "buf_current",
+        "toPortIndex": 0
+      },
+      {
+        "id": "buf_current:frame->win_current:signal",
+        "fromNodeId": "buf_current",
+        "fromPortIndex": 0,
+        "toNodeId": "win_current",
+        "toPortIndex": 0
+      },
+      {
+        "id": "win_current:windowed->fft_current:signal",
+        "fromNodeId": "win_current",
+        "fromPortIndex": 0,
+        "toNodeId": "fft_current",
+        "toPortIndex": 0
+      },
+      {
+        "id": "fft_current:spectrum->spec_current:magnitudes",
+        "fromNodeId": "fft_current",
+        "fromPortIndex": 0,
+        "toNodeId": "spec_current",
+        "toPortIndex": 0
+      },
+      {
+        "id": "split:x->buf_accX:value",
+        "fromNodeId": "split",
+        "fromPortIndex": 0,
+        "toNodeId": "buf_accX",
+        "toPortIndex": 0
+      },
+      {
+        "id": "buf_accX:frame->win_accX:signal",
+        "fromNodeId": "buf_accX",
+        "fromPortIndex": 0,
+        "toNodeId": "win_accX",
+        "toPortIndex": 0
+      },
+      {
+        "id": "win_accX:windowed->fft_accX:signal",
+        "fromNodeId": "win_accX",
+        "fromPortIndex": 0,
+        "toNodeId": "fft_accX",
+        "toPortIndex": 0
+      },
+      {
+        "id": "fft_accX:spectrum->spec_accX:magnitudes",
+        "fromNodeId": "fft_accX",
+        "fromPortIndex": 0,
+        "toNodeId": "spec_accX",
+        "toPortIndex": 0
+      },
+      {
+        "id": "split:y->buf_accY:value",
+        "fromNodeId": "split",
+        "fromPortIndex": 1,
+        "toNodeId": "buf_accY",
+        "toPortIndex": 0
+      },
+      {
+        "id": "buf_accY:frame->win_accY:signal",
+        "fromNodeId": "buf_accY",
+        "fromPortIndex": 0,
+        "toNodeId": "win_accY",
+        "toPortIndex": 0
+      },
+      {
+        "id": "win_accY:windowed->fft_accY:signal",
+        "fromNodeId": "win_accY",
+        "fromPortIndex": 0,
+        "toNodeId": "fft_accY",
+        "toPortIndex": 0
+      },
+      {
+        "id": "fft_accY:spectrum->spec_accY:magnitudes",
+        "fromNodeId": "fft_accY",
+        "fromPortIndex": 0,
+        "toNodeId": "spec_accY",
+        "toPortIndex": 0
+      },
+      {
+        "id": "split:z->buf_accZ:value",
+        "fromNodeId": "split",
+        "fromPortIndex": 2,
+        "toNodeId": "buf_accZ",
+        "toPortIndex": 0
+      },
+      {
+        "id": "buf_accZ:frame->win_accZ:signal",
+        "fromNodeId": "buf_accZ",
+        "fromPortIndex": 0,
+        "toNodeId": "win_accZ",
+        "toPortIndex": 0
+      },
+      {
+        "id": "win_accZ:windowed->fft_accZ:signal",
+        "fromNodeId": "win_accZ",
+        "fromPortIndex": 0,
+        "toNodeId": "fft_accZ",
+        "toPortIndex": 0
+      },
+      {
+        "id": "fft_accZ:spectrum->spec_accZ:magnitudes",
+        "fromNodeId": "fft_accZ",
+        "fromPortIndex": 0,
+        "toNodeId": "spec_accZ",
+        "toPortIndex": 0
+      }
+    ]
+  },
+  "model": {
+    "nodes": [
+      {
+        "id": "scene",
+        "label": "Earth",
+        "typeId": "Physics.Scene:earth",
+        "data": {
+          "_gravity": {
+            "x": 0,
+            "y": 0,
+            "z": -9.81
+          },
+          "_temperatureK": 293.15,
+          "_pressurePa": 101325,
+          "_densityKgPerM3": 1.225,
+          "_timeScale": 1,
+          "_localPosition": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "_localRotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "_localScale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          },
+          "_gravitySourceId": "",
+          "_temperatureSourceId": "",
+          "_pressureSourceId": "",
+          "_densitySourceId": "",
+          "_timeScaleSourceId": "",
+          "_localPositionSourceId": "",
+          "_localRotationSourceId": "",
+          "_localScaleSourceId": "",
+          "_localMatrixSourceId": "",
+          "_parentWorldMatrixSourceId": "",
+          "_atmosphereItemId": "",
+          "_solverItemIds": [],
+          "_sharedNodeIds": [],
+          "_manualHzHz": 0,
+          "_isPrimary": false
+        }
+      },
+      {
+        "id": "drive",
+        "label": "Number Slider",
+        "typeId": "Logic.Input:slider",
+        "data": {
+          "enabled": true,
+          "_value": 7,
+          "_min": 0,
+          "_max": 16,
+          "_step": 0.1
+        }
+      },
+      {
+        "id": "motor",
+        "label": "DC Motor (Dynamic)",
+        "typeId": "Physics.Electric.Motor.DC:dynamic",
+        "data": {
+          "enabled": true,
+          "sceneItemId": "",
+          "_requiredHzValue": 0,
+          "_requiredHzUserDefined": false,
+          "_armatureResistance": 1.22,
+          "_armatureInductance": 0.001,
+          "_torqueConstant": 0.00822,
+          "_backEmfConstant": 0.00822,
+          "_rotorInertia": 6e-7,
+          "_viscousFriction": 0.00000103,
+          "_initialArmatureCurrent": 0,
+          "_initialAngularVelocity": 0,
+          "_initialRotorAngle": 0,
+          "_motorMass": 0.082,
+          "_rotorMass": 0.013,
+          "_rotorGyrationRadius": 0.00679,
+          "_comOffset": 0.000385,
+          "_comPhase": 0,
+          "_airGap": 0.0005,
+          "_bearingRadialStiffness": 100000,
+          "_umpRadialStiffness": 4000,
+          "_i": 0,
+          "_omega": 0,
+          "_tauEm": 0
+        }
+      },
+      {
+        "id": "turbine",
+        "label": "Turbine Payload",
+        "typeId": "Physics.Mechanical.Load:turbine",
+        "data": {
+          "enabled": true,
+          "sceneItemId": "",
+          "_payloadMass": 0.05,
+          "_unbalanceRadius": 0.001,
+          "_comPhase": 0,
+          "_fanCoefficient": 1.5e-8,
+          "_airGap": 0.0003,
+          "_bearingRadialStiffness": 1000000,
+          "_includePayloadWeight": true
+        }
+      },
+      {
+        "id": "imbalance",
+        "label": "Rotor Imbalance (mechanical cause)",
+        "typeId": "Physics.Mechanical.Fault:rotor-imbalance",
+        "data": {
+          "enabled": true,
+          "_severity": 1,
+          "_phaseOffset": 0,
+          "_dynamicEccentricityCoupling": false,
+          "_gravityCoupling": true
+        }
+      },
+      {
+        "id": "eccentricity",
+        "label": "Rotor Eccentricity (static cause)",
+        "typeId": "Physics.Mechanical.Fault:rotor-eccentricity",
+        "data": {
+          "enabled": true,
+          "_severity": 0,
+          "_eccentricityPhase": 0
+        }
+      },
+      {
+        "id": "feedback",
+        "label": "Feedback Channel",
+        "typeId": "Control.Feedback:channel",
+        "data": {
+          "enabled": true,
+          "_delay": 1,
+          "_initial": 0,
+          "_output": 0
+        }
+      },
+      {
+        "id": "housing",
+        "label": "Housing Mechanics",
+        "typeId": "Physics.Mechanical.Housing:mechanics",
+        "data": {
+          "enabled": true,
+          "sceneItemId": "",
+          "_massX": 0.1,
+          "_massY": 0.1,
+          "_massZ": 0.1,
+          "_naturalFrequencyX": 500,
+          "_naturalFrequencyY": 500,
+          "_naturalFrequencyZ": 500,
+          "_dampingRatioX": 0.02,
+          "_dampingRatioY": 0.02,
+          "_dampingRatioZ": 0.02,
+          "_posX": 0,
+          "_posY": 0,
+          "_posZ": 0,
+          "_velX": 0,
+          "_velY": 0,
+          "_velZ": 0,
+          "_accelX": 0,
+          "_accelY": 0,
+          "_accelZ": 0,
+          "_requiredHzValue": 0,
+          "_requiredHzUserDefined": false
+        }
+      },
+      {
+        "id": "imu",
+        "label": "IMU (3-axis)",
+        "typeId": "Physics.Mechanical.Vibration:imu",
+        "data": {
+          "enabled": true,
+          "sceneItemId": "",
+          "_noiseStdDev": 0.001,
+          "_seed": 1,
+          "_measuresGravity": true
+        }
+      },
+      {
+        "id": "split",
+        "label": "Cartesian3 Split",
+        "typeId": "spk.geometry:cartesian3-split",
+        "data": {
+          "enabled": true
+        }
+      },
+      {
+        "id": "sensor",
+        "label": "Current Sensor (LEM)",
+        "typeId": "Physics.Electric.Motor.DC:currentSensor",
+        "data": {
+          "enabled": true,
+          "_noiseStdDev": 0.01,
+          "_resolution": 0.005,
+          "_bandwidthHz": 100000,
+          "_seed": 1,
+          "_filtered": 0,
+          "_measured": 0
+        }
+      },
+      {
+        "id": "line_current",
+        "label": "current f(t)",
+        "typeId": "Viz.Plot:line",
+        "data": {
+          "enabled": true
+        }
+      },
+      {
+        "id": "line_accX",
+        "label": "accX f(t)",
+        "typeId": "Viz.Plot:line",
+        "data": {
+          "enabled": true
+        }
+      },
+      {
+        "id": "line_accY",
+        "label": "accY f(t)",
+        "typeId": "Viz.Plot:line",
+        "data": {
+          "enabled": true
+        }
+      },
+      {
+        "id": "line_accZ",
+        "label": "accZ f(t)",
+        "typeId": "Viz.Plot:line",
+        "data": {
+          "enabled": true
+        }
+      },
+      {
+        "id": "line_speed",
+        "label": "speed f(t)",
+        "typeId": "Viz.Plot:line",
+        "data": {
+          "enabled": true
+        }
+      },
+      {
+        "id": "line_load",
+        "label": "load f(t)",
+        "typeId": "Viz.Plot:line",
+        "data": {
+          "enabled": true
+        }
+      },
+      {
+        "id": "buf_current",
+        "label": "Scalar Buffer",
+        "typeId": "DSP.Stream:buffer",
+        "data": {
+          "enabled": true,
+          "_frameSize": 512,
+          "_hopLength": 256,
+          "_frameCount": 0
+        }
+      },
+      {
+        "id": "win_current",
+        "label": "Window",
+        "typeId": "DSP.Window:window",
+        "data": {
+          "enabled": true,
+          "_windowType": 0,
+          "_alpha": 0.5
+        }
+      },
+      {
+        "id": "fft_current",
+        "label": "FFT",
+        "typeId": "DSP.Transform:fft",
+        "data": {
+          "enabled": true,
+          "_nfft": 512,
+          "_outputType": 1
+        }
+      },
+      {
+        "id": "spec_current",
+        "label": "current FFT",
+        "typeId": "Viz.Plot:spectrum",
+        "data": {
+          "enabled": true
+        }
+      },
+      {
+        "id": "buf_accX",
+        "label": "Scalar Buffer",
+        "typeId": "DSP.Stream:buffer",
+        "data": {
+          "enabled": true,
+          "_frameSize": 512,
+          "_hopLength": 256,
+          "_frameCount": 0
+        }
+      },
+      {
+        "id": "win_accX",
+        "label": "Window",
+        "typeId": "DSP.Window:window",
+        "data": {
+          "enabled": true,
+          "_windowType": 0,
+          "_alpha": 0.5
+        }
+      },
+      {
+        "id": "fft_accX",
+        "label": "FFT",
+        "typeId": "DSP.Transform:fft",
+        "data": {
+          "enabled": true,
+          "_nfft": 512,
+          "_outputType": 1
+        }
+      },
+      {
+        "id": "spec_accX",
+        "label": "accX FFT",
+        "typeId": "Viz.Plot:spectrum",
+        "data": {
+          "enabled": true
+        }
+      },
+      {
+        "id": "buf_accY",
+        "label": "Scalar Buffer",
+        "typeId": "DSP.Stream:buffer",
+        "data": {
+          "enabled": true,
+          "_frameSize": 512,
+          "_hopLength": 256,
+          "_frameCount": 0
+        }
+      },
+      {
+        "id": "win_accY",
+        "label": "Window",
+        "typeId": "DSP.Window:window",
+        "data": {
+          "enabled": true,
+          "_windowType": 0,
+          "_alpha": 0.5
+        }
+      },
+      {
+        "id": "fft_accY",
+        "label": "FFT",
+        "typeId": "DSP.Transform:fft",
+        "data": {
+          "enabled": true,
+          "_nfft": 512,
+          "_outputType": 1
+        }
+      },
+      {
+        "id": "spec_accY",
+        "label": "accY FFT",
+        "typeId": "Viz.Plot:spectrum",
+        "data": {
+          "enabled": true
+        }
+      },
+      {
+        "id": "buf_accZ",
+        "label": "Scalar Buffer",
+        "typeId": "DSP.Stream:buffer",
+        "data": {
+          "enabled": true,
+          "_frameSize": 512,
+          "_hopLength": 256,
+          "_frameCount": 0
+        }
+      },
+      {
+        "id": "win_accZ",
+        "label": "Window",
+        "typeId": "DSP.Window:window",
+        "data": {
+          "enabled": true,
+          "_windowType": 0,
+          "_alpha": 0.5
+        }
+      },
+      {
+        "id": "fft_accZ",
+        "label": "FFT",
+        "typeId": "DSP.Transform:fft",
+        "data": {
+          "enabled": true,
+          "_nfft": 512,
+          "_outputType": 1
+        }
+      },
+      {
+        "id": "spec_accZ",
+        "label": "accZ FFT",
+        "typeId": "Viz.Plot:spectrum",
+        "data": {
+          "enabled": true
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "drive:value->motor:armatureVoltage",
+        "from": {
+          "node": "drive",
+          "port": "value"
+        },
+        "to": {
+          "node": "motor",
+          "port": "armatureVoltage"
+        }
+      },
+      {
+        "id": "imbalance:applyTo->turbine:fault_0",
+        "from": {
+          "node": "imbalance",
+          "port": "applyTo"
+        },
+        "to": {
+          "node": "turbine",
+          "port": "fault_0"
+        }
+      },
+      {
+        "id": "eccentricity:applyTo->turbine:fault_1",
+        "from": {
+          "node": "eccentricity",
+          "port": "applyTo"
+        },
+        "to": {
+          "node": "turbine",
+          "port": "fault_1"
+        }
+      },
+      {
+        "id": "turbine:applyTo->motor:fault_0",
+        "from": {
+          "node": "turbine",
+          "port": "applyTo"
+        },
+        "to": {
+          "node": "motor",
+          "port": "fault_0"
+        }
+      },
+      {
+        "id": "motor:angularVelocity->feedback:input",
+        "from": {
+          "node": "motor",
+          "port": "angularVelocity"
+        },
+        "to": {
+          "node": "feedback",
+          "port": "input"
+        }
+      },
+      {
+        "id": "feedback:output->turbine:angularVelocity",
+        "from": {
+          "node": "feedback",
+          "port": "output"
+        },
+        "to": {
+          "node": "turbine",
+          "port": "angularVelocity"
+        }
+      },
+      {
+        "id": "motor:forceY->housing:forceY",
+        "from": {
+          "node": "motor",
+          "port": "forceY"
+        },
+        "to": {
+          "node": "housing",
+          "port": "forceY"
+        }
+      },
+      {
+        "id": "motor:forceZ->housing:forceZ",
+        "from": {
+          "node": "motor",
+          "port": "forceZ"
+        },
+        "to": {
+          "node": "housing",
+          "port": "forceZ"
+        }
+      },
+      {
+        "id": "housing:acceleration->imu:acceleration",
+        "from": {
+          "node": "housing",
+          "port": "acceleration"
+        },
+        "to": {
+          "node": "imu",
+          "port": "acceleration"
+        }
+      },
+      {
+        "id": "imu:measuredAcceleration->split:vec3",
+        "from": {
+          "node": "imu",
+          "port": "measuredAcceleration"
+        },
+        "to": {
+          "node": "split",
+          "port": "vec3"
+        }
+      },
+      {
+        "id": "motor:armatureCurrent->sensor:armatureCurrent",
+        "from": {
+          "node": "motor",
+          "port": "armatureCurrent"
+        },
+        "to": {
+          "node": "sensor",
+          "port": "armatureCurrent"
+        }
+      },
+      {
+        "id": "scene:scene_out->motor:scene",
+        "from": {
+          "node": "scene",
+          "port": "scene_out"
+        },
+        "to": {
+          "node": "motor",
+          "port": "scene"
+        }
+      },
+      {
+        "id": "sensor:measuredCurrent->line_current:value",
+        "from": {
+          "node": "sensor",
+          "port": "measuredCurrent"
+        },
+        "to": {
+          "node": "line_current",
+          "port": "value"
+        }
+      },
+      {
+        "id": "split:x->line_accX:value",
+        "from": {
+          "node": "split",
+          "port": "x"
+        },
+        "to": {
+          "node": "line_accX",
+          "port": "value"
+        }
+      },
+      {
+        "id": "split:y->line_accY:value",
+        "from": {
+          "node": "split",
+          "port": "y"
+        },
+        "to": {
+          "node": "line_accY",
+          "port": "value"
+        }
+      },
+      {
+        "id": "split:z->line_accZ:value",
+        "from": {
+          "node": "split",
+          "port": "z"
+        },
+        "to": {
+          "node": "line_accZ",
+          "port": "value"
+        }
+      },
+      {
+        "id": "motor:angularVelocity->line_speed:value",
+        "from": {
+          "node": "motor",
+          "port": "angularVelocity"
+        },
+        "to": {
+          "node": "line_speed",
+          "port": "value"
+        }
+      },
+      {
+        "id": "turbine:loadTorque->line_load:value",
+        "from": {
+          "node": "turbine",
+          "port": "loadTorque"
+        },
+        "to": {
+          "node": "line_load",
+          "port": "value"
+        }
+      },
+      {
+        "id": "sensor:measuredCurrent->buf_current:value",
+        "from": {
+          "node": "sensor",
+          "port": "measuredCurrent"
+        },
+        "to": {
+          "node": "buf_current",
+          "port": "value"
+        }
+      },
+      {
+        "id": "buf_current:frame->win_current:signal",
+        "from": {
+          "node": "buf_current",
+          "port": "frame"
+        },
+        "to": {
+          "node": "win_current",
+          "port": "signal"
+        }
+      },
+      {
+        "id": "win_current:windowed->fft_current:signal",
+        "from": {
+          "node": "win_current",
+          "port": "windowed"
+        },
+        "to": {
+          "node": "fft_current",
+          "port": "signal"
+        }
+      },
+      {
+        "id": "fft_current:spectrum->spec_current:magnitudes",
+        "from": {
+          "node": "fft_current",
+          "port": "spectrum"
+        },
+        "to": {
+          "node": "spec_current",
+          "port": "magnitudes"
+        }
+      },
+      {
+        "id": "split:x->buf_accX:value",
+        "from": {
+          "node": "split",
+          "port": "x"
+        },
+        "to": {
+          "node": "buf_accX",
+          "port": "value"
+        }
+      },
+      {
+        "id": "buf_accX:frame->win_accX:signal",
+        "from": {
+          "node": "buf_accX",
+          "port": "frame"
+        },
+        "to": {
+          "node": "win_accX",
+          "port": "signal"
+        }
+      },
+      {
+        "id": "win_accX:windowed->fft_accX:signal",
+        "from": {
+          "node": "win_accX",
+          "port": "windowed"
+        },
+        "to": {
+          "node": "fft_accX",
+          "port": "signal"
+        }
+      },
+      {
+        "id": "fft_accX:spectrum->spec_accX:magnitudes",
+        "from": {
+          "node": "fft_accX",
+          "port": "spectrum"
+        },
+        "to": {
+          "node": "spec_accX",
+          "port": "magnitudes"
+        }
+      },
+      {
+        "id": "split:y->buf_accY:value",
+        "from": {
+          "node": "split",
+          "port": "y"
+        },
+        "to": {
+          "node": "buf_accY",
+          "port": "value"
+        }
+      },
+      {
+        "id": "buf_accY:frame->win_accY:signal",
+        "from": {
+          "node": "buf_accY",
+          "port": "frame"
+        },
+        "to": {
+          "node": "win_accY",
+          "port": "signal"
+        }
+      },
+      {
+        "id": "win_accY:windowed->fft_accY:signal",
+        "from": {
+          "node": "win_accY",
+          "port": "windowed"
+        },
+        "to": {
+          "node": "fft_accY",
+          "port": "signal"
+        }
+      },
+      {
+        "id": "fft_accY:spectrum->spec_accY:magnitudes",
+        "from": {
+          "node": "fft_accY",
+          "port": "spectrum"
+        },
+        "to": {
+          "node": "spec_accY",
+          "port": "magnitudes"
+        }
+      },
+      {
+        "id": "split:z->buf_accZ:value",
+        "from": {
+          "node": "split",
+          "port": "z"
+        },
+        "to": {
+          "node": "buf_accZ",
+          "port": "value"
+        }
+      },
+      {
+        "id": "buf_accZ:frame->win_accZ:signal",
+        "from": {
+          "node": "buf_accZ",
+          "port": "frame"
+        },
+        "to": {
+          "node": "win_accZ",
+          "port": "signal"
+        }
+      },
+      {
+        "id": "win_accZ:windowed->fft_accZ:signal",
+        "from": {
+          "node": "win_accZ",
+          "port": "windowed"
+        },
+        "to": {
+          "node": "fft_accZ",
+          "port": "signal"
+        }
+      },
+      {
+        "id": "fft_accZ:spectrum->spec_accZ:magnitudes",
+        "from": {
+          "node": "fft_accZ",
+          "port": "spectrum"
+        },
+        "to": {
+          "node": "spec_accZ",
+          "port": "magnitudes"
+        }
+      }
+    ]
+  },
+  "dashboards": [
+    {
+      "id": "main",
+      "name": "Main",
+      "tiles": [
+        {
+          "nodeId": "line_current",
+          "renderableType": "Viz.Plot:line",
+          "x": 0,
+          "y": 0,
+          "w": 4,
+          "h": 4
+        },
+        {
+          "nodeId": "line_accX",
+          "renderableType": "Viz.Plot:line",
+          "x": 4,
+          "y": 0,
+          "w": 4,
+          "h": 4
+        },
+        {
+          "nodeId": "line_accY",
+          "renderableType": "Viz.Plot:line",
+          "x": 8,
+          "y": 0,
+          "w": 4,
+          "h": 4
+        },
+        {
+          "nodeId": "line_accZ",
+          "renderableType": "Viz.Plot:line",
+          "x": 0,
+          "y": 4,
+          "w": 4,
+          "h": 4
+        },
+        {
+          "nodeId": "line_speed",
+          "renderableType": "Viz.Plot:line",
+          "x": 4,
+          "y": 4,
+          "w": 4,
+          "h": 4
+        },
+        {
+          "nodeId": "line_load",
+          "renderableType": "Viz.Plot:line",
+          "x": 8,
+          "y": 4,
+          "w": 4,
+          "h": 4
+        },
+        {
+          "nodeId": "spec_current",
+          "renderableType": "Viz.Plot:spectrum",
+          "x": 0,
+          "y": 8,
+          "w": 4,
+          "h": 4
+        },
+        {
+          "nodeId": "spec_accX",
+          "renderableType": "Viz.Plot:spectrum",
+          "x": 4,
+          "y": 8,
+          "w": 4,
+          "h": 4
+        },
+        {
+          "nodeId": "spec_accY",
+          "renderableType": "Viz.Plot:spectrum",
+          "x": 0,
+          "y": 12,
+          "w": 4,
+          "h": 4
+        },
+        {
+          "nodeId": "spec_accZ",
+          "renderableType": "Viz.Plot:spectrum",
+          "x": 4,
+          "y": 12,
+          "w": 4,
+          "h": 4
+        }
+      ]
+    }
+  ]
+}

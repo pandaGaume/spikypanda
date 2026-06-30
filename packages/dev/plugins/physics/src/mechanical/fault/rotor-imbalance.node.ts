@@ -22,6 +22,15 @@ const APPLY_TO_OUTPUT_PORTS: ReadonlyArray<IPortDescriptor> = [{ slot: "applyTo"
  *   - 1x vibration, NO current signature -> suspect imbalance first;
  *   - 1x vibration + current harmonics/sidebands -> suspect eccentricity.
  *
+ * GRAVITY NUANCE (`gravityCoupling`, off by default): the offset CG is also a
+ * gravity pendulum. As it spins, gravity lifts then drops the heavy spot, a 1x
+ * braking-torque ripple m·r·g_radial·sin(angle - g_angle). Because the
+ * centrifugal force is purely radial (no shaft torque), this ripple is a PURE
+ * gravity SIGNATURE in the current, readable at any speed; it vanishes in
+ * microgravity (g_radial -> 0) and peaks for a horizontal shaft. This is the
+ * mechanism by which a balanced-looking machine still leaks its 1g orientation
+ * into the current spectrum (study: gravity is observable on a loaded turbine).
+ *
  * NONLINEAR NUANCE (off by default = normal diagnostic conditions): a STRONG
  * imbalance dynamically DEFLECTS the shaft; if the deflection is large enough
  * the rotor is no longer centred while spinning and a DYNAMIC eccentricity
@@ -54,9 +63,11 @@ export class RotorImbalanceFaultNode extends RuntimeNode implements IFault, IDec
     @cloneable private _severity: number = 1; // scales the residual unbalance product
     @cloneable private _phaseOffset: number = 0; // heavy-spot phase vs the rotor angle [rad]
     @cloneable private _dynamicEccentricityCoupling: boolean = false; // strong-imbalance -> dynamic eccentricity
+    @cloneable private _gravityCoupling: boolean = false; // heavy-spot weight -> 1x torque ripple (gravity signature)
 
     private _forceY: number = 0;
     private _forceZ: number = 0;
+    private _gravityTorque: number = 0;
 
     public constructor(onsc: Nullable<IOlink[]> = null, opsc: Nullable<IOlink[]> = null, position?: ICartesian) {
         super(onsc, opsc, position);
@@ -83,16 +94,34 @@ export class RotorImbalanceFaultNode extends RuntimeNode implements IFault, IDec
         this.setField("dynamicEccentricityCoupling", this._dynamicEccentricityCoupling, v, (n) => (this._dynamicEccentricityCoupling = n));
     }
 
+    /** When on AND the target's scene gravity is available (ctx.bodyGravity), the
+     *  offset CG is also a gravity pendulum: as it spins, gravity alternately
+     *  lifts and drops the heavy spot, a 1x torque ripple m·r·g_radial·sin that
+     *  the motor must fight. Because the centrifugal force is purely radial (no
+     *  shaft torque), this ripple is a PURE gravity signature in the current,
+     *  readable at any speed, -> 0 in microgravity, max for a horizontal shaft. */
+    @editable("boolean") public get gravityCoupling(): boolean {
+        return this._gravityCoupling;
+    }
+    public set gravityCoupling(v: boolean) {
+        this.setField("gravityCoupling", this._gravityCoupling, v, (n) => (this._gravityCoupling = n));
+    }
+
     @viewable("number") public get forceY(): number {
         return this._forceY;
     }
     @viewable("number") public get forceZ(): number {
         return this._forceZ;
     }
+    /** The 1x gravity torque ripple on the shaft (0 without gravity coupling). */
+    @viewable("number", { unit: "N.m" }) public get gravityTorque(): number {
+        return this._gravityTorque;
+    }
 
     public override reset(_session: ISession): void {
         this._forceY = 0;
         this._forceZ = 0;
+        this._gravityTorque = 0;
     }
 
     /** Contribute the rotating centripetal imbalance force to the linked motor. */
@@ -106,6 +135,22 @@ export class RotorImbalanceFaultNode extends RuntimeNode implements IFault, IDec
         this._forceZ = force * Math.sin(angle);
         ctx.accumulate("radialForceY", this._forceY);
         ctx.accumulate("radialForceZ", this._forceZ);
+
+        // Gravity acts on the offset CG: a 1x braking-torque RIPPLE (the heavy
+        // spot is lifted on the way up, dropped on the way down), zero mean over
+        // a turn. tau = (m·r)·g_radial·sin(angle - g_angle). This is the gravity
+        // SIGNATURE in the current (no centrifugal competitor in the torque
+        // channel); it vanishes in microgravity (g_radial -> 0) and peaks for a
+        // horizontal shaft. The target turns "tau" into the integrated load.
+        if (this._gravityCoupling && ctx.bodyGravity) {
+            const g = ctx.bodyGravity;
+            const gRadial = Math.sqrt(g.y * g.y + g.z * g.z);
+            const gAngle = Math.atan2(g.z, g.y);
+            this._gravityTorque = unbalanceProduct * gRadial * Math.sin(angle - gAngle);
+            ctx.accumulate("tau", this._gravityTorque);
+        } else {
+            this._gravityTorque = 0;
+        }
 
         // Nonlinear nuance: a strong imbalance deflects the shaft, so the rotor
         // is no longer centred while spinning -> a DYNAMIC eccentricity (rotating
