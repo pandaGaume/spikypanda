@@ -13,6 +13,7 @@ export * from "./nn.spectral.synapse";
 export * from "./nn.spectral.neuron";
 export * from "./nn.spectral.inference";
 export * from "./nn.spectral.runner.builder";
+export * from "./nn.spectral.training";
 export * from "./nn.builders";
 export * from "./nn.runner";
 export * from "./nn.runner.builder";

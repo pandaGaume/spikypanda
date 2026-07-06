@@ -1,0 +1,154 @@
+{
+  "selected": {
+    "r": 64,
+    "readout": "magreim",
+    "params": 2565
+  },
+  "test_mean": 88.04999947547913,
+  "test_std": 1.6985271553030343,
+  "test_max": 91.24999642372131,
+  "val_mean": 91.91667079925537,
+  "binary_mean": 95.3499984741211,
+  "recall": [
+    0.95,
+    0.818,
+    0.951,
+    0.765,
+    0.936
+  ],
+  "confusion_last": [
+    [
+      77,
+      3,
+      0,
+      0,
+      0
+    ],
+    [
+      16,
+      71,
+      3,
+      0,
+      0
+    ],
+    [
+      0,
+      2,
+      75,
+      0,
+      0
+    ],
+    [
+      2,
+      0,
+      14,
+      57,
+      8
+    ],
+    [
+      0,
+      0,
+      0,
+      4,
+      68
+    ]
+  ],
+  "sweep": [
+    {
+      "r": 8,
+      "readout": "mag",
+      "params": 165,
+      "val_mean": 61.86,
+      "test_mean": 55.239999999999995,
+      "test_std": 5.676830101385809
+    },
+    {
+      "r": 8,
+      "readout": "reim",
+      "params": 245,
+      "val_mean": 24.52,
+      "test_mean": 20.54,
+      "test_std": 3.111655507925002
+    },
+    {
+      "r": 8,
+      "readout": "magreim",
+      "params": 325,
+      "val_mean": 62.60000000000001,
+      "test_mean": 57.71999999999999,
+      "test_std": 6.563962218050923
+    },
+    {
+      "r": 16,
+      "readout": "mag",
+      "params": 325,
+      "val_mean": 72.84,
+      "test_mean": 69.1,
+      "test_std": 8.510934143794087
+    },
+    {
+      "r": 16,
+      "readout": "reim",
+      "params": 485,
+      "val_mean": 25.0,
+      "test_mean": 20.28,
+      "test_std": 2.4243762084297065
+    },
+    {
+      "r": 16,
+      "readout": "magreim",
+      "params": 645,
+      "val_mean": 73.35999999999999,
+      "test_mean": 67.32,
+      "test_std": 7.57242365428665
+    },
+    {
+      "r": 32,
+      "readout": "mag",
+      "params": 645,
+      "val_mean": 84.34,
+      "test_mean": 79.67999999999999,
+      "test_std": 6.060825026347485
+    },
+    {
+      "r": 32,
+      "readout": "reim",
+      "params": 965,
+      "val_mean": 25.1,
+      "test_mean": 19.0,
+      "test_std": 1.36088206689632
+    },
+    {
+      "r": 32,
+      "readout": "magreim",
+      "params": 1285,
+      "val_mean": 83.0833375453949,
+      "test_mean": 76.99999809265137,
+      "test_std": 4.987483104878298
+    },
+    {
+      "r": 64,
+      "readout": "mag",
+      "params": 1285,
+      "val_mean": 90.75000405311584,
+      "test_mean": 85.84999918937683,
+      "test_std": 2.6057627380235093
+    },
+    {
+      "r": 64,
+      "readout": "reim",
+      "params": 1925,
+      "val_mean": 25.083334743976593,
+      "test_mean": 19.14999932050705,
+      "test_std": 1.562049857339129
+    },
+    {
+      "r": 64,
+      "readout": "magreim",
+      "params": 2565,
+      "val_mean": 91.91667079925537,
+      "test_mean": 88.04999947547913,
+      "test_std": 1.6985271553030343
+    }
+  ]
+}

@@ -74,7 +74,7 @@ Récapitulatif de l'état des preuves :
 |---|---|---|---|
 | **H1** | Plusieurs messages cohabitent sur une arête sans se mélanger (multiplexage propre) | `etapeA/multipath-standalone.mjs` | ✅ **prouvé (mesuré)** |
 | **H2** | Une même topologie porte des comportements *distincts*, un par bande, lus indépendamment | `etapeA/heterogeneite-standalone.mjs` | ✅ **prouvé (mesuré)** |
-| **H3** | Le multi-chemin fréquentiel remplace le routage discret, tout en restant dérivable | argument + comparatif | 🟡 partiel |
+| **H3** | Le multi-chemin fréquentiel remplace le routage discret, tout en restant dérivable | comparatif entraîné (étape B+) | 🟢 **partiel verrouillé (mesuré)** |
 | **H4** | La puissance de calcul vient du **couplage non-linéaire**, pas du multiplexage seul | `etapeA/couplage-standalone.mjs` | ✅ **prouvé (mesuré)** |
 | **H5** | La réponse en fréquence est une description *compacte* du comportement (l'« ADN ») | `etapeA/compacite-standalone.mjs` | ✅ **prouvé (mesuré)** |
 | **H6** | La **phase** porte de l'information et permet de router (au-delà de l'amplitude) | `etapeA/phase-standalone.mjs` | ✅ **prouvé (mesuré)** |
@@ -153,11 +153,15 @@ même effet par superposition + filtrage, qui sont **linéaires et dérivables**
 décoder ; et sur une petite tâche à deux régimes, la version fréquentielle se règle
 plus stablement qu'une version à aiguillage dur.
 
-**État.** 🟡 **Partiel.** L'argument est établi (addition et filtrage sont dérivables ;
-le couplage multiplicatif de H4 l'est aussi) et confirmé indirectement par H1/H4. Le
-*comparatif quantitatif* contre un routage discret reste à faire — c'est un
-apprentissage, donc un jalon ultérieur (étape B+). **Plan détaillé de H3 et des jalons
-suivants (plasticité, récompense, sélection, ADN) : `02-ROADMAP-JALONS.md`.**
+**État.** 🟢 **Partiel verrouillé (mesuré, étape B+).** Le comparatif entraîné existe
+maintenant dans le vrai moteur (`SpectralTrainingRuntime` + rétropropagation analytique
+sur `gain`/`phase`). Sur une tâche de **fondu continu** de deux comportements sur une
+connexion, la réponse en fréquence apprend le mélange **exactement** (loss au bruit
+numérique, 0/20 échec) là où un gate dur reste à un **plancher structurel** (il ne sait
+que sélectionner, pas mélanger). Nuance honnête : le régime propre du substrat est le
+mélange **lisse** ; une commutation brutale reste une décision non lisse que les deux
+substrats apprennent mal. Détail : `etapeC/RESULTATS-H3.md`. **Plan des jalons suivants
+(plasticité, récompense, sélection, ADN) : `02-ROADMAP-JALONS.md`.**
 
 ---
 

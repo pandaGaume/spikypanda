@@ -216,6 +216,24 @@ matériel.*
   de fréquence**, différentiables : preuve que « poids dépendant de la fréquence » est
   entraînable.
 
+## 10b. Réseaux à valeurs complexes & apprentissage physique
+
+*→ soutient : la Décision 002 (entraîner le substrat comme un CVNN) et le jalon 6 (champ
+latent ondulatoire).*
+
+- **Trabelsi, C., Bilaniuk, O., Zhang, Y., Serdyuk, D., Bengio, Y., Pal, C. J., et al.**
+  (2018). *Deep Complex Networks.* ICLR (arXiv:1705.09792). — modReLU, complex-BN,
+  convolutions complexes ; **entraîner des réseaux complexes par gradient**.
+- **Hirose, A.** (2012). *Complex-Valued Neural Networks.* Springer (2ᵉ éd.). — La
+  référence de synthèse sur les CVNN.
+- **Nitta, T.** (1997). *An Extension of the Back-Propagation Algorithm to Complex
+  Numbers.* Neural Networks. — Backprop en complexe, historique.
+- **Kreutz-Delgado, K.** (2009). *The Complex Gradient Operator and the CR-Calculus.*
+  arXiv:0906.4835. — Le **calcul de Wirtinger** appliqué à l'optimisation (`∂L/∂W*`).
+- **Raissi, M., Perdikaris, P. & Karniadakis, G. E.** (2019). *Physics-Informed Neural
+  Networks.* Journal of Computational Physics, 378, 686–707. — Inscrire une PDE dans le
+  réseau ; base du **jalon 6** (dynamique d'onde dans le latent).
+
 ## 11. Cadres généraux
 
 - **Sutton, R.** (2019). *The Bitter Lesson.* — La tension calcul+échelle vs. méthodes
@@ -233,4 +251,6 @@ matériel.*
 - **H4 (couplage)** : §9 (thêta-gamma).
 - **H5 (compacité / ADN)** : §2, §10 (Fourier Neural Operator).
 - **Discussion / positionnement** : §10 (matériel), §1 (No Free Prune, limites), §11.
+- **Décision 002 (entraînement CVNN)** : §10b (Deep Complex Networks, Wirtinger, CVNN).
 - **Jalons futurs (plasticité, récompense, sélection)** : §5, §7, §8.
+- **Jalon 6 (champ ondulatoire)** : §10b (PINNs), §10 (Fourier Neural Operator).
