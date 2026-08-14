@@ -23,6 +23,37 @@ export class Unit {
     ) {}
 }
 
+/**
+ * Serializable physical-unit tag carried by a signal/measurement tensor
+ * (`ITensor.unit`). Plain JSON (strings + a number) so it survives
+ * `.spikypanda` and metadata-sidecar round-trips; `resolveUnit()` maps it
+ * back to the concrete `Unit` at runtime. See
+ * docs/architecture/unit-tag-convention.md.
+ */
+export interface IUnitTag {
+    /** Physical quantity kind = which Quantity subclass owns the unit
+     *  vocabulary (e.g. "Acceleration", "Current", "Speed"). */
+    quantity: string;
+    /** Unit KEY within that quantity as `<Quantity>.unitForSymbol` expects
+     *  (the `Units` map key, e.g. "g", "mps2", "amp", "mmps") — NOT the
+     *  display symbol. */
+    unit: string;
+    /** Sampling rate (Hz) for a time-series tensor; needed by ISO/DSP nodes
+     *  (band coverage, Nyquist). Separate from the unit, travels with it. */
+    sampleRateHz?: number;
+}
+
+/**
+ * A port's declared unit expectation (a wiring-time contract on
+ * `IPortDescriptor.unit`). `unit` omitted = any unit of `quantity`
+ * accepted; `requires: true` = the port refuses an untagged tensor.
+ */
+export interface IUnitExpectation {
+    quantity: string;
+    unit?: string;
+    requires?: boolean;
+}
+
 const _defaultDecimalPrecision = 6;
 
 /**
@@ -582,6 +613,8 @@ export class Speed extends Quantity {
 
     public static Units: { [key: string]: Unit } = {
         mps: new Unit("meter per second", "m/s", 1),
+        // mm/s is the ISO 20816-3 broadband velocity-RMS unit (severity node).
+        mmps: new Unit("millimeter per second", "mm/s", 1e-3),
         kph: new Unit("kilometer per hour", "km/h", 1000 / 3600),
         mph: new Unit("mile per hour", "mph", 1609.344 / 3600),
         knot: new Unit("knot", "kn", 1852 / 3600),
@@ -808,4 +841,28 @@ export class DynamicViscosity extends Quantity {
     public unitForSymbol(str: string): Unit | undefined {
         return DynamicViscosity.Units[str] || undefined;
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Unit-tag resolution
+//
+// QUANTITY_REGISTRY maps an IUnitTag.quantity string to the Quantity
+// subclass that owns the `Units` vocabulary; resolveUnit() returns the
+// concrete Unit (or undefined for an unknown quantity/unit key). Declared
+// AFTER every class so the registry references initialized bindings.
+// ─────────────────────────────────────────────────────────────────────
+
+const QUANTITY_REGISTRY: { [quantity: string]: { Units: { [key: string]: Unit } } } = {
+    Timespan, Temperature, Mass, Power, Voltage, Current, Luminosity, Volume, Area,
+    VolumetricFlow, Angle, Length, Speed, Frequency, Acceleration, Pressure, Dimensionless,
+    MolarMass, Density, MassConcentration, MassSpecificHeat, ThermalConductivity, DynamicViscosity,
+};
+
+/**
+ * Resolve a serializable {@link IUnitTag} to the concrete {@link Unit}
+ * instance, or `undefined` when the quantity or unit key is unknown.
+ */
+export function resolveUnit(tag: IUnitTag): Unit | undefined {
+    const q = QUANTITY_REGISTRY[tag.quantity];
+    return q ? q.Units[tag.unit] : undefined;
 }

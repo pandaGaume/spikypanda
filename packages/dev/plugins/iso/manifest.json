@@ -1,0 +1,23 @@
+{
+    "id": "spk.iso",
+    "version": "0.1.0",
+    "displayName": "ISO",
+    "description": "ISO condition-monitoring standards as graph nodes (ISO.*). ISO.Severity: ISO 20816-3 broadband vibration-severity (zone A/B/C/D) with unit-tagged, refuse-not-guess inputs.",
+    "category": "ISO",
+    "entry": "bundle/SpkPluginIso.js",
+    "nodes": [],
+    "editors": [],
+    "subPlugins": [
+        {
+            "id": "ISO.Severity",
+            "displayName": "Severity",
+            "description": "ISO 20816-3 broadband velocity-RMS severity (zone A/B/C/D) over 10-1000 Hz. Reads the signal's unit tag and refuses on undeclared units, undersampling, or out-of-scope machines.",
+            "category": "ISO.Severity",
+            "version": "0.1.0",
+            "standards": [{ "id": "iso", "version": "20816-3:2022" }],
+            "nodes": [
+                { "type": "ISO.Severity:iso20816", "factory": "createIso20816SeverityNode", "label": "ISO 20816-3 Severity" }
+            ]
+        }
+    ]
+}

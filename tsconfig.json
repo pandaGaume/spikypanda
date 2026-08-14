@@ -21,6 +21,7 @@
         { "path": "packages/dev/plugins/chemistry/tsconfig.build.json" },
         { "path": "packages/dev/plugins/viz/tsconfig.build.json" },
         { "path": "packages/dev/plugins/helios/tsconfig.build.json" },
+        { "path": "packages/dev/plugins/iso/tsconfig.build.json" },
         { "path": "packages/tests/tsconfig.json" }
     ]
 }

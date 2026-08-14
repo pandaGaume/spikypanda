@@ -24,6 +24,7 @@ const bundleSources = [
     join(root, "packages/dev/plugins/chemistry/bundle"),
     join(root, "packages/dev/plugins/viz/bundle"),
     join(root, "packages/dev/plugins/helios/bundle"),
+    join(root, "packages/dev/plugins/iso/bundle"),
 ];
 
 // Plugin-owned documentation. Each plugin keeps its node docs under
@@ -47,6 +48,7 @@ const docSources = [
     join(root, "packages/dev/plugins/chemistry/docs"),
     join(root, "packages/dev/plugins/viz/docs"),
     join(root, "packages/dev/plugins/helios/docs"),
+    join(root, "packages/dev/plugins/iso/docs"),
 ];
 
 const dest = join(root, "packages/host/www/bundle");

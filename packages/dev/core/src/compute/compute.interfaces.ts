@@ -11,6 +11,7 @@
 
 import { IChannel, IRuntimeGraph, IRuntimeNode } from "../execution/execution.interfaces";
 import type { IQuantizationParams } from "../quantization/quantization.interfaces";
+import type { IUnitTag } from "../math/math.units";
 
 // ─── Tensor ──────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,17 @@ export interface ITensor {
      * `core/quantization/IQuantizedTensor` for that.
      */
     quantization?: IQuantizationParams;
+
+    /**
+     * Optional physical-unit tag: the quantity + unit (+ sample rate) of
+     * the values in `data`. Set by sensor/source nodes, propagated or
+     * transformed by physical ops (e.g. accel->velocity changes the
+     * quantity), and READ by verdict nodes (ISO severity) which REFUSE
+     * when it is absent rather than guess the unit from amplitude. Pure
+     * metadata; FP32 code paths ignore it, exactly like `quantization`.
+     * See docs/architecture/unit-tag-convention.md.
+     */
+    unit?: IUnitTag;
 }
 
 // ─── Data link ───────────────────────────────────────────────────────────────

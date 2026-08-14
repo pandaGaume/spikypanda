@@ -167,21 +167,26 @@ Risi 2018), MAP-Elites (Mouret & Clune 2015). **Statut :** ⬜ planifié / reche
 
 ---
 
-## JALON 5 — ADN génératif *(encoder la règle, pas les poids)*
+## JALON 5 — ADN génératif *(encoder le PROCESSUS qui apprend, pas les poids)*
 
-**Objectif.** Boucler sur l'intuition de départ : encoder la **règle génératrice
-compacte** (le « génome ») qui *déploie* le substrat, au lieu de stocker les poids.
-Reprend H5 (compacité) et le goulot génomique.
+> **Réorienté par la Décision 003.** La formulation initiale (« un générateur reproduit un
+> substrat entier ») générait encore *les poids entraînés* — donc **la mémoire acquise, le
+> fossile**. La version forte n'encode pas la mémoire : elle encode le **processus qui
+> apprend** (règle topologique + dynamique pilotée par spikes + régulation chimique).
+
+**Objectif.** Encoder la **règle génératrice compacte** (le « génome ») qui **déploie un
+processus apprenant** — pas qui stocke des poids. Reprend H5 (compacité), le goulot
+génomique, et la boussole « pas de poids, un processus ».
 
 **Hypothèse introduite.**
-- **H12** — un petit générateur (la règle) reproduit un substrat entier à peu de
-  paramètres, avec transfert à de nouvelles tâches.
+- **H12** — un petit générateur (la règle) déploie un substrat **qui apprend** à peu de
+  paramètres, avec transfert — *sans* que la mémoire soit pré-générée.
 
-**Démonstration prévue.** Un générateur produit le substrat ; mesurer ratio de
-compression *et* transfert. **Dépend de :** jalons 1-4. **Réf :** goulot génomique
-(Zador 2019, 2024), CPPN/HyperNEAT (Stanley), hypernetworks (Ha 2016). **Statut :** ⬜
-recherche (le plus incertain — cf. *No Free Prune*, qui borne ce qu'on peut espérer a
-priori).
+**Démonstration prévue.** Un générateur produit le *processus* (pas les poids finaux) ;
+mesurer compacité du générateur *et* capacité d'apprentissage/transfert du substrat
+déployé. **Dépend de :** jalons 1-4 + Décision 003. **Réf :** goulot génomique (Zador
+2019, 2024), CPPN/HyperNEAT (Stanley), hypernetworks (Ha 2016), reservoir/spiking (§8b).
+**Statut :** ⬜ recherche (le plus incertain — cf. *No Free Prune*).
 
 ---
 
@@ -228,7 +233,7 @@ recherche lointaine — le plus ambitieux, ferme l'arc « de l'ADN au champ ».
 | H9 | deux échelles de temps stables | 2 | ⬜ planifié |
 | H10 | plasticité gatée par récompense | 3 | ⬜ planifié |
 | H11 | évoluer les règles + diversité | 4 | ⬜ planifié |
-| H12 | générateur compact (ADN) | 5 | ⬜ recherche |
+| H12 | générateur du **processus** apprenant (ADN) | 5 | ⬜ recherche |
 | H13 | champ latent ondulatoire | 6 | ⬜ recherche lointaine |
 
 **Note de prudence.** H8→H13 sont des hypothèses *candidates* : elles orientent le
@@ -238,3 +243,9 @@ c'est le but. Le socle solide reste le jalon 1 ; le reste est un programme.
 **Fondation d'entraînement.** La pile CVNN (Décision 002) est le prérequis d'ingénierie
 de tout ce qui est ≥ L1 : elle transforme « on n'est pas prêt sur le learning » en une
 recette standard (Wirtinger + activations préservant la phase).
+
+**Boussole (Décision 003).** L'objet n'est pas un jeu de *poids* (une mémoire acquise)
+mais un *processus* (transfert piloté par spikes, régulé par la chimie, encodé par une
+règle). Les jalons 2/3/5/6 sont des facettes de ce même objet. On construit le substrat
+paramétrique (traçable) en gardant cette cible en ligne de mire — sans confondre « avoir
+généré des poids » avec « avoir un apprenant ».

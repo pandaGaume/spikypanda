@@ -62,7 +62,9 @@
             "spikypanda-plugin-onnx": ["dev/plugins/onnx/src/index.ts"],
             "spikypanda-plugin-onnx/*": ["dev/plugins/onnx/src/*"],
             "spikypanda-plugin-physics": ["dev/plugins/physics/src/index.ts"],
-            "spikypanda-plugin-physics/*": ["dev/plugins/physics/src/*"]
+            "spikypanda-plugin-physics/*": ["dev/plugins/physics/src/*"],
+            "spikypanda-plugin-iso": ["dev/plugins/iso/src/index.ts"],
+            "spikypanda-plugin-iso/*": ["dev/plugins/iso/src/*"]
         },
 
         "types": ["reflect-metadata", "jest", "node"]

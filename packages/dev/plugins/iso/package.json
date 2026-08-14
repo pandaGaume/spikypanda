@@ -1,0 +1,28 @@
+{
+    "name": "@spikypanda/plugin-iso",
+    "version": "0.1.0",
+    "description": "ISO condition-monitoring standards plugin for SpikyPanda: ISO 20816-3 broadband vibration-severity assessment (zone A/B/C/D) with unit-tagged, refuse-not-guess inputs.",
+    "private": true,
+    "type": "module",
+    "main": "dist/index.js",
+    "module": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "files": ["dist", "bundle", "src", "manifest.json"],
+    "scripts": {
+        "build": "npm run clean && npm run compile",
+        "clean": "rimraf dist bundle tsconfig.build.tsbuildinfo",
+        "compile": "tsc -b tsconfig.build.json",
+        "watch": "tsc -b tsconfig.build.json -w",
+        "bundle": "webpack --mode production --config webpack.config.cjs",
+        "bundle:dev": "webpack --mode development --config webpack.config.cjs"
+    },
+    "sideEffects": false,
+    "dependencies": {
+        "@spiky-panda/core": "*",
+        "@spikypanda/nodeeditor": "*"
+    },
+    "devDependencies": {
+        "rimraf": "~6.0.1",
+        "ts-loader": "^9.5.0"
+    }
+}

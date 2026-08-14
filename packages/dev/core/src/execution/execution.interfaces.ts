@@ -1,5 +1,6 @@
 import { IEnabled, IGraph, INode, IOlink } from "../graph/graph.interfaces";
 import type { SceneStateView } from "../sim/scene-state-view.interface";
+import type { IUnitExpectation } from "../math/math.units";
 
 /**
  * Execution layer. Reuses the topology of core/graph (INode, IOlink,
@@ -693,6 +694,14 @@ export interface IPortDescriptor {
     readonly slot: string | number;
     readonly optional: boolean;
     readonly type?: string;
+    /**
+     * Optional declared unit expectation (wiring-time contract): the
+     * physical quantity (+ optional exact unit) this port expects or
+     * produces. The GraphBuilder can validate it like it validates
+     * shapes; `requires: true` means the port refuses an untagged tensor.
+     * See docs/architecture/unit-tag-convention.md.
+     */
+    readonly unit?: IUnitExpectation;
     readonly multiplicity?: "single" | "variadic";
     /**
      * Maximum number of un-consumed tokens this port may accumulate in

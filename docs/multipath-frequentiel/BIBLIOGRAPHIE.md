@@ -183,6 +183,32 @@ auto-organisateur.*
 - **Najarro, E., Sudhakaran, S., Glanois, C. & Risi, S.** (2022). *HyperNCA: Growing
   Developmental Networks with Neural Cellular Automata.* arXiv:2204.11674.
 
+## 8b. Calcul événementiel & « pas de poids appris » *(Décision 003)*
+
+*→ soutient : la boussole « pas de poids, un processus » — l'état/processus plutôt que le
+paramètre stocké.*
+
+- **Maass, W., Natschläger, T. & Markram, H.** (2002). *Real-Time Computing Without Stable
+  States (Liquid State Machines).* Neural Computation. — On **ne règle pas** les poids
+  internes : on lit la dynamique transitoire d'un système excité par des spikes.
+- **Tsodyks, M. & Markram, H.** (1997). *The neural code between neocortical pyramidal
+  neurons depends on neurotransmitter release probability (dynamic synapses).* PNAS. — La
+  synapse comme **fonction de transfert dictée par le timing** des spikes, pas un scalaire.
+- **Neftci, E., Mostafa, H. & Zenke, F.** (2019). *Surrogate Gradient Learning in Spiking
+  Neural Networks.* IEEE Signal Processing Magazine. — Entraîner du non-différentiable
+  (spikes) par gradient de substitution.
+- **Bellec, G., Scherr, F., Subramoney, A., et al.** (2020). *A solution to the learning
+  dilemma for recurrent networks of spiking neurons (e-prop).* Nature Communications. —
+  Apprentissage local, en ligne, dans des réseaux de spikes.
+- **Williams, R. J.** (1992). *Simple statistical gradient-following algorithms for
+  connectionist reinforcement learning (REINFORCE).* Machine Learning. — L'estimateur du
+  score : différencier la *loi de tirage*, pas la récompense (Décision 004).
+- **Scellier, B. & Bengio, Y.** (2017). *Equilibrium Propagation.* Frontiers in
+  Computational Neuroscience. — Gradients ~backprop par une **règle locale**.
+- **Lillicrap, T., Cownden, D., Tweed, D. & Akerman, C.** (2016). *Random synaptic feedback
+  weights support error backpropagation (feedback alignment).* Nature Communications. —
+  Relâche le transport symétrique des poids.
+
 ## 9. Multiplexage fréquentiel & rythmes cérébraux
 
 *→ soutient : le cœur du substrat (H1) et la distinction fuite/couplage (H4).*
@@ -236,8 +262,14 @@ latent ondulatoire).*
 
 ## 11. Cadres généraux
 
-- **Sutton, R.** (2019). *The Bitter Lesson.* — La tension calcul+échelle vs. méthodes
-  structurées ; contrepoint honnête à toute la démarche.
+*→ soutient : la Décision 004 (objectif & économie) et l'axe apprendre ↔ connaître.*
+
+- **Sutton, R.** (2019). *The Bitter Lesson.* — Échelle + apprentissage battent la
+  connaissance codée à la main ; **un pôle de l'axe** de la Décision 004.
+- **Zador, A.** (2019). *A critique of pure learning…* Nature Comms (voir §2). — **L'autre
+  pôle** : la structure innée. Sutton vs Zador = l'axe apprendre ↔ connaître.
+- **Wolpert, D. & Macready, W.** (1997). *No Free Lunch Theorems for Optimization.* IEEE
+  Trans. Evol. Comput. — Pas d'apprenant sans a priori ; l'asymétrie de l'axe.
 - **Baldwin, J. M.** (1896). *A New Factor in Evolution.* — L'effet Baldwin : évoluer la
   *capacité à apprendre*, pas les solutions.
 
@@ -252,5 +284,9 @@ latent ondulatoire).*
 - **H5 (compacité / ADN)** : §2, §10 (Fourier Neural Operator).
 - **Discussion / positionnement** : §10 (matériel), §1 (No Free Prune, limites), §11.
 - **Décision 002 (entraînement CVNN)** : §10b (Deep Complex Networks, Wirtinger, CVNN).
+- **Décision 003 (pas de poids, un processus)** : §8b (reservoir, synapses dynamiques,
+  spiking), §2 (goulot génomique), §5 (neuromodulation).
+- **Décision 004 (objectif & économie)** : §11 (Sutton, Zador, No Free Lunch), §8b
+  (REINFORCE, local learning), §1 (Lottery Ticket, No Free Prune).
 - **Jalons futurs (plasticité, récompense, sélection)** : §5, §7, §8.
 - **Jalon 6 (champ ondulatoire)** : §10b (PINNs), §10 (Fourier Neural Operator).
