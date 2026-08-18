@@ -68,7 +68,8 @@ export type PortType =
     | "composition"
     | "particulate"
     | "layer"
-    | "fault";
+    | "fault"
+    | "spike";
 
 /**
  * The four config-link types — referenced from `Connection` to decide
@@ -142,6 +143,7 @@ export const PORT_COLORS: Record<PortType, string> = {
     // `ApplyTo` relation (the fault reads the model's properties and applies its
     // physics), rendered as a distinct structural cable.
     fault: "#e8694a", // ember: a fault operator's apply point
+    spike: "#ffb000", // amber pulse: discrete neuromorphic event
 };
 
 export interface PortDef {

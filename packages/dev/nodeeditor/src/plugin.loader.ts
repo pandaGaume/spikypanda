@@ -1,4 +1,4 @@
-import type { INodeRegistry } from "spikypanda-core";
+import type { ILinkRegistry, INodeRegistry } from "spikypanda-core";
 import type { EditorRegistry } from "./editor-registry";
 import type { IPlugin, IPluginContext, IPluginManifest, ISubPluginManifest } from "./plugin.interfaces";
 
@@ -29,6 +29,8 @@ import type { IPlugin, IPluginContext, IPluginManifest, ISubPluginManifest } fro
 export interface LoadPluginOptions {
     /** The application's NodeRegistry that sub-plugins register into. */
     nodes: INodeRegistry;
+    /** The application's LinkRegistry for concrete persisted edge types. */
+    links: ILinkRegistry;
     /** The application's EditorRegistry that sub-plugins register into. */
     editors: EditorRegistry;
     /** Resolves a plugin-relative path to an absolute URL. Typically
@@ -74,6 +76,7 @@ export async function loadPlugin(globalName: string, id: string, options: LoadPl
     const mkCtx = (subId: string): IPluginContext => ({
         id: subId,
         nodes: options.nodes,
+        links: options.links,
         editors: options.editors,
         assetUrl: options.assetUrl,
     });

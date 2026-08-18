@@ -205,9 +205,21 @@ export class Session implements ISession {
      * legacy immediate publish.
      */
     public publish(channelIndex: number, value: unknown, opts?: { validAtTick?: number }): void {
-        const validAt = opts?.validAtTick;
+        const link = this._linkAt(channelIndex);
+        let payload = value;
+        let linkValidAt: number | undefined;
+        if (link?.prepareDelivery) {
+            const prepared = link.prepareDelivery(value, this);
+            if (prepared === null) return;
+            payload = prepared.value;
+            linkValidAt = prepared.validAtTick;
+        }
+        const requestedValidAt = opts?.validAtTick;
+        const validAt = requestedValidAt === undefined ? linkValidAt : linkValidAt === undefined ? requestedValidAt : Math.max(requestedValidAt, linkValidAt);
         const ref: ILinkRef =
-            validAt !== undefined ? { kind: "linkRef", linkIndex: channelIndex, value, validAtTick: validAt } : { kind: "linkRef", linkIndex: channelIndex, value };
+            validAt !== undefined
+                ? { kind: "linkRef", linkIndex: channelIndex, value: payload, validAtTick: validAt }
+                : { kind: "linkRef", linkIndex: channelIndex, value: payload };
         // Defer when validAtTick is a future TICK INDEX (integer),
         // not a future sim-time. Holds for BOTH stream and signal
         // channels — a signal scheduled for tick N+2 is just a future
@@ -375,15 +387,9 @@ export class Session implements ISession {
         const stepDt = this.dt;
         if (Number.isFinite(stepDt) && stepDt > 0 && this._solvers.length > 0) {
             for (const solver of this._solvers) {
-                try {
-                    solver.step(stepDt, this);
-                } catch (err) {
-                    // Solver failures are surfaced to the host via the
-                    // standard error path (re-throw); without this the
-                    // dispatch phase would fire leaves with stale state
-                    // and produce silently wrong results.
-                    throw err;
-                }
+                // Solver failures propagate to the host. Dispatch stops before
+                // any leaf can publish observations from stale state.
+                solver.step(stepDt, this);
             }
         }
 

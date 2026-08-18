@@ -35,6 +35,7 @@ import {
     NODE_OUTPUT,
     NODE_NAME,
     NODE_OP_TYPE,
+    NODE_DOMAIN,
     NODE_ATTRIBUTE,
     // AttributeProto fields
     ATT_NAME,
@@ -282,6 +283,17 @@ export class OnnxParser {
                 case NODE_OP_TYPE: {
                     // Already read in first pass, just skip
                     reader.skip();
+                    break;
+                }
+                case NODE_DOMAIN: {
+                    // The OperatorSet that defines op_type. Skipping this
+                    // used to be harmless only because nothing emitted it;
+                    // a custom op declared the standard way would then have
+                    // resolved to the default-domain implementation of the
+                    // same name, and computed a plausible wrong answer.
+                    const s = reader.readString(KEY_MAX_LENGTH);
+                    if (s === null) return null;
+                    if (s.length > 0) node.domain = s;
                     break;
                 }
                 case NODE_ATTRIBUTE: {

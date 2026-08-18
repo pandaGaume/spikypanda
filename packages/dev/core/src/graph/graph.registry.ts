@@ -1,4 +1,5 @@
 import type { IRuntimeNode, IPortDescriptor } from "../execution/execution.interfaces";
+import type { IOlink } from "./graph.interfaces";
 
 export interface INodeMeta {
     readonly type: string;
@@ -159,4 +160,89 @@ export class NodeRegistry implements INodeRegistry {
     public types(): ReadonlyArray<string> {
         return Array.from(this._factories.keys());
     }
+}
+
+/**
+ * Editor and runtime metadata for a concrete link type.
+ *
+ * `sourcePortTypes` and `targetPortTypes` are optional routing hints used
+ * when a visual editor creates a cable without an explicitly selected link
+ * type. An absent list accepts every port type. The literal `"*"` is also a
+ * wildcard. Higher `priority` wins when several registered link types match;
+ * equal priorities preserve registration order.
+ */
+export interface ILinkMeta {
+    readonly type: string;
+    readonly label: string;
+    readonly category?: string;
+    readonly sourcePortTypes?: ReadonlyArray<string>;
+    readonly targetPortTypes?: ReadonlyArray<string>;
+    readonly priority?: number;
+}
+
+/** Create an unwired link definition. Endpoints are assigned only when a
+ * runtime graph is materialized. */
+export type LinkFactory = (config?: Record<string, unknown>) => IOlink;
+
+/** Registry counterpart of `INodeRegistry` for persisted graph links. */
+export interface ILinkRegistry {
+    register(type: string, factory: LinkFactory, meta: Omit<ILinkMeta, "type">): void;
+    unregister(type: string): boolean;
+    create(type: string, config?: Record<string, unknown>): IOlink | undefined;
+    meta(type: string): ILinkMeta | undefined;
+    types(): ReadonlyArray<string>;
+    resolve(sourcePortType: string, targetPortType: string): string | undefined;
+}
+
+/**
+ * Factory registry for concrete graph links.
+ *
+ * It deliberately creates links without endpoints. This keeps an editor's
+ * persisted link definition separate from the short-lived link instance
+ * attached to a `RuntimeGraph` and owned by a `Session` build.
+ */
+export class LinkRegistry implements ILinkRegistry {
+    private readonly _factories = new Map<string, LinkFactory>();
+    private readonly _meta = new Map<string, ILinkMeta>();
+
+    public register(type: string, factory: LinkFactory, meta: Omit<ILinkMeta, "type">): void {
+        this._factories.set(type, factory);
+        this._meta.set(type, { ...meta, type });
+    }
+
+    public unregister(type: string): boolean {
+        this._meta.delete(type);
+        return this._factories.delete(type);
+    }
+
+    public create(type: string, config?: Record<string, unknown>): IOlink | undefined {
+        return this._factories.get(type)?.(config);
+    }
+
+    public meta(type: string): ILinkMeta | undefined {
+        return this._meta.get(type);
+    }
+
+    public types(): ReadonlyArray<string> {
+        return Array.from(this._factories.keys());
+    }
+
+    public resolve(sourcePortType: string, targetPortType: string): string | undefined {
+        let selected: string | undefined;
+        let selectedPriority = -Infinity;
+        for (const [type, meta] of this._meta) {
+            if (!acceptsPortType(meta.sourcePortTypes, sourcePortType)) continue;
+            if (!acceptsPortType(meta.targetPortTypes, targetPortType)) continue;
+            const priority = meta.priority ?? 0;
+            if (selected === undefined || priority > selectedPriority) {
+                selected = type;
+                selectedPriority = priority;
+            }
+        }
+        return selected;
+    }
+}
+
+function acceptsPortType(accepted: ReadonlyArray<string> | undefined, actual: string): boolean {
+    return accepted === undefined || accepted.length === 0 || accepted.includes("*") || accepted.includes(actual);
 }

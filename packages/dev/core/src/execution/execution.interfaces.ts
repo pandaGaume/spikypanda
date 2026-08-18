@@ -49,6 +49,18 @@ export interface IChannel<T = unknown> extends IOlink, IEnabled {
     readonly toSlot?: string | number;
     readonly delayed: boolean;
     readonly initialValue?: T;
+    /**
+     * Optional per-link delivery policy. `Session.publish` invokes it once
+     * before queueing the event. Specialized channels can transform a token,
+     * schedule it for a future integer tick, or reject it by returning null.
+     * Generic channels omit the hook and preserve the existing fast path.
+     */
+    prepareDelivery?(value: T, session: ISession): IChannelDelivery<T> | null;
+}
+
+export interface IChannelDelivery<T = unknown> {
+    readonly value: T;
+    readonly validAtTick?: number;
 }
 
 /**

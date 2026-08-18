@@ -89,6 +89,8 @@ export const NODE_OUTPUT = 2;
 export const NODE_NAME = 3;
 export const NODE_OP_TYPE = 4;
 export const NODE_ATTRIBUTE = 5;
+/** NodeProto.domain. The OperatorSet that defines op_type; "" is ai.onnx. */
+export const NODE_DOMAIN = 7;
 
 // AttributeProto (partial, most commonly used fields)
 export const ATT_NAME = 1;
@@ -171,6 +173,18 @@ export interface OnnxTensorInfo {
 export interface OnnxNodeInfo {
     name: string;
     opType: string;
+    /**
+     * NodeProto.domain: the OperatorSet that defines opType. Empty (or
+     * absent) means the default ONNX domain, ai.onnx.
+     *
+     * Custom operators belong in their own domain, which is what the
+     * standard provides the field for. The registry keys on the
+     * QUALIFIED name, `domain.opType`, so an op declared in a domain and
+     * one whose domain is baked into its opType string land on the same
+     * entry. That is deliberate: it lets a file written the old way and a
+     * file written the standard way resolve identically.
+     */
+    domain?: string;
     inputs: string[];
     outputs: string[];
     /**

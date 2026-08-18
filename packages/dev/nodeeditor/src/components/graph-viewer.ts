@@ -1,6 +1,7 @@
 import { defaultLayout, LayoutStrategy } from "../auto-layout";
 import { Camera } from "../camera";
-import { Connection, ConnectionPreview } from "../connection";
+import { Connection, ConnectionLinkModel, ConnectionPreview, deriveLinkKind } from "../connection";
+import { createConnectionLinkModel } from "../link-model";
 import { NavigationStack, SIM_GRAPH_TYPE_ID, SUB_GRAPH_JSON_KEY } from "../navigation-stack";
 import { enrichNodeDefFromMeta } from "../node-def";
 import { NodeUI } from "../node-ui";
@@ -14,7 +15,7 @@ import { lightSkin } from "../styles/skins/light";
 import { transparentDarkSkin, transparentLightSkin } from "../styles/skins/transparent";
 import { arePortTypesCompatible, ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedConnection, SerializedGraph } from "../types";
 import { DebugBus } from "../debug-bus";
-import type { INodeRegistry, IRuntimeNode } from "spikypanda-core";
+import type { ILinkRegistry, INodeRegistry, IRuntimeNode } from "spikypanda-core";
 import type { Dashboard, ISerializedDashboard } from "../dashboard";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -137,6 +138,9 @@ export class GraphViewer {
      * an empty viewer.
      */
     private _registry: INodeRegistry | null = null;
+    /** Link counterpart of `_registry`, used to restore concrete edge
+     * definitions and their serialized properties. */
+    private _linkRegistry: ILinkRegistry | null = null;
 
     constructor(host: HTMLElement, permissions: Permissions = Permissions.FULL, standards?: StandardsRegistry) {
         this.host = host;
@@ -222,7 +226,7 @@ export class GraphViewer {
         return node.removeOutput(port);
     }
 
-    connect(from: Port, to: Port): Connection | null {
+    connect(from: Port, to: Port, persistedModel?: Partial<ConnectionLinkModel>): Connection | null {
         if (from.direction === to.direction) {
             this._reportRejection(from, to, `same direction (${from.direction})`);
             return null;
@@ -241,7 +245,9 @@ export class GraphViewer {
         const exists = this.connections.some((c) => c.from === from && c.to === to);
         if (exists) return null;
 
-        const conn = new Connection(from, to, this.svg, this.currentProfile.connectionStroke);
+        const linkKind = deriveLinkKind(from.type, to.type);
+        const model = createConnectionLinkModel(this._linkRegistry, from.type, to.type, from.name, to.name, linkKind, persistedModel);
+        const conn = new Connection(from, to, this.svg, this.currentProfile.connectionStroke, linkKind, model);
         this.connections.push(conn);
         if (this.onConnectionAdded) this.onConnectionAdded(conn);
         return conn;
@@ -482,11 +488,10 @@ export class GraphViewer {
     save(): string {
         const connId = (c: Connection): string => `${this._fromNodeOf(c).id}:${c.from.name}->${this._toNodeOf(c).id}:${c.to.name}`;
         const data = {
-            // v3 adds `typeId` per node in BOTH layout and model so load()
-            // can rebind every node to a fresh runtime IRuntimeNode via
-            // a NodeRegistry. v2 saves still load (typeId is optional);
-            // the runtime model just isn't rebuildable from them.
-            version: 3,
+            // v4 gives links the same persisted identity as nodes:
+            // `{ id, typeId, data, from, to }`. A link registry can now
+            // restore a concrete edge and its @cloneable properties.
+            version: 4,
             layout: {
                 nodes: this.nodes.map((n) => ({
                     id: n.id,
@@ -517,6 +522,8 @@ export class GraphViewer {
                 })),
                 connections: this.connections.map((c) => ({
                     id: connId(c),
+                    typeId: c.typeId,
+                    data: c.item.serialize(),
                     from: { node: this._fromNodeOf(c).id, port: c.from.name },
                     to: { node: this._toNodeOf(c).id, port: c.to.name },
                 })),
@@ -549,10 +556,11 @@ export class GraphViewer {
      * possible if some typeIds aren't registered (those nodes fall back
      * to layout-only).
      */
-    load(json: string, registry?: INodeRegistry): void {
+    load(json: string, registry?: INodeRegistry, linkRegistry?: ILinkRegistry): void {
         // Cache the registry so drill-down / leave can re-load
         // without the caller re-supplying it on every navigation.
         if (registry) this._registry = registry;
+        if (linkRegistry) this._linkRegistry = linkRegistry;
         const data = JSON.parse(json);
         this.clear();
 
@@ -561,6 +569,7 @@ export class GraphViewer {
         const layoutNodes = layout.nodes ?? [];
         const layoutConns = layout.connections ?? [];
         const modelNodes = model?.nodes;
+        const modelConns = model?.connections;
 
         const nodeMap = new Map<string, NodeUI>();
         for (const sn of layoutNodes) {
@@ -648,7 +657,10 @@ export class GraphViewer {
                 // endpoints keep the legacy outputs/inputs index.
                 const fromPort = (sc.fromControl ? fromNode.controlOutputs : fromNode.outputs)[sc.fromPortIndex];
                 const toPort = (sc.toControl ? toNode.controlInputs : toNode.inputs)[sc.toPortIndex];
-                if (fromPort && toPort) this.connect(fromPort, toPort);
+                if (fromPort && toPort) {
+                    const savedModel = modelConns?.find((candidate: { id?: string }) => candidate.id === sc.id);
+                    this.connect(fromPort, toPort, savedModel ? { typeId: savedModel.typeId, data: savedModel.data } : undefined);
+                }
             }
         }
 
@@ -669,10 +681,12 @@ export class GraphViewer {
             version: 1,
             nodes: this.nodes.map((n) => ({ id: n.id, label: n.label, data: n.item.serialize() })),
             connections: this.connections.map((c) => {
-                const fromNode = this.nodes.find((nd) => nd.outputs.includes(c.from))!;
-                const toNode = this.nodes.find((nd) => nd.inputs.includes(c.to))!;
+                const fromNode = this._fromNodeOf(c);
+                const toNode = this._toNodeOf(c);
                 return {
                     id: `${fromNode.id}:${c.from.name}->${toNode.id}:${c.to.name}`,
+                    typeId: c.typeId,
+                    data: c.item.serialize(),
                     from: { node: fromNode.id, port: c.from.name },
                     to: { node: toNode.id, port: c.to.name },
                 };
@@ -696,6 +710,15 @@ export class GraphViewer {
 
     public getNodeRegistry(): INodeRegistry | null {
         return this._registry;
+    }
+
+    /** Prime the concrete-link registry used by new cables and loads. */
+    public setLinkRegistry(registry: ILinkRegistry | null): void {
+        this._linkRegistry = registry;
+    }
+
+    public getLinkRegistry(): ILinkRegistry | null {
+        return this._linkRegistry;
     }
 
     /**

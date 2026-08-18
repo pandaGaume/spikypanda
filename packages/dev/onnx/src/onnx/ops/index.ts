@@ -5,7 +5,8 @@ export { registerConvOps, ConvNode } from "./conv";
 export { registerNormOps } from "./normalization";
 export { registerRecurrentOps } from "./recurrent";
 export { registerMiscOps } from "./misc";
-export { registerDotVisionOps } from "./dotvision";
+export { registerDotVisionOps } from "./ext/vendors/dotvision";
+export { registerCyanMyceliumOps, ConvWioNode } from "./ext/vendors/cyanmycelium";
 export { registerDspOps, enroll, serializeTemplate, deserializeTemplate, templateToTensor } from "./dsp";
 export type { MfccParams, DtwTemplate } from "./dsp";
 export { registerQuantOps } from "./quant";
@@ -18,7 +19,8 @@ import { registerConvOps } from "./conv";
 import { registerNormOps } from "./normalization";
 import { registerRecurrentOps } from "./recurrent";
 import { registerMiscOps } from "./misc";
-import { registerDotVisionOps } from "./dotvision";
+import { registerDotVisionOps } from "./ext/vendors/dotvision";
+import { registerCyanMyceliumOps } from "./ext/vendors/cyanmycelium";
 import { registerDspOps } from "./dsp";
 import { registerQuantOps } from "./quant";
 
@@ -28,8 +30,10 @@ import { registerQuantOps } from "./quant";
  * overrides): Conv comes from conv.ts, Gemm from math.ts, LSTM/GRU
  * from recurrent.ts, DSP-specific SpikyPanda ops from dsp.ts, etc.
  *
- * Domain extensions (DotVision MCSA) are also registered so research
- * use-cases work out of the box without a second factory.
+ * Domain extensions are also registered so research use-cases work out
+ * of the box without a second factory: DotVision MCSA, and CyanMycelium
+ * whose ConvWIO carries convolution weights already permuted to the
+ * layout its embedded kernel reads.
  */
 export function createRegistry(): OnnxOpRegistry {
     const registry = new OnnxOpRegistry();
@@ -43,6 +47,7 @@ export function createRegistry(): OnnxOpRegistry {
     registerDspOps(registry);
     registerQuantOps(registry);
     registerDotVisionOps(registry);
+    registerCyanMyceliumOps(registry);
     return registry;
 }
 

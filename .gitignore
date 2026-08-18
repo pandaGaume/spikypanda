@@ -68,3 +68,6 @@ internals/
 
 #private working docs (drafts, internal, not for public repo)
 /helios/private/**
+
+# do not ignore the node-editor-v2.js file in the node-editor-v2 package
+!/packages/host/www/node-editor-v2/node-editor-v2.js

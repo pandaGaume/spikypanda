@@ -35,6 +35,7 @@ import {
     NODE_OUTPUT,
     NODE_NAME,
     NODE_OP_TYPE,
+    NODE_DOMAIN,
     NODE_ATTRIBUTE,
     // AttributeProto fields
     ATT_NAME,
@@ -104,13 +105,21 @@ export class OnnxWriter {
         // least one entry when ir_version >= 3. We declare the default
         // domain at opset 13, which covers all ops emitted by
         // CnnGraphOnnxExporter and the cardriver serializers.
-        w.writeTag(MODEL_OPSET_IMPORT, WireType.LEN);
-        w.writeSubMessage((sub) => {
-            sub.writeTag(OPSET_DOMAIN, WireType.LEN);
-            sub.writeString("");
-            sub.writeTag(OPSET_VERSION, WireType.VARINT);
-            sub.writeInt64(13);
-        });
+        //
+        // Every custom domain used by a node needs its own entry, or the
+        // file is invalid and readers reject it. That rejection is the
+        // point: an op whose domain is undeclared must fail loudly rather
+        // than fall back to the default domain and run the wrong kernel.
+        const domains = ["", ...this._customDomains(model)];
+        for (const d of domains) {
+            w.writeTag(MODEL_OPSET_IMPORT, WireType.LEN);
+            w.writeSubMessage((sub) => {
+                sub.writeTag(OPSET_DOMAIN, WireType.LEN);
+                sub.writeString(d);
+                sub.writeTag(OPSET_VERSION, WireType.VARINT);
+                sub.writeInt64(d.length > 0 ? 1 : 13);
+            });
+        }
 
         // graph (field 7, length-delimited)
         w.writeTag(MODEL_GRAPH, WireType.LEN);
@@ -161,6 +170,17 @@ export class OnnxWriter {
 
     // ── Node (NodeProto) ──────────────────────────────────────────────────
 
+    /** Distinct custom domains named by the graph's nodes, sorted. */
+    private _customDomains(model: OnnxParseResult): string[] {
+        const seen = new Set<string>();
+        for (const node of model.nodes) {
+            if (node.domain && node.domain.length > 0 && node.domain !== "ai.onnx") {
+                seen.add(node.domain);
+            }
+        }
+        return [...seen].sort();
+    }
+
     private _writeNode(w: PBWriter, node: OnnxNodeInfo): void {
         // inputs (field 1, repeated string)
         for (const input of node.inputs) {
@@ -184,6 +204,15 @@ export class OnnxWriter {
         if (node.opType) {
             w.writeTag(NODE_OP_TYPE, WireType.LEN);
             w.writeString(node.opType);
+        }
+
+        // domain (field 7). Omitted for the default ONNX domain, which is
+        // what an absent field means. Written whenever the node names a
+        // custom OperatorSet, so the file says which one defines op_type
+        // instead of leaving a reader to guess.
+        if (node.domain && node.domain.length > 0) {
+            w.writeTag(NODE_DOMAIN, WireType.LEN);
+            w.writeString(node.domain);
         }
 
         // attributes (field 5, repeated). List-valued attributes take

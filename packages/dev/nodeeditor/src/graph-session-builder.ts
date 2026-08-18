@@ -1,5 +1,4 @@
 import {
-    ApplyTo,
     buildSolverAttachmentsForGraph,
     isSceneResident,
     RuntimeGraphBuilder,
@@ -7,6 +6,7 @@ import {
     SimGraphNode,
     type Channel,
     type IHasTransform,
+    type IOlink,
     type IRuntimeGraph,
     type IRuntimeNode,
     type ISolver,
@@ -16,6 +16,7 @@ import {
 import type { GraphViewer } from "./components/graph-viewer";
 import type { NodeUI } from "./node-ui";
 import type { Port } from "./port";
+import { isRuntimeChannel, materializeConnectionLink } from "./link-model";
 
 /**
  * Build a fresh `Session` over the current GraphViewer state.
@@ -75,19 +76,31 @@ export function buildSessionFromViewer(viewer: GraphViewer): {
     // (ApplyTo) Connections, create the typed core link instead of a channel —
     // a fault operator (`from`) applies its physics to a model (`to`), read by
     // the model's fire() via opsc(ApplyTo), never as a port payload.
-    const structuralLinks: ApplyTo[] = [];
+    const structuralLinks: IOlink[] = [];
     for (const conn of viewer.connections) {
         if (conn.linkKind === "config") continue;
         const fromNode = _findRuntimeNodeByPort(viewer, conn.from, "output");
         const toNode = _findRuntimeNodeByPort(viewer, conn.to, "input");
         if (!fromNode || !toNode) continue;
-        if (conn.linkKind === "structural") {
-            structuralLinks.push(new ApplyTo(fromNode, toNode));
-            continue;
-        }
         const fromSlot = (conn.from as Port).name;
         const toSlot = (conn.to as Port).name;
-        builder.withChannel(fromNode, toNode, fromSlot, toSlot);
+        const runtimeLink = materializeConnectionLink({ typeId: conn.typeId, data: conn.item?.data }, conn.linkKind, fromNode, toNode, fromSlot, toSlot);
+        if (!runtimeLink) {
+            // eslint-disable-next-line no-console
+            console.warn(`[graph-session-builder] link type "${conn.typeId ?? "unknown"}" is not valid for a ${conn.linkKind} connection; skipping its wire`);
+            continue;
+        }
+        if (conn.linkKind === "structural") {
+            structuralLinks.push(runtimeLink);
+            continue;
+        }
+        if (!isRuntimeChannel(runtimeLink)) {
+            // eslint-disable-next-line no-console
+            console.warn(`[graph-session-builder] data link type "${conn.typeId ?? "unknown"}" does not implement IChannel; skipping its wire`);
+            runtimeLink.dispose();
+            continue;
+        }
+        builder.withLinks(runtimeLink as Channel);
     }
 
     const graph = builder.build();

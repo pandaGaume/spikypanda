@@ -50,12 +50,31 @@ export class OnnxOpRegistry {
     }
 
     /**
+     * Qualified lookup key for a node: `domain.opType`, or plain `opType`
+     * in the default ONNX domain.
+     *
+     * This is what lets both spellings of a custom op resolve to the same
+     * entry. A node declared the standard way (domain "ai.cyanmycelium",
+     * opType "ConvWIO") and one whose domain is baked into its opType
+     * string ("ai.cyanmycelium.ConvWIO", no domain field) produce the
+     * same key, so a single registration serves both.
+     *
+     * It also closes a trap: without it, a node in a custom domain whose
+     * opType collides with a standard op would silently resolve to the
+     * standard implementation.
+     */
+    static qualify(opType: string, domain?: string): string {
+        return domain && domain.length > 0 && domain !== "ai.onnx" ? `${domain}.${opType}` : opType;
+    }
+
+    /**
      * Create a node using the highest-priority factory.
      */
     create(nodeInfo: OnnxNodeInfo, initializers: Map<string, OnnxTensorInfo>): Kernel {
-        const list = this.entries.get(nodeInfo.opType);
+        const key = OnnxOpRegistry.qualify(nodeInfo.opType, nodeInfo.domain);
+        const list = this.entries.get(key);
         if (!list || list.length === 0) {
-            throw new Error(`No ONNX op implementation for: ${nodeInfo.opType}`);
+            throw new Error(`No ONNX op implementation for: ${key}`);
         }
         return list[0].factory(nodeInfo, initializers);
     }

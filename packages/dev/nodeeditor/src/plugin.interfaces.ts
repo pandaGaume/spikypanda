@@ -1,4 +1,4 @@
-import type { INodeRegistry } from "spikypanda-core";
+import type { ILinkRegistry, INodeRegistry } from "spikypanda-core";
 import type { EditorRegistry } from "./editor-registry";
 
 export interface IPluginContext {
@@ -8,6 +8,7 @@ export interface IPluginContext {
      *  not the root plugin's id. */
     readonly id: string;
     readonly nodes: INodeRegistry;
+    readonly links: ILinkRegistry;
     readonly editors: EditorRegistry;
     /** Resolve a plugin-relative path to an absolute URL for asset loading. */
     assetUrl(relativePath: string): string;

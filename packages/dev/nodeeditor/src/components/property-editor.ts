@@ -1,4 +1,5 @@
 import { getEditorSchema, IEditableField, IEditorSchema } from "spikypanda-core";
+import type { Connection } from "../connection";
 import type { NodeUI } from "../node-ui";
 import { EditorRegistry, IEditor } from "../editor-registry";
 import { Permissions } from "../permissions";
@@ -18,14 +19,22 @@ interface PresetEnvelope {
     properties?: Record<string, unknown>;
 }
 
+interface PropertyTarget {
+    kind: "node" | "connection";
+    label: string;
+    typeId?: string;
+    data: object | null;
+    node?: NodeUI;
+}
+
 /**
  * Property editor: schema-driven panel that mounts the right widget for
- * the currently-selected node. Matches the component shape of Palette /
+ * the currently-selected node or connection. Matches the component shape of Palette /
  * DebugConsole so a host page just instantiates it once and forwards
  * the GraphViewer's selection events.
  *
  * Rendering rules (in order):
- *   1. zero selection → "Select a node" placeholder.
+ *   1. zero selection → "Select a node or connection" placeholder.
  *   2. multi-selection → "<N> nodes selected" placeholder.
  *   3. single node with a class-level @editor("kind") registered in
  *      the EditorRegistry → mount that whole-object editor.
@@ -58,7 +67,7 @@ export class PropertyEditor {
     private readonly _title: string;
     private readonly _bodyEl: HTMLDivElement;
 
-    private _currentNode: NodeUI | null = null;
+    private _currentTarget: PropertyTarget | null = null;
     private _activeClassEditor: IEditor | null = null;
     private _activeClassEditorHost: HTMLElement | null = null;
     private _activeFieldEditors: IEditor[] = [];
@@ -79,7 +88,7 @@ export class PropertyEditor {
         host.appendChild(this._bodyEl);
 
         this._installDropZone();
-        this._renderEmpty("Select a node", null);
+        this._renderEmpty("Select a node or connection", null);
     }
 
     /**
@@ -87,27 +96,37 @@ export class PropertyEditor {
      * Single node → mount editor; otherwise render a placeholder.
      */
     public setSelection(nodes: ReadonlyArray<NodeUI>): void {
-        this._currentNode = nodes.length === 1 ? nodes[0] : null;
+        this._currentTarget = nodes.length === 1 ? this._targetFromNode(nodes[0]) : null;
         if (nodes.length === 0) {
             this._dispose();
-            this._renderEmpty("Select a node", null);
+            this._renderEmpty("Select a node or connection", null);
             return;
         }
         if (nodes.length === 1) {
-            if (this._mountEditorForNode(nodes[0])) return;
+            const target = this._currentTarget!;
+            if (this._mountEditorForTarget(target)) return;
             this._dispose();
-            this._renderEmpty(`Selected: ${nodes[0].label} (id ${nodes[0].id})`, nodes[0]);
+            this._renderEmpty(`Selected: ${nodes[0].label} (id ${nodes[0].id})`, target);
             return;
         }
         this._dispose();
         this._renderEmpty(`${nodes.length} nodes selected`, null);
     }
 
+    /** Inspect a visual connection and edit the schema exposed by its link definition. */
+    public setConnection(connection: Connection): void {
+        const target = this._targetFromConnection(connection);
+        this._currentTarget = target;
+        if (this._mountEditorForTarget(target)) return;
+        this._dispose();
+        this._renderEmpty(`Selected: ${target.label}`, target);
+    }
+
     /** Re-mount the current selection. Useful after a model mutation. */
     public refresh(): void {
-        const n = this._currentNode;
-        if (!n) return;
-        this._mountEditorForNode(n);
+        const target = this._currentTarget;
+        if (!target) return;
+        this._mountEditorForTarget(target);
     }
 
     public dispose(): void {
@@ -118,19 +137,19 @@ export class PropertyEditor {
 
     // ── Rendering ──────────────────────────────────────────────────────
 
-    private _renderEmpty(text: string, node: NodeUI | null): void {
+    private _renderEmpty(text: string, target: PropertyTarget | null): void {
         this._bodyEl.innerHTML = "";
-        this._bodyEl.appendChild(this._buildHeader(this._title, node));
-        if (node) this._renderShieldsForNode(node);
+        this._bodyEl.appendChild(this._buildHeader(this._title, target));
+        if (target) this._renderShieldsForTarget(target);
         const empty = document.createElement("div");
         empty.className = "ne-property-editor-empty";
         empty.textContent = text;
         this._bodyEl.appendChild(empty);
     }
 
-    private _mountEditorForNode(node: NodeUI): boolean {
+    private _mountEditorForTarget(target: PropertyTarget): boolean {
         this._dispose();
-        const data = node && node.item ? (node.item.data as object | null) : null;
+        const data = target.data;
         if (!data) return false;
         const schema = getEditorSchema(data);
 
@@ -140,8 +159,8 @@ export class PropertyEditor {
             const factory = this.editorRegistry.getFactory(kind);
             if (!factory) continue;
             this._bodyEl.innerHTML = "";
-            this._bodyEl.appendChild(this._buildHeader(`${node.label} · ${kind}`, node));
-            this._renderShieldsForNode(node);
+            this._bodyEl.appendChild(this._buildHeader(`${target.label} · ${kind}`, target));
+            this._renderShieldsForTarget(target);
             const editorHost = document.createElement("div");
             editorHost.className = "ne-property-editor-class-host";
             this._bodyEl.appendChild(editorHost);
@@ -162,8 +181,8 @@ export class PropertyEditor {
         if (editables.length === 0 && viewables.length === 0) return false;
 
         this._bodyEl.innerHTML = "";
-        this._bodyEl.appendChild(this._buildHeader(node.label, node));
-        this._renderShieldsForNode(node);
+        this._bodyEl.appendChild(this._buildHeader(target.label, target));
+        this._renderShieldsForTarget(target);
 
         let rendered = 0;
         if (editables.length > 0) {
@@ -245,7 +264,8 @@ export class PropertyEditor {
         }
     }
 
-    private _renderShieldsForNode(node: NodeUI): void {
+    private _renderShieldsForTarget(target: PropertyTarget): void {
+        const node = target.node;
         if (!node || !node.standards || node.standards.length === 0) return;
         renderStandardShields(this._bodyEl, node.standards, this.standards);
     }
@@ -256,7 +276,7 @@ export class PropertyEditor {
      * gated on `permissions.write` so a read-only session cannot mutate
      * the model from clipboard.
      */
-    private _buildHeader(label: string, node: NodeUI | null): HTMLElement {
+    private _buildHeader(label: string, target: PropertyTarget | null): HTMLElement {
         const wrap = document.createElement("div");
         wrap.className = "ne-property-editor-title";
 
@@ -264,8 +284,8 @@ export class PropertyEditor {
         text.textContent = label;
         wrap.appendChild(text);
 
-        if (!node) return wrap;
-        const data = node.item ? (node.item.data as object | null) : null;
+        if (!target) return wrap;
+        const data = target.data;
         if (!data) return wrap;
         const schema = getEditorSchema(data);
         const hasEditables = schema.fields.some((f) => f.editable);
@@ -276,7 +296,7 @@ export class PropertyEditor {
 
         const copyBtn = makeIconButton(ICON_COPY, "Copy properties (JSON to clipboard)", async () => {
             try {
-                const payload = this._buildPreset(node, schema, data);
+                const payload = this._buildPreset(target, schema, data);
                 const ok = await writeClipboard(JSON.stringify(payload, null, 2));
                 flashIcon(copyBtn, ok ? "ok" : "err");
             } catch (e) {
@@ -295,7 +315,7 @@ export class PropertyEditor {
                     const n = this._applyPreset(schema, data, obj);
                     if (n > 0) {
                         flashIcon(pasteBtn, "ok");
-                        this._mountEditorForNode(node);
+                        this._mountEditorForTarget(target);
                     } else {
                         flashIcon(pasteBtn, "err");
                     }
@@ -313,15 +333,15 @@ export class PropertyEditor {
 
     // ── Preset (copy / paste / drop) ───────────────────────────────────
 
-    private _buildPreset(node: NodeUI, schema: IEditorSchema, data: object): PresetEnvelope {
+    private _buildPreset(target: PropertyTarget, schema: IEditorSchema, data: object): PresetEnvelope {
         const properties: Record<string, unknown> = {};
         for (const field of schema.fields) {
             if (!field.editable) continue;
             properties[field.propertyName] = serializeValue((data as Record<string, unknown>)[field.propertyName]);
         }
         return {
-            typeId: node.typeId,
-            label: node.label,
+            typeId: target.typeId,
+            label: target.label,
             properties,
         };
     }
@@ -346,8 +366,8 @@ export class PropertyEditor {
     }
 
     /**
-     * Drag-and-drop a manufacturer JSON onto the panel: parse + apply
-     * to the current node. Listeners stay alive for the lifetime of
+     * Drag-and-drop a preset JSON onto the panel: parse + apply
+     * to the current target. Listeners stay alive for the lifetime of
      * the component (no per-render churn).
      */
     private _installDropZone(): void {
@@ -378,19 +398,19 @@ export class PropertyEditor {
 
     private async _handleDrop(e: DragEvent): Promise<void> {
         if (!this.permissions.write) return;
-        const node = this._currentNode;
-        if (!node) return;
+        const target = this._currentTarget;
+        if (!target) return;
         const file = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files[0] : null;
         if (!file) return;
         try {
             const text = await file.text();
             const obj = JSON.parse(text);
-            const data = node.item ? (node.item.data as object | null) : null;
+            const data = target.data;
             if (!data) return;
             const schema = getEditorSchema(data);
             const applied = this._applyPreset(schema, data, obj);
             console.log(`[ne] preset applied: ${applied} field(s) from ${file.name}`);
-            if (applied > 0) this._mountEditorForNode(node);
+            if (applied > 0) this._mountEditorForTarget(target);
         } catch (err) {
             console.warn("[ne] preset drop failed:", err);
         }
@@ -421,6 +441,25 @@ export class PropertyEditor {
                 }
             }
         }
+    }
+
+    private _targetFromNode(node: NodeUI): PropertyTarget {
+        return {
+            kind: "node",
+            label: node.label,
+            typeId: node.typeId,
+            data: node.item ? (node.item.data as object | null) : null,
+            node,
+        };
+    }
+
+    private _targetFromConnection(connection: Connection): PropertyTarget {
+        return {
+            kind: "connection",
+            label: connection.item.getDisplayName(),
+            typeId: connection.typeId,
+            data: connection.item ? (connection.item.data as object | null) : null,
+        };
     }
 }
 

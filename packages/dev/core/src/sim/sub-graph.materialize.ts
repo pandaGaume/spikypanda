@@ -42,7 +42,9 @@
  * `subGraphJson`) is materialized recursively, so nesting works to any
  * depth from a single top-level call.
  */
+import { Channel } from "../execution/execution.channel";
 import type { IChannel, IRuntimeNode } from "../execution/execution.interfaces";
+import type { IOlink } from "../graph/graph.interfaces";
 import { RuntimeGraph } from "../execution/execution.graph";
 import { RuntimeGraphBuilder } from "../execution/execution.builder";
 
@@ -57,6 +59,8 @@ interface SubGraphModelNode {
 
 /** A name-addressed connection between two interior nodes. */
 interface SubGraphModelConnection {
+    typeId?: string;
+    data?: unknown;
     from: { node: string; port: string | number };
     to: { node: string; port: string | number };
 }
@@ -92,6 +96,8 @@ export interface SubGraphMaterializeResult {
     instances: Map<string, IRuntimeNode>;
     /** typeIds present in the document the factory could not resolve. */
     missingTypeIds: string[];
+    /** Concrete link typeIds the optional link factory could not resolve. */
+    missingLinkTypeIds: string[];
     /** Connection / boundary-port specs dropped because an endpoint is
      *  missing or not a runtime node. */
     skipped: string[];
@@ -129,8 +135,13 @@ function isNestedContainer(x: unknown): x is NestedContainerLike {
  * cannot be parsed simply does nothing, matching the editor's tolerance
  * for transient invalid state during edits.
  */
-export function materializeSubGraphInto(host: RuntimeGraph, json: string, createNode: (typeId: string) => IRuntimeNode | null): SubGraphMaterializeResult {
-    const result: SubGraphMaterializeResult = { instances: new Map(), missingTypeIds: [], skipped: [] };
+export function materializeSubGraphInto(
+    host: RuntimeGraph,
+    json: string,
+    createNode: (typeId: string) => IRuntimeNode | null,
+    createLink?: (typeId: string) => IOlink | null
+): SubGraphMaterializeResult {
+    const result: SubGraphMaterializeResult = { instances: new Map(), missingTypeIds: [], missingLinkTypeIds: [], skipped: [] };
 
     let doc: SubGraphDocument;
     try {
@@ -156,7 +167,7 @@ export function materializeSubGraphInto(host: RuntimeGraph, json: string, create
             instance.deserialize(saved.data);
         }
         if (isNestedContainer(instance)) {
-            materializeSubGraphInto(instance as unknown as RuntimeGraph, instance.subGraphJson, createNode);
+            materializeSubGraphInto(instance as unknown as RuntimeGraph, instance.subGraphJson, createNode, createLink);
         }
         result.instances.set(saved.id, instance);
     }
@@ -169,7 +180,9 @@ export function materializeSubGraphInto(host: RuntimeGraph, json: string, create
     }
     const builder = new RuntimeGraphBuilder<IRuntimeNode, IChannel>().withMode("dynamic").withNodes(...runtimeNodes);
 
-    // 3) Interior channels, addressed by name.
+    // 3) Interior channels, addressed by name. A v4 document may carry a
+    // concrete link type and serialized data. Older endpoint-only documents
+    // keep the local generic Channel fallback.
     for (const conn of modelConns) {
         const from = result.instances.get(String(conn.from.node));
         const to = result.instances.get(String(conn.to.node));
@@ -177,7 +190,26 @@ export function materializeSubGraphInto(host: RuntimeGraph, json: string, create
             result.skipped.push(`conn ${String(conn.from.node)}.${String(conn.from.port)} -> ${String(conn.to.node)}.${String(conn.to.port)}`);
             continue;
         }
-        builder.withChannel(from, to, conn.from.port, conn.to.port);
+        let link: IOlink | null = null;
+        if (conn.typeId && createLink) {
+            link = createLink(conn.typeId);
+            if (!link) result.missingLinkTypeIds.push(conn.typeId);
+        }
+        link ??= new Channel();
+        if (conn.data !== undefined && isDeserializable(link)) {
+            link.deserialize(conn.data);
+        }
+        if (!isChannel(link)) {
+            result.skipped.push(`link ${conn.typeId ?? "unknown"} is not an IChannel`);
+            link.dispose();
+            continue;
+        }
+        const mutable = link as IChannel & { slot: string | number; toSlot?: string | number };
+        mutable.slot = conn.from.port;
+        mutable.toSlot = conn.to.port;
+        link.oini = from;
+        link.ofin = to;
+        builder.withLinks(mutable);
     }
 
     // 4) Boundary ports: dangling channels whose slot name is the public
@@ -203,4 +235,9 @@ export function materializeSubGraphInto(host: RuntimeGraph, json: string, create
 
     host.adoptTopologyFrom(builder.build());
     return result;
+}
+
+function isChannel(link: IOlink): link is IChannel {
+    const candidate = link as Partial<IChannel>;
+    return "slot" in candidate && "delayed" in candidate && "enabled" in candidate;
 }

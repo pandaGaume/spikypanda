@@ -29,6 +29,12 @@ const SVG_NS = "http://www.w3.org/2000/svg";
  */
 export type LinkKind = "data" | "config" | "structural";
 
+/** Persisted runtime definition associated with a visual cable. */
+export interface ConnectionLinkModel {
+    readonly typeId: string;
+    readonly data: unknown;
+}
+
 /**
  * Decide a cable's render style purely from its endpoint types. Used
  * by the GraphViewer's `connect()` so every new cable picks the
@@ -69,6 +75,7 @@ export class Connection {
     readonly path: SVGPathElement;
     readonly item: UIItemBase<unknown>;
     readonly linkKind: LinkKind;
+    readonly typeId?: string;
 
     private readonly svg: SVGSVGElement;
 
@@ -82,19 +89,22 @@ export class Connection {
      * edge case of a config-style wire between two `any` ports (e.g.
      * a plugin-defined virtual binding).
      */
-    constructor(from: Port, to: Port, svg: SVGSVGElement, strokeColor = "#fff", linkKind?: LinkKind) {
+    constructor(from: Port, to: Port, svg: SVGSVGElement, strokeColor = "#fff", linkKind?: LinkKind, model?: ConnectionLinkModel) {
         this.from = from;
         this.to = to;
         this.svg = svg;
         this.linkKind = linkKind ?? deriveLinkKind(from.type, to.type);
-        this.item = new UIItemBase({
-            name: "Connection",
-            from: from.name,
-            to: to.name,
-            fromType: from.type,
-            toType: to.type,
-            linkKind: this.linkKind,
-        });
+        this.typeId = model?.typeId;
+        this.item = new UIItemBase(
+            model?.data ?? {
+                name: "Connection",
+                from: from.name,
+                to: to.name,
+                fromType: from.type,
+                toType: to.type,
+                linkKind: this.linkKind,
+            }
+        );
 
         this.path = document.createElementNS(SVG_NS, "path") as SVGPathElement;
         this.path.setAttribute("stroke", strokeColor);
