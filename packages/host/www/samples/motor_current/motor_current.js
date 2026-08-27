@@ -22,6 +22,14 @@
     const btnLoad = document.getElementById("btnLoad");
     const btnTrain = document.getElementById("btnTrain");
     const btnTest = document.getElementById("btnTest");
+    const btnExport = document.getElementById("btnExport");
+    const btnRestoreCheckpoint = document.getElementById("btnRestoreCheckpoint");
+    const btnResetCheckpoint = document.getElementById("btnResetCheckpoint");
+    const btnDownloadCheckpoint = document.getElementById("btnDownloadCheckpoint");
+    const btnImportCheckpoint = document.getElementById("btnImportCheckpoint");
+    const checkpointFileInput = document.getElementById("checkpointFileInput");
+    const btnCopyLog = document.getElementById("btnCopyLog");
+    const btnClearLog = document.getElementById("btnClearLog");
     const resultsPanel = document.getElementById("resultsPanel");
     const lossCanvas = document.getElementById("lossCanvas");
     const signalCanvas = document.getElementById("signalCanvas");
@@ -32,7 +40,26 @@
     let rnnGraph = null;
     let runtime = null;
     let trainer = null;
+    let snnModel = null;
+    let snnInference = null;
+    let snnSensorConfig = null;
+    let activeCheckpoint = null;
+    let loadedSplitProtocol = null;
+    let loadedDatasetFingerprint = null;
+    let loadedSampleRateHz = 60;
+    let loadedSignalDomain = "envelope";
+    let loadedLineFrequencyHz = 60;
+    let lastTestAccuracy = null;
     const lossHistory = [];
+
+    const CHECKPOINT_SCHEMA_VERSION = 2;
+    const CHECKPOINT_PREFIX = "spikypanda.motor-current.best.v2.";
+    const CHECKPOINT_LATEST_KEY = "spikypanda.motor-current.best.latest.v2";
+    const RNN_ARCHITECTURE_VERSION = "rnn-many-to-one-v2";
+    const SNN_ARCHITECTURE_VERSION = "snn-wave-lif-ff-v2";
+    const VALIDATION_PROTOCOL = "train-holdout-12.5-v1";
+    const SNN_SEED = 0x534e4e31;
+    const SNN_BATCH_SIZE = 16;
 
     // Default class list matches the synthetic fallback below. When real data
     // (UFU .mat) is loaded via prepare_motor_current.py, the JSON exposes a
@@ -48,8 +75,591 @@
         logEl.textContent += msg + "\n";
         logEl.scrollTop = logEl.scrollHeight;
     }
-    function setStatus(msg) { statusEl.textContent = msg; }
-    function setProgress(pct) { progressFill.style.width = pct + "%"; }
+    function setStatus(msg) {
+        statusEl.textContent = msg;
+    }
+    function setProgress(pct) {
+        progressFill.style.width = pct + "%";
+    }
+
+    function flashButton(button, text, duration) {
+        if (!button) return;
+        const original = button.textContent;
+        button.textContent = text;
+        button.classList.add("copied");
+        window.setTimeout(function () {
+            button.textContent = original;
+            button.classList.remove("copied");
+        }, duration || 1200);
+    }
+
+    function copyTrainingLog() {
+        const text = logEl.textContent || "";
+        const copied = function () {
+            flashButton(btnCopyLog, "Copied!", 1500);
+        };
+        const failed = function () {
+            flashButton(btnCopyLog, "Failed", 1500);
+        };
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(copied).catch(failed);
+            return;
+        }
+
+        try {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.style.position = "fixed";
+            textarea.style.top = "-1000px";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            const ok = document.execCommand("copy");
+            textarea.remove();
+            if (ok) copied();
+            else failed();
+        } catch (e) {
+            failed();
+        }
+    }
+
+    if (btnCopyLog) btnCopyLog.addEventListener("click", copyTrainingLog);
+    const cellTypeSelect = document.getElementById("cellType");
+    if (cellTypeSelect) {
+        cellTypeSelect.addEventListener("change", function () {
+            btnExport.disabled = true;
+            if (cellTypeSelect.value !== "snn") return;
+            document.getElementById("hiddenSize").value = "16";
+            document.getElementById("epochs").value = "20";
+            document.getElementById("lr").value = "0.01";
+            setStatus("SNN selected: wave sensor, 16 hidden LIF, 5 class LIF.");
+        });
+    }
+    if (btnClearLog) {
+        btnClearLog.addEventListener("click", function () {
+            logEl.textContent = "Ready.\n";
+            logEl.scrollTop = 0;
+            flashButton(btnClearLog, "Cleared", 1000);
+        });
+    }
+
+    function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        anchor.style.display = "none";
+        document.body.appendChild(anchor);
+        anchor.click();
+        window.setTimeout(function () {
+            anchor.remove();
+            URL.revokeObjectURL(url);
+        }, 1000);
+    }
+
+    function hashText(text, initial) {
+        let hash = initial === undefined ? 2166136261 : initial;
+        for (let i = 0; i < text.length; i++) {
+            hash ^= text.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        return hash >>> 0;
+    }
+
+    function fingerprintDataset(samples, splitProtocol) {
+        let hash = hashText(splitProtocol + "|" + samples.length);
+        for (let i = 0; i < samples.length; i++) {
+            const sample = samples[i];
+            const sequence = sample.sequence;
+            const first = sequence[0] || [];
+            const last = sequence[sequence.length - 1] || [];
+            hash = hashText(
+                [sample.label, sample.sourceGroup || "", sample.sourceLoad || "", sample.windowStart === undefined ? "" : sample.windowStart, first.join(","), last.join(",")].join(
+                    "|"
+                ),
+                hash
+            );
+        }
+        return hash.toString(16).padStart(8, "0");
+    }
+
+    function splitTrainingValidation(samples) {
+        const grouped =
+            samples.length > 0 &&
+            samples.every(function (sample) {
+                return typeof sample.sourceGroup === "string" && sample.sourceGroup.length > 0;
+            });
+
+        if (grouped) {
+            const strata = new Map();
+            for (let i = 0; i < samples.length; i++) {
+                const sample = samples[i];
+                const stratum = sample.label + "|" + (sample.sourceLoad || "unknown");
+                if (!strata.has(stratum)) strata.set(stratum, new Map());
+                const groups = strata.get(stratum);
+                if (!groups.has(sample.sourceGroup)) groups.set(sample.sourceGroup, []);
+                groups.get(sample.sourceGroup).push(sample);
+            }
+
+            const validationGroups = new Set();
+            strata.forEach(function (groups, stratum) {
+                const names = Array.from(groups.keys()).sort(function (left, right) {
+                    const leftHash = hashText(stratum + "|" + left);
+                    const rightHash = hashText(stratum + "|" + right);
+                    return leftHash - rightHash || left.localeCompare(right);
+                });
+                const count = Math.max(1, Math.round(names.length * 0.125));
+                for (let i = 0; i < count && i < names.length; i++) {
+                    validationGroups.add(names[i]);
+                }
+            });
+
+            return {
+                train: samples.filter(function (sample) {
+                    return !validationGroups.has(sample.sourceGroup);
+                }),
+                validation: samples.filter(function (sample) {
+                    return validationGroups.has(sample.sourceGroup);
+                }),
+                protocol: VALIDATION_PROTOCOL + "-grouped",
+            };
+        }
+
+        const train = [];
+        const validation = [];
+        const classOffsets = new Map();
+        for (let i = 0; i < samples.length; i++) {
+            const sample = samples[i];
+            const offset = classOffsets.get(sample.label) || 0;
+            if (offset % 8 === 0) validation.push(sample);
+            else train.push(sample);
+            classOffsets.set(sample.label, offset + 1);
+        }
+        return {
+            train: train,
+            validation: validation,
+            protocol: VALIDATION_PROTOCOL + "-stratified-windows",
+        };
+    }
+
+    async function evaluateAccuracy(samples) {
+        let correct = 0;
+        for (let i = 0; i < samples.length; i++) {
+            const sample = samples[i];
+            runtime.resetState();
+            const outputs = runtime.run(sample.sequence);
+            const lastOutput = outputs[outputs.length - 1];
+            let predicted = 0;
+            for (let c = 1; c < lastOutput.length; c++) {
+                if (lastOutput[c] > lastOutput[predicted]) predicted = c;
+            }
+            if (predicted === sample.label) correct++;
+            if (i % 50 === 0) {
+                await new Promise(function (resolve) {
+                    window.setTimeout(resolve, 0);
+                });
+            }
+        }
+        return { correct: correct, total: samples.length, accuracy: correct / samples.length };
+    }
+
+    async function evaluateSnnTeacherAccuracy(model, samples) {
+        let correct = 0;
+        let sensorEvents = 0;
+        let eventTimesteps = 0;
+        for (let i = 0; i < samples.length; i++) {
+            const result = MotorCurrentSnn.predictTeacher(model, samples[i].sequence, "hard");
+            if (result.predicted === samples[i].label) correct++;
+            sensorEvents += result.sensorEvents;
+            eventTimesteps += result.eventTimesteps;
+            if (i % 25 === 0) {
+                await new Promise(function (resolve) {
+                    window.setTimeout(resolve, 0);
+                });
+            }
+        }
+        return {
+            correct: correct,
+            total: samples.length,
+            accuracy: correct / samples.length,
+            sensorEvents: sensorEvents,
+            eventTimesteps: eventTimesteps,
+        };
+    }
+
+    function buildSnnFromMetadata(modelMetadata, learningRate) {
+        if (!modelMetadata.snn || !modelMetadata.snn.sensorConfig || !Array.isArray(modelMetadata.snn.sensorConfig.bands)) {
+            throw new Error("SNN checkpoint is missing its wave sensor metadata.");
+        }
+        return MotorCurrentSnn.buildModel({
+            hiddenSize: modelMetadata.hiddenSize,
+            outputSize: modelMetadata.outputSize,
+            windowSize: modelMetadata.windowSize,
+            sensorConfig: modelMetadata.snn.sensorConfig,
+            seed: modelMetadata.snn.seed,
+            learningRate: learningRate,
+        });
+    }
+
+    function createCompiledSnnFromCheckpoint(checkpoint) {
+        const model = buildSnnFromMetadata(checkpoint.model, 0.001);
+        if (!checkpointTopologyMatches(model.graph, checkpoint)) {
+            throw new Error("SNN checkpoint topology does not match its model metadata.");
+        }
+        spRestoreWeights(model.graph, checkpoint.snapshot);
+        MotorCurrentSnn.compileModel(model);
+        return model;
+    }
+
+    function architectureDescriptor(model) {
+        const descriptor = {
+            architectureVersion: model.architectureVersion,
+            cellType: model.cellType,
+            inputSize: model.inputSize,
+            hiddenSize: model.hiddenSize,
+            outputSize: model.outputSize,
+            windowSize: model.windowSize,
+        };
+        if (model.cellType === "snn") {
+            descriptor.snn = {
+                encoder: model.snn && model.snn.encoder,
+                sensorConfig: model.snn && model.snn.sensorConfig,
+                frameEndSlot: model.snn && model.snn.frameEndSlot,
+            };
+        }
+        return descriptor;
+    }
+
+    function stableStringify(value) {
+        if (value === null || typeof value !== "object") return JSON.stringify(value === undefined ? null : value);
+        if (Array.isArray(value)) {
+            return "[" + value.map(stableStringify).join(",") + "]";
+        }
+        return (
+            "{" +
+            Object.keys(value)
+                .sort()
+                .map(function (key) {
+                    return JSON.stringify(key) + ":" + stableStringify(value[key]);
+                })
+                .join(",") +
+            "}"
+        );
+    }
+
+    function architectureSignature(model) {
+        return hashText(stableStringify(architectureDescriptor(model)))
+            .toString(16)
+            .padStart(8, "0");
+    }
+
+    function stampArchitecture(model) {
+        model.architectureSignature = architectureSignature(model);
+        return model.architectureSignature;
+    }
+
+    function checkpointHasValidArchitecture(checkpoint) {
+        return (
+            checkpoint &&
+            checkpoint.model &&
+            typeof checkpoint.model.architectureSignature === "string" &&
+            checkpoint.model.architectureSignature === architectureSignature(checkpoint.model)
+        );
+    }
+
+    function checkpointStorageKey(model) {
+        const signature = architectureSignature(model);
+        return CHECKPOINT_PREFIX + [model.datasetFingerprint, signature].join(".");
+    }
+
+    function checkpointTopologyMatches(graph, checkpoint) {
+        return (
+            checkpoint &&
+            checkpoint.snapshot &&
+            Array.isArray(checkpoint.snapshot.syn) &&
+            Array.isArray(checkpoint.snapshot.neu) &&
+            checkpoint.snapshot.syn.length === graph.links.length &&
+            checkpoint.snapshot.neu.length === graph.nodes.length
+        );
+    }
+
+    function readCheckpoint(key) {
+        if (!key) return null;
+        try {
+            const raw = localStorage.getItem(key);
+            if (!raw) return null;
+            const checkpoint = JSON.parse(raw);
+            if (!checkpoint || checkpoint.schemaVersion !== CHECKPOINT_SCHEMA_VERSION || !checkpointHasValidArchitecture(checkpoint)) return null;
+            return checkpoint;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function readLatestCheckpoint() {
+        try {
+            return readCheckpoint(localStorage.getItem(CHECKPOINT_LATEST_KEY));
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function persistCheckpoint(checkpoint) {
+        try {
+            stampArchitecture(checkpoint.model);
+            const key = checkpointStorageKey(checkpoint.model);
+            localStorage.setItem(key, JSON.stringify(checkpoint));
+            localStorage.setItem(CHECKPOINT_LATEST_KEY, key);
+            return { ok: true, key: key };
+        } catch (e) {
+            return { ok: false, error: e.message };
+        }
+    }
+
+    function removePersistedCheckpoint(checkpoint) {
+        if (!checkpoint || !checkpoint.model) return false;
+        try {
+            const key = checkpointStorageKey(checkpoint.model);
+            localStorage.removeItem(key);
+            if (localStorage.getItem(CHECKPOINT_LATEST_KEY) === key) {
+                localStorage.removeItem(CHECKPOINT_LATEST_KEY);
+            }
+            return true;
+        } catch (e) {
+            log("ERROR resetting checkpoint: " + e.message);
+            return false;
+        }
+    }
+
+    function buildGraph(cellType, hiddenSize, outputSize) {
+        return new S.RnnBuilder()
+            .withInputSize(3)
+            .withHiddenSize(hiddenSize)
+            .withOutputSize(outputSize)
+            .withCellType(cellType === "lstm" ? S.RnnCellType.LSTM : S.RnnCellType.GRU)
+            .withOutputActivation(S.ActivationFunctions.sigmoid)
+            .build();
+    }
+
+    function restoreCheckpoint(checkpoint, announce) {
+        if (!checkpoint || checkpoint.schemaVersion !== CHECKPOINT_SCHEMA_VERSION || !checkpoint.model || !checkpoint.snapshot || !Array.isArray(checkpoint.classes)) {
+            throw new Error("Invalid checkpoint payload.");
+        }
+        if (!checkpointHasValidArchitecture(checkpoint)) {
+            throw new Error("Checkpoint architecture signature is missing or does not match its model.");
+        }
+
+        const model = checkpoint.model;
+        if (model.cellType === "snn") {
+            snnModel = null;
+            snnInference = createCompiledSnnFromCheckpoint(checkpoint);
+            snnSensorConfig = model.snn.sensorConfig;
+            rnnGraph = snnInference.graph;
+            runtime = snnInference;
+            trainer = null;
+        } else {
+            const graph = buildGraph(model.cellType, model.hiddenSize, model.outputSize);
+            if (!checkpointTopologyMatches(graph, checkpoint)) {
+                throw new Error("Checkpoint topology does not match its model metadata.");
+            }
+            spRestoreWeights(graph, checkpoint.snapshot);
+            rnnGraph = graph;
+            runtime = new S.RnnInferenceRuntime(rnnGraph);
+            trainer = null;
+            snnModel = null;
+            snnInference = null;
+            snnSensorConfig = null;
+        }
+        activeCheckpoint = checkpoint;
+        CLASS_NAMES = checkpoint.classes.slice();
+        NUM_CLASSES = CLASS_NAMES.length;
+
+        document.getElementById("cellType").value = model.cellType;
+        document.getElementById("hiddenSize").value = String(model.hiddenSize);
+        if (checkpoint.dataset && checkpoint.dataset.selection) {
+            document.getElementById("datasetSplit").value = checkpoint.dataset.selection;
+        }
+
+        const bestPct = (checkpoint.metric.validationAccuracy * 100).toFixed(1);
+        const bestValidationEl = document.getElementById("bestValidation");
+        const bestEpochEl = document.getElementById("bestEpoch");
+        const finalLossEl = document.getElementById("finalLoss");
+        if (bestValidationEl) bestValidationEl.textContent = bestPct + "%";
+        if (bestEpochEl) bestEpochEl.textContent = checkpoint.metric.epoch;
+        if (finalLossEl) finalLossEl.textContent = checkpoint.metric.trainLoss.toFixed(4);
+
+        btnRestoreCheckpoint.disabled = false;
+        if (btnResetCheckpoint) btnResetCheckpoint.disabled = false;
+        btnDownloadCheckpoint.disabled = false;
+        btnExport.disabled = model.cellType === "snn";
+        btnTest.disabled = !(testData && loadedDatasetFingerprint === model.datasetFingerprint);
+
+        if (announce !== false) {
+            log(
+                "Restored persistent best checkpoint: epoch " +
+                    checkpoint.metric.epoch +
+                    ", validation " +
+                    bestPct +
+                    "% (" +
+                    checkpoint.metric.validationCorrect +
+                    "/" +
+                    checkpoint.metric.validationTotal +
+                    ")."
+            );
+            setStatus(
+                model.cellType === "snn" ? "Best SNN checkpoint restored. Load matching data to test." : "Best checkpoint restored. Export is ready; load matching data to test."
+            );
+        }
+        return checkpoint;
+    }
+
+    function createAccuracyCheckpointer(graph, metadata) {
+        stampArchitecture(metadata.model);
+        const storageKey = checkpointStorageKey(metadata.model);
+        const saved = readCheckpoint(storageKey);
+        let bestCheckpoint = checkpointHasValidArchitecture(saved) && checkpointTopologyMatches(graph, saved) ? saved : null;
+        let bestAccuracy = bestCheckpoint ? bestCheckpoint.metric.validationAccuracy : -1;
+        let bestLoss = bestCheckpoint ? bestCheckpoint.metric.trainLoss : Infinity;
+
+        return {
+            update: function (epoch, trainLoss, validation) {
+                const improved = validation.accuracy > bestAccuracy + 1e-12 || (Math.abs(validation.accuracy - bestAccuracy) <= 1e-12 && trainLoss < bestLoss);
+                if (!improved) return { improved: false, checkpoint: bestCheckpoint };
+
+                const snapshot = spSnapshotWeights(graph);
+                bestAccuracy = validation.accuracy;
+                bestLoss = trainLoss;
+                bestCheckpoint = {
+                    schemaVersion: CHECKPOINT_SCHEMA_VERSION,
+                    savedAt: new Date().toISOString(),
+                    model: metadata.model,
+                    dataset: metadata.dataset,
+                    validationProtocol: metadata.validationProtocol,
+                    classes: metadata.classes.slice(),
+                    metric: {
+                        epoch: epoch + 1,
+                        validationAccuracy: validation.accuracy,
+                        validationCorrect: validation.correct,
+                        validationTotal: validation.total,
+                        trainLoss: trainLoss,
+                    },
+                    snapshot: { syn: snapshot.syn, neu: snapshot.neu },
+                };
+
+                const persisted = persistCheckpoint(bestCheckpoint);
+                activeCheckpoint = bestCheckpoint;
+                btnRestoreCheckpoint.disabled = false;
+                if (btnResetCheckpoint) btnResetCheckpoint.disabled = false;
+                btnDownloadCheckpoint.disabled = false;
+                return { improved: true, persisted: persisted, checkpoint: bestCheckpoint };
+            },
+            restore: function () {
+                if (bestCheckpoint) spRestoreWeights(graph, bestCheckpoint.snapshot);
+                activeCheckpoint = bestCheckpoint;
+                return bestCheckpoint;
+            },
+            hasSavedBaseline: function () {
+                return bestCheckpoint !== null;
+            },
+        };
+    }
+
+    if (btnRestoreCheckpoint) {
+        btnRestoreCheckpoint.addEventListener("click", function () {
+            const checkpoint = activeCheckpoint || readLatestCheckpoint();
+            if (!checkpoint) {
+                log("No persistent checkpoint is available.");
+                return;
+            }
+            try {
+                restoreCheckpoint(checkpoint, true);
+            } catch (e) {
+                log("ERROR restoring checkpoint: " + e.message);
+            }
+        });
+    }
+
+    if (btnResetCheckpoint) {
+        btnResetCheckpoint.addEventListener("click", function () {
+            const checkpoint = activeCheckpoint || readLatestCheckpoint();
+            if (!checkpoint) {
+                log("No persistent checkpoint is available to reset.");
+                return;
+            }
+            if (!removePersistedCheckpoint(checkpoint)) return;
+
+            activeCheckpoint = null;
+            lastTestAccuracy = null;
+            btnRestoreCheckpoint.disabled = true;
+            btnResetCheckpoint.disabled = true;
+            btnDownloadCheckpoint.disabled = true;
+            document.getElementById("bestValidation").textContent = "-";
+            document.getElementById("bestEpoch").textContent = "-";
+            document.getElementById("finalLoss").textContent = "-";
+            log("Reset saved checkpoint for architecture " + checkpoint.model.architectureSignature + ".");
+            setStatus("Saved baseline reset. The next training epoch can become the new best.");
+        });
+    }
+
+    if (btnDownloadCheckpoint) {
+        btnDownloadCheckpoint.addEventListener("click", function () {
+            if (!activeCheckpoint) {
+                log("No best checkpoint is available to download.");
+                return;
+            }
+            const metric = (activeCheckpoint.metric.validationAccuracy * 100).toFixed(1).replace(".", "p");
+            const filename =
+                "motor_current_" +
+                activeCheckpoint.model.cellType +
+                "_h" +
+                activeCheckpoint.model.hiddenSize +
+                "_" +
+                activeCheckpoint.model.architectureSignature +
+                "_best_val_" +
+                metric +
+                ".json";
+            downloadBlob(new Blob([JSON.stringify(activeCheckpoint, null, 2)], { type: "application/json" }), filename);
+            log("Downloaded checkpoint: " + filename);
+        });
+    }
+
+    if (btnImportCheckpoint && checkpointFileInput) {
+        btnImportCheckpoint.addEventListener("click", function () {
+            checkpointFileInput.click();
+        });
+        checkpointFileInput.addEventListener("change", async function () {
+            const file = checkpointFileInput.files && checkpointFileInput.files[0];
+            if (!file) return;
+            try {
+                const checkpoint = JSON.parse(await file.text());
+                restoreCheckpoint(checkpoint, true);
+                const persisted = persistCheckpoint(checkpoint);
+                if (!persisted.ok) {
+                    log("WARNING: imported weights are in memory but local persistence failed: " + persisted.error);
+                } else {
+                    log("Imported checkpoint saved in browser storage.");
+                }
+            } catch (e) {
+                log("ERROR importing checkpoint: " + e.message);
+            } finally {
+                checkpointFileInput.value = "";
+            }
+        });
+    }
+
+    async function fetchDataset(filename) {
+        const url = new URL("../../data/motor_current/" + filename, window.location.href);
+        const response = await fetch(url.href, { cache: "no-store" });
+        if (!response.ok) {
+            throw new Error(filename + " returned HTTP " + response.status);
+        }
+        const payload = await response.json();
+        if (!payload || !Array.isArray(payload.samples) || !Array.isArray(payload.classes)) {
+            throw new Error(filename + " has an invalid dataset schema");
+        }
+        return payload;
+    }
 
     // ====================== SYNTHETIC DATA GENERATOR ======================
     //
@@ -67,12 +677,14 @@
         return sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
     }
 
-    function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
+    function clamp(x, lo, hi) {
+        return Math.max(lo, Math.min(hi, x));
+    }
 
     function generateCurrentSample(faultType, windowSize) {
         const sequence = [];
-        const baseFreq = 60;           // Hz (line frequency)
-        const dt = 1 / 1000;           // 1 kHz effective sample rate
+        const baseFreq = 60; // Hz (line frequency)
+        const dt = 1 / 1000; // 1 kHz effective sample rate
         const phaseNoise = (Math.random() - 0.5) * 0.2;
 
         for (let t = 0; t < windowSize; t++) {
@@ -82,27 +694,27 @@
             switch (faultType) {
                 case 0: // Normal: balanced 3-phase
                     ia = Math.sin(angle);
-                    ib = Math.sin(angle - 2 * Math.PI / 3);
-                    ic = Math.sin(angle + 2 * Math.PI / 3);
+                    ib = Math.sin(angle - (2 * Math.PI) / 3);
+                    ic = Math.sin(angle + (2 * Math.PI) / 3);
                     n = 0.02;
                     break;
                 case 1: // Open phase A
                     ia = 0;
-                    ib = 1.15 * Math.sin(angle - 2 * Math.PI / 3);
-                    ic = 1.15 * Math.sin(angle + 2 * Math.PI / 3);
+                    ib = 1.15 * Math.sin(angle - (2 * Math.PI) / 3);
+                    ic = 1.15 * Math.sin(angle + (2 * Math.PI) / 3);
                     n = 0.03;
                     break;
                 case 2: // Short circuit on A: elevated + harmonic
                     ia = 1.6 * Math.sin(angle) + 0.35 * Math.sin(3 * angle);
-                    ib = Math.sin(angle - 2 * Math.PI / 3) + 0.1 * Math.sin(3 * angle);
-                    ic = Math.sin(angle + 2 * Math.PI / 3) + 0.1 * Math.sin(3 * angle);
+                    ib = Math.sin(angle - (2 * Math.PI) / 3) + 0.1 * Math.sin(3 * angle);
+                    ic = Math.sin(angle + (2 * Math.PI) / 3) + 0.1 * Math.sin(3 * angle);
                     n = 0.05;
                     break;
                 case 3: // Unbalanced amplitudes + small phase drift
                 default:
                     ia = 1.2 * Math.sin(angle);
-                    ib = 0.8 * Math.sin(angle - 2 * Math.PI / 3 + 0.15);
-                    ic = 1.0 * Math.sin(angle + 2 * Math.PI / 3 - 0.10);
+                    ib = 0.8 * Math.sin(angle - (2 * Math.PI) / 3 + 0.15);
+                    ic = 1.0 * Math.sin(angle + (2 * Math.PI) / 3 - 0.1);
                     n = 0.04;
                     break;
             }
@@ -142,7 +754,7 @@
         const splitIdx = Math.floor(numSamples * 0.8);
         return {
             train: all.slice(0, splitIdx),
-            test: all.slice(splitIdx)
+            test: all.slice(splitIdx),
         };
     }
 
@@ -155,7 +767,8 @@
         canvas.height = rect.height * window.devicePixelRatio;
         const ctx = canvas.getContext("2d");
         ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-        const W = rect.width, H = rect.height;
+        const W = rect.width,
+            H = rect.height;
 
         ctx.fillStyle = "#0a0a1a";
         ctx.fillRect(0, 0, W, H);
@@ -169,7 +782,7 @@
         ctx.strokeStyle = "#1a2a3a";
         ctx.lineWidth = 0.5;
         for (let i = 0; i < 5; i++) {
-            const y = 10 + i * (H - 20) / 4;
+            const y = 10 + (i * (H - 20)) / 4;
             ctx.beginPath();
             ctx.moveTo(10, y);
             ctx.lineTo(W - 10, y);
@@ -182,7 +795,8 @@
         for (let i = 0; i < lossHistory.length; i++) {
             const x = (i / (lossHistory.length - 1)) * (W - 20) + 10;
             const y = H - 10 - ((lossHistory[i] - minLoss) / range) * (H - 20);
-            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
         }
         ctx.stroke();
 
@@ -201,21 +815,25 @@
         canvas.height = rect.height * window.devicePixelRatio;
         const ctx = canvas.getContext("2d");
         ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-        const W = rect.width, H = rect.height;
+        const W = rect.width,
+            H = rect.height;
 
         ctx.fillStyle = "#0a0a1a";
         ctx.fillRect(0, 0, W, H);
 
         const seq = sample.sequence;
         const T = seq.length;
-        const padL = 40, padR = 10, padT = 10, padB = 25;
+        const padL = 40,
+            padR = 10,
+            padT = 10,
+            padB = 25;
         const plotW = W - padL - padR;
         const plotH = H - padT - padB;
 
         ctx.strokeStyle = "#1a2a3a";
         ctx.lineWidth = 0.5;
         for (let i = 0; i <= 4; i++) {
-            const y = padT + i * plotH / 4;
+            const y = padT + (i * plotH) / 4;
             ctx.beginPath();
             ctx.moveTo(padL, y);
             ctx.lineTo(W - padR, y);
@@ -227,7 +845,7 @@
         ctx.textAlign = "right";
         for (let i = 0; i <= 4; i++) {
             const val = (1 - i / 4).toFixed(2);
-            const y = padT + i * plotH / 4 + 3;
+            const y = padT + (i * plotH) / 4 + 3;
             ctx.fillText(val, padL - 4, y);
         }
 
@@ -239,7 +857,8 @@
             for (let t = 0; t < T; t++) {
                 const x = padL + (t / (T - 1)) * plotW;
                 const y = padT + (1 - seq[t][ch]) * plotH;
-                if (t === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                if (t === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
             }
             ctx.stroke();
         }
@@ -259,10 +878,7 @@
         ctx.fillStyle = "#888";
         ctx.font = "11px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(
-            "Rotor state: " + CLASS_NAMES[sample.label] + " (" + T + " timesteps)",
-            W / 2, H - 2
-        );
+        ctx.fillText("Rotor state: " + CLASS_NAMES[sample.label] + " (" + T + " timesteps)", W / 2, H - 2);
     }
 
     function drawConfusionMatrix(matrix) {
@@ -326,34 +942,71 @@
 
         const numSamples = parseInt(document.getElementById("numSamples").value);
         const windowSize = parseInt(document.getElementById("windowSize").value);
+        const splitSelect = document.getElementById("datasetSplit");
+        const splitProtocol = splitSelect ? splitSelect.value : "legacy";
+        const groupedSplit = splitProtocol === "grouped";
+        const trainFile = groupedSplit ? "train_grouped.json" : "train.json";
+        const testFile = groupedSplit ? "test_grouped.json" : "test.json";
 
         let dataLoaded = false;
 
         // Prefer real data generated by prepare_motor_current.py
         try {
-            const trainResp = await fetch("../../data/motor_current/train.json");
-            if (trainResp.ok) {
-                const trainJson = await trainResp.json();
-                const testResp = await fetch("../../data/motor_current/test.json");
-                const testJson = await testResp.json();
-
-                trainData = trainJson.samples.map(function (s) {
-                    return { sequence: s.sequence, label: s.label };
-                });
-                testData = testJson.samples.map(function (s) {
-                    return { sequence: s.sequence, label: s.label };
-                });
-
-                if (trainJson.classes) {
-                    CLASS_NAMES = trainJson.classes;
-                    NUM_CLASSES = CLASS_NAMES.length;
-                }
-                log("Loaded real data: " + trainData.length + " train, " + testData.length + " test samples");
-                log("Classes: " + CLASS_NAMES.join(", "));
-                dataLoaded = true;
+            const datasets = await Promise.all([fetchDataset(trainFile), fetchDataset(testFile)]);
+            const trainJson = datasets[0];
+            const testJson = datasets[1];
+            if (groupedSplit && trainJson.splitProtocol !== "grouped-acquisition-v1") {
+                throw new Error(trainFile + " is not an acquisition-grouped dataset");
             }
+
+            trainData = trainJson.samples.map(function (s) {
+                return {
+                    sequence: s.sequence,
+                    label: s.label,
+                    sourceGroup: s.sourceGroup,
+                    sourceLoad: s.sourceLoad,
+                    windowStart: s.windowStart,
+                };
+            });
+            testData = testJson.samples.map(function (s) {
+                return {
+                    sequence: s.sequence,
+                    label: s.label,
+                    sourceGroup: s.sourceGroup,
+                    sourceLoad: s.sourceLoad,
+                    windowStart: s.windowStart,
+                };
+            });
+
+            CLASS_NAMES = trainJson.classes;
+            NUM_CLASSES = CLASS_NAMES.length;
+            loadedSplitProtocol = trainJson.splitProtocol || "legacy-window-random";
+            loadedSampleRateHz = Number.isFinite(trainJson.sampleRateHz) ? trainJson.sampleRateHz : CLASS_NAMES[0] === "Healthy" ? 59.990291 : 1000;
+            loadedSignalDomain =
+                trainJson.signalDomain || (trainJson.preprocessing && trainJson.preprocessing.envelope ? "envelope" : CLASS_NAMES[0] === "Healthy" ? "envelope" : "raw-current");
+            loadedLineFrequencyHz = Number.isFinite(trainJson.lineFrequencyHz) ? trainJson.lineFrequencyHz : 60;
+            log("Loaded real data: " + trainData.length + " train, " + testData.length + " test samples");
+            log("Classes: " + CLASS_NAMES.join(", "));
+            log("Split protocol: " + loadedSplitProtocol);
+            log("Signal domain: " + loadedSignalDomain + " at " + loadedSampleRateHz.toFixed(3) + " Hz");
+            dataLoaded = true;
         } catch (e) {
-            // Fall through to synthetic
+            if (groupedSplit) {
+                log("ERROR loading grouped dataset: " + e.message);
+                log("Generate it with prepare_motor_current.py --split-protocol grouped.");
+                setStatus("Grouped dataset is not available.");
+                btnLoad.disabled = false;
+                return;
+            }
+            // Legacy mode can fall through to synthetic data.
+        }
+
+        if (!dataLoaded && groupedSplit) {
+            log("Grouped dataset files are missing.");
+            log("Generate them with prepare_motor_current.py --split-protocol grouped.");
+            setStatus("Grouped dataset is not available.");
+            btnLoad.disabled = false;
+            return;
         }
 
         if (!dataLoaded) {
@@ -364,9 +1017,24 @@
             // Synthetic fallback always uses the 4-class electrical fault set
             CLASS_NAMES = ["Normal", "OpenPhase", "ShortCircuit", "Unbalanced"];
             NUM_CLASSES = CLASS_NAMES.length;
+            loadedSplitProtocol = "synthetic-random-v1";
+            loadedSampleRateHz = 1000;
+            loadedSignalDomain = "raw-current";
+            loadedLineFrequencyHz = 60;
             log("Generated synthetic data: " + trainData.length + " train, " + testData.length + " test samples");
             log("Window size: " + windowSize + " timesteps x 3 channels (Ia, Ib, Ic)");
             log("Classes: " + CLASS_NAMES.join(", "));
+        }
+
+        loadedDatasetFingerprint = fingerprintDataset(trainData, loadedSplitProtocol);
+        log("Dataset fingerprint: " + loadedDatasetFingerprint);
+
+        if (activeCheckpoint) {
+            const compatible = activeCheckpoint.model.datasetFingerprint === loadedDatasetFingerprint && activeCheckpoint.model.outputSize === NUM_CLASSES;
+            btnTest.disabled = !compatible;
+            if (!compatible) {
+                log("Saved checkpoint does not match this dataset. Train a model for the selected split.");
+            }
         }
 
         if (trainData.length > 0) {
@@ -381,29 +1049,247 @@
 
     // ====================== TRAINING ======================
 
+    async function trainSnn(hiddenSize, epochs, learningRate) {
+        const split = splitTrainingValidation(trainData);
+        const trainingSamples = split.train;
+        const validationSamples = split.validation;
+        if (trainingSamples.length === 0 || validationSamples.length === 0) {
+            throw new Error("Unable to create a non-empty SNN training/validation split.");
+        }
+
+        const baseSensorConfig = MotorCurrentSnn.createSensorConfig({
+            sampleRateHz: loadedSampleRateHz,
+            signalDomain: loadedSignalDomain,
+            lineFrequencyHz: loadedLineFrequencyHz,
+            channelCount: 3,
+        });
+        snnSensorConfig = MotorCurrentSnn.calibrateSensor(trainingSamples, baseSensorConfig, MotorCurrentSnn.DEFAULT_PERCENTILE);
+        const windowSize = trainingSamples[0].sequence.length;
+        snnModel = MotorCurrentSnn.buildModel({
+            hiddenSize: hiddenSize,
+            outputSize: NUM_CLASSES,
+            windowSize: windowSize,
+            sensorConfig: snnSensorConfig,
+            seed: SNN_SEED,
+            learningRate: learningRate,
+        });
+        snnInference = null;
+        rnnGraph = snnModel.graph;
+        runtime = null;
+        trainer = snnModel.trainer;
+
+        log(
+            "SNN RuntimeGraphBuilder topology: observation source -> wave sensor (" +
+                snnModel.sensorPorts.length +
+                " frequency/phase ports) -> " +
+                hiddenSize +
+                " hidden LIF -> " +
+                NUM_CLASSES +
+                " class LIF"
+        );
+        log("Training graph: " + snnModel.graph.nodes.length + " nodes, " + snnModel.graph.links.length + " links, " + snnModel.trainableWeightCount + " trainable weights");
+        log(
+            "Hidden tau bank: " +
+                snnModel.tauBank
+                    .map(function (tau) {
+                        return (tau * 1000).toFixed(1) + "ms";
+                    })
+                    .join(", ")
+        );
+        log(
+            "Wave bands: " +
+                Array.from(
+                    new Set(
+                        snnSensorConfig.bands.map(function (band) {
+                            return band.centerFrequencyHz + " Hz";
+                        })
+                    )
+                ).join(", ")
+        );
+        log(
+            "Band thresholds (85th percentile, Ia first): " +
+                snnSensorConfig.bands
+                    .slice(0, snnSensorConfig.bands.length / 3)
+                    .map(function (band) {
+                        return band.threshold.toFixed(5);
+                    })
+                    .join(", ")
+        );
+        log("Training/validation: " + trainingSamples.length + "/" + validationSamples.length + " samples (" + split.protocol + ")");
+
+        const checkpointMetadata = {
+            model: {
+                architectureVersion: SNN_ARCHITECTURE_VERSION,
+                cellType: "snn",
+                inputSize: snnModel.inputSize,
+                hiddenSize: hiddenSize,
+                outputSize: NUM_CLASSES,
+                windowSize: windowSize,
+                datasetFingerprint: loadedDatasetFingerprint,
+                snn: {
+                    encoder: "wave-filter-bank-phase-crossing-v1",
+                    sensorConfig: snnSensorConfig,
+                    percentile: MotorCurrentSnn.DEFAULT_PERCENTILE,
+                    seed: snnModel.seed,
+                    frameEndSlot: MotorCurrentSnn.FRAME_END_SLOT,
+                },
+            },
+            dataset: {
+                selection: document.getElementById("datasetSplit").value,
+                splitProtocol: loadedSplitProtocol,
+                fingerprint: loadedDatasetFingerprint,
+            },
+            validationProtocol: split.protocol + "-hard-snn",
+            classes: CLASS_NAMES,
+        };
+        const checkpointer = createAccuracyCheckpointer(snnModel.graph, checkpointMetadata);
+        log("Checkpoint architecture: " + checkpointMetadata.model.architectureSignature);
+        if (checkpointer.hasSavedBaseline()) {
+            log("A persistent checkpoint for this exact SNN architecture will be kept unless this run improves it. Use Reset saved to start a fresh baseline.");
+        }
+
+        const batchCount = Math.ceil(trainingSamples.length / SNN_BATCH_SIZE);
+        const totalSteps = epochs * batchCount;
+        let completedSteps = 0;
+        setStatus("Training SNN...");
+
+        for (let epoch = 0; epoch < epochs; epoch++) {
+            let epochLoss = 0;
+            let epochSamples = 0;
+            let epochEvents = 0;
+            for (let start = 0; start < trainingSamples.length; start += SNN_BATCH_SIZE) {
+                const end = Math.min(trainingSamples.length, start + SNN_BATCH_SIZE);
+                const encodedBatch = [];
+                for (let i = start; i < end; i++) {
+                    const encoded = MotorCurrentSnn.encodeSequence(trainingSamples[i].sequence, trainingSamples[i].label, NUM_CLASSES, {
+                        sensorConfig: snnModel.sensorConfig,
+                        inputIndexBySlot: snnModel.inputIndexBySlot,
+                    });
+                    encodedBatch.push(encoded);
+                    epochEvents += encoded.sensorEvents;
+                }
+                const batchLoss = snnModel.trainer.trainBatch(encodedBatch);
+                epochLoss += batchLoss * encodedBatch.length;
+                epochSamples += encodedBatch.length;
+                completedSteps++;
+
+                if (completedSteps % 2 === 0 || end === trainingSamples.length) {
+                    setProgress((completedSteps / totalSteps) * 100);
+                    setStatus("SNN epoch " + (epoch + 1) + "/" + epochs + " - Batch " + Math.ceil(end / SNN_BATCH_SIZE) + "/" + batchCount);
+                    await new Promise(function (resolve) {
+                        window.setTimeout(resolve, 0);
+                    });
+                }
+            }
+
+            const avgLoss = epochLoss / epochSamples;
+            lossHistory.push(avgLoss);
+            drawLossChart();
+            setStatus("SNN epoch " + (epoch + 1) + "/" + epochs + " - validating hard spikes...");
+            const validation = await evaluateSnnTeacherAccuracy(snnModel, validationSamples);
+            const checkpointUpdate = checkpointer.update(epoch, avgLoss, validation);
+            const marker = checkpointUpdate.improved ? " * saved" : "";
+            log(
+                "SNN epoch " +
+                    (epoch + 1) +
+                    "/" +
+                    epochs +
+                    " - Loss: " +
+                    avgLoss.toFixed(6) +
+                    " - Hard val: " +
+                    (validation.accuracy * 100).toFixed(1) +
+                    "% (" +
+                    validation.correct +
+                    "/" +
+                    validation.total +
+                    ")" +
+                    " - Input events/sample: " +
+                    (epochEvents / epochSamples).toFixed(1) +
+                    marker
+            );
+            if (checkpointUpdate.improved && checkpointUpdate.persisted && !checkpointUpdate.persisted.ok) {
+                log("WARNING: SNN checkpoint is in memory but local persistence failed: " + checkpointUpdate.persisted.error);
+            }
+            await new Promise(function (resolve) {
+                window.setTimeout(resolve, 0);
+            });
+        }
+
+        const bestCheckpoint = checkpointer.restore();
+        if (!bestCheckpoint) throw new Error("SNN training produced no checkpoint.");
+        activeCheckpoint = bestCheckpoint;
+        snnSensorConfig = bestCheckpoint.model.snn.sensorConfig;
+        snnInference = createCompiledSnnFromCheckpoint(bestCheckpoint);
+        rnnGraph = snnInference.graph;
+        runtime = snnInference;
+
+        const bestPct = (bestCheckpoint.metric.validationAccuracy * 100).toFixed(1);
+        log(
+            "Restored and compiled best SNN from epoch " +
+                bestCheckpoint.metric.epoch +
+                " - validation " +
+                bestPct +
+                "% (" +
+                bestCheckpoint.metric.validationCorrect +
+                "/" +
+                bestCheckpoint.metric.validationTotal +
+                ")."
+        );
+        log(
+            "Compiled graph: " +
+                snnInference.graph.nodes.length +
+                " nodes, " +
+                snnInference.graph.links.length +
+                " links, " +
+                snnInference.compilation.neurons.length +
+                " native LIF neurons"
+        );
+        document.getElementById("bestValidation").textContent = bestPct + "%";
+        document.getElementById("bestEpoch").textContent = bestCheckpoint.metric.epoch;
+        document.getElementById("finalLoss").textContent = bestCheckpoint.metric.trainLoss.toFixed(4);
+        btnRestoreCheckpoint.disabled = false;
+        if (btnResetCheckpoint) btnResetCheckpoint.disabled = false;
+        btnDownloadCheckpoint.disabled = false;
+        btnExport.disabled = true;
+        setProgress(100);
+        setStatus("SNN training complete. Native LIF graph is ready to test.");
+    }
+
     btnTrain.addEventListener("click", async function () {
         if (!trainData) return;
         btnTrain.disabled = true;
         btnTest.disabled = true;
         btnLoad.disabled = true;
         lossHistory.length = 0;
+        lastTestAccuracy = null;
 
         const cellType = document.getElementById("cellType").value;
         const hiddenSize = parseInt(document.getElementById("hiddenSize").value);
         const epochs = parseInt(document.getElementById("epochs").value);
         const lr = parseFloat(document.getElementById("lr").value);
 
+        if (cellType === "snn") {
+            try {
+                await trainSnn(hiddenSize, epochs, lr);
+                btnTest.disabled = false;
+            } catch (e) {
+                log("ERROR training SNN: " + e.message);
+                setStatus("SNN training failed.");
+            } finally {
+                btnTrain.disabled = false;
+                btnLoad.disabled = false;
+            }
+            return;
+        }
+
+        snnModel = null;
+        snnInference = null;
+        snnSensorConfig = null;
         log("Building RNN (" + cellType.toUpperCase() + ", hidden=" + hiddenSize + ", out=" + NUM_CLASSES + ")...");
         setStatus("Building model...");
 
         try {
-            rnnGraph = new S.RnnBuilder()
-                .withInputSize(3)
-                .withHiddenSize(hiddenSize)
-                .withOutputSize(NUM_CLASSES)
-                .withCellType(cellType === "lstm" ? S.RnnCellType.LSTM : S.RnnCellType.GRU)
-                .withOutputActivation(S.ActivationFunctions.sigmoid)
-                .build();
+            rnnGraph = buildGraph(cellType, hiddenSize, NUM_CLASSES);
         } catch (e) {
             log("ERROR building model: " + e.message);
             setStatus("Build failed.");
@@ -415,23 +1301,54 @@
         log("RNN graph: " + rnnGraph.nodes.length + " neurons, " + rnnGraph.links.length + " synapses");
 
         runtime = new S.RnnInferenceRuntime(rnnGraph);
-        trainer = new S.RnnTrainingRuntime(
-            rnnGraph,
-            runtime,
-            S.LossFunctions.MSE,
-            lr,
-            S.Optimizers.Adam()
-        );
+        trainer = new S.RnnTrainingRuntime(rnnGraph, runtime, S.LossFunctions.MSE, lr, S.Optimizers.Adam());
+
+        const split = splitTrainingValidation(trainData);
+        const trainingSamples = split.train;
+        const validationSamples = split.validation;
+        if (trainingSamples.length === 0 || validationSamples.length === 0) {
+            log("ERROR: Unable to create a non-empty training/validation split.");
+            setStatus("Validation split failed.");
+            btnTrain.disabled = false;
+            btnLoad.disabled = false;
+            return;
+        }
+
+        log("Training/validation: " + trainingSamples.length + "/" + validationSamples.length + " samples (" + split.protocol + ")");
+
+        const checkpointMetadata = {
+            model: {
+                architectureVersion: RNN_ARCHITECTURE_VERSION,
+                cellType: cellType,
+                inputSize: 3,
+                hiddenSize: hiddenSize,
+                outputSize: NUM_CLASSES,
+                windowSize: trainingSamples[0].sequence.length,
+                datasetFingerprint: loadedDatasetFingerprint,
+            },
+            dataset: {
+                selection: document.getElementById("datasetSplit").value,
+                splitProtocol: loadedSplitProtocol,
+                fingerprint: loadedDatasetFingerprint,
+            },
+            validationProtocol: split.protocol,
+            classes: CLASS_NAMES,
+        };
+        const checkpointer = createAccuracyCheckpointer(rnnGraph, checkpointMetadata);
+        log("Checkpoint architecture: " + checkpointMetadata.model.architectureSignature);
+        if (checkpointer.hasSavedBaseline()) {
+            log("A persistent checkpoint for this exact RNN architecture will be kept unless this run improves it. Use Reset saved to start a fresh baseline.");
+        }
 
         setStatus("Training...");
-        const totalSteps = epochs * trainData.length;
+        const totalSteps = epochs * trainingSamples.length;
         let step = 0;
 
         for (let epoch = 0; epoch < epochs; epoch++) {
             let epochLoss = 0;
 
-            for (let i = 0; i < trainData.length; i++) {
-                const sample = trainData[i];
+            for (let i = 0; i < trainingSamples.length; i++) {
+                const sample = trainingSamples[i];
                 runtime.resetState();
 
                 // Many-to-one classification: enforce the same one-hot
@@ -461,22 +1378,71 @@
 
                 if (i % 10 === 0) {
                     setProgress((step / totalSteps) * 100);
-                    setStatus("Epoch " + (epoch + 1) + "/" + epochs + " - Sample " + (i + 1) + "/" + trainData.length);
-                    await new Promise(function (r) { setTimeout(r, 0); });
+                    setStatus("Epoch " + (epoch + 1) + "/" + epochs + " - Sample " + (i + 1) + "/" + trainingSamples.length);
+                    await new Promise(function (r) {
+                        setTimeout(r, 0);
+                    });
                 }
             }
 
-            const avgLoss = epochLoss / trainData.length;
+            const avgLoss = epochLoss / trainingSamples.length;
             lossHistory.push(avgLoss);
             drawLossChart();
-            log("Epoch " + (epoch + 1) + "/" + epochs + " - Avg Loss: " + avgLoss.toFixed(6));
 
-            await new Promise(function (r) { setTimeout(r, 0); });
+            setStatus("Epoch " + (epoch + 1) + "/" + epochs + " - validating...");
+            const validation = await evaluateAccuracy(validationSamples);
+            const checkpointUpdate = checkpointer.update(epoch, avgLoss, validation);
+            const marker = checkpointUpdate.improved ? " * saved" : "";
+            log(
+                "Epoch " +
+                    (epoch + 1) +
+                    "/" +
+                    epochs +
+                    " - Avg Loss: " +
+                    avgLoss.toFixed(6) +
+                    " - Val: " +
+                    (validation.accuracy * 100).toFixed(1) +
+                    "% (" +
+                    validation.correct +
+                    "/" +
+                    validation.total +
+                    ")" +
+                    marker
+            );
+
+            if (checkpointUpdate.improved && checkpointUpdate.persisted && !checkpointUpdate.persisted.ok) {
+                log("WARNING: checkpoint is in memory but local persistence failed: " + checkpointUpdate.persisted.error);
+            }
+
+            await new Promise(function (r) {
+                setTimeout(r, 0);
+            });
         }
 
         setProgress(100);
+        const bestCheckpoint = checkpointer.restore();
+        if (bestCheckpoint) {
+            const bestPct = (bestCheckpoint.metric.validationAccuracy * 100).toFixed(1);
+            log(
+                "Restored best weights from epoch " +
+                    bestCheckpoint.metric.epoch +
+                    " - validation " +
+                    bestPct +
+                    "% (" +
+                    bestCheckpoint.metric.validationCorrect +
+                    "/" +
+                    bestCheckpoint.metric.validationTotal +
+                    ")."
+            );
+            document.getElementById("bestValidation").textContent = bestPct + "%";
+            document.getElementById("bestEpoch").textContent = bestCheckpoint.metric.epoch;
+            document.getElementById("finalLoss").textContent = bestCheckpoint.metric.trainLoss.toFixed(4);
+            btnRestoreCheckpoint.disabled = false;
+            if (btnResetCheckpoint) btnResetCheckpoint.disabled = false;
+            btnDownloadCheckpoint.disabled = false;
+        }
         setStatus("Training complete. Click Test to evaluate.");
-        log("Training finished.");
+        log("Training finished. The graph now contains the best validation checkpoint.");
         btnTrain.disabled = false;
         btnTest.disabled = false;
         btnLoad.disabled = false;
@@ -494,6 +1460,8 @@
         log("Testing on " + testData.length + " samples...");
 
         let correct = 0;
+        let snnInputEvents = 0;
+        let snnNeuronSpikes = 0;
         const confMatrix = [];
         for (let i = 0; i < NUM_CLASSES; i++) {
             confMatrix.push(new Array(NUM_CLASSES).fill(0));
@@ -503,14 +1471,20 @@
 
         for (let i = 0; i < testData.length; i++) {
             const sample = testData[i];
-            runtime.resetState();
-
-            const outputs = runtime.run(sample.sequence);
-            const lastOutput = outputs[outputs.length - 1];
-
-            let predicted = 0;
-            for (let c = 1; c < lastOutput.length; c++) {
-                if (lastOutput[c] > lastOutput[predicted]) predicted = c;
+            let predicted;
+            if (snnInference) {
+                const result = MotorCurrentSnn.predictCompiled(snnInference, sample.sequence);
+                predicted = result.predicted;
+                snnInputEvents += result.sensorEvents;
+                snnNeuronSpikes += result.neuronSpikes;
+            } else {
+                runtime.resetState();
+                const outputs = runtime.run(sample.sequence);
+                const lastOutput = outputs[outputs.length - 1];
+                predicted = 0;
+                for (let c = 1; c < lastOutput.length; c++) {
+                    if (lastOutput[c] > lastOutput[predicted]) predicted = c;
+                }
             }
 
             if (predicted === sample.label) correct++;
@@ -518,23 +1492,51 @@
 
             if (i % 10 === 0) {
                 setStatus("Testing " + (i + 1) + "/" + testData.length + "...");
-                await new Promise(function (r) { setTimeout(r, 0); });
+                await new Promise(function (r) {
+                    setTimeout(r, 0);
+                });
             }
         }
 
         const elapsed = performance.now() - t0;
         const accuracy = correct / testData.length;
+        lastTestAccuracy = accuracy;
+
+        if (activeCheckpoint && activeCheckpoint.model.datasetFingerprint === loadedDatasetFingerprint) {
+            activeCheckpoint.lastTest = {
+                evaluatedAt: new Date().toISOString(),
+                accuracy: accuracy,
+                correct: correct,
+                total: testData.length,
+            };
+            persistCheckpoint(activeCheckpoint);
+        }
 
         log("Accuracy: " + (accuracy * 100).toFixed(1) + "% (" + correct + "/" + testData.length + ")");
         log("Inference time: " + elapsed.toFixed(0) + "ms (" + (elapsed / testData.length).toFixed(1) + "ms/sample)");
+        if (snnInference) {
+            log(
+                "SNN activity: " +
+                    (snnInputEvents / testData.length).toFixed(1) +
+                    " encoded input events/sample, " +
+                    (snnNeuronSpikes / testData.length).toFixed(1) +
+                    " neuron spikes/sample"
+            );
+        }
 
         resultsPanel.style.display = "block";
         document.getElementById("accuracy").textContent = (accuracy * 100).toFixed(1) + "%";
-        document.getElementById("finalLoss").textContent = lossHistory.length > 0 ? lossHistory[lossHistory.length - 1].toFixed(4) : "-";
+        document.getElementById("finalLoss").textContent = activeCheckpoint
+            ? activeCheckpoint.metric.trainLoss.toFixed(4)
+            : lossHistory.length > 0
+              ? lossHistory[lossHistory.length - 1].toFixed(4)
+              : "-";
         document.getElementById("inferenceTime").textContent = elapsed.toFixed(0) + "ms";
         document.getElementById("testCount").textContent = testData.length;
 
-        await new Promise(function (r) { setTimeout(r, 50); });
+        await new Promise(function (r) {
+            setTimeout(r, 50);
+        });
 
         drawConfusionMatrix(confMatrix);
 
@@ -565,11 +1567,11 @@
 
     // ====================== ONNX EXPORT ======================
     //
-    // Exports the trained LSTM as an ONNX model with a custom
+    // Exports the trained LSTM or GRU as an ONNX model with optional
     // EnvelopeRMS preprocessing op. The ONNX graph is:
     //
     //   Input: envelope [seq_len, 1, 3]
-    //     -> LSTM (hidden_size=H)
+    //     -> LSTM or GRU (hidden_size=H)
     //     -> Gemm (H -> NUM_CLASSES)
     //     -> Sigmoid
     //   Output: probabilities [1, NUM_CLASSES]
@@ -627,9 +1629,12 @@
     //
     // ----------------------------------------------------------------
 
-    var btnExport = document.getElementById("btnExport");
     if (btnExport) {
         btnExport.addEventListener("click", function () {
+            if (activeCheckpoint && activeCheckpoint.model.cellType === "snn") {
+                log("SNN ONNX export is not available yet. Save the JSON checkpoint for the native LIF graph.");
+                return;
+            }
             if (!rnnGraph) {
                 log("ERROR: Train a model first before exporting.");
                 return;
@@ -641,21 +1646,28 @@
 
             var exportMode = document.getElementById("exportMode").value;
             log("Exporting ONNX model (mode: " + exportMode + ")...");
+            if (activeCheckpoint) {
+                log("  Best checkpoint: epoch " + activeCheckpoint.metric.epoch + ", validation " + (activeCheckpoint.metric.validationAccuracy * 100).toFixed(1) + "%");
+            }
 
             try {
-                var onnxBytes = exportToOnnx(rnnGraph, NUM_CLASSES, exportMode);
+                var sequenceLength = activeCheckpoint ? activeCheckpoint.model.windowSize : trainData && trainData[0] ? trainData[0].sequence.length : 64;
+                var onnxBytes = exportToOnnx(rnnGraph, exportMode, sequenceLength);
                 log("ONNX model size: " + onnxBytes.length + " bytes");
 
-                // Trigger browser download
                 var blob = new Blob([onnxBytes], { type: "application/octet-stream" });
-                var url = URL.createObjectURL(blob);
-                var a = document.createElement("a");
-                a.href = url;
-                a.download = "motor_current_lstm.onnx";
-                a.click();
-                URL.revokeObjectURL(url);
+                var score = lastTestAccuracy;
+                var scoreLabel = "";
+                if (score !== null) {
+                    scoreLabel = "_test_" + (score * 100).toFixed(1).replace(".", "p");
+                } else if (activeCheckpoint) {
+                    scoreLabel = "_val_" + (activeCheckpoint.metric.validationAccuracy * 100).toFixed(1).replace(".", "p");
+                }
+                var cellType = activeCheckpoint ? activeCheckpoint.model.cellType : rnnGraph.hiddens[0] && typeof rnnGraph.hiddens[0].biasForget === "number" ? "lstm" : "gru";
+                var filename = "motor_current_" + cellType + scoreLabel + ".onnx";
+                downloadBlob(blob, filename);
 
-                log("Downloaded: motor_current_lstm.onnx");
+                log("Downloaded: " + filename);
                 setStatus("ONNX model exported.");
             } catch (e) {
                 log("ERROR exporting ONNX: " + e.message);
@@ -663,7 +1675,7 @@
         });
     }
 
-    function exportToOnnx(graph, numClasses, mode) {
+    function exportToOnnx(graph, mode, sequenceLength) {
         var R = SpikypandaOnnx;
         var FLOAT = 1; // OnnxDataType.FLOAT
 
@@ -671,102 +1683,130 @@
         var inputNeurons = graph.inputs;
         var hiddenNeurons = graph.hiddens;
         var outputNeurons = graph.outputs;
-        var inputSize = inputNeurons.length;   // 3
-        var hiddenSize = hiddenNeurons.length;  // 32
-        var outputSize = outputNeurons.length;  // 5
+        var inputSize = inputNeurons.length; // 3
+        var hiddenSize = hiddenNeurons.length; // 32
+        var outputSize = outputNeurons.length; // 5
 
         log("  Architecture: input=" + inputSize + ", hidden=" + hiddenSize + ", output=" + outputSize);
 
-        // ---- Extract LSTM weights ----
+        var isLstm = hiddenNeurons[0] && typeof hiddenNeurons[0].biasForget === "number";
+        var isGru = hiddenNeurons[0] && typeof hiddenNeurons[0].biasReset === "number";
+        if (!isLstm && !isGru) {
+            throw new Error("Unsupported recurrent cell type for ONNX export.");
+        }
+        var cellType = isLstm ? "lstm" : "gru";
+        var recurrentOpType = isLstm ? "LSTM" : "GRU";
+        var gateCount = isLstm ? 4 : 3;
+
+        // ---- Extract recurrent weights ----
         // SpikyPanda gate order: [0:forget, 1:input, 2:candidate, 3:output]
         // ONNX LSTM gate order:  [0:input, 1:output, 2:forget, 3:candidate]
         // Remap: SP[0]->ONNX[2], SP[1]->ONNX[0], SP[2]->ONNX[3], SP[3]->ONNX[1]
-        var GATE_MAP = [2, 0, 3, 1]; // SP gate g -> ONNX gate GATE_MAP[g]
+        // SpikyPanda GRU order: [0:reset, 1:update-to-candidate, 2:candidate]
+        // ONNX GRU order:       [0:update-to-memory, 1:reset, 2:candidate]
+        // The two update gates are complements. Negating the SpikyPanda
+        // update pre-activation gives z_onnx = 1 - z_spikypanda.
+        var gateMap = isLstm ? [2, 0, 3, 1] : [1, 0, 2];
 
-        // W: input-to-hidden weights [1, 4*H, inputSize]
+        function mapGateWeight(spGate, value) {
+            return isGru && spGate === 1 ? -value : value;
+        }
+
+        // W: input-to-hidden weights [1, gateCount*H, inputSize]
         // Each RnnSynapse connects one input neuron to one hidden neuron
-        // with weights[0..3] for the 4 gates.
-        var W = new Float32Array(4 * hiddenSize * inputSize);
+        // with one weight per gate.
+        var W = new Float32Array(gateCount * hiddenSize * inputSize);
+        var inputLinkCount = 0;
         for (var i = 0; i < inputSize; i++) {
             var inp = inputNeurons[i];
-            // Get outgoing RnnSynapses from this input neuron
-            var synapses = [];
-            if (inp.onsc) {
-                for (var si = 0; si < inp.onsc.length; si++) {
-                    var syn = inp.onsc[si];
-                    if (syn.weights && syn.weights.length === 4) {
-                        synapses.push(syn);
-                    }
-                }
-            }
-            // synapses[j] connects input[i] to hidden[j]
-            for (var j = 0; j < hiddenSize && j < synapses.length; j++) {
-                for (var g = 0; g < 4; g++) {
-                    var onnxGate = GATE_MAP[g];
+            var synapses = typeof inp.onsc === "function" ? inp.onsc() : [];
+            for (var si = 0; si < synapses.length; si++) {
+                var syn = synapses[si];
+                var j = hiddenNeurons.indexOf(syn.ofin);
+                if (j < 0 || !syn.weights || syn.weights.length !== gateCount) continue;
+                for (var g = 0; g < gateCount; g++) {
+                    var onnxGate = gateMap[g];
                     // W layout: [onnxGate * H + j, i] row-major -> flat index
-                    W[onnxGate * hiddenSize * inputSize + j * inputSize + i] = synapses[j].weights[g];
+                    W[onnxGate * hiddenSize * inputSize + j * inputSize + i] = mapGateWeight(g, syn.weights[g]);
                 }
+                inputLinkCount++;
             }
         }
 
-        // R: hidden-to-hidden recurrent weights [1, 4*H, H]
-        var Rec = new Float32Array(4 * hiddenSize * hiddenSize);
+        if (inputLinkCount !== inputSize * hiddenSize) {
+            throw new Error("Incomplete input weights: found " + inputLinkCount + ", expected " + inputSize * hiddenSize + ".");
+        }
+
+        // R: hidden-to-hidden recurrent weights [1, gateCount*H, H]
+        var Rec = new Float32Array(gateCount * hiddenSize * hiddenSize);
+        var recurrentLinkCount = 0;
         for (var i = 0; i < hiddenSize; i++) {
             var hid = hiddenNeurons[i];
-            // Recurrent synapses: from hidden[i] to hidden[j]
-            var recSynapses = [];
-            if (hid.onsc) {
-                for (var si = 0; si < hid.onsc.length; si++) {
-                    var syn = hid.onsc[si];
-                    if (syn.weights && syn.weights.length === 4) {
-                        recSynapses.push(syn);
-                    }
+            var recSynapses = typeof hid.onsc === "function" ? hid.onsc() : [];
+            for (var si = 0; si < recSynapses.length; si++) {
+                var syn = recSynapses[si];
+                var j = hiddenNeurons.indexOf(syn.ofin);
+                if (j < 0 || !syn.weights || syn.weights.length !== gateCount) continue;
+                for (var g = 0; g < gateCount; g++) {
+                    var onnxGate = gateMap[g];
+                    Rec[onnxGate * hiddenSize * hiddenSize + j * hiddenSize + i] = mapGateWeight(g, syn.weights[g]);
                 }
-            }
-            for (var j = 0; j < hiddenSize && j < recSynapses.length; j++) {
-                for (var g = 0; g < 4; g++) {
-                    var onnxGate = GATE_MAP[g];
-                    Rec[onnxGate * hiddenSize * hiddenSize + j * hiddenSize + i] = recSynapses[j].weights[g];
-                }
+                recurrentLinkCount++;
             }
         }
 
-        // B: biases [1, 8*H] (first 4*H = W biases, next 4*H = R biases = 0)
-        var B = new Float32Array(8 * hiddenSize);
+        if (recurrentLinkCount !== hiddenSize * hiddenSize) {
+            throw new Error("Incomplete recurrent weights: found " + recurrentLinkCount + ", expected " + hiddenSize * hiddenSize + ".");
+        }
+
+        // B: [1, 2*gateCount*H]. Recurrent biases remain zero.
+        var B = new Float32Array(2 * gateCount * hiddenSize);
         for (var j = 0; j < hiddenSize; j++) {
             var neuron = hiddenNeurons[j];
-            // SP biases: biasForget, biasInput, biasCandidate, biasOutput
-            // ONNX order: input, output, forget, candidate
-            B[0 * hiddenSize + j] = neuron.biasInput;      // ONNX gate 0 = input
-            B[1 * hiddenSize + j] = neuron.biasOutput;     // ONNX gate 1 = output
-            B[2 * hiddenSize + j] = neuron.biasForget;     // ONNX gate 2 = forget
-            B[3 * hiddenSize + j] = neuron.biasCandidate;  // ONNX gate 3 = candidate
-            // R biases (indices 4*H .. 8*H) are zero
+            if (isLstm) {
+                // ONNX LSTM order: input, output, forget, candidate.
+                B[0 * hiddenSize + j] = neuron.biasInput;
+                B[1 * hiddenSize + j] = neuron.biasOutput;
+                B[2 * hiddenSize + j] = neuron.biasForget;
+                B[3 * hiddenSize + j] = neuron.biasCandidate;
+            } else {
+                // ONNX GRU order: update, reset, candidate. The update
+                // pre-activation is negated to preserve SpikyPanda semantics.
+                B[0 * hiddenSize + j] = -neuron.biasUpdate;
+                B[1 * hiddenSize + j] = neuron.biasReset;
+                B[2 * hiddenSize + j] = neuron.biasCandidate;
+            }
         }
 
         // ---- Extract output layer weights ----
         // OutputNeurons are MlpNeurons with .bias and incoming Synapses with .weight
         var Wout = new Float32Array(outputSize * hiddenSize);
         var Bout = new Float32Array(outputSize);
+        var outputLinkCount = 0;
         for (var o = 0; o < outputSize; o++) {
             var outN = outputNeurons[o];
             Bout[o] = outN.bias;
             // Incoming synapses from hidden neurons
-            if (outN.opsc) {
-                for (var si = 0; si < outN.opsc.length && si < hiddenSize; si++) {
-                    var syn = outN.opsc[si];
-                    Wout[o * hiddenSize + si] = syn.weight;
-                }
+            var outSynapses = typeof outN.opsc === "function" ? outN.opsc() : [];
+            for (var si = 0; si < outSynapses.length; si++) {
+                var syn = outSynapses[si];
+                var h = hiddenNeurons.indexOf(syn.oini);
+                if (h < 0 || typeof syn.weight !== "number") continue;
+                Wout[o * hiddenSize + h] = syn.weight;
+                outputLinkCount++;
             }
         }
 
-        log("  Extracted: W[" + W.length + "], R[" + Rec.length + "], B[" + B.length +
-            "], Wout[" + Wout.length + "], Bout[" + Bout.length + "]");
+        if (outputLinkCount !== outputSize * hiddenSize) {
+            throw new Error("Incomplete output weights: found " + outputLinkCount + ", expected " + outputSize * hiddenSize + ".");
+        }
+
+        log("  Extracted: W[" + W.length + "], R[" + Rec.length + "], B[" + B.length + "], Wout[" + Wout.length + "], Bout[" + Bout.length + "]");
 
         // ---- Build ONNX model ----
         var model = {
             irVersion: 8,
-            graphName: "motor_current_lstm",
+            graphName: "motor_current_" + cellType,
             nodes: [],
             initializers: [],
             inputs: [],
@@ -778,17 +1818,22 @@
         //   "custom"   -> single com.dotvision.EnvelopeCenter node
         //   "standard" -> ReduceMean + Sub + Mul + Add + Clip (5 standard ops)
         //   "none"     -> no preprocessing, LSTM takes centered input directly
-        var lstmInputName = "envelope_seq"; // default: pre-centered
+        var recurrentInputName = "envelope_seq"; // default: pre-centered
 
         if (mode === "custom") {
             model.nodes.push({
                 name: "centering",
-                opType: "com.dotvision.EnvelopeCenter",
+                opType: "EnvelopeCenter",
+                domain: "com.dotvision",
                 inputs: ["envelope_raw"],
                 outputs: ["envelope_centered"],
-                attributes: new Map([["gain", 6.0], ["since_version", 1]]),
+                attributes: new Map([
+                    ["gain", 6.0],
+                    ["since_version", 1],
+                ]),
+                floatAttributeNames: new Set(["gain"]),
             });
-            lstmInputName = "envelope_centered_seq";
+            recurrentInputName = "envelope_centered_seq";
         } else if (mode === "standard") {
             // ReduceMean(axes=[0], keepdims=1): compute per-channel mean
             model.nodes.push({
@@ -796,7 +1841,8 @@
                 opType: "ReduceMean",
                 inputs: ["envelope_raw"],
                 outputs: ["env_mean"],
-                attributes: new Map([["axes", 0], ["keepdims", 1]]),
+                attributes: new Map([["keepdims", 1]]),
+                listAttributes: new Map([["axes", [0]]]),
             });
             // Sub: centered = raw - mean
             model.nodes.push({
@@ -835,9 +1881,9 @@
             model.initializers.push({ name: "const_half", dataType: FLOAT, dims: [], floatData: new Float32Array([0.5]) });
             model.initializers.push({ name: "const_zero", dataType: FLOAT, dims: [], floatData: new Float32Array([0.0]) });
             model.initializers.push({ name: "const_one", dataType: FLOAT, dims: [], floatData: new Float32Array([1.0]) });
-            lstmInputName = "envelope_centered_seq";
+            recurrentInputName = "envelope_centered_seq";
         }
-        // mode === "none": no preprocessing nodes, lstmInputName stays "envelope_seq"
+        // mode === "none": no preprocessing nodes, recurrentInputName stays "envelope_seq"
 
         // If preprocessing is present, add a Reshape to go from [64, 3] to [64, 1, 3]
         if (mode !== "none") {
@@ -845,34 +1891,35 @@
                 name: "reshape_to_seq",
                 opType: "Reshape",
                 inputs: ["envelope_centered", "reshape_seq_shape"],
-                outputs: [lstmInputName],
+                outputs: [recurrentInputName],
                 attributes: new Map(),
             });
             model.initializers.push({
-                name: "reshape_seq_shape", dataType: 7,
+                name: "reshape_seq_shape",
+                dataType: 7,
                 dims: [3],
-                rawData: new Uint8Array(new BigInt64Array([64n, 1n, BigInt(inputSize)]).buffer),
+                rawData: new Uint8Array(new BigInt64Array([BigInt(sequenceLength), 1n, BigInt(inputSize)]).buffer),
             });
         }
 
-        // LSTM node
+        // Recurrent cell. SpikyPanda applies the reset gate after the
+        // recurrent candidate projection, which is ONNX linear_before_reset=1.
+        var recurrentAttributes = new Map([["hidden_size", hiddenSize]]);
+        if (isGru) recurrentAttributes.set("linear_before_reset", 1);
         model.nodes.push({
-            name: "lstm",
-            opType: "LSTM",
-            inputs: [lstmInputName, "W", "R", "B"],
-            outputs: ["lstm_out", "lstm_h"],
-            attributes: new Map([
-                ["hidden_size", hiddenSize],
-                ["direction", 0],
-            ]),
+            name: cellType,
+            opType: recurrentOpType,
+            inputs: [recurrentInputName, "W", "R", "B"],
+            outputs: ["rnn_out", "rnn_h"],
+            attributes: recurrentAttributes,
         });
 
-        // Reshape LSTM output from [1,1,H] to [1,H]
+        // Reshape final recurrent state from [1,1,H] to [1,H]
         model.nodes.push({
             name: "reshape",
             opType: "Reshape",
-            inputs: ["lstm_h", "reshape_shape"],
-            outputs: ["lstm_flat"],
+            inputs: ["rnn_h", "reshape_shape"],
+            outputs: ["rnn_flat"],
             attributes: new Map(),
         });
 
@@ -880,11 +1927,9 @@
         model.nodes.push({
             name: "output_gemm",
             opType: "Gemm",
-            inputs: ["lstm_flat", "W_out", "B_out"],
+            inputs: ["rnn_flat", "W_out", "B_out"],
             outputs: ["logits"],
-            attributes: new Map([
-                ["transB", 1],
-            ]),
+            attributes: new Map([["transB", 1]]),
         });
 
         // Sigmoid
@@ -897,13 +1942,14 @@
         });
 
         // Initializers (weight tensors)
-        model.initializers.push({ name: "W", dataType: FLOAT, dims: [1, 4 * hiddenSize, inputSize], floatData: W });
-        model.initializers.push({ name: "R", dataType: FLOAT, dims: [1, 4 * hiddenSize, hiddenSize], floatData: Rec });
-        model.initializers.push({ name: "B", dataType: FLOAT, dims: [1, 8 * hiddenSize], floatData: B });
+        model.initializers.push({ name: "W", dataType: FLOAT, dims: [1, gateCount * hiddenSize, inputSize], floatData: W });
+        model.initializers.push({ name: "R", dataType: FLOAT, dims: [1, gateCount * hiddenSize, hiddenSize], floatData: Rec });
+        model.initializers.push({ name: "B", dataType: FLOAT, dims: [1, 2 * gateCount * hiddenSize], floatData: B });
         model.initializers.push({ name: "W_out", dataType: FLOAT, dims: [outputSize, hiddenSize], floatData: Wout });
         model.initializers.push({ name: "B_out", dataType: FLOAT, dims: [outputSize], floatData: Bout });
         model.initializers.push({
-            name: "reshape_shape", dataType: 7, // INT64
+            name: "reshape_shape",
+            dataType: 7, // INT64
             dims: [2],
             rawData: new Uint8Array(new BigInt64Array([1n, BigInt(hiddenSize)]).buffer),
         });
@@ -911,41 +1957,39 @@
         // Graph inputs (depend on mode)
         if (mode !== "none") {
             // Modes "custom" and "standard": input is uncentered envelope [64, 3]
-            model.inputs.push({ name: "envelope_raw", type: 0, elemType: FLOAT, shape: [64, inputSize] });
+            model.inputs.push({ name: "envelope_raw", type: 0, elemType: FLOAT, shape: [sequenceLength, inputSize] });
         } else {
-            // Mode "none": input is pre-centered, already shaped for LSTM [64, 1, 3]
-            model.inputs.push({ name: "envelope_seq", type: 0, elemType: FLOAT, shape: [64, 1, inputSize] });
+            // Mode "none": input is pre-centered and already sequence-shaped.
+            model.inputs.push({ name: "envelope_seq", type: 0, elemType: FLOAT, shape: [sequenceLength, 1, inputSize] });
         }
-        // Initializers declared as inputs (ONNX convention for static weights)
-        model.inputs.push({ name: "W", type: 0, elemType: FLOAT, shape: [1, 4 * hiddenSize, inputSize] });
-        model.inputs.push({ name: "R", type: 0, elemType: FLOAT, shape: [1, 4 * hiddenSize, hiddenSize] });
-        model.inputs.push({ name: "B", type: 0, elemType: FLOAT, shape: [1, 8 * hiddenSize] });
-        model.inputs.push({ name: "W_out", type: 0, elemType: FLOAT, shape: [outputSize, hiddenSize] });
-        model.inputs.push({ name: "B_out", type: 0, elemType: FLOAT, shape: [outputSize] });
-        model.inputs.push({ name: "reshape_shape", type: 0, elemType: 7, shape: [2] });
-        if (mode !== "none") {
-            model.inputs.push({ name: "reshape_seq_shape", type: 0, elemType: 7, shape: [3] });
-        }
-
         // Graph outputs
         model.outputs.push({ name: "probabilities", type: 0, elemType: FLOAT, shape: [1, outputSize] });
 
         // Intermediate value infos
         if (mode !== "none") {
-            model.valueInfos.push({ name: "envelope_centered", type: 0, elemType: FLOAT, shape: [64, inputSize] });
-            model.valueInfos.push({ name: "envelope_centered_seq", type: 0, elemType: FLOAT, shape: [64, 1, inputSize] });
+            model.valueInfos.push({ name: "envelope_centered", type: 0, elemType: FLOAT, shape: [sequenceLength, inputSize] });
+            model.valueInfos.push({ name: "envelope_centered_seq", type: 0, elemType: FLOAT, shape: [sequenceLength, 1, inputSize] });
         }
         if (mode === "standard") {
             model.valueInfos.push({ name: "env_mean", type: 0, elemType: FLOAT, shape: [1, inputSize] });
-            model.valueInfos.push({ name: "env_centered", type: 0, elemType: FLOAT, shape: [64, inputSize] });
-            model.valueInfos.push({ name: "env_scaled", type: 0, elemType: FLOAT, shape: [64, inputSize] });
-            model.valueInfos.push({ name: "env_shifted", type: 0, elemType: FLOAT, shape: [64, inputSize] });
+            model.valueInfos.push({ name: "env_centered", type: 0, elemType: FLOAT, shape: [sequenceLength, inputSize] });
+            model.valueInfos.push({ name: "env_scaled", type: 0, elemType: FLOAT, shape: [sequenceLength, inputSize] });
+            model.valueInfos.push({ name: "env_shifted", type: 0, elemType: FLOAT, shape: [sequenceLength, inputSize] });
         }
-        model.valueInfos.push({ name: "lstm_out", type: 0, elemType: FLOAT, shape: [64, 1, hiddenSize] });
-        model.valueInfos.push({ name: "lstm_h", type: 0, elemType: FLOAT, shape: [1, 1, hiddenSize] });
-        model.valueInfos.push({ name: "lstm_flat", type: 0, elemType: FLOAT, shape: [1, hiddenSize] });
+        model.valueInfos.push({ name: "rnn_out", type: 0, elemType: FLOAT, shape: [sequenceLength, 1, 1, hiddenSize] });
+        model.valueInfos.push({ name: "rnn_h", type: 0, elemType: FLOAT, shape: [1, 1, hiddenSize] });
+        model.valueInfos.push({ name: "rnn_flat", type: 0, elemType: FLOAT, shape: [1, hiddenSize] });
         model.valueInfos.push({ name: "logits", type: 0, elemType: FLOAT, shape: [1, outputSize] });
 
         return R.OnnxWriter.serialize(model);
+    }
+
+    const savedCheckpoint = readLatestCheckpoint();
+    if (savedCheckpoint) {
+        try {
+            restoreCheckpoint(savedCheckpoint, true);
+        } catch (e) {
+            log("WARNING: saved checkpoint could not be restored: " + e.message);
+        }
     }
 })();

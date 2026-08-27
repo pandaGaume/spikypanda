@@ -21,6 +21,22 @@ export class RuntimeGraphBuilder<N extends IRuntimeNode = IRuntimeNode, L extend
     protected _mode: SchedulingMode = "dynamic";
     protected _enabled: boolean = true;
 
+    public constructor(graph?: RuntimeGraph<N, L>) {
+        super(graph);
+        if (graph) {
+            this._mode = graph.mode;
+            this._enabled = graph.enabled;
+        }
+    }
+
+    /** Seed from a runtime graph and preserve its scheduler configuration. */
+    public override withGraph(graph: RuntimeGraph<N, L>): this {
+        super.withGraph(graph);
+        this._mode = graph.mode;
+        this._enabled = graph.enabled;
+        return this;
+    }
+
     /**
      * Declare the scheduling mode. Defaults to "dynamic" (ready-queue
      * dispatch). Use "static" for pure-DAG, all-nodes-fire-each-tick

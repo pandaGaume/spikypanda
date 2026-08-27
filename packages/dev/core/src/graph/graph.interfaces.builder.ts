@@ -32,6 +32,9 @@ export interface INodeBuilder {
 }
 
 export interface IGraphBuilder<N extends INode, L extends IOlink> {
+    /** Seed this builder from an existing graph without cloning its items. */
+    withGraph(graph: IGraph<N, L>): IGraphBuilder<N, L>;
+
     // the Node part of the graph (graph is also a node through inheritance)
     withNodePosition(p: ICartesian): IGraphBuilder<N, L>;
     withNodeInputs(...links: Array<IOlink | ILinkBuilder>): IGraphBuilder<N, L>;
@@ -61,6 +64,11 @@ export interface IGraphBuilder<N extends INode, L extends IOlink> {
     /** Declare the graph hidden nodes explicitly. When omitted, auto-
      * detected as nodes not in inputs or outputs. */
     withHiddens(...nodes: Array<N | INodeBuilder>): IGraphBuilder<N, L>;
+
+    /** Replace one graph node and rewire every graph link that references it. */
+    replaceNode(current: N, replacement: N): IGraphBuilder<N, L>;
+    /** Replace one graph link at the same topology index. */
+    replaceLink(current: L, replacement: L): IGraphBuilder<N, L>;
 
     build(): IGraph<N, L>;
 }

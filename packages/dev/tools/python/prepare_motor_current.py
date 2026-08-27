@@ -91,6 +91,8 @@ Each referenced array is shape (1, N):
 Output:
     packages/host/www/data/motor_current/train.json
     packages/host/www/data/motor_current/test.json
+    packages/host/www/data/motor_current/train_grouped.json
+    packages/host/www/data/motor_current/test_grouped.json
 
 --------------------------------------------------------------------------
 Critical preprocessing decisions (read before changing anything!)
@@ -103,10 +105,11 @@ Every one of them is documented in detail in:
 
 Short version:
 
-A. Normalization MUST be global across the entire dataset, not per
-   trace. The broken-bar fault signature lives in the absolute current
-   amplitude — per-trace [0,1] rescaling erases it. See
-   `compute_global_stats` and `_windows_from_traces`.
+A. The UFU envelope path uses per-window mean centering with a fixed
+   gain. This removes load level, which is a nuisance variable because
+   every rotor state is recorded at every load, while preserving and
+   amplifying the slow broken-bar modulation. The generic CSV path still
+   uses global per-channel normalization. See `_normalize_window_centered`.
 
 B. The first ~5 s of every UFU acquisition is a startup transient
    (zero current then inrush peaks of 6-8x rated). It MUST be skipped
@@ -156,6 +159,8 @@ WINDOW_SIZE = 64
 STRIDE = 32
 TRAIN_RATIO = 0.8
 MAX_SAMPLES_PER_CLASS = 400
+GROUPED_SPLIT_SEED = 42
+GROUPED_SPLIT_PROTOCOL = "grouped-acquisition-v1"
 
 # UFU pipeline: instead of feeding the RNN the raw 60 Hz line current
 # (where the fundamental dominates and the broken-bar signature is buried
@@ -344,12 +349,10 @@ def collect_ufu_traces(filepath):
          ~60 Hz effective rate suitable for an LSTM.
       4. Skip the startup transient (UFU_TRANSIENT_SKIP envelope samples).
 
-    Returns a list of (label, trace) where trace is a list of
-    [Ia_env, Ib_env, Ic_env] timesteps. The caller computes global
-    per-channel stats across all traces and normalizes in a second pass
-    (`compute_global_stats` / `normalize_with_global_stats`) so that the
-    absolute envelope amplitude — which encodes load level and broken-
-    bar severity — is preserved across the dataset.
+    Returns trace records containing the class, load, acquisition ID and
+    [Ia_env, Ib_env, Ic_env] timesteps. Keeping the acquisition ID lets
+    the grouped benchmark guarantee that overlapping windows from one
+    physical recording never cross the train/test boundary.
     """
     try:
         import h5py
@@ -411,7 +414,12 @@ def collect_ufu_traces(filepath):
 
                 trace = list(zip(ia_env.tolist(), ib_env.tolist(), ic_env.tolist()))
                 if len(trace) >= WINDOW_SIZE:
-                    traces.append((label, trace))
+                    traces.append({
+                        "label": label,
+                        "load": load,
+                        "source_group": f"{rotor_key}/{load}/rep{rep:02d}",
+                        "trace": trace,
+                    })
 
     return traces
 
@@ -429,7 +437,8 @@ def compute_global_stats(traces):
     """
     mins = [float("inf")] * 3
     maxs = [float("-inf")] * 3
-    for _label, trace in traces:
+    for record in traces:
+        trace = record["trace"]
         for step in trace:
             for ch in range(3):
                 v = step[ch]
@@ -606,7 +615,9 @@ def _windows_from_traces(traces, mins, maxs, max_per_class, num_classes,
     shuffled = list(traces)
     random.shuffle(shuffled)
 
-    for label, trace in shuffled:
+    for record in shuffled:
+        label = record["label"]
+        trace = record["trace"]
         if class_counts[label] >= max_per_class:
             continue
 
@@ -640,6 +651,161 @@ def _windows_from_traces(traces, mins, maxs, max_per_class, num_classes,
               f"Ib=[{mins[1]:.3f},{maxs[1]:.3f}] "
               f"Ic=[{mins[2]:.3f},{maxs[2]:.3f}]")
     return samples
+
+
+def _split_traces_by_acquisition(traces, train_ratio, seed):
+    """Split complete acquisitions within each class and load stratum.
+
+    UFU provides ten repetitions for every rotor state and load. Holding
+    out two repetitions in every stratum preserves the operating-range
+    balance while preventing overlapping windows from crossing splits.
+    """
+    strata = {}
+    for record in traces:
+        key = (record["label"], record["load"])
+        strata.setdefault(key, []).append(record)
+
+    rng = random.Random(seed)
+    train_traces = []
+    test_traces = []
+    for key in sorted(strata, key=lambda item: (item[0], str(item[1]))):
+        records = sorted(strata[key], key=lambda item: item["source_group"])
+        rng.shuffle(records)
+        if len(records) < 2:
+            raise ValueError(
+                f"Grouped split requires at least two acquisitions for stratum {key}"
+            )
+        test_count = max(1, int(round(len(records) * (1.0 - train_ratio))))
+        test_count = min(test_count, len(records) - 1)
+        test_traces.extend(records[:test_count])
+        train_traces.extend(records[test_count:])
+
+    train_groups = {record["source_group"] for record in train_traces}
+    test_groups = {record["source_group"] for record in test_traces}
+    overlap = train_groups & test_groups
+    if overlap:
+        raise AssertionError(f"Acquisition leakage detected: {sorted(overlap)}")
+
+    return train_traces, test_traces
+
+
+def _grouped_windows_from_traces(traces, max_per_class, num_classes, seed):
+    """Sample windows evenly across already-separated acquisitions."""
+    rng = random.Random(seed)
+    queues_by_stratum = {}
+    dropped = 0
+
+    for record in sorted(traces, key=lambda item: item["source_group"]):
+        candidates = []
+        trace = record["trace"]
+        for start in range(0, len(trace) - WINDOW_SIZE + 1, STRIDE):
+            raw_window = trace[start:start + WINDOW_SIZE]
+            mean_a = sum(step[0] for step in raw_window) / len(raw_window)
+            if mean_a < UFU_MIN_ENV_THRESHOLD:
+                dropped += 1
+                continue
+            normalized = _normalize_window_centered(raw_window, UFU_MOD_GAIN)
+            candidates.append({
+                "sequence": [
+                    [round(value, 4) for value in step]
+                    for step in normalized
+                ],
+                "label": record["label"],
+                "sourceGroup": record["source_group"],
+                "sourceLoad": record["load"],
+                "windowStart": start,
+            })
+        rng.shuffle(candidates)
+        stratum = (record["label"], record["load"])
+        queues_by_stratum.setdefault(stratum, []).append({
+            "samples": candidates,
+            "next": 0,
+        })
+
+    samples = []
+    class_counts = {label: 0 for label in range(num_classes)}
+    for label in range(num_classes):
+        strata = sorted(
+            (key for key in queues_by_stratum if key[0] == label),
+            key=lambda item: str(item[1]),
+        )
+        if not strata:
+            raise ValueError(f"Class {label} has no grouped acquisitions")
+        base_quota, remainder = divmod(max_per_class, len(strata))
+        for position, stratum in enumerate(strata):
+            stratum_quota = base_quota + (1 if position < remainder else 0)
+            queues = queues_by_stratum[stratum]
+            rng.shuffle(queues)
+            stratum_count = 0
+            while stratum_count < stratum_quota:
+                progressed = False
+                for queue in queues:
+                    if stratum_count >= stratum_quota:
+                        break
+                    index = queue["next"]
+                    if index >= len(queue["samples"]):
+                        continue
+                    samples.append(queue["samples"][index])
+                    queue["next"] = index + 1
+                    class_counts[label] += 1
+                    stratum_count += 1
+                    progressed = True
+                if not progressed:
+                    break
+            if stratum_count != stratum_quota:
+                raise ValueError(
+                    f"Stratum {stratum} only produced {stratum_count} windows; "
+                    f"expected {stratum_quota}"
+                )
+        if class_counts[label] != max_per_class:
+            raise ValueError(
+                f"Class {label} only produced {class_counts[label]} grouped windows; "
+                f"expected {max_per_class}"
+            )
+
+    rng.shuffle(samples)
+    print(f"Grouped window distribution: {class_counts}")
+    if dropped:
+        print(f"Dropped {dropped} windows below env threshold")
+    return samples
+
+
+def process_grouped_ufu_source(source_dir, seed):
+    """Build deterministic train/test sets separated by UFU acquisition."""
+    mat_files = find_ufu_mat_files(source_dir)
+    if not mat_files:
+        raise ValueError(
+            "Grouped acquisition split requires the UFU struct_*_R1.mat files"
+        )
+
+    print(f"Found {len(mat_files)} UFU .mat file(s) under {source_dir}")
+    all_traces = []
+    for filepath in mat_files:
+        all_traces.extend(collect_ufu_traces(filepath))
+    print(f"Collected {len(all_traces)} envelope traces total")
+
+    train_traces, test_traces = _split_traces_by_acquisition(
+        all_traces, TRAIN_RATIO, seed
+    )
+    train_per_class = int(MAX_SAMPLES_PER_CLASS * TRAIN_RATIO)
+    test_per_class = MAX_SAMPLES_PER_CLASS - train_per_class
+    train_samples = _grouped_windows_from_traces(
+        train_traces, train_per_class, len(UFU_CLASS_NAMES), seed
+    )
+    test_samples = _grouped_windows_from_traces(
+        test_traces, test_per_class, len(UFU_CLASS_NAMES), seed + 1
+    )
+
+    train_groups = {sample["sourceGroup"] for sample in train_samples}
+    test_groups = {sample["sourceGroup"] for sample in test_samples}
+    if train_groups & test_groups:
+        raise AssertionError("Grouped dataset contains train/test acquisition leakage")
+
+    print(
+        f"Grouped acquisitions: {len(train_groups)} train, "
+        f"{len(test_groups)} test, 0 shared"
+    )
+    return train_samples, test_samples, UFU_CLASS_NAMES
 
 
 def process_source_dir(source_dir):
@@ -707,7 +873,12 @@ def process_source_dir(source_dir):
         if len(data) < WINDOW_SIZE:
             print(f"    Too short ({len(data)} samples), skipping")
             continue
-        all_traces.append((label, data))
+        all_traces.append({
+            "label": label,
+            "load": None,
+            "source_group": os.path.basename(filepath),
+            "trace": data,
+        })
 
     if not all_traces:
         return [], CLASS_NAMES
@@ -727,27 +898,99 @@ def main():
                              "If omitted, synthetic data is generated.")
     parser.add_argument("--num-synthetic", type=int, default=400,
                         help="Number of synthetic samples (used when no source dir).")
+    parser.add_argument(
+        "--split-protocol",
+        choices=("legacy", "grouped"),
+        default="legacy",
+        help=(
+            "legacy writes train.json/test.json with the paper's window-level "
+            "split; grouped writes train_grouped.json/test_grouped.json with "
+            "complete acquisitions held out"
+        ),
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=GROUPED_SPLIT_SEED,
+        help="Deterministic seed used by the grouped acquisition split.",
+    )
     args = parser.parse_args()
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    all_samples = []
-    class_names = CLASS_NAMES
-    if args.source_dir:
-        all_samples, class_names = process_source_dir(args.source_dir)
-        if len(all_samples) < 40:
-            print("Too few real samples extracted. Falling back to synthetic.")
-            all_samples = []
-            class_names = CLASS_NAMES
+    extra_payload = {}
+    if args.split_protocol == "grouped":
+        if not args.source_dir:
+            parser.error("--split-protocol grouped requires --source-dir")
+        train_samples, test_samples, class_names = process_grouped_ufu_source(
+            args.source_dir, args.seed
+        )
+        train_filename = "train_grouped.json"
+        test_filename = "test_grouped.json"
+        extra_payload = {
+            "schemaVersion": 2,
+            "splitProtocol": GROUPED_SPLIT_PROTOCOL,
+            "seed": args.seed,
+            "stride": STRIDE,
+            "signalDomain": "envelope",
+            "sampleRateHz": round(55611.0 / UFU_ENV_DECIMATE, 6),
+            "lineFrequencyHz": 60.0,
+            "preprocessing": {
+                "envelope": "moving-rms-half-cycle",
+                "rmsWindowSamples": UFU_RAW_HALF_CYCLE,
+                "decimation": UFU_ENV_DECIMATE,
+                "transientSkipSamples": UFU_TRANSIENT_SKIP,
+                "normalization": "per-window-centered",
+                "gain": UFU_MOD_GAIN,
+                "outputRange": [0.0, 1.0],
+            },
+        }
+    else:
+        all_samples = []
+        class_names = CLASS_NAMES
+        generated_synthetic = False
+        ufu_source = bool(args.source_dir and find_ufu_mat_files(args.source_dir))
+        if args.source_dir:
+            all_samples, class_names = process_source_dir(args.source_dir)
+            if len(all_samples) < 40:
+                print("Too few real samples extracted. Falling back to synthetic.")
+                all_samples = []
+                class_names = CLASS_NAMES
 
-    if not all_samples:
-        all_samples = generate_synthetic(args.num_synthetic, WINDOW_SIZE)
-        print(f"Generated {len(all_samples)} synthetic samples")
+        if not all_samples:
+            all_samples = generate_synthetic(args.num_synthetic, WINDOW_SIZE)
+            generated_synthetic = True
+            print(f"Generated {len(all_samples)} synthetic samples")
 
-    random.shuffle(all_samples)
-    split_idx = int(len(all_samples) * TRAIN_RATIO)
-    train_samples = all_samples[:split_idx]
-    test_samples = all_samples[split_idx:]
+        random.shuffle(all_samples)
+        split_idx = int(len(all_samples) * TRAIN_RATIO)
+        train_samples = all_samples[:split_idx]
+        test_samples = all_samples[split_idx:]
+        train_filename = "train.json"
+        test_filename = "test.json"
+        if generated_synthetic:
+            extra_payload = {
+                "schemaVersion": 2,
+                "signalDomain": "raw-current",
+                "sampleRateHz": 1000.0,
+                "lineFrequencyHz": 50.0,
+            }
+        elif ufu_source:
+            extra_payload = {
+                "schemaVersion": 2,
+                "signalDomain": "envelope",
+                "sampleRateHz": round(55611.0 / UFU_ENV_DECIMATE, 6),
+                "lineFrequencyHz": 60.0,
+                "preprocessing": {
+                    "envelope": "moving-rms-half-cycle",
+                    "rmsWindowSamples": UFU_RAW_HALF_CYCLE,
+                    "decimation": UFU_ENV_DECIMATE,
+                    "transientSkipSamples": UFU_TRANSIENT_SKIP,
+                    "normalization": "per-window-centered",
+                    "gain": UFU_MOD_GAIN,
+                    "outputRange": [0.0, 1.0],
+                },
+            }
 
     def counts(xs):
         c = {}
@@ -762,10 +1005,11 @@ def main():
         "windowSize": WINDOW_SIZE,
         "channels": 3,
         "classes": class_names,
+        **extra_payload,
     }
 
-    train_path = os.path.join(OUTPUT_DIR, "train.json")
-    test_path = os.path.join(OUTPUT_DIR, "test.json")
+    train_path = os.path.join(OUTPUT_DIR, train_filename)
+    test_path = os.path.join(OUTPUT_DIR, test_filename)
 
     with open(train_path, "w") as f:
         json.dump({**payload, "samples": train_samples}, f)

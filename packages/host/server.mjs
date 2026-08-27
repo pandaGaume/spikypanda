@@ -65,7 +65,10 @@ const server = createServer((req, res) => {
     try { statSync(target); } catch { send(res, 404, "not found"); return; }
 
     const mime = MIME[extname(target).toLowerCase()] ?? "application/octet-stream";
-    res.writeHead(200, { "Content-Type": mime });
+    res.writeHead(200, {
+        "Content-Type": mime,
+        "Cache-Control": "no-store",
+    });
     createReadStream(target).pipe(res);
 });
 

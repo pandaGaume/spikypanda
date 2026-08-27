@@ -29,6 +29,21 @@ export class GraphBuilder<N extends INode, L extends IOlink> implements IGraphBu
     protected _outputs: Nullable<Array<N>> = null;
     protected _hiddens: Nullable<Array<N>> = null;
 
+    /**
+     * Optionally seed the builder from an existing graph. Topology arrays are
+     * copied, while node and link identities are preserved.
+     */
+    public constructor(graph?: IGraph<N, L>) {
+        if (graph) this._hydrateGraph(graph);
+    }
+
+    /** Reset and seed this builder from an existing graph. */
+    public withGraph(graph: IGraph<N, L>): this {
+        this.reset();
+        this._hydrateGraph(graph);
+        return this;
+    }
+
     /** Set the node position. The graph is assumed to be a node through inheritance. */
     public withNodePosition(p: ICartesian): this {
         this._position = p;
@@ -83,6 +98,44 @@ export class GraphBuilder<N extends INode, L extends IOlink> implements IGraphBu
     /** Add nodes to the graph. */
     public withNodes(...nodes: Array<N | INodeBuilder>): this {
         this._nodes.push(...GraphNodeBuilder.Resolve(nodes, isNode<N>));
+        return this;
+    }
+
+    /**
+     * Replace a node in place, preserve its topology index and partition
+     * membership, and rewire all links owned by this builder.
+     */
+    public replaceNode(current: N, replacement: N): this {
+        if (current === replacement) return this;
+        const index = this._nodes.indexOf(current);
+        if (index < 0) throw new Error("replaceNode: current node is not part of this builder.");
+        if (this._nodes.includes(replacement)) throw new Error("replaceNode: replacement node is already part of this builder.");
+
+        for (const link of this._links) {
+            if (link.oini === current) link.oini = replacement;
+            if (link.ofin === current) link.ofin = replacement;
+        }
+        this._nodes[index] = replacement;
+        this._inputs = replacePartitionNode(this._inputs, current, replacement);
+        this._outputs = replacePartitionNode(this._outputs, current, replacement);
+        this._hiddens = replacePartitionNode(this._hiddens, current, replacement);
+        return this;
+    }
+
+    /**
+     * Replace a link in place and detach the previous link from its endpoints.
+     * The replacement keeps its own configured endpoints and properties.
+     */
+    public replaceLink(current: L, replacement: L): this {
+        if (current === replacement) return this;
+        const index = this._links.indexOf(current);
+        if (index < 0) throw new Error("replaceLink: current link is not part of this builder.");
+        if (this._links.includes(replacement)) throw new Error("replaceLink: replacement link is already part of this builder.");
+
+        current.dispose();
+        current.oini = null;
+        current.ofin = null;
+        this._links[index] = replacement;
         return this;
     }
 
@@ -183,4 +236,20 @@ export class GraphBuilder<N extends INode, L extends IOlink> implements IGraphBu
         this._hiddens = null;
         return this;
     }
+
+    private _hydrateGraph(graph: IGraph<N, L>): void {
+        this._position = graph.position;
+        this._nodeInputLinks = [...graph.onsc<L>()];
+        this._nodeOutputLinks = [...graph.opsc<L>()];
+        this._nodes = [...graph.nodes];
+        this._links = [...graph.links];
+        this._inputs = [...graph.inputs];
+        this._outputs = [...graph.outputs];
+        this._hiddens = [...graph.hiddens];
+    }
+}
+
+function replacePartitionNode<N extends INode>(partition: Nullable<N[]>, current: N, replacement: N): Nullable<N[]> {
+    if (partition === null) return null;
+    return partition.map((node) => (node === current ? replacement : node));
 }

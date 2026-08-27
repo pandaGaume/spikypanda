@@ -67,6 +67,44 @@
     color: var(--log-text);
 }
 
+.log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+
+.log-header h2 {
+    margin: 0;
+}
+
+.log-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.log-copy-btn {
+    background: rgba(0, 212, 255, 0.1);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    color: var(--text-muted);
+    font-size: 0.75em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.log-copy-btn:hover {
+    color: var(--primary);
+    background: rgba(0, 212, 255, 0.2);
+}
+
+.log-copy-btn.copied {
+    color: var(--success);
+    border-color: var(--success);
+}
+
 /* Results grid layout */
 .results-grid {
     display: grid;

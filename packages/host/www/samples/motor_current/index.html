@@ -1,208 +1,457 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SpikyPanda - Motor Current (Broken Rotor Bar) RNN</title>
-    <link rel="stylesheet" href="../../css/common.css" />
-    <link rel="stylesheet" href="motor_current.css" />
-</head>
-<body>
-    <div class="sample-hero">
-        <div class="sample-hero-overlay">
-            <nav class="nav-bar" style="margin:0; background:none; border:none; padding:10px 0;">
-                <a href="../../index.html" class="nav-logo">SpikyPanda</a>
-                <div class="nav-links">
-                    <a href="../../index.html">Home</a>
-                    <a href="../motor/">Motor Vibration</a>
-                    <a href="../motor_monitor/">Motor Monitor</a>
-                    <a href="../mox/">MOx Gas</a>
-                    <a href="../kws/">KWS</a>
-                    <a href="../mnist/">MNIST CNN</a>
-                    <a href="../lidar/">LiDAR</a>
-                </div>
-            </nav>
-            <h1>Motor Current</h1>
-            <p class="subtitle">Detect broken rotor bars in 3-phase induction motors via stator current signature analysis (MCSA)</p>
-        </div>
-    </div>
-
-    <div class="container">
-
-        <div class="panel">
-            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
-                <h2>Understanding the use case</h2><span class="collapsible-arrow">&#9660;</span>
-            </div>
-            <div class="collapsible-body metrics-help">
-                <p><strong>Broken rotor bars</strong> - Squirrel-cage induction motors are the most common industrial motors. Their rotor is built from a set of conductive bars shorted at each end. Bars can crack or break due to thermal cycling, mechanical stress, or manufacturing defects. A broken bar rarely causes an immediate failure, but it degrades efficiency, creates torque ripple, damages adjacent bars over time, and eventually leads to catastrophic failure. Detecting broken bars early allows the motor to be serviced during a planned shutdown rather than after an unscheduled trip.</p>
-                <p><strong>Why stator currents?</strong> - Historically, broken bars were detected with vibration sensors, but vibration pickups must be physically attached to the motor housing. Motor Current Signature Analysis (MCSA) uses only the stator phase currents, which are already measured by the drive or by non-invasive clamp-on probes. No extra sensor, no machine modification — the fault signature lives in sidebands around the line frequency caused by the rotor asymmetry.</p>
-                <p><strong>Edge-side MCSA</strong> - A small RNN running on an MCU next to a current clamp can classify the rotor state continuously without ever sending raw currents to the cloud. Only the fault label is streamed upstream, which keeps bandwidth, privacy, and latency all under control. This makes MCSA a textbook target for tiny sequence models deployed on constrained hardware.</p>
-                <p><strong>Complementary to vibration</strong> - The <a href="../motor/">Motor Vibration</a> sample solves a related problem (mechanical imbalance / bearing / misalignment) from accelerometer data. Vibration and MCSA together give a richer picture of motor health: some faults are easier to see in the electrical domain, others in the mechanical domain.</p>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>SpikyPanda - Motor Current (Broken Rotor Bar) RNN</title>
+        <link rel="stylesheet" href="../../css/common.css" />
+        <link rel="stylesheet" href="motor_current.css" />
+    </head>
+    <body>
+        <div class="sample-hero">
+            <div class="sample-hero-overlay">
+                <nav class="nav-bar" style="margin: 0; background: none; border: none; padding: 10px 0">
+                    <a href="../../index.html" class="nav-logo">SpikyPanda</a>
+                    <div class="nav-links">
+                        <a href="../../index.html">Home</a>
+                        <a href="../motor/">Motor Vibration</a>
+                        <a href="../motor_monitor/">Motor Monitor</a>
+                        <a href="../mox/">MOx Gas</a>
+                        <a href="../kws/">KWS</a>
+                        <a href="../mnist/">MNIST CNN</a>
+                        <a href="../lidar/">LiDAR</a>
+                    </div>
+                </nav>
+                <h1>Motor Current</h1>
+                <p class="subtitle">Detect broken rotor bars in 3-phase induction motors via stator current signature analysis (MCSA)</p>
             </div>
         </div>
 
-        <div class="panel">
-            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
-                <h2>Understanding the data</h2><span class="collapsible-arrow">&#9660;</span>
+        <div class="container">
+            <div class="panel">
+                <div
+                    class="collapsible-header"
+                    title="Click to expand"
+                    onclick="
+                        this.classList.toggle('open');
+                        this.nextElementSibling.classList.toggle('open');
+                        this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand';
+                    "
+                >
+                    <h2>Understanding the use case</h2>
+                    <span class="collapsible-arrow">&#9660;</span>
+                </div>
+                <div class="collapsible-body metrics-help">
+                    <p>
+                        <strong>Broken rotor bars</strong> - Squirrel-cage induction motors are the most common industrial motors. Their rotor is built from a set of conductive
+                        bars shorted at each end. Bars can crack or break due to thermal cycling, mechanical stress, or manufacturing defects. A broken bar rarely causes an
+                        immediate failure, but it degrades efficiency, creates torque ripple, damages adjacent bars over time, and eventually leads to catastrophic failure.
+                        Detecting broken bars early allows the motor to be serviced during a planned shutdown rather than after an unscheduled trip.
+                    </p>
+                    <p>
+                        <strong>Why stator currents?</strong> - Historically, broken bars were detected with vibration sensors, but vibration pickups must be physically attached to
+                        the motor housing. Motor Current Signature Analysis (MCSA) uses only the stator phase currents, which are already measured by the drive or by non-invasive
+                        clamp-on probes. No extra sensor, no machine modification — the fault signature lives in sidebands around the line frequency caused by the rotor asymmetry.
+                    </p>
+                    <p>
+                        <strong>Edge-side MCSA</strong> - A small RNN running on an MCU next to a current clamp can classify the rotor state continuously without ever sending raw
+                        currents to the cloud. Only the fault label is streamed upstream, which keeps bandwidth, privacy, and latency all under control. This makes MCSA a textbook
+                        target for tiny sequence models deployed on constrained hardware.
+                    </p>
+                    <p>
+                        <strong>Complementary to vibration</strong> - The <a href="../motor/">Motor Vibration</a> sample solves a related problem (mechanical imbalance / bearing /
+                        misalignment) from accelerometer data. Vibration and MCSA together give a richer picture of motor health: some faults are easier to see in the electrical
+                        domain, others in the mechanical domain.
+                    </p>
+                </div>
             </div>
-            <div class="collapsible-body metrics-help">
-                <p><strong>Dataset - UFU Broken Rotor Bar</strong> - This sample consumes the Broken Rotor Bar dataset published by the Federal University of Uberlândia (UFU) on IEEE DataPort. It contains simultaneous electrical and vibration recordings from a 1&nbsp;hp, 220/380&nbsp;V, 4-pole, 60&nbsp;Hz squirrel-cage induction motor (rated 1715&nbsp;rpm, nominal torque 4.1&nbsp;Nm, 34 rotor bars). Only the three phase currents (Ia, Ib, Ic) are used here; voltages and the five vibration channels are ignored.</p>
-                <p><strong>Five rotor states</strong> - The classifier distinguishes five conditions: (0) <em>Healthy</em> - no mechanical defect; (1) <em>BRB1</em> - one broken rotor bar; (2) <em>BRB2</em> - two adjacent broken bars; (3) <em>BRB3</em> - three adjacent broken bars; (4) <em>BRB4</em> - four adjacent broken bars. Each rotor was tested under 8 load levels (12.5 % to 100 % of rated torque, in 12.5 % steps) with 10 repetitions per condition. The script <code>prepare_motor_current.py</code> pulls 400 windows per class for a balanced 2000-sample dataset.</p>
-                <p><strong>Envelope preprocessing</strong> - The key design decision in the prep script is that the RNN does <em>not</em> see the raw 60&nbsp;Hz stator currents. Instead, each phase current is passed through a moving RMS filter whose window is one half-cycle of the line frequency (~463 raw samples). This cancels the 60&nbsp;Hz fundamental and leaves only the slow amplitude envelope — which is exactly where the broken-bar fault signature lives. The envelope is then decimated to ~60&nbsp;Hz so a 64-timestep window covers ~1&nbsp;second of motor running, capturing 2-5 periods of the 2-5&nbsp;Hz slip-frequency modulation. Earlier attempts that fed the raw 60&nbsp;Hz current to the LSTM failed because the fundamental dominates the signal and the fault modulation is buried in a 256+ step BPTT chain that the gradient cannot traverse.</p>
-                <p><strong>Why the envelope trick works</strong> - Broken bars produce sidebands at f<sub>line</sub>&nbsp;± 2·s·f<sub>line</sub> (where s is rotor slip, a few percent). In the time domain these sidebands appear as a slow envelope modulation at 2·s·f<sub>line</sub> ≈ 2-5&nbsp;Hz. Moving RMS over one half-cycle is a cheap way to extract that envelope without FFTs or Hilbert transforms. Once the fundamental is gone, the signal becomes a smooth slowly-varying function that a tiny LSTM can learn in a few dozen epochs.</p>
-                <p><strong>Synthetic fallback</strong> - When real UFU data is not available, the sample falls back to a synthetic 3-phase <em>raw</em> sinusoid generator with 4 electrical fault classes (Normal, OpenPhase, ShortCircuit, Unbalanced). Note that the synthetic path trains on raw sinusoids while the real-data path trains on envelopes — the two are visually different but share the same 3-channel, windowed, [0,1]-normalized JSON schema.</p>
-                <p><strong>Normalization</strong> - Envelope values (in Amps RMS) are normalized to [0, 1] using <em>global</em> per-channel min/max computed across the entire dataset, not per-trace. Per-trace normalization would erase the absolute amplitude differences between load levels and rotor states, which is one of the discriminators. The global max is also capped at 6&nbsp;A RMS to prevent residual inrush artifacts from wasting dynamic range.</p>
-            </div>
-        </div>
 
-        <div class="panel">
-            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
-                <h2>Understanding the configuration</h2><span class="collapsible-arrow">&#9660;</span>
+            <div class="panel">
+                <div
+                    class="collapsible-header"
+                    title="Click to expand"
+                    onclick="
+                        this.classList.toggle('open');
+                        this.nextElementSibling.classList.toggle('open');
+                        this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand';
+                    "
+                >
+                    <h2>Understanding the data</h2>
+                    <span class="collapsible-arrow">&#9660;</span>
+                </div>
+                <div class="collapsible-body metrics-help">
+                    <p>
+                        <strong>Dataset - UFU Broken Rotor Bar</strong> - This sample consumes the Broken Rotor Bar dataset published by the Federal University of Uberlândia (UFU)
+                        on IEEE DataPort. It contains simultaneous electrical and vibration recordings from a 1&nbsp;hp, 220/380&nbsp;V, 4-pole, 60&nbsp;Hz squirrel-cage induction
+                        motor (rated 1715&nbsp;rpm, nominal torque 4.1&nbsp;Nm, 34 rotor bars). Only the three phase currents (Ia, Ib, Ic) are used here; voltages and the five
+                        vibration channels are ignored.
+                    </p>
+                    <p>
+                        <strong>Five rotor states</strong> - The classifier distinguishes five conditions: (0) <em>Healthy</em> - no mechanical defect; (1) <em>BRB1</em> - one
+                        broken rotor bar; (2) <em>BRB2</em> - two adjacent broken bars; (3) <em>BRB3</em> - three adjacent broken bars; (4) <em>BRB4</em> - four adjacent broken
+                        bars. Each rotor was tested under 8 load levels (12.5 % to 100 % of rated torque, in 12.5 % steps) with 10 repetitions per condition. The script
+                        <code>prepare_motor_current.py</code> pulls 400 windows per class for a balanced 2000-sample dataset.
+                    </p>
+                    <p>
+                        <strong>Envelope preprocessing</strong> - The key design decision in the prep script is that the RNN does <em>not</em> see the raw 60&nbsp;Hz stator
+                        currents. Instead, each phase current is passed through a moving RMS filter whose window is one half-cycle of the line frequency (~463 raw samples). This
+                        cancels the 60&nbsp;Hz fundamental and leaves only the slow amplitude envelope — which is exactly where the broken-bar fault signature lives. The envelope
+                        is then decimated to ~60&nbsp;Hz so a 64-timestep window covers ~1&nbsp;second of motor running, capturing 2-5 periods of the 2-5&nbsp;Hz slip-frequency
+                        modulation. Earlier attempts that fed the raw 60&nbsp;Hz current to the LSTM failed because the fundamental dominates the signal and the fault modulation is
+                        buried in a 256+ step BPTT chain that the gradient cannot traverse.
+                    </p>
+                    <p>
+                        <strong>Why the envelope trick works</strong> - Broken bars produce sidebands at f<sub>line</sub>&nbsp;± 2·s·f<sub>line</sub> (where s is rotor slip, a few
+                        percent). In the time domain these sidebands appear as a slow envelope modulation at 2·s·f<sub>line</sub> ≈ 2-5&nbsp;Hz. Moving RMS over one half-cycle is a
+                        cheap way to extract that envelope without FFTs or Hilbert transforms. Once the fundamental is gone, the signal becomes a smooth slowly-varying function
+                        that a tiny LSTM can learn in a few dozen epochs.
+                    </p>
+                    <p>
+                        <strong>Synthetic fallback</strong> - When real UFU data is not available, the sample falls back to a synthetic 3-phase <em>raw</em> sinusoid generator with
+                        4 electrical fault classes (Normal, OpenPhase, ShortCircuit, Unbalanced). Note that the synthetic path trains on raw sinusoids while the real-data path
+                        trains on envelopes — the two are visually different but share the same 3-channel, windowed, [0,1]-normalized JSON schema.
+                    </p>
+                    <p>
+                        <strong>Normalization</strong> - The UFU envelope path subtracts the mean of each 64-step window independently for every phase, multiplies the residual
+                        modulation by a fixed gain of 6, shifts it around 0.5, and clamps it to [0, 1]. This removes load level, which is a nuisance variable because every rotor
+                        state is represented at every load, while preserving the slow broken-bar modulation. Global per-channel min/max normalization is used only by the generic
+                        CSV path.
+                    </p>
+                    <p>
+                        <strong>Evaluation splits</strong> - The paper split reproduces the historical experiment by shuffling overlapping windows before the 80/20 division. The
+                        grouped split is stricter: complete motor acquisitions are assigned to either training or test within every rotor-state and load stratum. No acquisition,
+                        and therefore no overlapping window from that acquisition, appears on both sides. Use the grouped split for the direct LSTM/SNN comparison.
+                    </p>
+                </div>
             </div>
-            <div class="collapsible-body metrics-help">
-                <p><strong>LSTM vs GRU</strong> - LSTM (Long Short-Term Memory) uses 4 gates (forget, input, candidate, output) and maintains a separate cell state for long-term memory. GRU (Gated Recurrent Unit) uses 3 gates (reset, update, candidate) and merges the cell state into the hidden state, making it simpler and faster. For short current windows, GRU typically matches LSTM accuracy with fewer parameters — a good default for edge deployment.</p>
-                <p><strong>Hidden size</strong> - The number of recurrent units in the hidden layer. For 5-class broken-bar classification, 16 units is usually enough. Push to 32 if accuracy is low; drop to 8 for faster experiments on constrained hardware.</p>
-                <p><strong>Learning rate</strong> - Controls the step size during gradient updates. 0.003 with Adam is a solid default for this task. If training is unstable (loss jumps around), try 0.001. If training is too slow, try 0.005.</p>
-                <p><strong>Window size</strong> - The number of timesteps per sample. On the real-data path the prep script computes a moving-RMS envelope of the raw 55.6&nbsp;kHz currents and decimates it to ~60&nbsp;Hz, so a 64-step window covers ~1.0&nbsp;s of motor running — long enough to see 2-5 periods of the 2-5&nbsp;Hz slip-frequency modulation where the broken-bar signature lives. 64 steps is also short enough for the LSTM's BPTT gradients to flow easily during training (vanishing gradients were the main failure mode of an earlier 256-step raw-current attempt). The dropdown only affects the in-browser synthetic fallback; real UFU data always uses whatever window size the JSON file declares.</p>
-            </div>
-        </div>
 
-        <div class="panel">
-            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
-                <h2>Understanding the results</h2><span class="collapsible-arrow">&#9660;</span>
+            <div class="panel">
+                <div
+                    class="collapsible-header"
+                    title="Click to expand"
+                    onclick="
+                        this.classList.toggle('open');
+                        this.nextElementSibling.classList.toggle('open');
+                        this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand';
+                    "
+                >
+                    <h2>Understanding the configuration</h2>
+                    <span class="collapsible-arrow">&#9660;</span>
+                </div>
+                <div class="collapsible-body metrics-help">
+                    <p>
+                        <strong>LSTM vs GRU</strong> - LSTM (Long Short-Term Memory) uses 4 gates (forget, input, candidate, output) and maintains a separate cell state for
+                        long-term memory. GRU (Gated Recurrent Unit) uses 3 gates (reset, update, candidate) and merges the cell state into the hidden state, making it simpler and
+                        faster. For short current windows, GRU typically matches LSTM accuracy with fewer parameters — a good default for edge deployment.
+                    </p>
+                    <p>
+                        <strong>SNN wave sensor</strong> - The SNN does not receive scalar deltas. A replaceable runtime sensor analyzes each current phase through a small IIR band
+                        bank, then emits separate spikes for rising and falling phase crossings. On the UFU RMS envelope, the default bands are 2 Hz, 3.5 Hz and 5 Hz. On raw
+                        current, the same interface can instead target the line fundamental, harmonics and sidebands. Frequency is carried by spike timing and by the configured
+                        output port, keeping the inference payload small enough for an MCU.
+                    </p>
+                    <p>
+                        <strong>Hidden size</strong> - The number of recurrent units in the hidden layer. For 5-class broken-bar classification, 16 units is usually enough. Push to
+                        32 if accuracy is low; drop to 8 for faster experiments on constrained hardware.
+                    </p>
+                    <p>
+                        <strong>Learning rate</strong> - Controls the step size during gradient updates. 0.003 with Adam is a solid default for this task. If training is unstable
+                        (loss jumps around), try 0.001. If training is too slow, try 0.005.
+                    </p>
+                    <p>
+                        <strong>Window size</strong> - The number of timesteps per sample. On the real-data path the prep script computes a moving-RMS envelope of the raw
+                        55.6&nbsp;kHz currents and decimates it to ~60&nbsp;Hz, so a 64-step window covers ~1.0&nbsp;s of motor running — long enough to see 2-5 periods of the
+                        2-5&nbsp;Hz slip-frequency modulation where the broken-bar signature lives. 64 steps is also short enough for the LSTM's BPTT gradients to flow easily
+                        during training (vanishing gradients were the main failure mode of an earlier 256-step raw-current attempt). The dropdown only affects the in-browser
+                        synthetic fallback; real UFU data always uses whatever window size the JSON file declares.
+                    </p>
+                </div>
             </div>
-            <div class="collapsible-body metrics-help">
-                <p><strong>Accuracy</strong> - Percentage of test windows correctly classified. Random guessing on a balanced 5-class problem gives 20 %. A trained model on UFU real data should reach 70-90 %+ depending on hidden size and epoch count. If accuracy stays near 20 %, the model has not learned — increase epochs or hidden size.</p>
-                <p><strong>Confusion matrix</strong> - Rows = actual class, columns = predicted class. Diagonal (green) cells are correct predictions; off-diagonal (red) cells are errors. On real UFU data, expect confusions mostly between <em>adjacent severities</em> (BRB1 vs BRB2, BRB3 vs BRB4) because the signatures grow progressively and the transition is gradual. Healthy vs any broken-bar class should be very sharp.</p>
-                <p><strong>Loss curve</strong> - Average training loss per epoch. A healthy curve drops quickly in the first few epochs then flattens. Oscillation = learning rate too high. Plateau at a high value = model too small or not enough epochs.</p>
-                <p><strong>Inference time</strong> - Total wall-clock time to classify all test windows in the browser. Per-sample latency (divide by number of test samples) is the relevant metric when projecting to an MCU.</p>
-            </div>
-        </div>
 
-        <div class="panel">
-            <h2>Configuration</h2>
-            <div class="controls">
-                <div>
-                    <label for="cellType">Cell type:</label><br>
-                    <select id="cellType">
-                        <option value="lstm" selected>LSTM</option>
-                        <option value="gru">GRU</option>
-                    </select>
+            <div class="panel">
+                <div
+                    class="collapsible-header"
+                    title="Click to expand"
+                    onclick="
+                        this.classList.toggle('open');
+                        this.nextElementSibling.classList.toggle('open');
+                        this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand';
+                    "
+                >
+                    <h2>Understanding the results</h2>
+                    <span class="collapsible-arrow">&#9660;</span>
                 </div>
-                <div>
-                    <label for="hiddenSize">Hidden size:</label><br>
-                    <select id="hiddenSize">
-                        <option value="8">8</option>
-                        <option value="16">16</option>
-                        <option value="32" selected>32</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="epochs">Epochs:</label><br>
-                    <input type="number" id="epochs" value="80" min="1" max="200" style="width:70px" />
-                </div>
-                <div>
-                    <label for="lr">Learning rate:</label><br>
-                    <input type="number" id="lr" value="0.003" step="0.001" min="0.0001" style="width:90px" />
-                </div>
-                <div>
-                    <label for="numSamples">Samples:</label><br>
-                    <input type="number" id="numSamples" value="200" min="20" max="2000" step="10" style="width:80px" />
-                </div>
-                <div>
-                    <label for="windowSize">Window size:</label><br>
-                    <select id="windowSize">
-                        <option value="32">32</option>
-                        <option value="64" selected>64</option>
-                        <option value="128">128</option>
-                    </select>
-                </div>
-            </div>
-            <div class="controls" style="margin-top:10px;">
-                <div style="display:flex; gap:8px; align-self:flex-end;">
-                    <button id="btnLoad">Load / Generate Data</button>
-                    <button id="btnTrain" disabled>Train</button>
-                    <button id="btnTest" disabled>Test</button>
-                    <button id="btnExport" disabled>Export ONNX</button>
-                    <select id="exportMode" style="margin-left:4px;">
-                        <option value="custom">Custom op (EnvelopeCenter)</option>
-                        <option value="standard">Standard ONNX ops</option>
-                        <option value="none">LSTM only (no preprocessing)</option>
-                    </select>
+                <div class="collapsible-body metrics-help">
+                    <p>
+                        <strong>Accuracy</strong> - Percentage of test windows correctly classified. Random guessing on a balanced 5-class problem gives 20 %. A trained model on
+                        UFU real data should reach 70-90 %+ depending on hidden size and epoch count. If accuracy stays near 20 %, the model has not learned — increase epochs or
+                        hidden size.
+                    </p>
+                    <p>
+                        <strong>Best checkpoint</strong> - A deterministic validation subset is held out from the training file. After every epoch, the page measures validation
+                        accuracy and immediately saves the best weights in browser storage. Ties are resolved with the lower training loss. At the end of training, those best
+                        weights are restored before test or ONNX export. The separate test file is never used to choose the checkpoint.
+                    </p>
+                    <p>
+                        <strong>Recovery after reload</strong> - The most recent best checkpoint is restored automatically when the page opens. The JSON backup button saves the
+                        same weights and metadata as a portable file. Optimizer state is not included, so this is an inference/export checkpoint rather than a resumable training
+                        session. Checkpoints are isolated by a complete architecture signature, including the SNN sensor bands and ports. Use <em>Reset saved</em> to discard the
+                        current architecture's persistent baseline before starting a fresh comparison.
+                    </p>
+                    <p>
+                        <strong>Confusion matrix</strong> - Rows = actual class, columns = predicted class. Diagonal (green) cells are correct predictions; off-diagonal (red) cells
+                        are errors. On real UFU data, expect confusions mostly between <em>adjacent severities</em> (BRB1 vs BRB2, BRB3 vs BRB4) because the signatures grow
+                        progressively and the transition is gradual. Healthy vs any broken-bar class should be very sharp.
+                    </p>
+                    <p>
+                        <strong>Loss curve</strong> - Average training loss per epoch. A healthy curve drops quickly in the first few epochs then flattens. Oscillation = learning
+                        rate too high. Plateau at a high value = model too small or not enough epochs.
+                    </p>
+                    <p>
+                        <strong>Inference time</strong> - Total wall-clock time to classify all test windows in the browser. Per-sample latency (divide by number of test samples)
+                        is the relevant metric when projecting to an MCU.
+                    </p>
                 </div>
             </div>
-            <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
-            <div id="status">Load or generate data to begin.</div>
-        </div>
 
-        <div class="panel">
-            <h2>Training Log</h2>
-            <div class="log" id="log">Ready.
-</div>
-            <canvas class="loss-canvas" id="lossCanvas"></canvas>
-        </div>
-
-        <div class="panel" id="resultsPanel" style="display:none">
-            <h2>Results</h2>
-            <div class="stats">
-                <div class="stat"><div class="value" id="accuracy">-</div><div class="label">Accuracy</div></div>
-                <div class="stat"><div class="value" id="finalLoss">-</div><div class="label">Final Loss</div></div>
-                <div class="stat"><div class="value" id="inferenceTime">-</div><div class="label">Inference Time</div></div>
-                <div class="stat"><div class="value" id="testCount">-</div><div class="label">Test Samples</div></div>
-            </div>
-            <div class="results-grid">
-                <div class="result-section">
-                    <h3>3-Phase Current Signal</h3>
-                    <canvas class="signal-canvas" id="signalCanvas"></canvas>
+            <div class="panel">
+                <h2>Configuration</h2>
+                <div class="controls">
+                    <div>
+                        <label for="datasetSplit">Dataset split:</label><br />
+                        <select id="datasetSplit">
+                            <option value="legacy" selected>Paper split (legacy)</option>
+                            <option value="grouped">Grouped acquisitions</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="cellType">Cell type:</label><br />
+                        <select id="cellType">
+                            <option value="lstm" selected>LSTM</option>
+                            <option value="gru">GRU</option>
+                            <option value="snn">SNN (LIF)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="hiddenSize">Hidden size:</label><br />
+                        <select id="hiddenSize">
+                            <option value="8">8</option>
+                            <option value="16">16</option>
+                            <option value="32" selected>32</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="epochs">Epochs:</label><br />
+                        <input type="number" id="epochs" value="80" min="1" max="200" style="width: 70px" />
+                    </div>
+                    <div>
+                        <label for="lr">Learning rate:</label><br />
+                        <input type="number" id="lr" value="0.003" step="0.001" min="0.0001" style="width: 90px" />
+                    </div>
+                    <div>
+                        <label for="numSamples">Samples:</label><br />
+                        <input type="number" id="numSamples" value="200" min="20" max="2000" step="10" style="width: 80px" />
+                    </div>
+                    <div>
+                        <label for="windowSize">Window size:</label><br />
+                        <select id="windowSize">
+                            <option value="32">32</option>
+                            <option value="64" selected>64</option>
+                            <option value="128">128</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="result-section">
-                    <h3>Confusion Matrix</h3>
-                    <div id="confusionMatrix"></div>
+                <div class="controls" style="margin-top: 10px">
+                    <div style="display: flex; gap: 8px; align-self: flex-end">
+                        <button id="btnLoad">Load / Generate Data</button>
+                        <button id="btnTrain" disabled>Train</button>
+                        <button id="btnTest" disabled>Test</button>
+                        <button id="btnExport" disabled>Export ONNX</button>
+                        <select id="exportMode" style="margin-left: 4px">
+                            <option value="none" selected>Preprocessed input [64,1,3]</option>
+                            <option value="standard">Raw envelope, standard ONNX</option>
+                            <option value="custom">Raw envelope, custom MCU op</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-self: flex-end">
+                        <button id="btnRestoreCheckpoint" disabled>Restore best</button>
+                        <button id="btnResetCheckpoint" title="Delete the persistent baseline for the currently restored architecture" disabled>Reset saved</button>
+                        <button id="btnDownloadCheckpoint" disabled>Save weights JSON</button>
+                        <button id="btnImportCheckpoint">Load weights JSON</button>
+                        <input id="checkpointFileInput" type="file" accept="application/json,.json" hidden />
+                    </div>
+                </div>
+                <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+                <div id="status">Load or generate data to begin.</div>
+            </div>
+
+            <div class="panel">
+                <div class="log-header">
+                    <h2>Training Log</h2>
+                    <div class="log-actions">
+                        <button class="log-copy-btn" id="btnCopyLog" title="Copy log to clipboard">Copy</button>
+                        <button class="log-copy-btn" id="btnClearLog" title="Clear log">Clear</button>
+                    </div>
+                </div>
+                <div class="log" id="log">Ready.</div>
+                <canvas class="loss-canvas" id="lossCanvas"></canvas>
+            </div>
+
+            <div class="panel" id="resultsPanel" style="display: none">
+                <h2>Results</h2>
+                <div class="stats">
+                    <div class="stat">
+                        <div class="value" id="accuracy">-</div>
+                        <div class="label">Accuracy</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value" id="bestValidation">-</div>
+                        <div class="label">Best Validation</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value" id="bestEpoch">-</div>
+                        <div class="label">Best Epoch</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value" id="finalLoss">-</div>
+                        <div class="label">Loss at Best</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value" id="inferenceTime">-</div>
+                        <div class="label">Inference Time</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value" id="testCount">-</div>
+                        <div class="label">Test Samples</div>
+                    </div>
+                </div>
+                <div class="results-grid">
+                    <div class="result-section">
+                        <h3>3-Phase Current Signal</h3>
+                        <canvas class="signal-canvas" id="signalCanvas"></canvas>
+                    </div>
+                    <div class="result-section">
+                        <h3>Confusion Matrix</h3>
+                        <div id="confusionMatrix"></div>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="panel">
-            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
-                <h2>Data preparation</h2><span class="collapsible-arrow">&#9660;</span>
-            </div>
-            <div class="collapsible-body metrics-help">
-                <p>The browser sample expects <code>train.json</code> / <code>test.json</code> in
-                <code>packages/host/www/data/motor_current/</code>. Generate them with the
-                Python prep script:</p>
-                <div class="code-block">
-                    <button class="copy-btn" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent).then(() => { this.textContent='Copied!'; this.classList.add('copied'); setTimeout(() => { this.textContent='Copy'; this.classList.remove('copied'); }, 2000); })">Copy</button>
-<pre># Synthetic fallback (no download needed):
+            <div class="panel">
+                <div
+                    class="collapsible-header"
+                    title="Click to expand"
+                    onclick="
+                        this.classList.toggle('open');
+                        this.nextElementSibling.classList.toggle('open');
+                        this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand';
+                    "
+                >
+                    <h2>Data preparation</h2>
+                    <span class="collapsible-arrow">&#9660;</span>
+                </div>
+                <div class="collapsible-body metrics-help">
+                    <p>
+                        The browser sample expects <code>train.json</code> / <code>test.json</code> in <code>packages/host/www/data/motor_current/</code>. Generate them with the
+                        Python prep script:
+                    </p>
+                    <div class="code-block">
+                        <button
+                            class="copy-btn"
+                            onclick="
+                                navigator.clipboard.writeText(this.nextElementSibling.textContent).then(() => {
+                                    this.textContent = 'Copied!';
+                                    this.classList.add('copied');
+                                    setTimeout(() => {
+                                        this.textContent = 'Copy';
+                                        this.classList.remove('copied');
+                                    }, 2000);
+                                })
+                            "
+                        >
+                            Copy
+                        </button>
+                        <pre>
+# Synthetic fallback (no download needed):
 python packages/dev/tools/python/prepare_motor_current.py
 
 # Real UFU data: extract struct_*_R1.mat files into
 # packages/host/www/data/motor_current/ and run:
 python packages/dev/tools/python/prepare_motor_current.py \
-    --source-dir packages/host/www/data/motor_current</pre>
+    --source-dir packages/host/www/data/motor_current</pre
+                        >
+                    </div>
+                    <p>To generate the stricter acquisition-grouped benchmark without replacing the historical paper files, run:</p>
+                    <div class="code-block">
+                        <button
+                            class="copy-btn"
+                            onclick="
+                                navigator.clipboard.writeText(this.nextElementSibling.textContent).then(() => {
+                                    this.textContent = 'Copied!';
+                                    this.classList.add('copied');
+                                    setTimeout(() => {
+                                        this.textContent = 'Copy';
+                                        this.classList.remove('copied');
+                                    }, 2000);
+                                })
+                            "
+                        >
+                            Copy
+                        </button>
+                        <pre>
+python packages/dev/tools/python/prepare_motor_current.py \
+    --source-dir packages/host/www/data/motor_current \
+    --split-protocol grouped</pre
+                        >
+                    </div>
+                    <p>
+                        The script auto-detects the <strong>UFU .mat</strong> format (dataset #2 in <code>packages/dev/tools/python/README.md</code>), extracts a moving-RMS
+                        envelope from the ~55.6 kHz currents, decimates it to ~60 Hz, removes the first ~6 seconds, and emits 64-step sequences. The UFU path applies per-window
+                        centering with gain 6. The grouped command writes <code>train_grouped.json</code> and <code>test_grouped.json</code>; it leaves <code>train.json</code> and
+                        <code>test.json</code> untouched. When no source directory is provided in legacy mode, a synthetic 4-class generator keeps the sample available offline.
+                    </p>
+                    <p>
+                        Full list of public electrical-signal datasets compatible with this sample is documented in <code>packages/dev/tools/python/README.md</code> under
+                        <em>prepare_motor_current.py</em>.
+                    </p>
                 </div>
-                <p>The script auto-detects the <strong>UFU .mat</strong> format
-                (dataset #2 in <code>packages/dev/tools/python/README.md</code>),
-                decimates the ~55.6 kHz currents to ~1 kHz, windows them into
-                64-step sequences, normalizes to [0, 1], and writes JSON. When
-                no source directory is provided, a synthetic 3-phase current
-                generator produces a 4-class fallback dataset so the sample
-                still runs offline.</p>
-                <p>Full list of public electrical-signal datasets compatible
-                with this sample is documented in
-                <code>packages/dev/tools/python/README.md</code> under
-                <em>prepare_motor_current.py</em>.</p>
             </div>
-        </div>
 
-        <div class="panel">
-            <div class="collapsible-header" title="Click to expand" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open'); this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand'">
-                <h2>Code</h2><span class="collapsible-arrow">&#9660;</span>
-            </div>
-            <div class="collapsible-body">
-                <p style="font-size:0.85em; color:#bbb; margin-bottom:10px;">Build and train the RNN classifier using <code style="color:var(--log-text);">@spiky-panda/core</code>:</p>
-                <div class="code-block">
-                    <button class="copy-btn" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent).then(() => { this.textContent='Copied!'; this.classList.add('copied'); setTimeout(() => { this.textContent='Copy'; this.classList.remove('copied'); }, 2000); })">Copy</button>
-<pre>import {
+            <div class="panel">
+                <div
+                    class="collapsible-header"
+                    title="Click to expand"
+                    onclick="
+                        this.classList.toggle('open');
+                        this.nextElementSibling.classList.toggle('open');
+                        this.title = this.classList.contains('open') ? 'Click to collapse' : 'Click to expand';
+                    "
+                >
+                    <h2>Code</h2>
+                    <span class="collapsible-arrow">&#9660;</span>
+                </div>
+                <div class="collapsible-body">
+                    <p style="font-size: 0.85em; color: #bbb; margin-bottom: 10px">
+                        Build and train the RNN classifier using <code style="color: var(--log-text)">@spiky-panda/core</code>:
+                    </p>
+                    <div class="code-block">
+                        <button
+                            class="copy-btn"
+                            onclick="
+                                navigator.clipboard.writeText(this.nextElementSibling.textContent).then(() => {
+                                    this.textContent = 'Copied!';
+                                    this.classList.add('copied');
+                                    setTimeout(() => {
+                                        this.textContent = 'Copy';
+                                        this.classList.remove('copied');
+                                    }, 2000);
+                                })
+                            "
+                        >
+                            Copy
+                        </button>
+                        <pre>
+import {
   RnnBuilder,
   RnnCellType,
   RnnInferenceRuntime,
@@ -252,16 +501,17 @@ for (let epoch = 0; epoch &lt; 25; epoch++) {
 runtime.resetState();
 const outputs = runtime.run(testSample.sequence);
 const predicted = argmax(outputs[outputs.length - 1]);
-console.log("Predicted rotor state:", predicted);</pre>
+console.log("Predicted rotor state:", predicted);</pre
+                        >
+                    </div>
                 </div>
             </div>
         </div>
 
-    </div>
-
-    <script src="../../bundle/spikypanda-core.js"></script>
-    <script src="../../bundle/spikypanda-onnx.js"></script>
-    <script src="../../js/common.js"></script>
-    <script src="motor_current.js"></script>
-</body>
+        <script src="../../bundle/spikypanda-core.js"></script>
+        <script src="../../bundle/spikypanda-onnx.js"></script>
+        <script src="../../js/common.js"></script>
+        <script src="motor_current_snn.js?v=wave-sensor-v2"></script>
+        <script src="motor_current.js?v=checkpoint-scope-v2"></script>
+    </body>
 </html>
