@@ -133,8 +133,9 @@ E. Raw 60 Hz stator currents are NOT what the RNN should see. Feeding
    through 256+ BPTT steps, which vanishes to zero. Instead we
    preprocess: moving RMS over one half-cycle of the fundamental
    cancels the 60 Hz carrier and leaves only the envelope, which is
-   where the fault lives. A 64-step LSTM on 60 Hz-rate envelopes
-   trains easily.
+   where the fault lives. A 128-step model on 120 Hz-rate envelopes
+   preserves the same approximately one-second observation while giving
+   the sensor twice the temporal resolution.
 
 F. Decimation math is error-prone. Always set the TARGET RATE as a
    named constant and compute the decimation factor from it, then
@@ -155,39 +156,40 @@ import math
 # Configuration
 # --------------------------------------------------------------------------
 
-WINDOW_SIZE = 64
-STRIDE = 32
+WINDOW_SIZE = 128
+STRIDE = 64
 TRAIN_RATIO = 0.8
 MAX_SAMPLES_PER_CLASS = 400
 GROUPED_SPLIT_SEED = 42
-GROUPED_SPLIT_PROTOCOL = "grouped-acquisition-v1"
+GROUPED_SPLIT_PROTOCOL = "grouped-acquisition-v2-120hz"
 
 # UFU pipeline: instead of feeding the RNN the raw 60 Hz line current
 # (where the fundamental dominates and the broken-bar signature is buried
 # in 2..5 Hz envelope modulation that the RNN cannot easily extract from
 # 256 LSTM steps), we extract the envelope explicitly via moving RMS over
 # one half-cycle of the line frequency. After the envelope is computed
-# the 60 Hz fundamental is gone and only the slow modulation remains —
+# the 60 Hz fundamental is gone and only the slow modulation remains,
 # exactly the signal MCSA cares about. This means:
 #
 #   - Network sees a smooth slowly-varying envelope, not a 60 Hz sinusoid
-#   - 64-sample windows suffice (no need for 256+ steps)
-#   - Training gradients flow easily through the shorter LSTM
+#   - 128 samples at ~120 Hz retain an approximately 1.07 s observation
+#   - The sensor gets twice the temporal resolution of the previous 60 Hz data
 #
 # Raw rate ~55.6 kHz, line frequency 60 Hz -> half-cycle = 463 raw
 # samples. After RMS we decimate by ENV_DECIMATE to land at a manageable
-# effective rate (~60 Hz envelope rate) so a 64-step window covers ~1 s
+# effective rate (~120 Hz envelope rate) so a 128-step window covers ~1 s
 # of motor running, capturing 2..5 envelope periods.
-UFU_RAW_HALF_CYCLE = 463          # samples per half-cycle of 60 Hz at 55.6 kHz
-UFU_ENV_DECIMATE = 927            # 55611 / 927 -> ~60 Hz envelope rate
-                                  # (one envelope sample per 60 Hz full cycle)
+UFU_RAW_SAMPLE_RATE_HZ = 55611.0
+UFU_TARGET_ENV_RATE_HZ = 120.0
+UFU_RAW_HALF_CYCLE = 463
+UFU_ENV_DECIMATE = round(UFU_RAW_SAMPLE_RATE_HZ / UFU_TARGET_ENV_RATE_HZ)
 
 # Each 18 s acquisition contains a startup transient (zero current then a
 # large inrush, settling into steady state after ~4..5 s). We skip this
 # many ENVELOPE samples (post-decimation) from the start of every trace
-# before computing global stats and before windowing. At ~60 Hz envelope
-# rate, 360 samples ~= 6 s, safely past the worst startup transients.
-UFU_TRANSIENT_SKIP = 360
+# before computing global stats and before windowing. At ~120 Hz envelope
+# rate, 720 samples ~= 6 s, safely past the worst startup transients.
+UFU_TRANSIENT_SKIP = 720
 
 # Safety filter: drop any windows whose mean envelope is below this
 # threshold (Amps RMS). These are "motor off" or extreme light-load
@@ -326,7 +328,7 @@ def _moving_rms(signal_1d, window_samples):
 
     Returns an array of length len(signal_1d) - window_samples + 1 where
     out[i] is the RMS of signal_1d[i:i+window_samples]. Used to extract
-    the envelope of the 60 Hz stator current — averaging over one
+    the envelope of the 60 Hz stator current. Averaging over one
     half-cycle cancels the fundamental and leaves only the slow envelope
     modulation that carries the broken-bar signature.
     """
@@ -346,7 +348,7 @@ def collect_ufu_traces(filepath):
          (UFU_RAW_HALF_CYCLE samples). This is the envelope: the 60 Hz
          fundamental cancels out, only the slow modulation remains.
       3. Decimate the envelope by UFU_ENV_DECIMATE to land at a smooth
-         ~60 Hz effective rate suitable for an LSTM.
+         ~120 Hz effective rate with higher sensor timing resolution.
       4. Skip the startup transient (UFU_TRANSIENT_SKIP envelope samples).
 
     Returns trace records containing the class, load, acquisition ID and
@@ -399,8 +401,8 @@ def collect_ufu_traces(filepath):
                 ib_env = _moving_rms(ib_raw[:n], UFU_RAW_HALF_CYCLE)
                 ic_env = _moving_rms(ic_raw[:n], UFU_RAW_HALF_CYCLE)
 
-                # Decimate the smooth envelope to ~60 Hz so the LSTM
-                # sequence length is manageable.
+                # Decimate the smooth envelope to ~120 Hz. A 128-step
+                # sequence keeps the previous approximately 1.07 s duration.
                 ia_env = ia_env[::UFU_ENV_DECIMATE]
                 ib_env = ib_env[::UFU_ENV_DECIMATE]
                 ic_env = ic_env[::UFU_ENV_DECIMATE]
@@ -779,6 +781,14 @@ def process_grouped_ufu_source(source_dir, seed):
         )
 
     print(f"Found {len(mat_files)} UFU .mat file(s) under {source_dir}")
+    env_rate_hz = UFU_RAW_SAMPLE_RATE_HZ / UFU_ENV_DECIMATE
+    print(
+        f"UFU envelope sampling: decimation {UFU_ENV_DECIMATE}, "
+        f"rate {env_rate_hz:.3f} Hz, window {WINDOW_SIZE} "
+        f"({WINDOW_SIZE/env_rate_hz:.3f} s), stride {STRIDE} "
+        f"({STRIDE/env_rate_hz:.3f} s), transient skip "
+        f"{UFU_TRANSIENT_SKIP/env_rate_hz:.3f} s"
+    )
     all_traces = []
     for filepath in mat_files:
         all_traces.extend(collect_ufu_traces(filepath))
@@ -815,7 +825,7 @@ def process_source_dir(source_dir):
         print(f"Found {len(mat_files)} UFU .mat file(s) under {source_dir}")
         # Sanity print: show the pipeline timing in physical units so a
         # regression on the decimation constants is immediately visible.
-        raw_rate_hz = 55611.0
+        raw_rate_hz = UFU_RAW_SAMPLE_RATE_HZ
         env_rate_hz = raw_rate_hz / UFU_ENV_DECIMATE
         print(
             f"UFU pipeline: raw {raw_rate_hz/1000:.1f} kHz -> "
@@ -933,7 +943,7 @@ def main():
             "seed": args.seed,
             "stride": STRIDE,
             "signalDomain": "envelope",
-            "sampleRateHz": round(55611.0 / UFU_ENV_DECIMATE, 6),
+            "sampleRateHz": round(UFU_RAW_SAMPLE_RATE_HZ / UFU_ENV_DECIMATE, 6),
             "lineFrequencyHz": 60.0,
             "preprocessing": {
                 "envelope": "moving-rms-half-cycle",
@@ -979,7 +989,7 @@ def main():
             extra_payload = {
                 "schemaVersion": 2,
                 "signalDomain": "envelope",
-                "sampleRateHz": round(55611.0 / UFU_ENV_DECIMATE, 6),
+                "sampleRateHz": round(UFU_RAW_SAMPLE_RATE_HZ / UFU_ENV_DECIMATE, 6),
                 "lineFrequencyHz": 60.0,
                 "preprocessing": {
                     "envelope": "moving-rms-half-cycle",

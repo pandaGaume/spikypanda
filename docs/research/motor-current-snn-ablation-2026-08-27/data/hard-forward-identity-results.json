@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "hard-forward-native-identity-v1",
+  "experimentDate": "2026-08-27",
+  "purpose": "Verify that the training forward pass is strictly binary and identical to the native compiled LIF runtime.",
+  "dataset": {
+    "fingerprint": "ec00f5c3",
+    "samplingRateHz": 120.110,
+    "windowSamples": 128,
+    "windowDurationSeconds": 1.066,
+    "trainingSamples": 1400,
+    "validationSamples": 200,
+    "independentTestSamples": 400,
+    "validationProtocol": "train-holdout-12.5-v1-grouped-hard-forward-native-identity-v1"
+  },
+  "architecture": {
+    "architectureVersion": "snn-wave-lif-hard-forward-v5",
+    "architectureSignature": "dd285f33",
+    "hiddenLifCount": 16,
+    "trainingGraphNodes": 65,
+    "trainingGraphLinks": 1013,
+    "trainableWeights": 949,
+    "compiledGraphNodes": 23,
+    "compiledGraphLinks": 950,
+    "compiledNativeLifCount": 21,
+    "surrogateSlope": 1.25
+  },
+  "smokeTraining": {
+    "purpose": "Functional learning check only, not a performance benchmark.",
+    "epochs": 5,
+    "elapsedSeconds": 19.9,
+    "inputEventsPerSample": 150.0,
+    "history": [
+      { "epoch": 1, "trainingLoss": 0.047146, "runtimeHardTrainAccuracyPercent": 31.9, "runtimeHardValidationAccuracyPercent": 36.5 },
+      { "epoch": 2, "trainingLoss": 0.042461, "runtimeHardTrainAccuracyPercent": 33.5, "runtimeHardValidationAccuracyPercent": 33.0 },
+      { "epoch": 3, "trainingLoss": 0.043659, "runtimeHardTrainAccuracyPercent": 41.3, "runtimeHardValidationAccuracyPercent": 40.5 },
+      { "epoch": 4, "trainingLoss": 0.041271, "runtimeHardTrainAccuracyPercent": 43.9, "runtimeHardValidationAccuracyPercent": 44.5 },
+      { "epoch": 5, "trainingLoss": 0.040712, "runtimeHardTrainAccuracyPercent": 38.6, "runtimeHardValidationAccuracyPercent": 39.0 }
+    ],
+    "restoredBestEpoch": 4,
+    "restoredBestValidationCorrect": 89,
+    "restoredBestValidationTotal": 200,
+    "restoredBestValidationAccuracyPercent": 44.5
+  },
+  "identityCheck": {
+    "evaluatedAt": "2026-08-27T20:40:46.338Z",
+    "validationSamples": 200,
+    "binaryValueCount": 264915,
+    "binaryViolationCount": 0,
+    "trainingHardPredictionMismatches": 0,
+    "trainingHardScoreMaxError": 0,
+    "trainingHardMembraneMaxError": 0,
+    "nativePredictionMismatches": 0,
+    "nativeScoreMeanAbsoluteError": 0,
+    "nativeScoreMaxError": 0,
+    "elapsedMilliseconds": 1516.2000000476837
+  },
+  "conclusion": "The forward dynamics used during training are strictly binary and exactly match both analytical hard mode and the compiled native LIF runtime on the 200 validation windows. The surrogate is used only as a backward derivative."
+}

@@ -29,6 +29,8 @@ export interface IWaveSpikeBandConfig {
     readonly centerFrequencyHz: number;
     readonly bandwidthHz: number;
     readonly threshold: number;
+    /** Optional ordered amplitude levels sharing the same IIR band state. */
+    readonly thresholds?: ReadonlyArray<number>;
     readonly polarity?: WaveSpikePolarityMode;
     readonly amplitudeMode?: WaveSpikeAmplitudeMode;
     readonly spikeAmplitude?: number;
@@ -42,6 +44,34 @@ export interface IWaveSpikeSensorConfig {
     readonly diagnostics?: boolean;
 }
 
+/**
+ * Derived phenotype of one physical sensor cell. The stored band parameters
+ * remain the genotype; this descriptor makes its spectral and temporal limits
+ * explicit for training, diagnostics and future topology mutation.
+ */
+export interface IWaveSensorCellDescriptor {
+    readonly id: string;
+    readonly responseKind: "iir-band-pass-phase-crossing";
+    readonly channel: number;
+    readonly sampleRateHz: number;
+    readonly nyquistFrequencyHz: number;
+    readonly centerFrequencyHz: number;
+    readonly bandwidthHz: number;
+    readonly nominalLowerFrequencyHz: number;
+    readonly nominalUpperFrequencyHz: number;
+    readonly qualityFactor: number;
+    /** Approximate 1/e decay time of the resonant response. */
+    readonly remanenceTimeConstantSeconds: number;
+    /** Approximate time for the residual response to fall below two percent. */
+    readonly settlingTimeSeconds: number;
+    /** Approximate bandwidth available for changes in the cell response. */
+    readonly maximumAdaptationFrequencyHz: number;
+    readonly thresholds: ReadonlyArray<number>;
+    readonly polarity: WaveSpikePolarityMode;
+    readonly amplitudeMode: WaveSpikeAmplitudeMode;
+    readonly outputSlots: ReadonlyArray<string>;
+}
+
 /** Port metadata keeps the frequency map in graph configuration, not in every MCU spike. */
 export interface IWaveSpikePortDescriptor extends IPortDescriptor {
     readonly bandId: string;
@@ -49,6 +79,8 @@ export interface IWaveSpikePortDescriptor extends IPortDescriptor {
     readonly centerFrequencyHz: number;
     readonly bandwidthHz: number;
     readonly polarity: WaveSpikePolarity;
+    readonly thresholdLevel: number;
+    readonly threshold: number;
 }
 
 export interface IWaveSpikeDiagnostics {
@@ -59,6 +91,8 @@ export interface IWaveSpikeDiagnostics {
     readonly bandwidthHz: number;
     readonly phaseRadians: number;
     readonly polarity: WaveSpikePolarity;
+    readonly thresholdLevel: number;
+    readonly threshold: number;
     readonly peakAmplitude: number;
     readonly halfWaveEnergy: number;
 }
@@ -118,6 +152,7 @@ interface ICompiledWaveBand {
 export class WaveSpikeEncoder {
     public readonly config: IWaveSpikeSensorConfig;
     public readonly outputPorts: ReadonlyArray<IWaveSpikePortDescriptor>;
+    public readonly cells: ReadonlyArray<IWaveSensorCellDescriptor>;
 
     private readonly _bands: ReadonlyArray<ICompiledWaveBand>;
 
@@ -128,6 +163,7 @@ export class WaveSpikeEncoder {
             coefficients: bandPassCoefficients(this.config.sampleRateHz, band.centerFrequencyHz, band.bandwidthHz),
         }));
         this.outputPorts = Object.freeze(this.config.bands.flatMap((band) => portDescriptorsOf(band)));
+        this.cells = Object.freeze(this.config.bands.map((band) => cellDescriptorOf(this.config.sampleRateHz, band)));
     }
 
     public createState(): IWaveSpikeEncoderState {
@@ -179,25 +215,32 @@ export class WaveSpikeEncoder {
             if (polarity !== null) {
                 const peakAmplitude = bandState.peakAmplitude;
                 const halfWaveEnergy = bandState.halfWaveEnergy;
-                if (peakAmplitude >= band.config.threshold && acceptsPolarity(band.config.polarity, polarity)) {
+                if (acceptsPolarity(band.config.polarity, polarity)) {
                     const lastCrossing = polarity === "rising" ? bandState.lastRisingTime : bandState.lastFallingTime;
                     const period = lastCrossing === null ? null : observation.timestamp - lastCrossing;
                     const estimatedFrequencyHz = period !== null && period > 0 ? 1 / period : null;
-                    emissions.push({
-                        slot: waveSpikeSlot(band.config.id, polarity),
-                        timestamp: observation.timestamp,
-                        amplitude: encodedAmplitude(band.config, peakAmplitude),
-                        bandId: band.config.id,
-                        channel: band.config.channel,
-                        centerFrequencyHz: band.config.centerFrequencyHz,
-                        estimatedFrequencyHz,
-                        bandwidthHz: band.config.bandwidthHz,
-                        phaseRadians: polarity === "rising" ? 0 : Math.PI,
-                        polarity,
-                        peakAmplitude,
-                        halfWaveEnergy,
-                    });
-                    state.spikeCount++;
+                    const thresholds = thresholdsOf(band.config);
+                    for (let thresholdLevel = 0; thresholdLevel < thresholds.length; thresholdLevel++) {
+                        const threshold = thresholds[thresholdLevel];
+                        if (peakAmplitude < threshold) continue;
+                        emissions.push({
+                            slot: waveSpikeSlot(band.config.id, polarity, thresholds.length > 1 ? thresholdLevel : undefined),
+                            timestamp: observation.timestamp,
+                            amplitude: encodedAmplitude(band.config, peakAmplitude, threshold),
+                            bandId: band.config.id,
+                            channel: band.config.channel,
+                            centerFrequencyHz: band.config.centerFrequencyHz,
+                            estimatedFrequencyHz,
+                            bandwidthHz: band.config.bandwidthHz,
+                            phaseRadians: polarity === "rising" ? 0 : Math.PI,
+                            polarity,
+                            thresholdLevel,
+                            threshold,
+                            peakAmplitude,
+                            halfWaveEnergy,
+                        });
+                        state.spikeCount++;
+                    }
                 }
                 if (polarity === "rising") bandState.lastRisingTime = observation.timestamp;
                 else bandState.lastFallingTime = observation.timestamp;
@@ -312,6 +355,8 @@ export class WaveSpikeSensorNode extends RuntimeNode implements IDeclaresPorts {
                                       bandwidthHz: emission.bandwidthHz,
                                       phaseRadians: emission.phaseRadians,
                                       polarity: emission.polarity,
+                                      thresholdLevel: emission.thresholdLevel,
+                                      threshold: emission.threshold,
                                       peakAmplitude: emission.peakAmplitude,
                                       halfWaveEnergy: emission.halfWaveEnergy,
                                   },
@@ -335,24 +380,30 @@ export class WaveSpikeSensorNode extends RuntimeNode implements IDeclaresPorts {
     }
 }
 
-export function waveSpikeSlot(bandId: string, polarity: WaveSpikePolarity): string {
-    return `wave:${bandId}:${polarity}`;
+export function waveSpikeSlot(bandId: string, polarity: WaveSpikePolarity, thresholdLevel?: number): string {
+    const level = thresholdLevel === undefined ? "" : `:level-${Math.max(0, Math.floor(thresholdLevel))}`;
+    return `wave:${bandId}:${polarity}${level}`;
 }
 
 function portDescriptorsOf(band: IWaveSpikeBandConfig): IWaveSpikePortDescriptor[] {
     const polarities: WaveSpikePolarity[] = band.polarity === "rising" ? ["rising"] : band.polarity === "falling" ? ["falling"] : ["rising", "falling"];
-    return polarities.map((polarity) => ({
-        slot: waveSpikeSlot(band.id, polarity),
-        optional: true,
-        type: "spike",
-        kind: "stream",
-        capacity: 1024,
-        bandId: band.id,
-        channel: band.channel,
-        centerFrequencyHz: band.centerFrequencyHz,
-        bandwidthHz: band.bandwidthHz,
-        polarity,
-    }));
+    const thresholds = thresholdsOf(band);
+    return polarities.flatMap((polarity) =>
+        thresholds.map((threshold, thresholdLevel) => ({
+            slot: waveSpikeSlot(band.id, polarity, thresholds.length > 1 ? thresholdLevel : undefined),
+            optional: true,
+            type: "spike",
+            kind: "stream",
+            capacity: 1024,
+            bandId: band.id,
+            channel: band.channel,
+            centerFrequencyHz: band.centerFrequencyHz,
+            bandwidthHz: band.bandwidthHz,
+            polarity,
+            thresholdLevel,
+            threshold,
+        }))
+    );
 }
 
 function outputPortsOf(encoder: WaveSpikeEncoder, emitFrameEnd: boolean): ReadonlyArray<IPortDescriptor> {
@@ -372,6 +423,30 @@ function outputPortsOf(encoder: WaveSpikeEncoder, emitFrameEnd: boolean): Readon
     ]);
 }
 
+function cellDescriptorOf(sampleRateHz: number, band: IWaveSpikeBandConfig): IWaveSensorCellDescriptor {
+    const thresholds = thresholdsOf(band);
+    const remanenceTimeConstantSeconds = 1 / (Math.PI * band.bandwidthHz);
+    return Object.freeze({
+        id: band.id,
+        responseKind: "iir-band-pass-phase-crossing",
+        channel: band.channel,
+        sampleRateHz,
+        nyquistFrequencyHz: sampleRateHz / 2,
+        centerFrequencyHz: band.centerFrequencyHz,
+        bandwidthHz: band.bandwidthHz,
+        nominalLowerFrequencyHz: Math.max(0, band.centerFrequencyHz - band.bandwidthHz / 2),
+        nominalUpperFrequencyHz: Math.min(sampleRateHz / 2, band.centerFrequencyHz + band.bandwidthHz / 2),
+        qualityFactor: band.centerFrequencyHz / band.bandwidthHz,
+        remanenceTimeConstantSeconds,
+        settlingTimeSeconds: 4 * remanenceTimeConstantSeconds,
+        maximumAdaptationFrequencyHz: 1 / (2 * Math.PI * remanenceTimeConstantSeconds),
+        thresholds,
+        polarity: normalizePolarity(band.polarity),
+        amplitudeMode: band.amplitudeMode === "normalized-peak" ? "normalized-peak" : "binary",
+        outputSlots: Object.freeze(portDescriptorsOf(band).map((port) => String(port.slot))),
+    });
+}
+
 function normalizeSensorConfig(config: IWaveSpikeSensorConfig): IWaveSpikeSensorConfig {
     const sampleRateHz = positiveFinite(config?.sampleRateHz, 1);
     const bands = Array.isArray(config?.bands) ? config.bands : [];
@@ -384,12 +459,14 @@ function normalizeSensorConfig(config: IWaveSpikeSensorConfig): IWaveSpikeSensor
         if (centerFrequencyHz >= sampleRateHz / 2) {
             throw new Error(`WaveSpikeEncoder: band '${id}' must be below Nyquist (${sampleRateHz / 2} Hz).`);
         }
+        const thresholds = normalizeThresholds(band.thresholds, band.threshold);
         return Object.freeze({
             id,
             channel: Math.max(0, Math.floor(finiteOr(band.channel, 0))),
             centerFrequencyHz,
             bandwidthHz: positiveFinite(band.bandwidthHz, centerFrequencyHz / 2),
-            threshold: Math.max(0, finiteOr(band.threshold, 0)),
+            threshold: thresholds[0],
+            thresholds,
             polarity: normalizePolarity(band.polarity),
             amplitudeMode: band.amplitudeMode === "normalized-peak" ? "normalized-peak" : "binary",
             spikeAmplitude: finiteOr(band.spikeAmplitude, 1),
@@ -460,10 +537,24 @@ function acceptsPolarity(mode: WaveSpikePolarityMode | undefined, polarity: Wave
     return mode === undefined || mode === "both" || mode === polarity;
 }
 
-function encodedAmplitude(config: IWaveSpikeBandConfig, peakAmplitude: number): number {
+function encodedAmplitude(config: IWaveSpikeBandConfig, peakAmplitude: number, threshold: number): number {
     const base = finiteOr(config.spikeAmplitude, 1);
     if (config.amplitudeMode !== "normalized-peak") return base;
-    return base * (peakAmplitude / Math.max(config.threshold, 1e-12));
+    return base * (peakAmplitude / Math.max(threshold, 1e-12));
+}
+
+function normalizeThresholds(values: ReadonlyArray<number> | undefined, fallback: number): ReadonlyArray<number> {
+    const candidates = Array.isArray(values) && values.length > 0 ? values : [fallback];
+    const normalized = candidates
+        .filter((value) => Number.isFinite(value))
+        .map((value) => Math.max(0, value))
+        .sort((left, right) => left - right)
+        .filter((value, index, array) => index === 0 || value !== array[index - 1]);
+    return Object.freeze(normalized.length > 0 ? normalized : [Math.max(0, finiteOr(fallback, 0))]);
+}
+
+function thresholdsOf(config: IWaveSpikeBandConfig): ReadonlyArray<number> {
+    return config.thresholds && config.thresholds.length > 0 ? config.thresholds : [config.threshold];
 }
 
 function asWaveObservation(value: unknown, fallbackTimestamp: number): IWaveObservation | null {

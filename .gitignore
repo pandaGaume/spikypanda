@@ -47,6 +47,10 @@ yarn-error.log*
 # Ignore downloaded datasets
 data/
 
+# Keep reproducibility bundles for committed R&D experiments.
+!docs/research/motor-current-snn-ablation-2026-08-27/data/
+!docs/research/motor-current-snn-ablation-2026-08-27/data/*.json
+
 # Ignore test coverage
 coverage/
 

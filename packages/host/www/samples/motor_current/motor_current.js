@@ -22,14 +22,24 @@
     const btnLoad = document.getElementById("btnLoad");
     const btnTrain = document.getElementById("btnTrain");
     const btnTest = document.getElementById("btnTest");
+    const btnProfileConversion = document.getElementById("btnProfileConversion");
     const btnExport = document.getElementById("btnExport");
     const btnRestoreCheckpoint = document.getElementById("btnRestoreCheckpoint");
     const btnResetCheckpoint = document.getElementById("btnResetCheckpoint");
     const btnDownloadCheckpoint = document.getElementById("btnDownloadCheckpoint");
     const btnImportCheckpoint = document.getElementById("btnImportCheckpoint");
     const checkpointFileInput = document.getElementById("checkpointFileInput");
+    const datasetSplitSelect = document.getElementById("datasetSplit");
+    const numSamplesInput = document.getElementById("numSamples");
+    const numSamplesHint = document.getElementById("numSamplesHint");
+    const snnSensorEncodingSelect = document.getElementById("snnSensorEncoding");
+    const snnBandSelectionSelect = document.getElementById("snnBandSelection");
+    const snnTopologySelect = document.getElementById("snnTopology");
+    const snnTrainingObjectiveSelect = document.getElementById("snnTrainingObjective");
     const btnCopyLog = document.getElementById("btnCopyLog");
     const btnClearLog = document.getElementById("btnClearLog");
+    const conversionProfileDetails = document.getElementById("conversionProfileDetails");
+    const conversionProfileOutput = document.getElementById("conversionProfileOutput");
     const resultsPanel = document.getElementById("resultsPanel");
     const lossCanvas = document.getElementById("lossCanvas");
     const signalCanvas = document.getElementById("signalCanvas");
@@ -56,10 +66,13 @@
     const CHECKPOINT_PREFIX = "spikypanda.motor-current.best.v2.";
     const CHECKPOINT_LATEST_KEY = "spikypanda.motor-current.best.latest.v2";
     const RNN_ARCHITECTURE_VERSION = "rnn-many-to-one-v2";
-    const SNN_ARCHITECTURE_VERSION = "snn-wave-lif-ff-v2";
+    const SNN_ARCHITECTURE_VERSION = "snn-wave-lif-hard-forward-v5";
     const VALIDATION_PROTOCOL = "train-holdout-12.5-v1";
+    const GROUPED_DATASET_PROTOCOL = "grouped-acquisition-v2-120hz";
     const SNN_SEED = 0x534e4e31;
     const SNN_BATCH_SIZE = 16;
+    const SNN_OBJECTIVE_RUNTIME_DECODER = "runtime-decoder-ce";
+    const SNN_OBJECTIVE_TEMPORAL_MSE = "temporal-mse";
 
     // Default class list matches the synthetic fallback below. When real data
     // (UFU .mat) is loaded via prepare_motor_current.py, the JSON exposes a
@@ -81,6 +94,45 @@
     function setProgress(pct) {
         progressFill.style.width = pct + "%";
     }
+    function showConversionProfile(profile) {
+        if (!conversionProfileDetails || !conversionProfileOutput) return;
+        if (!profile) {
+            conversionProfileDetails.style.display = "none";
+            conversionProfileOutput.textContent = "";
+            return;
+        }
+        conversionProfileOutput.textContent = JSON.stringify(profile, null, 2);
+        conversionProfileDetails.style.display = "block";
+    }
+
+    function updateSampleCountControl(source, trainCount, testCount) {
+        if (!numSamplesInput || !numSamplesHint) return;
+
+        if (source === "real") {
+            numSamplesInput.disabled = true;
+            numSamplesHint.textContent = "Real dataset loaded: " + trainCount + " train + " + testCount + " test. All samples are used.";
+            return;
+        }
+
+        if (source === "synthetic") {
+            numSamplesInput.disabled = false;
+            numSamplesHint.textContent = "Synthetic dataset size before the 80% train, 20% test split.";
+            return;
+        }
+
+        const groupedSplit = datasetSplitSelect && datasetSplitSelect.value === "grouped";
+        numSamplesInput.disabled = groupedSplit;
+        numSamplesHint.textContent = groupedSplit
+            ? "Grouped mode uses every sample from train_grouped.json and test_grouped.json."
+            : "Used only if the legacy JSON dataset is unavailable. Split 80% train, 20% test.";
+    }
+
+    if (datasetSplitSelect) {
+        datasetSplitSelect.addEventListener("change", function () {
+            updateSampleCountControl("selection");
+        });
+    }
+    updateSampleCountControl("selection");
 
     function flashButton(button, text, duration) {
         if (!button) return;
@@ -129,11 +181,16 @@
     if (cellTypeSelect) {
         cellTypeSelect.addEventListener("change", function () {
             btnExport.disabled = true;
-            if (cellTypeSelect.value !== "snn") return;
-            document.getElementById("hiddenSize").value = "16";
+            const isSnn = cellTypeSelect.value === "snn";
+            if (snnSensorEncodingSelect) snnSensorEncodingSelect.disabled = !isSnn;
+            if (snnBandSelectionSelect) snnBandSelectionSelect.disabled = !isSnn;
+            if (snnTopologySelect) snnTopologySelect.disabled = !isSnn;
+            if (snnTrainingObjectiveSelect) snnTrainingObjectiveSelect.disabled = !isSnn;
+            if (!isSnn) return;
+            document.getElementById("hiddenSize").value = "32";
             document.getElementById("epochs").value = "20";
-            document.getElementById("lr").value = "0.01";
-            setStatus("SNN selected: wave sensor, 16 hidden LIF, 5 class LIF.");
+            document.getElementById("lr").value = "0.003";
+            setStatus("SNN selected: interchangeable wave sensor, phase branches, native LIF inference.");
         });
     }
     if (btnClearLog) {
@@ -264,28 +321,485 @@
         return { correct: correct, total: samples.length, accuracy: correct / samples.length };
     }
 
-    async function evaluateSnnTeacherAccuracy(model, samples) {
+    async function evaluateSnnTeacherAccuracy(model, samples, options) {
+        const settings = options || {};
+        const includeTrainingForward = settings.includeTrainingForward === true;
         let correct = 0;
+        let trainingForwardCorrect = 0;
         let sensorEvents = 0;
         let eventTimesteps = 0;
+        let totalDurationSeconds = 0;
+        let trainingForwardLoss = 0;
+        let correctClassScore = 0;
+        let classificationMargin = 0;
+        let runtimeMargin = 0;
+        const totalHiddenSize = model.totalHiddenSize || model.hiddenSize;
+        const hiddenSpikeCounts = new Array(totalHiddenSize).fill(0);
+        const outputSpikeCounts = new Array(model.outputSize).fill(0);
+        const confusionMatrix = Array.from({ length: model.outputSize }, function () {
+            return new Array(model.outputSize).fill(0);
+        });
         for (let i = 0; i < samples.length; i++) {
-            const result = MotorCurrentSnn.predictTeacher(model, samples[i].sequence, "hard");
-            if (result.predicted === samples[i].label) correct++;
+            const result = MotorCurrentSnn.analyzeTeacher(model, samples[i].sequence, samples[i].label, includeTrainingForward);
+            if (result.runtimePredicted === samples[i].label) correct++;
+            if (includeTrainingForward && result.trainingPredicted === samples[i].label) trainingForwardCorrect++;
+            confusionMatrix[samples[i].label][result.runtimePredicted]++;
             sensorEvents += result.sensorEvents;
             eventTimesteps += result.eventTimesteps;
+            totalDurationSeconds += result.durationSeconds;
+            runtimeMargin += result.runtimeMargin;
+            for (let neuron = 0; neuron < hiddenSpikeCounts.length; neuron++) {
+                hiddenSpikeCounts[neuron] += result.hiddenSpikeCounts[neuron];
+            }
+            for (let output = 0; output < outputSpikeCounts.length; output++) {
+                outputSpikeCounts[output] += result.outputSpikeCounts[output];
+            }
+            if (includeTrainingForward) {
+                trainingForwardLoss += result.trainingLoss;
+                correctClassScore += result.correctClassScore;
+                classificationMargin += result.classificationMargin;
+            }
             if (i % 25 === 0) {
                 await new Promise(function (resolve) {
                     window.setTimeout(resolve, 0);
                 });
             }
         }
+        const mainHiddenSpikeCounts = hiddenSpikeCounts.slice(0, model.hiddenSize);
+        const specialistHiddenSpikeCounts = hiddenSpikeCounts.slice(model.hiddenSize);
         return {
             correct: correct,
             total: samples.length,
             accuracy: correct / samples.length,
+            trainingForwardAccuracy: includeTrainingForward ? trainingForwardCorrect / samples.length : null,
+            validationLoss: includeTrainingForward ? trainingForwardLoss / samples.length : null,
+            meanCorrectClassScore: includeTrainingForward ? correctClassScore / samples.length : null,
+            meanClassificationMargin: includeTrainingForward ? classificationMargin / samples.length : null,
+            meanRuntimeMargin: runtimeMargin / samples.length,
             sensorEvents: sensorEvents,
             eventTimesteps: eventTimesteps,
+            hiddenFiringRateMeanHz: meanRate(mainHiddenSpikeCounts, totalDurationSeconds),
+            hiddenFiringRateStdHz: standardDeviationRate(mainHiddenSpikeCounts, totalDurationSeconds),
+            specialistFiringRateMeanHz:
+                specialistHiddenSpikeCounts.length > 0 ? meanRate(specialistHiddenSpikeCounts, totalDurationSeconds) : null,
+            specialistFiringRateStdHz:
+                specialistHiddenSpikeCounts.length > 0 ? standardDeviationRate(specialistHiddenSpikeCounts, totalDurationSeconds) : null,
+            outputFiringRatesHz: outputSpikeCounts.map(function (count) {
+                return count / totalDurationSeconds;
+            }),
+            hiddenSpikesPerSampleMean: sum(mainHiddenSpikeCounts) / (mainHiddenSpikeCounts.length * samples.length),
+            specialistSpikesPerSampleMean:
+                specialistHiddenSpikeCounts.length > 0
+                    ? sum(specialistHiddenSpikeCounts) / (specialistHiddenSpikeCounts.length * samples.length)
+                    : null,
+            outputSpikesPerSample: outputSpikeCounts.map(function (count) {
+                return count / samples.length;
+            }),
+            confusionMatrix: confusionMatrix,
         };
+    }
+
+    function sum(values) {
+        let total = 0;
+        for (let index = 0; index < values.length; index++) total += values[index];
+        return total;
+    }
+
+    function meanRate(spikeCounts, durationSeconds) {
+        if (spikeCounts.length === 0 || !(durationSeconds > 0)) return 0;
+        return sum(spikeCounts) / (spikeCounts.length * durationSeconds);
+    }
+
+    function standardDeviationRate(spikeCounts, durationSeconds) {
+        if (spikeCounts.length === 0 || !(durationSeconds > 0)) return 0;
+        const mean = meanRate(spikeCounts, durationSeconds);
+        let squaredDistance = 0;
+        for (let index = 0; index < spikeCounts.length; index++) {
+            const rate = spikeCounts[index] / durationSeconds;
+            squaredDistance += (rate - mean) * (rate - mean);
+        }
+        return Math.sqrt(squaredDistance / spikeCounts.length);
+    }
+
+    function createFidelityLayerAccumulator(neuronCount) {
+        return {
+            neuronCount: neuronCount,
+            outputAbsoluteErrorSum: 0,
+            outputComparisonCount: 0,
+            membraneAbsoluteErrorSum: 0,
+            membraneMoments: { count: 0, softSum: 0, hardSum: 0, softSquaredSum: 0, hardSquaredSum: 0, productSum: 0 },
+            softNearThresholdCount: 0,
+            softThresholdStateCount: 0,
+            hardNearThresholdCount: 0,
+            hardThresholdStateCount: 0,
+            timingAbsoluteErrorSecondsSum: 0,
+            timingMatchCount: 0,
+            hardSpikeCount: 0,
+            softSpikeCounts: new Array(neuronCount).fill(0),
+            hardSpikeCounts: new Array(neuronCount).fill(0),
+        };
+    }
+
+    function mergeFidelityLayer(target, source) {
+        target.outputAbsoluteErrorSum += source.outputAbsoluteErrorSum;
+        target.outputComparisonCount += source.outputComparisonCount;
+        target.membraneAbsoluteErrorSum += source.membraneAbsoluteErrorSum;
+        target.softNearThresholdCount += source.softNearThresholdCount;
+        target.softThresholdStateCount += source.softThresholdStateCount;
+        target.hardNearThresholdCount += source.hardNearThresholdCount;
+        target.hardThresholdStateCount += source.hardThresholdStateCount;
+        target.timingAbsoluteErrorSecondsSum += source.timingAbsoluteErrorSecondsSum;
+        target.timingMatchCount += source.timingMatchCount;
+        target.hardSpikeCount += source.hardSpikeCount;
+        const momentKeys = ["count", "softSum", "hardSum", "softSquaredSum", "hardSquaredSum", "productSum"];
+        for (let key = 0; key < momentKeys.length; key++) {
+            const name = momentKeys[key];
+            target.membraneMoments[name] += source.membraneMoments[name];
+        }
+        for (let neuron = 0; neuron < target.neuronCount; neuron++) {
+            target.softSpikeCounts[neuron] += source.softSpikeCounts[neuron];
+            target.hardSpikeCounts[neuron] += source.hardSpikeCounts[neuron];
+        }
+    }
+
+    function correlationFromMoments(moments) {
+        if (moments.count < 2) return 0;
+        const covariance = moments.productSum - (moments.softSum * moments.hardSum) / moments.count;
+        const softVariance = moments.softSquaredSum - (moments.softSum * moments.softSum) / moments.count;
+        const hardVariance = moments.hardSquaredSum - (moments.hardSum * moments.hardSum) / moments.count;
+        const denominator = Math.sqrt(Math.max(0, softVariance) * Math.max(0, hardVariance));
+        return denominator > 0 ? covariance / denominator : 0;
+    }
+
+    function vectorCorrelation(left, right) {
+        if (left.length !== right.length || left.length < 2) return 0;
+        const leftMean = sum(left) / left.length;
+        const rightMean = sum(right) / right.length;
+        let covariance = 0;
+        let leftVariance = 0;
+        let rightVariance = 0;
+        for (let index = 0; index < left.length; index++) {
+            const leftCentered = left[index] - leftMean;
+            const rightCentered = right[index] - rightMean;
+            covariance += leftCentered * rightCentered;
+            leftVariance += leftCentered * leftCentered;
+            rightVariance += rightCentered * rightCentered;
+        }
+        const denominator = Math.sqrt(leftVariance * rightVariance);
+        return denominator > 0 ? covariance / denominator : 0;
+    }
+
+    function finalizeFidelityLayer(layer, durationSeconds, sampleCount) {
+        const softRate = meanRate(layer.softSpikeCounts, durationSeconds);
+        const hardRate = meanRate(layer.hardSpikeCounts, durationSeconds);
+        return {
+            neuronCount: layer.neuronCount,
+            spikeOutputMae: layer.outputAbsoluteErrorSum / Math.max(1, layer.outputComparisonCount),
+            membraneMae: layer.membraneAbsoluteErrorSum / Math.max(1, layer.membraneMoments.count),
+            membraneCorrelation: correlationFromMoments(layer.membraneMoments),
+            softFiringRateMeanHz: softRate,
+            hardFiringRateMeanHz: hardRate,
+            firingRateDeltaMeanHz: softRate - hardRate,
+            firingRateCorrelation: vectorCorrelation(layer.softSpikeCounts, layer.hardSpikeCounts),
+            spikeTimingMaeMilliseconds:
+                layer.timingMatchCount > 0 ? (layer.timingAbsoluteErrorSecondsSum * 1000) / layer.timingMatchCount : null,
+            spikeTimingMatchFraction: layer.timingMatchCount / Math.max(1, layer.hardSpikeCount),
+            softNearThresholdFraction: layer.softNearThresholdCount / Math.max(1, layer.softThresholdStateCount),
+            hardNearThresholdFraction: layer.hardNearThresholdCount / Math.max(1, layer.hardThresholdStateCount),
+            softExpectedSpikesPerSample: sum(layer.softSpikeCounts) / Math.max(1, sampleCount),
+            hardSpikesPerSample: sum(layer.hardSpikeCounts) / Math.max(1, sampleCount),
+        };
+    }
+
+    async function evaluateSnnConversionProfile(model, samples) {
+        const totalHiddenSize = model.totalHiddenSize || model.hiddenSize;
+        const hidden = createFidelityLayerAccumulator(totalHiddenSize);
+        const output = createFidelityLayerAccumulator(model.outputSize);
+        const divergenceSums = [];
+        const stageAccumulators = [];
+        let scoreMae = 0;
+        let softMargin = 0;
+        let hardMargin = 0;
+        let durationSeconds = 0;
+
+        for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex++) {
+            const sample = samples[sampleIndex];
+            const replay = MotorCurrentSnn.profileTeacherConversion(model, sample.sequence, sample.label, 8);
+            mergeFidelityLayer(hidden, replay.fidelity.hidden);
+            mergeFidelityLayer(output, replay.fidelity.output);
+            scoreMae += replay.fidelity.scoreMae;
+            softMargin += replay.fidelity.softMargin;
+            hardMargin += replay.fidelity.hardMargin;
+            durationSeconds += sample.sequence.length / model.sensorConfig.sampleRateHz;
+            for (let timestep = 0; timestep < replay.fidelity.divergenceByTimestep.length; timestep++) {
+                divergenceSums[timestep] = (divergenceSums[timestep] || 0) + replay.fidelity.divergenceByTimestep[timestep];
+            }
+            for (let stageIndex = 0; stageIndex < replay.stages.length; stageIndex++) {
+                const stage = replay.stages[stageIndex];
+                if (!stageAccumulators[stageIndex]) {
+                    stageAccumulators[stageIndex] = { id: stage.id, label: stage.label, correct: 0, margin: 0 };
+                }
+                if (stage.predicted === sample.label) stageAccumulators[stageIndex].correct++;
+                stageAccumulators[stageIndex].margin += stage.margin;
+            }
+            if (sampleIndex % 10 === 0) {
+                setProgress(((sampleIndex + 1) / samples.length) * 100);
+                setStatus("Profilage soft vers hard " + (sampleIndex + 1) + "/" + samples.length + "...");
+                await new Promise(function (resolve) {
+                    window.setTimeout(resolve, 0);
+                });
+            }
+        }
+
+        const divergence = divergenceSums.map(function (value) {
+            return value / samples.length;
+        });
+        return {
+            version: "paired-soft-hard-conversion-profiler-v1",
+            sampleCount: samples.length,
+            hidden: finalizeFidelityLayer(hidden, durationSeconds, samples.length),
+            output: finalizeFidelityLayer(output, durationSeconds, samples.length),
+            decision: {
+                scoreMae: scoreMae / samples.length,
+                softMargin: softMargin / samples.length,
+                hardMargin: hardMargin / samples.length,
+                marginGap: (softMargin - hardMargin) / samples.length,
+            },
+            divergenceByTimestep: divergence,
+            stages: stageAccumulators.map(function (stage) {
+                return {
+                    id: stage.id,
+                    label: stage.label,
+                    correct: stage.correct,
+                    total: samples.length,
+                    accuracy: stage.correct / samples.length,
+                    meanMargin: stage.margin / samples.length,
+                };
+            }),
+        };
+    }
+
+    function logSnnConversionProfile(profile) {
+        log("");
+        log("Profiler de conversion apparié sur " + profile.sampleCount + " fenêtres de validation:");
+        [
+            ["LIF cachés", profile.hidden],
+            ["LIF de sortie", profile.output],
+        ].forEach(function (entry) {
+            const layer = entry[1];
+            log(
+                entry[0] +
+                    " - spike MAE=" +
+                    layer.spikeOutputMae.toFixed(4) +
+                    "; membrane MAE=" +
+                    layer.membraneMae.toFixed(4) +
+                    "; corrélation membrane=" +
+                    layer.membraneCorrelation.toFixed(4)
+            );
+            log(
+                entry[0] +
+                    " - firing soft/hard=" +
+                    layer.softFiringRateMeanHz.toFixed(3) +
+                    "/" +
+                    layer.hardFiringRateMeanHz.toFixed(3) +
+                    " Hz; corrélation=" +
+                    layer.firingRateCorrelation.toFixed(4) +
+                    "; timing MAE=" +
+                    (layer.spikeTimingMaeMilliseconds === null ? "n/a" : layer.spikeTimingMaeMilliseconds.toFixed(2) + "ms")
+            );
+            log(
+                entry[0] +
+                    " - près du seuil, soft=" +
+                    (layer.softNearThresholdFraction * 100).toFixed(1) +
+                    "%, hard=" +
+                    (layer.hardNearThresholdFraction * 100).toFixed(1) +
+                    "%"
+            );
+        });
+        const divergence = profile.divergenceByTimestep;
+        const indices = [0, 0.25, 0.5, 0.75, 1].map(function (fraction) {
+            return Math.min(divergence.length - 1, Math.round((divergence.length - 1) * fraction));
+        });
+        log(
+            "Divergence membrane D(t), début/Q1/milieu/Q3/fin: " +
+                indices
+                    .map(function (index) {
+                        return divergence[index].toFixed(4);
+                    })
+                    .join(" / ") +
+                "; maximum=" +
+                Math.max.apply(Math, divergence).toFixed(4)
+        );
+        log(
+            "Décision comparable - score MAE=" +
+                profile.decision.scoreMae.toFixed(4) +
+                "; marge soft=" +
+                signed(profile.decision.softMargin, 4) +
+                "; marge hard=" +
+                signed(profile.decision.hardMargin, 4) +
+                "; gap=" +
+                signed(profile.decision.marginGap, 4)
+        );
+        log("Conversion progressive:");
+        for (let index = 0; index < profile.stages.length; index++) {
+            const stage = profile.stages[index];
+            log(
+                "  " +
+                    stage.label.padEnd(43, " ") +
+                    " " +
+                    (stage.accuracy * 100).toFixed(1).padStart(5, " ") +
+                    "%  marge " +
+                    signed(stage.meanMargin, 4)
+            );
+        }
+    }
+
+    async function evaluateSnnForwardIdentity(teacher, compiled, samples) {
+        let binaryValueCount = 0;
+        let binaryViolationCount = 0;
+        let trainingHardPredictionMismatches = 0;
+        let nativePredictionMismatches = 0;
+        let modeScoreMaxError = 0;
+        let membraneMaxError = 0;
+        let nativeScoreAbsoluteError = 0;
+        let nativeScoreComparisonCount = 0;
+        let nativeScoreMaxError = 0;
+
+        for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex++) {
+            const sample = samples[sampleIndex];
+            const contract = MotorCurrentSnn.profileForwardContract(teacher, sample.sequence, sample.label);
+            const native = MotorCurrentSnn.predictCompiled(compiled, sample.sequence);
+            binaryValueCount += contract.binaryValueCount;
+            binaryViolationCount += contract.binaryViolationCount;
+            if (contract.trainingPredicted !== contract.hardPredicted) trainingHardPredictionMismatches++;
+            if (contract.hardPredicted !== native.predicted) nativePredictionMismatches++;
+            modeScoreMaxError = Math.max(modeScoreMaxError, contract.modeScoreMaxError);
+            membraneMaxError = Math.max(membraneMaxError, contract.membraneMaxError);
+            for (let output = 0; output < contract.hardScores.length; output++) {
+                const error = Math.abs(contract.hardScores[output] - native.scores[output]);
+                nativeScoreAbsoluteError += error;
+                nativeScoreComparisonCount++;
+                nativeScoreMaxError = Math.max(nativeScoreMaxError, error);
+            }
+            if (sampleIndex % 10 === 0) {
+                setProgress(((sampleIndex + 1) / samples.length) * 100);
+                setStatus("Vérification du forward hard " + (sampleIndex + 1) + "/" + samples.length + "...");
+                await new Promise(function (resolve) {
+                    window.setTimeout(resolve, 0);
+                });
+            }
+        }
+
+        return {
+            version: "hard-forward-native-identity-v1",
+            sampleCount: samples.length,
+            binaryValueCount: binaryValueCount,
+            binaryViolationCount: binaryViolationCount,
+            trainingHardPredictionMismatches: trainingHardPredictionMismatches,
+            modeScoreMaxError: modeScoreMaxError,
+            membraneMaxError: membraneMaxError,
+            nativePredictionMismatches: nativePredictionMismatches,
+            nativeScoreMae: nativeScoreAbsoluteError / Math.max(1, nativeScoreComparisonCount),
+            nativeScoreMaxError: nativeScoreMaxError,
+        };
+    }
+
+    function logSnnForwardIdentity(profile) {
+        log("");
+        log("Vérification du contrat hard-forward sur " + profile.sampleCount + " fenêtres de validation:");
+        log(
+            "Valeurs binaires: " +
+                (profile.binaryValueCount - profile.binaryViolationCount) +
+                "/" +
+                profile.binaryValueCount +
+                "; violations=" +
+                profile.binaryViolationCount
+        );
+        log(
+            "Training vs hard analytique: prédictions différentes=" +
+                profile.trainingHardPredictionMismatches +
+                "; score max error=" +
+                profile.modeScoreMaxError.toExponential(3) +
+                "; membrane max error=" +
+                profile.membraneMaxError.toExponential(3)
+        );
+        log(
+            "Hard analytique vs LIF natif compilé: prédictions différentes=" +
+                profile.nativePredictionMismatches +
+                "; score MAE=" +
+                profile.nativeScoreMae.toExponential(3) +
+                "; score max error=" +
+                profile.nativeScoreMaxError.toExponential(3)
+        );
+        const exact =
+            profile.binaryViolationCount === 0 &&
+            profile.trainingHardPredictionMismatches === 0 &&
+            profile.modeScoreMaxError === 0 &&
+            profile.membraneMaxError === 0 &&
+            profile.nativePredictionMismatches === 0 &&
+            profile.nativeScoreMaxError < 1e-12;
+        log(exact ? "Contrat respecté: aucun pseudo-spike et forward identique au runtime natif." : "ATTENTION: le contrat hard-forward n'est pas respecté.");
+    }
+
+    function snnDiagnosticRecord(metrics) {
+        return {
+            runtimeHardAccuracy: metrics.accuracy,
+            trainingForwardAccuracy: metrics.trainingForwardAccuracy,
+            trainingObjectiveLoss: metrics.validationLoss,
+            meanCorrectClassScore: metrics.meanCorrectClassScore,
+            meanClassificationMargin: metrics.meanClassificationMargin,
+            meanRuntimeMargin: metrics.meanRuntimeMargin,
+            hiddenFiringRateMeanHz: metrics.hiddenFiringRateMeanHz,
+            hiddenFiringRateStdHz: metrics.hiddenFiringRateStdHz,
+            specialistFiringRateMeanHz: metrics.specialistFiringRateMeanHz,
+            specialistFiringRateStdHz: metrics.specialistFiringRateStdHz,
+            outputFiringRatesHz: metrics.outputFiringRatesHz.slice(),
+            hiddenSpikesPerSampleMean: metrics.hiddenSpikesPerSampleMean,
+            specialistSpikesPerSampleMean: metrics.specialistSpikesPerSampleMean,
+            outputSpikesPerSample: metrics.outputSpikesPerSample.slice(),
+        };
+    }
+
+    function formatOutputRates(rates) {
+        return rates
+            .map(function (rate, index) {
+                return CLASS_NAMES[index] + "=" + rate.toFixed(2);
+            })
+            .join(", ");
+    }
+
+    function logSnnDiagnostics(prefix, metrics) {
+        log(
+            prefix +
+                " - Training objective loss: " +
+                metrics.validationLoss.toFixed(6) +
+                " - Runtime hard margin: " +
+                signed(metrics.meanRuntimeMargin, 4)
+        );
+        log(
+            prefix +
+                " activity - Hidden firing: " +
+                metrics.hiddenFiringRateMeanHz.toFixed(2) +
+                " +/- " +
+                metrics.hiddenFiringRateStdHz.toFixed(2) +
+                " Hz - Output firing: [" +
+                formatOutputRates(metrics.outputFiringRatesHz) +
+                "] Hz"
+        );
+        if (metrics.specialistFiringRateMeanHz !== null) {
+            log(
+                prefix +
+                    " specialist activity - Firing: " +
+                    metrics.specialistFiringRateMeanHz.toFixed(2) +
+                    " +/- " +
+                    metrics.specialistFiringRateStdHz.toFixed(2) +
+                    " Hz"
+            );
+        }
+    }
+
+    function signed(value, digits) {
+        return (value >= 0 ? "+" : "") + value.toFixed(digits);
     }
 
     function buildSnnFromMetadata(modelMetadata, learningRate) {
@@ -297,6 +811,13 @@
             outputSize: modelMetadata.outputSize,
             windowSize: modelMetadata.windowSize,
             sensorConfig: modelMetadata.snn.sensorConfig,
+            sensorEncoding: modelMetadata.snn.sensorEncoding,
+            topology: modelMetadata.snn.topology,
+            recurrentCore: modelMetadata.snn.recurrentCore,
+            specialistBranch: modelMetadata.snn.specialistBranch,
+            pairAuxiliaryLoss: modelMetadata.snn.trainingObjective && modelMetadata.snn.trainingObjective.pairAuxiliaryLoss,
+            scopedPairAuxiliary: modelMetadata.snn.trainingObjective && modelMetadata.snn.trainingObjective.scopedPairAuxiliary,
+            runtimeDecoderObjective: modelMetadata.snn.trainingObjective && modelMetadata.snn.trainingObjective.runtimeDecoderObjective,
             seed: modelMetadata.snn.seed,
             learningRate: learningRate,
         });
@@ -324,9 +845,22 @@
         if (model.cellType === "snn") {
             descriptor.snn = {
                 encoder: model.snn && model.snn.encoder,
+                sensorEncoding: model.snn && model.snn.sensorEncoding,
+                topology: model.snn && model.snn.topology,
+                recurrentCore: model.snn && model.snn.recurrentCore,
+                temporalPolicy: model.snn && model.snn.temporalPolicy,
+                sensorPhenotypeVersion: model.snn && model.snn.sensorPhenotypeVersion,
                 sensorConfig: model.snn && model.snn.sensorConfig,
                 frameEndSlot: model.snn && model.snn.frameEndSlot,
             };
+            if (model.snn && model.snn.frequencySelectionStrategy === MotorCurrentSnn.FREQUENCY_SELECTION_TARGETED_PAIR) {
+                descriptor.snn.frequencySelectionStrategy = model.snn.frequencySelectionStrategy;
+                descriptor.snn.frequencySelectionTargetLabels = model.snn.frequencySelectionTargetLabels;
+            }
+            if (model.snn && model.snn.frequencySelectionMode) descriptor.snn.frequencySelectionMode = model.snn.frequencySelectionMode;
+            if (model.snn && model.snn.sensorTraining) descriptor.snn.sensorTraining = model.snn.sensorTraining;
+            if (model.snn && model.snn.specialistBranch) descriptor.snn.specialistBranch = model.snn.specialistBranch;
+            if (model.snn && model.snn.trainingObjective) descriptor.snn.trainingObjective = model.snn.trainingObjective;
         }
         return descriptor;
     }
@@ -363,6 +897,7 @@
         return (
             checkpoint &&
             checkpoint.model &&
+            (checkpoint.model.cellType !== "snn" || checkpoint.model.architectureVersion === SNN_ARCHITECTURE_VERSION) &&
             typeof checkpoint.model.architectureSignature === "string" &&
             checkpoint.model.architectureSignature === architectureSignature(checkpoint.model)
         );
@@ -472,13 +1007,49 @@
             snnSensorConfig = null;
         }
         activeCheckpoint = checkpoint;
+        showConversionProfile(model.cellType === "snn" ? checkpoint.forwardIdentityProfile : null);
         CLASS_NAMES = checkpoint.classes.slice();
         NUM_CLASSES = CLASS_NAMES.length;
 
         document.getElementById("cellType").value = model.cellType;
         document.getElementById("hiddenSize").value = String(model.hiddenSize);
+        if (snnSensorEncodingSelect) {
+            snnSensorEncodingSelect.value = model.cellType === "snn" && model.snn.sensorEncoding ? model.snn.sensorEncoding : MotorCurrentSnn.SENSOR_ENCODING_PHASE_MULTILEVEL;
+            snnSensorEncodingSelect.disabled = model.cellType !== "snn";
+        }
+        if (snnBandSelectionSelect) {
+            snnBandSelectionSelect.value =
+                model.cellType === "snn" && model.snn.frequencySelectionMode === "multiclass-spike-receptive-fields"
+                    ? "multiclass-spike-receptive-fields"
+                    : model.cellType === "snn" && model.snn.frequencySelectionMode === "multiclass-receptive-fields"
+                    ? "multiclass-receptive-fields"
+                    : model.cellType === "snn" && model.snn.frequencySelectionMode === "healthy-brb1-specialist-scoped"
+                    ? "healthy-brb1-specialist-scoped"
+                    : model.cellType === "snn" && model.snn.frequencySelectionMode === "healthy-brb1-specialist-aux"
+                    ? "healthy-brb1-specialist-aux"
+                    : model.cellType === "snn" && model.snn.frequencySelectionMode === "healthy-brb1-specialist"
+                    ? "healthy-brb1-specialist"
+                    : model.cellType === "snn" && model.snn.frequencySelectionMode === "healthy-brb1-extra"
+                      ? "healthy-brb1-extra"
+                    : model.cellType === "snn" && model.snn.frequencySelectionStrategy === MotorCurrentSnn.FREQUENCY_SELECTION_TARGETED_PAIR
+                      ? "healthy-brb1"
+                      : "multiclass";
+            snnBandSelectionSelect.disabled = model.cellType !== "snn";
+        }
+        if (snnTopologySelect) {
+            snnTopologySelect.value = model.cellType === "snn" && model.snn.topology ? model.snn.topology : MotorCurrentSnn.TOPOLOGY_PHASE_FUSION;
+            snnTopologySelect.disabled = model.cellType !== "snn";
+        }
+        if (snnTrainingObjectiveSelect) {
+            snnTrainingObjectiveSelect.value =
+                model.cellType === "snn" && model.snn.trainingObjective && model.snn.trainingObjective.runtimeDecoderObjective
+                    ? SNN_OBJECTIVE_RUNTIME_DECODER
+                    : SNN_OBJECTIVE_TEMPORAL_MSE;
+            snnTrainingObjectiveSelect.disabled = model.cellType !== "snn";
+        }
         if (checkpoint.dataset && checkpoint.dataset.selection) {
-            document.getElementById("datasetSplit").value = checkpoint.dataset.selection;
+            datasetSplitSelect.value = checkpoint.dataset.selection;
+            updateSampleCountControl("selection");
         }
 
         const bestPct = (checkpoint.metric.validationAccuracy * 100).toFixed(1);
@@ -494,6 +1065,9 @@
         btnDownloadCheckpoint.disabled = false;
         btnExport.disabled = model.cellType === "snn";
         btnTest.disabled = !(testData && loadedDatasetFingerprint === model.datasetFingerprint);
+        if (btnProfileConversion) {
+            btnProfileConversion.disabled = !(model.cellType === "snn" && trainData && loadedDatasetFingerprint === model.datasetFingerprint);
+        }
 
         if (announce !== false) {
             log(
@@ -543,6 +1117,18 @@
                         validationCorrect: validation.correct,
                         validationTotal: validation.total,
                         trainLoss: trainLoss,
+                        validationLoss: validation.validationLoss,
+                        meanCorrectClassScore: validation.meanCorrectClassScore,
+                        meanClassificationMargin: validation.meanClassificationMargin,
+                        meanRuntimeMargin: validation.meanRuntimeMargin,
+                        hiddenFiringRateMeanHz: validation.hiddenFiringRateMeanHz,
+                        hiddenFiringRateStdHz: validation.hiddenFiringRateStdHz,
+                        outputFiringRatesHz: validation.outputFiringRatesHz.slice(),
+                        validationConfusionMatrix: validation.confusionMatrix
+                            ? validation.confusionMatrix.map(function (row) {
+                                  return row.slice();
+                              })
+                            : undefined,
                     },
                     snapshot: { syn: snapshot.syn, neu: snapshot.neu },
                 };
@@ -561,6 +1147,9 @@
             },
             hasSavedBaseline: function () {
                 return bestCheckpoint !== null;
+            },
+            savedBaseline: function () {
+                return bestCheckpoint;
             },
         };
     }
@@ -594,6 +1183,8 @@
             btnRestoreCheckpoint.disabled = true;
             btnResetCheckpoint.disabled = true;
             btnDownloadCheckpoint.disabled = true;
+            if (btnProfileConversion) btnProfileConversion.disabled = true;
+            showConversionProfile(null);
             document.getElementById("bestValidation").textContent = "-";
             document.getElementById("bestEpoch").textContent = "-";
             document.getElementById("finalLoss").textContent = "-";
@@ -644,6 +1235,57 @@
                 log("ERROR importing checkpoint: " + e.message);
             } finally {
                 checkpointFileInput.value = "";
+            }
+        });
+    }
+
+    if (btnProfileConversion) {
+        btnProfileConversion.addEventListener("click", async function () {
+            const checkpoint = activeCheckpoint || readLatestCheckpoint();
+            if (!checkpoint || !checkpoint.model || checkpoint.model.cellType !== "snn") {
+                log("Aucun checkpoint SNN n'est disponible pour le profilage.");
+                return;
+            }
+            if (!trainData || checkpoint.model.datasetFingerprint !== loadedDatasetFingerprint) {
+                log("Le profiler exige les données d'apprentissage correspondant exactement au checkpoint.");
+                return;
+            }
+            btnProfileConversion.disabled = true;
+            btnTrain.disabled = true;
+            btnTest.disabled = true;
+            btnLoad.disabled = true;
+            try {
+                const split = splitTrainingValidation(trainData);
+                const teacher = buildSnnFromMetadata(checkpoint.model, 0.001);
+                if (!checkpointTopologyMatches(teacher.graph, checkpoint)) {
+                    throw new Error("La topologie du checkpoint ne correspond pas au graphe de profilage.");
+                }
+                spRestoreWeights(teacher.graph, checkpoint.snapshot);
+                const compiled = createCompiledSnnFromCheckpoint(checkpoint);
+                setStatus("Vérification du forward hard...");
+                const startedAt = performance.now();
+                const profile = await evaluateSnnForwardIdentity(teacher, compiled, split.validation);
+                profile.evaluatedAt = new Date().toISOString();
+                profile.validationProtocol = split.protocol + "-hard-forward-native-identity-v1";
+                profile.elapsedMilliseconds = performance.now() - startedAt;
+                activeCheckpoint = checkpoint;
+                activeCheckpoint.forwardIdentityProfile = profile;
+                delete activeCheckpoint.conversionProfile;
+                showConversionProfile(profile);
+                const persisted = persistCheckpoint(activeCheckpoint);
+                logSnnForwardIdentity(profile);
+                log("Temps de vérification: " + profile.elapsedMilliseconds.toFixed(0) + "ms.");
+                if (!persisted.ok) log("ATTENTION: le profil est en mémoire mais sa persistance a échoué: " + persisted.error);
+                setProgress(100);
+                setStatus("Vérification du forward hard terminée.");
+            } catch (e) {
+                log("ERREUR pendant la vérification du forward hard: " + e.message);
+                setStatus("Échec de la vérification du forward hard.");
+            } finally {
+                btnProfileConversion.disabled = false;
+                btnTrain.disabled = false;
+                btnTest.disabled = !(testData && checkpoint.model.datasetFingerprint === loadedDatasetFingerprint);
+                btnLoad.disabled = false;
             }
         });
     }
@@ -940,10 +1582,9 @@
         setStatus("Loading data...");
         log("Loading 3-phase current data...");
 
-        const numSamples = parseInt(document.getElementById("numSamples").value);
+        const numSamples = parseInt(numSamplesInput.value);
         const windowSize = parseInt(document.getElementById("windowSize").value);
-        const splitSelect = document.getElementById("datasetSplit");
-        const splitProtocol = splitSelect ? splitSelect.value : "legacy";
+        const splitProtocol = datasetSplitSelect ? datasetSplitSelect.value : "legacy";
         const groupedSplit = splitProtocol === "grouped";
         const trainFile = groupedSplit ? "train_grouped.json" : "train.json";
         const testFile = groupedSplit ? "test_grouped.json" : "test.json";
@@ -955,7 +1596,7 @@
             const datasets = await Promise.all([fetchDataset(trainFile), fetchDataset(testFile)]);
             const trainJson = datasets[0];
             const testJson = datasets[1];
-            if (groupedSplit && trainJson.splitProtocol !== "grouped-acquisition-v1") {
+            if (groupedSplit && trainJson.splitProtocol !== GROUPED_DATASET_PROTOCOL) {
                 throw new Error(trainFile + " is not an acquisition-grouped dataset");
             }
 
@@ -981,14 +1622,18 @@
             CLASS_NAMES = trainJson.classes;
             NUM_CLASSES = CLASS_NAMES.length;
             loadedSplitProtocol = trainJson.splitProtocol || "legacy-window-random";
-            loadedSampleRateHz = Number.isFinite(trainJson.sampleRateHz) ? trainJson.sampleRateHz : CLASS_NAMES[0] === "Healthy" ? 59.990291 : 1000;
+            loadedSampleRateHz = Number.isFinite(trainJson.sampleRateHz) ? trainJson.sampleRateHz : CLASS_NAMES[0] === "Healthy" ? 120.110151 : 1000;
             loadedSignalDomain =
                 trainJson.signalDomain || (trainJson.preprocessing && trainJson.preprocessing.envelope ? "envelope" : CLASS_NAMES[0] === "Healthy" ? "envelope" : "raw-current");
             loadedLineFrequencyHz = Number.isFinite(trainJson.lineFrequencyHz) ? trainJson.lineFrequencyHz : 60;
+            const loadedWindowSize = Number.isInteger(trainJson.windowSize) ? trainJson.windowSize : trainData[0].sequence.length;
+            document.getElementById("windowSize").value = String(loadedWindowSize);
             log("Loaded real data: " + trainData.length + " train, " + testData.length + " test samples");
             log("Classes: " + CLASS_NAMES.join(", "));
             log("Split protocol: " + loadedSplitProtocol);
             log("Signal domain: " + loadedSignalDomain + " at " + loadedSampleRateHz.toFixed(3) + " Hz");
+            log("Observation window: " + loadedWindowSize + " samples = " + (loadedWindowSize / loadedSampleRateHz).toFixed(3) + " s");
+            updateSampleCountControl("real", trainData.length, testData.length);
             dataLoaded = true;
         } catch (e) {
             if (groupedSplit) {
@@ -1021,6 +1666,7 @@
             loadedSampleRateHz = 1000;
             loadedSignalDomain = "raw-current";
             loadedLineFrequencyHz = 60;
+            updateSampleCountControl("synthetic");
             log("Generated synthetic data: " + trainData.length + " train, " + testData.length + " test samples");
             log("Window size: " + windowSize + " timesteps x 3 channels (Ia, Ib, Ic)");
             log("Classes: " + CLASS_NAMES.join(", "));
@@ -1032,6 +1678,7 @@
         if (activeCheckpoint) {
             const compatible = activeCheckpoint.model.datasetFingerprint === loadedDatasetFingerprint && activeCheckpoint.model.outputSize === NUM_CLASSES;
             btnTest.disabled = !compatible;
+            if (btnProfileConversion) btnProfileConversion.disabled = !(compatible && activeCheckpoint.model.cellType === "snn");
             if (!compatible) {
                 log("Saved checkpoint does not match this dataset. Train a model for the selected split.");
             }
@@ -1057,19 +1704,216 @@
             throw new Error("Unable to create a non-empty SNN training/validation split.");
         }
 
-        const baseSensorConfig = MotorCurrentSnn.createSensorConfig({
-            sampleRateHz: loadedSampleRateHz,
-            signalDomain: loadedSignalDomain,
-            lineFrequencyHz: loadedLineFrequencyHz,
-            channelCount: 3,
+        const requestedSensorEncoding = snnSensorEncodingSelect ? snnSensorEncodingSelect.value : MotorCurrentSnn.SENSOR_ENCODING_PHASE_MULTILEVEL;
+        const requestedTopology = snnTopologySelect ? snnTopologySelect.value : MotorCurrentSnn.TOPOLOGY_PHASE_FUSION;
+        const requestedTrainingObjective = snnTrainingObjectiveSelect ? snnTrainingObjectiveSelect.value : SNN_OBJECTIVE_RUNTIME_DECODER;
+        const runtimeDecoderObjective =
+            requestedTrainingObjective === SNN_OBJECTIVE_RUNTIME_DECODER
+                ? {
+                      version: MotorCurrentSnn.RUNTIME_DECODER_OBJECTIVE_VERSION,
+                      spikeCountScale: 2,
+                      membranePotentialScale: 1,
+                      temperature: 2,
+                      classificationLossWeight: 1,
+                      temporalLossWeight: 0.25,
+                  }
+                : null;
+        const frequencySelectionMode = snnBandSelectionSelect ? snnBandSelectionSelect.value : "multiclass";
+        const hasContinuousReceptiveFields = frequencySelectionMode === "multiclass-receptive-fields";
+        const hasSpikeAlignedReceptiveFields = frequencySelectionMode === "multiclass-spike-receptive-fields";
+        const hasTrainableReceptiveFields = hasContinuousReceptiveFields || hasSpikeAlignedReceptiveFields;
+        const hasPairAuxiliaryLoss = frequencySelectionMode === "healthy-brb1-specialist-aux";
+        const hasScopedPairAuxiliary = frequencySelectionMode === "healthy-brb1-specialist-scoped";
+        const hasSpecialistBranch = frequencySelectionMode === "healthy-brb1-specialist" || hasPairAuxiliaryLoss || hasScopedPairAuxiliary;
+        const sensorEncoding = hasSpecialistBranch || hasTrainableReceptiveFields ? MotorCurrentSnn.SENSOR_ENCODING_PHASE_MULTILEVEL : requestedSensorEncoding;
+        const snnTopology = hasSpecialistBranch || hasTrainableReceptiveFields ? MotorCurrentSnn.TOPOLOGY_DENSE : requestedTopology;
+        if (hasSpecialistBranch || hasTrainableReceptiveFields) {
+            if (snnSensorEncodingSelect) snnSensorEncodingSelect.value = sensorEncoding;
+            if (snnTopologySelect) snnTopologySelect.value = snnTopology;
+        }
+        const frequencySelectionStrategy =
+            frequencySelectionMode === "healthy-brb1" || frequencySelectionMode === "healthy-brb1-extra" || hasSpecialistBranch
+                ? MotorCurrentSnn.FREQUENCY_SELECTION_TARGETED_PAIR
+                : MotorCurrentSnn.FREQUENCY_SELECTION_MULTICLASS;
+        const frequencyBandCount = frequencySelectionMode === "healthy-brb1-extra" ? 4 : 3;
+        const healthyLabel = CLASS_NAMES.indexOf("Healthy");
+        const brb1Label = CLASS_NAMES.indexOf("BRB1");
+        if (frequencySelectionStrategy === MotorCurrentSnn.FREQUENCY_SELECTION_TARGETED_PAIR && (healthyLabel < 0 || brb1Label < 0)) {
+            throw new Error("Healthy/BRB1 band selection requires the UFU five-class dataset.");
+        }
+        let selectedFrequencyBands;
+        let globalFrequencyBands = null;
+        let specialistFrequencyBands = null;
+        let receptiveFieldTraining = null;
+        if (hasSpecialistBranch) {
+            globalFrequencyBands = MotorCurrentSnn.selectFrequencyBands(trainingSamples, loadedSampleRateHz, {
+                signalDomain: loadedSignalDomain,
+                lineFrequencyHz: loadedLineFrequencyHz,
+                count: 3,
+                minFrequencyHz: 1.5,
+                maxFrequencyHz: 8,
+                strategy: MotorCurrentSnn.FREQUENCY_SELECTION_MULTICLASS,
+            });
+            specialistFrequencyBands = MotorCurrentSnn.selectFrequencyBands(trainingSamples, loadedSampleRateHz, {
+                signalDomain: loadedSignalDomain,
+                lineFrequencyHz: loadedLineFrequencyHz,
+                count: 1,
+                minFrequencyHz: 1.5,
+                maxFrequencyHz: 8,
+                strategy: MotorCurrentSnn.FREQUENCY_SELECTION_TARGETED_PAIR,
+                targetLabels: [healthyLabel, brb1Label],
+                targetedCount: 1,
+            });
+            selectedFrequencyBands = globalFrequencyBands.concat(specialistFrequencyBands);
+        } else {
+            selectedFrequencyBands = MotorCurrentSnn.selectFrequencyBands(trainingSamples, loadedSampleRateHz, {
+                signalDomain: loadedSignalDomain,
+                lineFrequencyHz: loadedLineFrequencyHz,
+                count: frequencyBandCount,
+                minFrequencyHz: 1.5,
+                maxFrequencyHz: 8,
+                strategy: frequencySelectionStrategy,
+                targetLabels: frequencySelectionStrategy === MotorCurrentSnn.FREQUENCY_SELECTION_TARGETED_PAIR ? [healthyLabel, brb1Label] : undefined,
+                targetedCount: 1,
+            });
+        }
+        if (hasTrainableReceptiveFields) {
+            setStatus(hasSpikeAlignedReceptiveFields ? "Pré-entraînement des champs sur les spikes lissés..." : "Pré-entraînement RMS des trois champs récepteurs...");
+            await new Promise(function (resolve) {
+                window.setTimeout(resolve, 0);
+            });
+            receptiveFieldTraining = hasSpikeAlignedReceptiveFields
+                ? MotorCurrentSnn.trainSpikeAlignedReceptiveFields(trainingSamples, loadedSampleRateHz, selectedFrequencyBands, {
+                      signalDomain: loadedSignalDomain,
+                      minFrequencyHz: 1.5,
+                      maxFrequencyHz: 8,
+                      rounds: 3,
+                  })
+                : MotorCurrentSnn.trainReceptiveFields(trainingSamples, loadedSampleRateHz, selectedFrequencyBands, {
+                      signalDomain: loadedSignalDomain,
+                      minFrequencyHz: 1.5,
+                      maxFrequencyHz: 8,
+                      rounds: 3,
+                  });
+            selectedFrequencyBands = selectedFrequencyBands.map(function (band, index) {
+                const field = receptiveFieldTraining.fields[index];
+                return Object.assign({}, band, {
+                    initialFrequencyHz: band.frequencyHz,
+                    initialBandwidthHz: field.initialBandwidthHz,
+                    frequencyHz: field.centerFrequencyHz,
+                    bandwidthHz: field.bandwidthHz,
+                    initialFieldFisherScore: hasSpikeAlignedReceptiveFields ? field.initialSoftFisherScore : field.initialFisherScore,
+                    trainedFieldFisherScore: hasSpikeAlignedReceptiveFields ? field.trainedSoftFisherScore : field.trainedFisherScore,
+                    initialFieldObjectiveScore: hasSpikeAlignedReceptiveFields ? field.initialObjectiveScore : field.initialFisherScore,
+                    trainedFieldObjectiveScore: hasSpikeAlignedReceptiveFields ? field.trainedObjectiveScore : field.trainedFisherScore,
+                    initialHardFisherScore: hasSpikeAlignedReceptiveFields ? field.initialHardFisherScore : null,
+                    trainedHardFisherScore: hasSpikeAlignedReceptiveFields ? field.trainedHardFisherScore : null,
+                    initialFieldRedundancy: hasSpikeAlignedReceptiveFields ? field.initialRedundancy : null,
+                    trainedFieldRedundancy: hasSpikeAlignedReceptiveFields ? field.trainedRedundancy : null,
+                    initialHardEventsPerSample: hasSpikeAlignedReceptiveFields ? field.initialHardEventsPerSample : null,
+                    trainedHardEventsPerSample: hasSpikeAlignedReceptiveFields ? field.trainedHardEventsPerSample : null,
+                    source: hasSpikeAlignedReceptiveFields ? "train-soft-phase-spike-receptive-field" : "train-soft-biquad-receptive-field",
+                });
+            });
+        }
+        const selectedFrequenciesHz = selectedFrequencyBands.map(function (band) {
+            return band.frequencyHz;
         });
-        snnSensorConfig = MotorCurrentSnn.calibrateSensor(trainingSamples, baseSensorConfig, MotorCurrentSnn.DEFAULT_PERCENTILE);
+
+        let specialistBranch = null;
+        let pairAuxiliaryLoss = null;
+        let scopedPairAuxiliary = null;
+        if (hasSpecialistBranch) {
+            const globalSensorConfig = MotorCurrentSnn.calibrateSensor(
+                trainingSamples,
+                MotorCurrentSnn.createSensorConfig({
+                    sampleRateHz: loadedSampleRateHz,
+                    signalDomain: loadedSignalDomain,
+                    lineFrequencyHz: loadedLineFrequencyHz,
+                    channelCount: 3,
+                    frequenciesHz: globalFrequencyBands.map(function (band) {
+                        return band.frequencyHz;
+                    }),
+                    encodingMode: MotorCurrentSnn.SENSOR_ENCODING_PHASE_MULTILEVEL,
+                }),
+                MotorCurrentSnn.DEFAULT_PERCENTILE,
+                MotorCurrentSnn.SENSOR_ENCODING_PHASE_MULTILEVEL
+            );
+            const specialistSensorConfig = MotorCurrentSnn.calibrateSensor(
+                trainingSamples,
+                MotorCurrentSnn.createSensorConfig({
+                    sampleRateHz: loadedSampleRateHz,
+                    signalDomain: loadedSignalDomain,
+                    lineFrequencyHz: loadedLineFrequencyHz,
+                    channelCount: 3,
+                    frequenciesHz: specialistFrequencyBands.map(function (band) {
+                        return band.frequencyHz;
+                    }),
+                    encodingMode: MotorCurrentSnn.SENSOR_ENCODING_PHASE_BINARY,
+                }),
+                MotorCurrentSnn.DEFAULT_PERCENTILE,
+                MotorCurrentSnn.SENSOR_ENCODING_PHASE_BINARY
+            );
+            specialistSensorConfig.bands.forEach(function (band) {
+                band.id = "specialist-" + band.id;
+            });
+            snnSensorConfig = {
+                sampleRateHz: globalSensorConfig.sampleRateHz,
+                bands: globalSensorConfig.bands.concat(specialistSensorConfig.bands),
+                emitFrameEnd: true,
+                diagnostics: false,
+            };
+            specialistBranch = {
+                version: "healthy-brb1-binary-v1",
+                bandIds: specialistSensorConfig.bands.map(function (band) {
+                    return band.id;
+                }),
+                hiddenSize: 4,
+                outputLabels: [healthyLabel, brb1Label],
+                encoding: MotorCurrentSnn.SENSOR_ENCODING_PHASE_BINARY,
+            };
+            if (hasPairAuxiliaryLoss) {
+                pairAuxiliaryLoss = {
+                    version: "final-frame-pair-mse-v1",
+                    labels: [healthyLabel, brb1Label],
+                    mixtureWeight: 0.25,
+                };
+            }
+            if (hasScopedPairAuxiliary) {
+                scopedPairAuxiliary = {
+                    version: "specialist-only-pair-mse-v1",
+                    labels: [healthyLabel, brb1Label],
+                    learningRateScale: 0.1,
+                };
+            }
+        } else {
+            const baseSensorConfig = MotorCurrentSnn.createSensorConfig({
+                sampleRateHz: loadedSampleRateHz,
+                signalDomain: loadedSignalDomain,
+                lineFrequencyHz: loadedLineFrequencyHz,
+                channelCount: 3,
+                frequenciesHz: selectedFrequenciesHz,
+                bandwidthsHz: hasTrainableReceptiveFields
+                    ? selectedFrequencyBands.map(function (band) {
+                          return band.bandwidthHz;
+                      })
+                    : undefined,
+                encodingMode: sensorEncoding,
+            });
+            snnSensorConfig = MotorCurrentSnn.calibrateSensor(trainingSamples, baseSensorConfig, MotorCurrentSnn.DEFAULT_PERCENTILE, sensorEncoding);
+        }
         const windowSize = trainingSamples[0].sequence.length;
         snnModel = MotorCurrentSnn.buildModel({
             hiddenSize: hiddenSize,
             outputSize: NUM_CLASSES,
             windowSize: windowSize,
             sensorConfig: snnSensorConfig,
+            sensorEncoding: sensorEncoding,
+            topology: snnTopology,
+            specialistBranch: specialistBranch,
+            pairAuxiliaryLoss: pairAuxiliaryLoss,
+            scopedPairAuxiliary: scopedPairAuxiliary,
+            runtimeDecoderObjective: runtimeDecoderObjective,
             seed: SNN_SEED,
             learningRate: learningRate,
         });
@@ -1081,13 +1925,78 @@
         log(
             "SNN RuntimeGraphBuilder topology: observation source -> wave sensor (" +
                 snnModel.sensorPorts.length +
-                " frequency/phase ports) -> " +
-                hiddenSize +
-                " hidden LIF -> " +
+                " frequency/phase/level ports) -> " +
+                (snnModel.topology === MotorCurrentSnn.TOPOLOGY_PHASE_FUSION
+                    ? "phase LIF (" + snnModel.hiddenShape + ")"
+                    :
+                      hiddenSize +
+                      " dense hidden LIF" +
+                      (snnModel.recurrentCore
+                          ? " + " + snnModel.recurrentCore.synapseCount + " recurrent synapses, delay " + snnModel.recurrentCore.delayTicks + " tick"
+                          : "") +
+                      (snnModel.specialistBranch ? " + " + snnModel.specialistBranch.hiddenSize + " specialist LIF" : "")) +
+                " -> " +
                 NUM_CLASSES +
                 " class LIF"
         );
+        log(
+            "Sensor encoding: " +
+                sensorEncoding +
+                "; band selection: " +
+                (hasSpikeAlignedReceptiveFields
+                    ? "3 champs récepteurs appris sur les spikes lissés puis figés"
+                    : hasContinuousReceptiveFields
+                    ? "3 champs récepteurs appris sur l'énergie RMS puis figés"
+                    : hasScopedPairAuxiliary
+                    ? "3 multiclass multilevel + 1 binary Healthy/BRB1 specialist + confined gradient"
+                    : hasPairAuxiliaryLoss
+                    ? "3 multiclass multilevel + 1 binary Healthy/BRB1 specialist + pair loss"
+                    : frequencySelectionMode === "healthy-brb1-specialist"
+                      ? "3 multiclass multilevel + 1 binary Healthy/BRB1 specialist"
+                    : frequencySelectionMode === "healthy-brb1-extra"
+                    ? "3 multiclass + 1 Healthy/BRB1"
+                    : frequencySelectionStrategy === MotorCurrentSnn.FREQUENCY_SELECTION_TARGETED_PAIR
+                      ? "1 Healthy/BRB1 + 2 multiclass"
+                      : "3 multiclass") +
+                "; topology: " +
+                snnModel.topology +
+                "; hidden LIF budget: " +
+                hiddenSize +
+                (snnModel.specialistBranch ? " + " + snnModel.specialistBranch.hiddenSize + " specialist" : "")
+        );
+        const remanenceTimes = snnModel.sensorCells.map(function (cell) {
+            return cell.remanenceTimeConstantSeconds;
+        });
+        const adaptationFrequencies = snnModel.sensorCells.map(function (cell) {
+            return cell.maximumAdaptationFrequencyHz;
+        });
+        log(
+            "Sensor phenotype: " +
+                snnModel.sensorCells.length +
+                " cells; remanence " +
+                (Math.min.apply(Math, remanenceTimes) * 1000).toFixed(1) +
+                ".." +
+                (Math.max.apply(Math, remanenceTimes) * 1000).toFixed(1) +
+                "ms; adaptation " +
+                Math.min.apply(Math, adaptationFrequencies).toFixed(3) +
+                ".." +
+                Math.max.apply(Math, adaptationFrequencies).toFixed(3) +
+                "Hz"
+        );
         log("Training graph: " + snnModel.graph.nodes.length + " nodes, " + snnModel.graph.links.length + " links, " + snnModel.trainableWeightCount + " trainable weights");
+        if (snnModel.recurrentCore) {
+            log(
+                "Recurrent temporal core: " +
+                    snnModel.recurrentCore.synapseCount +
+                    " trainable hidden-to-hidden synapses; fan-in " +
+                    snnModel.recurrentCore.fanIn +
+                    "; delay " +
+                    snnModel.recurrentCore.delayTicks +
+                    " raw-sample tick; dense BPTT timeline " +
+                    windowSize +
+                    " samples + frame end."
+            );
+        }
         log(
             "Hidden tau bank: " +
                 snnModel.tauBank
@@ -1097,25 +2006,130 @@
                     .join(", ")
         );
         log(
-            "Wave bands: " +
-                Array.from(
-                    new Set(
-                        snnSensorConfig.bands.map(function (band) {
-                            return band.centerFrequencyHz + " Hz";
-                        })
-                    )
-                ).join(", ")
-        );
-        log(
-            "Band thresholds (85th percentile, Ia first): " +
-                snnSensorConfig.bands
-                    .slice(0, snnSensorConfig.bands.length / 3)
+            "Wave bands selected from training only: " +
+                selectedFrequencyBands
                     .map(function (band) {
-                        return band.threshold.toFixed(5);
+                        if (band.selectionScore === null) return band.frequencyHz.toFixed(3) + " Hz (physical)";
+                        if (hasTrainableReceptiveFields) {
+                            const commonDescription =
+                                band.initialFrequencyHz.toFixed(3) +
+                                " -> " +
+                                band.frequencyHz.toFixed(3) +
+                                " Hz; bandwidth " +
+                                band.initialBandwidthHz.toFixed(3) +
+                                " -> " +
+                                band.bandwidthHz.toFixed(3) + " Hz";
+                            if (hasSpikeAlignedReceptiveFields) {
+                                return (
+                                    commonDescription +
+                                    "; spike objective " +
+                                    band.initialFieldObjectiveScore.toFixed(4) +
+                                    " -> " +
+                                    band.trainedFieldObjectiveScore.toFixed(4) +
+                                    "; soft/hard Fisher " +
+                                    band.trainedFieldFisherScore.toFixed(4) +
+                                    "/" +
+                                    band.trainedHardFisherScore.toFixed(4) +
+                                    "; redundancy " +
+                                    band.trainedFieldRedundancy.toFixed(3)
+                                );
+                            }
+                            return commonDescription + "; RMS Fisher " + band.initialFieldFisherScore.toFixed(4) + " -> " + band.trainedFieldFisherScore.toFixed(4);
+                        }
+                        const objective = band.selectionObjective.indexOf("pair-") === 0 ? "Healthy/BRB1" : "multiclass";
+                        return band.frequencyHz.toFixed(3) + " Hz (" + objective + " Fisher " + band.selectionScore.toFixed(4) + ")";
                     })
                     .join(", ")
         );
+        log(
+            "Band thresholds (Ia): " +
+                snnSensorConfig.bands
+                    .filter(function (band) {
+                        return band.channel === 0;
+                    })
+                    .map(function (band) {
+                        const thresholds = Array.isArray(band.thresholds) ? band.thresholds : [band.threshold];
+                        return (
+                            band.centerFrequencyHz.toFixed(3) +
+                            "Hz=[" +
+                            thresholds
+                                .map(function (threshold) {
+                                    return threshold.toFixed(5);
+                                })
+                                .join(", ") +
+                            "]"
+                        );
+                    })
+                    .join("; ")
+        );
         log("Training/validation: " + trainingSamples.length + "/" + validationSamples.length + " samples (" + split.protocol + ")");
+        if (receptiveFieldTraining) {
+            log(
+                "Sensor pre-training: " +
+                    receptiveFieldTraining.objective +
+                    "; deterministic " +
+                    receptiveFieldTraining.rounds +
+                    "-round local search; " +
+                    receptiveFieldTraining.trainingSampleCount +
+                    " training samples; 0 validation and 0 test samples. Centers and bandwidths are now frozen for SNN training and runtime."
+            );
+            if (hasSpikeAlignedReceptiveFields) {
+                log(
+                    "Spike surrogate: sigmoid temperature=" +
+                        receptiveFieldTraining.temperatureRatio.toFixed(3) +
+                        " x threshold; LIF traces=" +
+                        receptiveFieldTraining.traceTauSeconds
+                            .map(function (tau) {
+                                return (tau * 1000).toFixed(1) + "ms";
+                            })
+                            .join(", ") +
+                        "; redundancy weight=" +
+                        receptiveFieldTraining.redundancyWeight.toFixed(2) +
+                        ". The runtime still uses strict binary threshold crossings."
+                );
+            }
+        }
+        if (pairAuxiliaryLoss) {
+            log(
+                "Training objective: base temporal MSE mixed with final-frame Healthy/BRB1 MSE, lambda=" +
+                    pairAuxiliaryLoss.mixtureWeight.toFixed(2) +
+                    ". The auxiliary term is active only for Healthy and BRB1 samples."
+            );
+        }
+        if (scopedPairAuxiliary) {
+            log(
+                "Training objective: base temporal MSE plus a separate Healthy/BRB1 MSE pass at LR x" +
+                    scopedPairAuxiliary.learningRateScale.toFixed(2) +
+                    ". Its gradient reaches only 32 runtime weights: 24 sensor-to-specialist and 8 specialist-to-pair weights. " +
+                    "Two additional frame weights exist only inside the auxiliary trainer and are discarded before runtime compilation."
+            );
+        }
+        if (runtimeDecoderObjective) {
+            log(
+                "Training objective: runtime decoder cross-entropy on score = " +
+                    runtimeDecoderObjective.spikeCountScale.toFixed(1) +
+                    " * total spike count + " +
+                    runtimeDecoderObjective.membranePotentialScale.toFixed(1) +
+                    " * final membrane / threshold; temperature=" +
+                    runtimeDecoderObjective.temperature.toFixed(1) +
+                    "; CE weight=" +
+                    runtimeDecoderObjective.classificationLossWeight.toFixed(2) +
+                    "; temporal MSE weight=" +
+                    runtimeDecoderObjective.temporalLossWeight.toFixed(2) +
+                    ". Forward spikes remain strictly binary."
+            );
+        } else {
+            log("Training objective: historical temporal hard-forward MSE baseline.");
+        }
+
+        const trainingObjectiveMetadata = runtimeDecoderObjective
+            ? {
+                  base: MotorCurrentSnn.RUNTIME_DECODER_OBJECTIVE_VERSION,
+                  runtimeDecoderObjective: runtimeDecoderObjective,
+              }
+            : { base: "temporal-hard-forward-mse-v2" };
+        if (pairAuxiliaryLoss) trainingObjectiveMetadata.pairAuxiliaryLoss = pairAuxiliaryLoss;
+        if (scopedPairAuxiliary) trainingObjectiveMetadata.scopedPairAuxiliary = scopedPairAuxiliary;
 
         const checkpointMetadata = {
             model: {
@@ -1127,9 +2141,30 @@
                 windowSize: windowSize,
                 datasetFingerprint: loadedDatasetFingerprint,
                 snn: {
-                    encoder: "wave-filter-bank-phase-crossing-v1",
+                    encoder: "wave-filter-bank-phase-crossing-v2",
+                    sensorEncoding: sensorEncoding,
+                    topology: snnModel.topology,
+                    recurrentCore: snnModel.recurrentCore,
+                    specialistBranch: snnModel.specialistBranch,
+                    trainingObjective: trainingObjectiveMetadata,
+                    temporalPolicy: snnModel.temporalPolicy,
+                    sensorPhenotypeVersion: snnModel.sensorPhenotypeVersion,
+                    sensorTraining: receptiveFieldTraining,
                     sensorConfig: snnSensorConfig,
                     percentile: MotorCurrentSnn.DEFAULT_PERCENTILE,
+                    frequencySelectionStrategy: frequencySelectionStrategy,
+                    frequencySelectionMode:
+                        frequencySelectionMode === "healthy-brb1-extra" ||
+                        frequencySelectionMode === "healthy-brb1-specialist" ||
+                        frequencySelectionMode === "healthy-brb1-specialist-aux" ||
+                        frequencySelectionMode === "healthy-brb1-specialist-scoped" ||
+                        frequencySelectionMode === "multiclass-receptive-fields" ||
+                        frequencySelectionMode === "multiclass-spike-receptive-fields"
+                            ? frequencySelectionMode
+                            : null,
+                    frequencySelectionTargetLabels:
+                        frequencySelectionStrategy === MotorCurrentSnn.FREQUENCY_SELECTION_TARGETED_PAIR ? [healthyLabel, brb1Label] : null,
+                    frequencySelection: selectedFrequencyBands,
                     seed: snnModel.seed,
                     frameEndSlot: MotorCurrentSnn.FRAME_END_SLOT,
                 },
@@ -1139,24 +2174,53 @@
                 splitProtocol: loadedSplitProtocol,
                 fingerprint: loadedDatasetFingerprint,
             },
-            validationProtocol: split.protocol + "-hard-snn",
+            validationProtocol: split.protocol + "-runtime-hard-decoder-v1",
             classes: CLASS_NAMES,
         };
         const checkpointer = createAccuracyCheckpointer(snnModel.graph, checkpointMetadata);
         log("Checkpoint architecture: " + checkpointMetadata.model.architectureSignature);
+        let savedBaseline = null;
+        let savedBaselineDiagnostics = null;
         if (checkpointer.hasSavedBaseline()) {
             log("A persistent checkpoint for this exact SNN architecture will be kept unless this run improves it. Use Reset saved to start a fresh baseline.");
+            savedBaseline = checkpointer.savedBaseline();
+            const initialSnapshot = spSnapshotWeights(snnModel.graph);
+            try {
+                spRestoreWeights(snnModel.graph, savedBaseline.snapshot);
+                setStatus("Measuring the saved SNN checkpoint before training...");
+                savedBaselineDiagnostics = await evaluateSnnTeacherAccuracy(snnModel, validationSamples, { includeTrainingForward: true });
+                logSnnDiagnostics(
+                    "Saved checkpoint epoch " + savedBaseline.metric.epoch + " (Runtime hard val " + (savedBaseline.metric.validationAccuracy * 100).toFixed(1) + "%)",
+                    savedBaselineDiagnostics
+                );
+            } finally {
+                spRestoreWeights(snnModel.graph, initialSnapshot);
+                snnModel.trainer.resetOptimizerState();
+            }
         }
 
         const batchCount = Math.ceil(trainingSamples.length / SNN_BATCH_SIZE);
         const totalSteps = epochs * batchCount;
         let completedSteps = 0;
+        const experimentHistory = [];
+        let currentRunProducedBestCheckpoint = false;
+        const trainingStartedAt = performance.now();
+        log(
+            "Diagnostics: every epoch measures runtime hard train on " +
+                trainingSamples.length +
+                " samples, hard-forward validation, runtime hard validation, margins, and neuron firing rates. The surrogate is used only in the backward derivative."
+        );
+        log(
+            "Runtime hard decoder: score = 2 * total spike count + final membrane / threshold. The retired last-timestep decoder is not used for validation or checkpoint selection."
+        );
         setStatus("Training SNN...");
 
         for (let epoch = 0; epoch < epochs; epoch++) {
             let epochLoss = 0;
             let epochSamples = 0;
             let epochEvents = 0;
+            let epochScopedPairLoss = 0;
+            let epochScopedPairSamples = 0;
             for (let start = 0; start < trainingSamples.length; start += SNN_BATCH_SIZE) {
                 const end = Math.min(trainingSamples.length, start + SNN_BATCH_SIZE);
                 const encodedBatch = [];
@@ -1164,12 +2228,20 @@
                     const encoded = MotorCurrentSnn.encodeSequence(trainingSamples[i].sequence, trainingSamples[i].label, NUM_CLASSES, {
                         sensorConfig: snnModel.sensorConfig,
                         inputIndexBySlot: snnModel.inputIndexBySlot,
+                        pairAuxiliaryLoss: snnModel.pairAuxiliaryLoss,
+                        runtimeDecoderObjective: snnModel.runtimeDecoderObjective,
+                        preserveEmptyTimesteps: !!snnModel.recurrentCore,
                     });
                     encodedBatch.push(encoded);
                     epochEvents += encoded.sensorEvents;
                 }
                 const batchLoss = snnModel.trainer.trainBatch(encodedBatch);
+                const scopedPairResult = MotorCurrentSnn.trainScopedPairBatch(snnModel, encodedBatch);
                 epochLoss += batchLoss * encodedBatch.length;
+                if (scopedPairResult.samples > 0) {
+                    epochScopedPairLoss += scopedPairResult.loss * scopedPairResult.samples;
+                    epochScopedPairSamples += scopedPairResult.samples;
+                }
                 epochSamples += encodedBatch.length;
                 completedSteps++;
 
@@ -1185,9 +2257,23 @@
             const avgLoss = epochLoss / epochSamples;
             lossHistory.push(avgLoss);
             drawLossChart();
-            setStatus("SNN epoch " + (epoch + 1) + "/" + epochs + " - validating hard spikes...");
-            const validation = await evaluateSnnTeacherAccuracy(snnModel, validationSamples);
+            setStatus("SNN epoch " + (epoch + 1) + "/" + epochs + " - validating the runtime hard decoder...");
+            const validation = await evaluateSnnTeacherAccuracy(snnModel, validationSamples, { includeTrainingForward: true });
+            setStatus("SNN epoch " + (epoch + 1) + "/" + epochs + " - measuring runtime hard training accuracy...");
+            const trainingDiagnostics = await evaluateSnnTeacherAccuracy(snnModel, trainingSamples, { includeTrainingForward: false });
+            experimentHistory.push({
+                epoch: epoch + 1,
+                trainLoss: avgLoss,
+                scopedPairLoss: epochScopedPairSamples > 0 ? epochScopedPairLoss / epochScopedPairSamples : null,
+                trainRuntimeHardAccuracy: trainingDiagnostics.accuracy,
+                validationAccuracy: validation.accuracy,
+                validationCorrect: validation.correct,
+                validationTotal: validation.total,
+                validationDiagnostics: snnDiagnosticRecord(validation),
+                inputEventsPerSample: epochEvents / epochSamples,
+            });
             const checkpointUpdate = checkpointer.update(epoch, avgLoss, validation);
+            if (checkpointUpdate.improved) currentRunProducedBestCheckpoint = true;
             const marker = checkpointUpdate.improved ? " * saved" : "";
             log(
                 "SNN epoch " +
@@ -1196,7 +2282,13 @@
                     epochs +
                     " - Loss: " +
                     avgLoss.toFixed(6) +
-                    " - Hard val: " +
+                    (epochScopedPairSamples > 0
+                        ? " - Scoped pair loss: " + (epochScopedPairLoss / epochScopedPairSamples).toFixed(6)
+                        : "") +
+                    " - Runtime hard train: " +
+                    (trainingDiagnostics.accuracy * 100).toFixed(1) +
+                    "%" +
+                    " - Runtime hard val: " +
                     (validation.accuracy * 100).toFixed(1) +
                     "% (" +
                     validation.correct +
@@ -1207,6 +2299,7 @@
                     (epochEvents / epochSamples).toFixed(1) +
                     marker
             );
+            logSnnDiagnostics("SNN epoch " + (epoch + 1), validation);
             if (checkpointUpdate.improved && checkpointUpdate.persisted && !checkpointUpdate.persisted.ok) {
                 log("WARNING: SNN checkpoint is in memory but local persistence failed: " + checkpointUpdate.persisted.error);
             }
@@ -1217,6 +2310,28 @@
 
         const bestCheckpoint = checkpointer.restore();
         if (!bestCheckpoint) throw new Error("SNN training produced no checkpoint.");
+        const currentExperiment = {
+            protocolVersion: "snn-runtime-decoder-loss-v4",
+            requestedEpochs: epochs,
+            completedEpochs: experimentHistory.length,
+            batchSize: SNN_BATCH_SIZE,
+            learningRate: learningRate,
+            elapsedMilliseconds: performance.now() - trainingStartedAt,
+            savedBaseline:
+                savedBaseline && savedBaselineDiagnostics
+                    ? {
+                          epoch: savedBaseline.metric.epoch,
+                          trainLoss: savedBaseline.metric.trainLoss,
+                          validationAccuracy: savedBaseline.metric.validationAccuracy,
+                          diagnostics: snnDiagnosticRecord(savedBaselineDiagnostics),
+                      }
+                    : null,
+            history: experimentHistory,
+        };
+        if (currentRunProducedBestCheckpoint || !bestCheckpoint.experiment) {
+            bestCheckpoint.experiment = currentExperiment;
+        }
+        persistCheckpoint(bestCheckpoint);
         activeCheckpoint = bestCheckpoint;
         snnSensorConfig = bestCheckpoint.model.snn.sensorConfig;
         snnInference = createCompiledSnnFromCheckpoint(bestCheckpoint);
@@ -1244,6 +2359,36 @@
                 snnInference.compilation.neurons.length +
                 " native LIF neurons"
         );
+        log("Training time: " + (bestCheckpoint.experiment.elapsedMilliseconds / 1000).toFixed(1) + "s");
+        if (savedBaseline && savedBaselineDiagnostics && experimentHistory.length > 0) {
+            const lastEpoch = experimentHistory[experimentHistory.length - 1];
+            const lastDiagnostics = lastEpoch.validationDiagnostics;
+            log(
+                "Objective alignment comparison - saved epoch " +
+                    savedBaseline.metric.epoch +
+                    ": train loss " +
+                    savedBaseline.metric.trainLoss.toFixed(6) +
+                    ", val loss " +
+                    savedBaselineDiagnostics.validationLoss.toFixed(6) +
+                    ", Runtime hard val " +
+                    (savedBaseline.metric.validationAccuracy * 100).toFixed(1) +
+                    "% - run epoch " +
+                    lastEpoch.epoch +
+                    ": train loss " +
+                    lastEpoch.trainLoss.toFixed(6) +
+                    ", val loss " +
+                    lastDiagnostics.trainingObjectiveLoss.toFixed(6) +
+                    ", Runtime hard val " +
+                    (lastEpoch.validationAccuracy * 100).toFixed(1) +
+                    "%"
+            );
+            if (lastDiagnostics.trainingObjectiveLoss < savedBaselineDiagnostics.validationLoss && lastEpoch.validationAccuracy < savedBaseline.metric.validationAccuracy) {
+                log("OBJECTIVE MISALIGNMENT OBSERVED: training objective improved while the runtime decoder accuracy declined.");
+            }
+        }
+        if (bestCheckpoint.metric.validationConfusionMatrix) {
+            logConfusionMatrix("Best validation confusion matrix", bestCheckpoint.metric.validationConfusionMatrix);
+        }
         document.getElementById("bestValidation").textContent = bestPct + "%";
         document.getElementById("bestEpoch").textContent = bestCheckpoint.metric.epoch;
         document.getElementById("finalLoss").textContent = bestCheckpoint.metric.trainLoss.toFixed(4);
@@ -1259,6 +2404,7 @@
         if (!trainData) return;
         btnTrain.disabled = true;
         btnTest.disabled = true;
+        if (btnProfileConversion) btnProfileConversion.disabled = true;
         btnLoad.disabled = true;
         lossHistory.length = 0;
         lastTestAccuracy = null;
@@ -1272,6 +2418,7 @@
             try {
                 await trainSnn(hiddenSize, epochs, lr);
                 btnTest.disabled = false;
+                if (btnProfileConversion) btnProfileConversion.disabled = false;
             } catch (e) {
                 log("ERROR training SNN: " + e.message);
                 setStatus("SNN training failed.");
@@ -1508,6 +2655,12 @@
                 accuracy: accuracy,
                 correct: correct,
                 total: testData.length,
+                elapsedMilliseconds: elapsed,
+                inputEventsPerSample: snnInference ? snnInputEvents / testData.length : undefined,
+                neuronSpikesPerSample: snnInference ? snnNeuronSpikes / testData.length : undefined,
+                confusionMatrix: confMatrix.map(function (row) {
+                    return row.slice();
+                }),
             };
             persistCheckpoint(activeCheckpoint);
         }
@@ -1545,8 +2698,16 @@
         }
 
         // Log confusion matrix as text
+        logConfusionMatrix("Confusion Matrix", confMatrix);
+
+        setStatus("Done - Accuracy: " + (accuracy * 100).toFixed(1) + "% - " + elapsed.toFixed(0) + "ms");
+        btnTrain.disabled = false;
+        btnTest.disabled = false;
+    });
+
+    function logConfusionMatrix(title, matrix) {
         log("");
-        log("Confusion Matrix (rows=actual, cols=predicted):");
+        log(title + " (rows=actual, cols=predicted):");
         let header = "".padEnd(14, " ");
         for (let c = 0; c < NUM_CLASSES; c++) {
             header += CLASS_NAMES[c].padStart(10, " ");
@@ -1555,15 +2716,11 @@
         for (let r = 0; r < NUM_CLASSES; r++) {
             let row = CLASS_NAMES[r].padEnd(14, " ");
             for (let c = 0; c < NUM_CLASSES; c++) {
-                row += String(confMatrix[r][c]).padStart(10, " ");
+                row += String(matrix[r][c]).padStart(10, " ");
             }
             log(row);
         }
-
-        setStatus("Done - Accuracy: " + (accuracy * 100).toFixed(1) + "% - " + elapsed.toFixed(0) + "ms");
-        btnTrain.disabled = false;
-        btnTest.disabled = false;
-    });
+    }
 
     // ====================== ONNX EXPORT ======================
     //

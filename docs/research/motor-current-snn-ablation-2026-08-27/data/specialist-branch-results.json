@@ -1,0 +1,105 @@
+{
+    "experimentId": "motor-current-snn-healthy-brb1-specialist-2026-08-27",
+    "dataset": {
+        "fingerprint": "ec00f5c3",
+        "splitProtocol": "grouped-acquisition-v2-120hz",
+        "sampleRateHz": 120.11,
+        "windowSize": 128,
+        "fitSamples": 1400,
+        "validationSamples": 200,
+        "heldOutTestSamples": 400
+    },
+    "training": {
+        "epochs": 80,
+        "learningRate": 0.003,
+        "seedHex": "0x534e4e31",
+        "selectionRule": "maximum runtime-hard validation accuracy; lower training loss wins accuracy ties",
+        "elapsedSeconds": 1155.2
+    },
+    "architecture": {
+        "signature": "78c242fb",
+        "mainBandsHz": [1.876721109375, 3.75344221875, 5.630163328125],
+        "specialistBandHz": 2.8150816640625003,
+        "mainEncoding": "phase-multilevel",
+        "specialistEncoding": "phase-binary",
+        "mainSensorPorts": 54,
+        "specialistSensorPorts": 6,
+        "mainHiddenLif": 32,
+        "specialistHiddenLif": 4,
+        "outputLif": 5,
+        "specialistOutputs": ["Healthy", "BRB1"],
+        "trainableWeights": 1925,
+        "trainingGraphNodes": 125,
+        "trainingGraphLinks": 2049,
+        "compiledGraphNodes": 43,
+        "compiledGraphLinks": 1926,
+        "nativeLifNeurons": 41,
+        "specialistThresholdsByPhase": {
+            "Ia": 0.08690239242171803,
+            "Ib": 0.08263781539710364,
+            "Ic": 0.0815943336543072
+        }
+    },
+    "checkpoint": {
+        "epoch": 63,
+        "validationAccuracy": 0.79,
+        "validationCorrect": 158,
+        "validationTotal": 200,
+        "trainLoss": 0.002463928516483621,
+        "validationLoss": 0.00954660278996473,
+        "continuousSurrogateAccuracy": 0.85,
+        "meanContinuousMargin": 0.6230553593077246,
+        "meanRuntimeMargin": 2.607700527485042,
+        "mainHiddenFiringRateMeanHz": 0.9417327879309065,
+        "mainHiddenFiringRateStdHz": 0.6981305907299794,
+        "outputFiringRatesHz": [0.4175704468359368, 0.304967180273437, 0.581783543906249, 0.49263929121093664, 0.3706524191015619],
+        "validationConfusionMatrix": [
+            [36, 1, 2, 1, 0],
+            [7, 29, 1, 3, 0],
+            [1, 0, 37, 2, 0],
+            [1, 0, 8, 29, 2],
+            [0, 0, 6, 7, 27]
+        ],
+        "downloadedFile": "motor_current_snn_h32_78c242fb_best_val_79p0.json",
+        "sha256": "0e663d328628a6d0a385404f331410843bdd2ee56c4353165178f8db11dc5465"
+    },
+    "heldOutTest": {
+        "accuracy": 0.7375,
+        "correct": 295,
+        "total": 400,
+        "elapsedMilliseconds": 17285,
+        "millisecondsPerSample": 43.2,
+        "inputEventsPerSample": 155.5,
+        "neuronSpikesPerSample": 36.5,
+        "confusionMatrix": [
+            [72, 2, 3, 3, 0],
+            [13, 53, 9, 4, 1],
+            [6, 2, 63, 9, 0],
+            [4, 1, 16, 52, 7],
+            [2, 4, 6, 13, 55]
+        ]
+    },
+    "comparisons": {
+        "baseline": {
+            "validationAccuracy": 0.79,
+            "testAccuracy": 0.7425,
+            "trainableWeights": 1893,
+            "inputEventsPerSample": 147.2,
+            "neuronSpikesPerSample": 37.0,
+            "testConfusionMatrix": [
+                [77, 1, 2, 0, 0],
+                [19, 53, 7, 1, 0],
+                [6, 4, 57, 12, 1],
+                [8, 0, 8, 49, 15],
+                [5, 5, 4, 5, 61]
+            ]
+        },
+        "denseFourBand": {
+            "validationAccuracy": 0.8,
+            "testAccuracy": 0.7325,
+            "trainableWeights": 2469,
+            "inputEventsPerSample": 190.9,
+            "neuronSpikesPerSample": 37.7
+        }
+    }
+}

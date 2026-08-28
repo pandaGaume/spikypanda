@@ -190,10 +190,11 @@ Each referenced array is shape `(1, N)` where:
 - vibration:           N ≈   153,504 (~ 8.5 kHz × 18 s)
 
 `prepare_motor_current.py` opens these files with `h5py`, walks
-`rotor → torque → repetition`, dereferences the `Ia/Ib/Ic` refs, decimates
-the ~55.6 kHz currents by 56× down to ~1 kHz (matching the Motor Vibration
-sample's temporal footprint so a 64-step window covers ~4 line cycles at
-60 Hz), windows them, normalizes per-channel to [0, 1], and writes JSON.
+`rotor → torque → repetition`, dereferences the `Ia/Ib/Ic` refs, extracts
+the moving-RMS envelope, then decimates it from ~55.6 kHz to ~120 Hz. A
+128-step window still covers ~1.07 s, while providing twice the temporal
+resolution of the earlier 60 Hz envelope dataset. The script centers and
+scales each window to [0, 1], then writes JSON.
 
 **Implications for the prep script**
 - 5 fault classes are available (healthy + 1..4 broken bars); the script

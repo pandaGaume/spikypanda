@@ -1,7 +1,7 @@
 import { LossFunctions } from "../nn.loss";
 import { Optimizers } from "../nn.optimizers";
 import type { ILossFunction, IOptimizer, ITrainingContext } from "../nn.training";
-import { ConstrainedLifSurrogateSubgraph, surrogateProbability, type LifSurrogateMode } from "./lif-surrogate.subgraph";
+import { ConstrainedLifSurrogateSubgraph, surrogateDerivative, type LifSurrogateMode } from "./lif-surrogate.subgraph";
 import type { IConstrainedLifBpttOptions, ILifSurrogateFitOptions, ILifSurrogateFitResult, ILifSurrogateForwardStep } from "./lif-surrogate.training";
 import { SpikeSynapse } from "./spike.synapse";
 
@@ -13,12 +13,12 @@ export interface ILifSurrogateNetworkInputBinding {
 }
 
 export interface IConstrainedLifTrainingNetwork {
-    /** Teachers in feed-forward topological order. */
+    /** Teachers in topological order for zero-delay connections. */
     neurons: ReadonlyArray<ConstrainedLifSurrogateSubgraph>;
     inputs: ReadonlyArray<ILifSurrogateNetworkInputBinding>;
-    /** Trainable zero-delay synapses between teacher threshold and integrate stages. */
+    /** Trainable synapses between teacher threshold and integrate stages. Delayed synapses may be recurrent. */
     connections: ReadonlyArray<SpikeSynapse>;
-    /** Teachers whose spike probabilities receive supervised targets. */
+    /** Teachers whose binary spikes receive supervised targets. */
     outputs: ReadonlyArray<ConstrainedLifSurrogateSubgraph>;
 }
 
@@ -28,7 +28,28 @@ export interface ILifSurrogateNetworkTrainingSequence {
     targets: ReadonlyArray<ReadonlyArray<number>>;
     /** Optional non-negative loss weights, indexed like targets. */
     lossWeights?: ReadonlyArray<ReadonlyArray<number>>;
+    /**
+     * Optional classification objective computed from the exact native LIF
+     * decoder score. Forward spikes remain binary. Only the derivative of
+     * each hard spike decision is substituted during BPTT.
+     */
+    runtimeDecoderObjective?: ILifSurrogateRuntimeDecoderObjective;
     timestamps?: ReadonlyArray<number>;
+}
+
+export interface ILifSurrogateRuntimeDecoderObjective {
+    /** Index in the supervised output list. */
+    targetOutput: number;
+    /** Contribution of every emitted output spike to the class score. */
+    spikeCountScale?: number;
+    /** Contribution of final membrane / threshold to the class score. */
+    membranePotentialScale?: number;
+    /** Softmax temperature used by the training loss, without changing argmax. */
+    temperature?: number;
+    /** Multiplier applied to decoder cross-entropy. Defaults to 1. */
+    classificationLossWeight?: number;
+    /** Multiplier applied to the existing timestep loss. Defaults to 1. */
+    temporalLossWeight?: number;
 }
 
 export interface ILifSurrogateNetworkForwardStep {
@@ -40,6 +61,10 @@ export interface ILifSurrogateNetworkForwardStep {
 export interface ILifSurrogateNetworkForwardTrace {
     steps: ReadonlyArray<ILifSurrogateNetworkForwardStep>;
     loss: number;
+    temporalLoss: number;
+    runtimeDecoderLoss: number | null;
+    runtimeDecoderScores: ReadonlyArray<number> | null;
+    runtimeDecoderProbabilities: ReadonlyArray<number> | null;
 }
 
 export interface ILifSurrogateNetworkGradientResult extends ILifSurrogateNetworkForwardTrace {
@@ -51,14 +76,16 @@ interface ITrainingEdge {
     targetNeuron: number;
     sourceNeuron?: number;
     inputIndex?: number;
+    delay: number;
 }
 
 /**
- * BPTT over an acyclic network of constrained LIF teacher motifs.
+ * BPTT over a network of constrained LIF teacher motifs.
  *
  * Temporal gradients travel through each membrane feedback state. Spatial
- * gradients travel in reverse topological order through soft spike amplitudes
- * and the actual SpikeSynapse weights. Every teacher remains independently
+ * gradients travel in reverse topological order through zero-delay edges.
+ * Delayed edges may point backward or to the same teacher, which provides a
+ * recurrent path across scheduler ticks. Every teacher remains independently
  * compilable to one LifNeuronNode after training.
  */
 export class ConstrainedLifNetworkBpttTrainer {
@@ -90,7 +117,7 @@ export class ConstrainedLifNetworkBpttTrainer {
             const targetNeuron = network.neurons.findIndex((neuron) => neuron.inputNode === binding.synapse.ofin);
             if (targetNeuron < 0) throw new Error("Every external input synapse must target a teacher integrate stage.");
             assertImmediate(binding.synapse);
-            edges.push({ synapse: binding.synapse, targetNeuron, inputIndex: binding.inputIndex });
+            edges.push({ synapse: binding.synapse, targetNeuron, inputIndex: binding.inputIndex, delay: 0 });
             maxInputIndex = Math.max(maxInputIndex, binding.inputIndex);
         }
 
@@ -100,11 +127,10 @@ export class ConstrainedLifNetworkBpttTrainer {
             if (sourceNeuron < 0 || targetNeuron < 0) {
                 throw new Error("Every constrained LIF connection must join a teacher threshold stage to a teacher integrate stage.");
             }
-            if (sourceNeuron >= targetNeuron) {
+            if (synapse.delay === 0 && sourceNeuron >= targetNeuron) {
                 throw new Error("Constrained LIF teachers and connections must be supplied in feed-forward topological order.");
             }
-            assertImmediate(synapse);
-            edges.push({ synapse, sourceNeuron, targetNeuron });
+            edges.push({ synapse, sourceNeuron, targetNeuron, delay: synapse.delay });
         }
 
         const uniqueSynapses = new Set(edges.map((edge) => edge.synapse));
@@ -145,23 +171,54 @@ export class ConstrainedLifNetworkBpttTrainer {
         return this._synapses;
     }
 
-    public forward(sequence: ILifSurrogateNetworkTrainingSequence, mode: LifSurrogateMode = "soft"): ILifSurrogateNetworkForwardTrace {
+    public forward(sequence: ILifSurrogateNetworkTrainingSequence, mode: LifSurrogateMode = "training"): ILifSurrogateNetworkForwardTrace {
         return this._forward(sequence, mode);
     }
 
+    /**
+     * Compatibility replay surface. Every teacher now has identical hard
+     * forward dynamics; the selected mode affects no runtime value.
+     */
+    public forwardMixed(sequence: ILifSurrogateNetworkTrainingSequence, modes: ReadonlyArray<LifSurrogateMode>): ILifSurrogateNetworkForwardTrace {
+        if (modes.length !== this.network.neurons.length) {
+            throw new Error(`Expected ${this.network.neurons.length} constrained LIF replay modes, received ${modes.length}.`);
+        }
+        if (modes.some((mode) => mode !== "training" && mode !== "soft" && mode !== "hard")) {
+            throw new Error("Constrained LIF replay modes must be training or hard.");
+        }
+        return this._forward(sequence, "training", modes);
+    }
+
     public gradients(sequence: ILifSurrogateNetworkTrainingSequence): ILifSurrogateNetworkGradientResult {
-        const trace = this._forward(sequence, "soft");
+        const trace = this._forward(sequence, "training");
         const gradientBySynapse = new Map<SpikeSynapse, number>(this._synapses.map((synapse) => [synapse, 0]));
         const dStateFromFuture = new Array(this.network.neurons.length).fill(0) as number[];
+        const dProbabilityByTime = trace.steps.map(() => new Array(this.network.neurons.length).fill(0) as number[]);
         const normalization = lossWeightSum(sequence, this._outputIndices.length);
+        const objective = normalizedRuntimeDecoderObjective(sequence.runtimeDecoderObjective);
+        const temporalLossWeight = objective?.temporalLossWeight ?? 1;
+
+        if (objective && trace.runtimeDecoderProbabilities) {
+            for (let output = 0; output < this._outputIndices.length; output++) {
+                const neuron = this._outputIndices[output];
+                const target = output === objective.targetOutput ? 1 : 0;
+                const dScore = (objective.classificationLossWeight * (trace.runtimeDecoderProbabilities[output] - target)) / objective.temperature;
+                for (let t = 0; t < trace.steps.length; t++) {
+                    dProbabilityByTime[t][neuron] += dScore * objective.spikeCountScale;
+                }
+                const threshold = this.network.neurons[neuron].config.threshold;
+                dStateFromFuture[neuron] += (dScore * objective.membranePotentialScale) / threshold;
+            }
+        }
 
         for (let t = trace.steps.length - 1; t >= 0; t--) {
             const networkStep = trace.steps[t];
-            const dProbability = new Array(this.network.neurons.length).fill(0) as number[];
+            const dProbability = dProbabilityByTime[t];
             for (let output = 0; output < this._outputIndices.length; output++) {
                 const neuron = this._outputIndices[output];
                 const weight = sequence.lossWeights?.[t][output] ?? 1;
-                dProbability[neuron] += (weight * this.lossFunction.dLoss(networkStep.neurons[neuron].probability, sequence.targets[t][output])) / normalization;
+                dProbability[neuron] +=
+                    (temporalLossWeight * weight * this.lossFunction.dLoss(networkStep.neurons[neuron].probability, sequence.targets[t][output])) / normalization;
             }
 
             for (let neuron = this.network.neurons.length - 1; neuron >= 0; neuron--) {
@@ -171,7 +228,7 @@ export class ConstrainedLifNetworkBpttTrainer {
                 let dIntegrated = dStateFromFuture[neuron];
                 if (step.canFire) {
                     const config = this.network.neurons[neuron].config;
-                    const dProbabilityDIntegrated = config.surrogateSlope * step.probability * (1 - step.probability);
+                    const dProbabilityDIntegrated = step.surrogateDerivative;
                     const dStateDProbability = config.resetPotential - step.integratedPotential;
                     dIntegrated =
                         dStateFromFuture[neuron] * (1 - step.probability) + (dProbability[neuron] + dStateFromFuture[neuron] * dStateDProbability) * dProbabilityDIntegrated;
@@ -185,9 +242,11 @@ export class ConstrainedLifNetworkBpttTrainer {
                     gradientBySynapse.set(edge.synapse, gradientBySynapse.get(edge.synapse)! + dIntegrated * amplitude);
 
                     if (edge.sourceNeuron !== undefined) {
-                        const sourceStep = networkStep.neurons[edge.sourceNeuron];
+                        const sourceTime = t - edge.delay;
+                        if (sourceTime < 0) continue;
+                        const sourceStep = trace.steps[sourceTime].neurons[edge.sourceNeuron];
                         if (sourceStep.canFire) {
-                            dProbability[edge.sourceNeuron] += dIntegrated * edge.synapse.weight * this.network.neurons[edge.sourceNeuron].config.spikeAmplitude;
+                            dProbabilityByTime[sourceTime][edge.sourceNeuron] += dIntegrated * edge.synapse.weight * this.network.neurons[edge.sourceNeuron].config.spikeAmplitude;
                         }
                     }
                 }
@@ -234,7 +293,7 @@ export class ConstrainedLifNetworkBpttTrainer {
         return meanLoss;
     }
 
-    public evaluate(dataset: ReadonlyArray<ILifSurrogateNetworkTrainingSequence>, mode: LifSurrogateMode = "soft"): number {
+    public evaluate(dataset: ReadonlyArray<ILifSurrogateNetworkTrainingSequence>, mode: LifSurrogateMode = "training"): number {
         if (dataset.length === 0) throw new Error("Cannot evaluate an empty constrained LIF network dataset.");
         let loss = 0;
         for (const sequence of dataset) loss += this._forward(sequence, mode).loss;
@@ -299,7 +358,7 @@ export class ConstrainedLifNetworkBpttTrainer {
         this._context.loss = undefined;
     }
 
-    private _forward(sequence: ILifSurrogateNetworkTrainingSequence, mode: LifSurrogateMode): ILifSurrogateNetworkForwardTrace {
+    private _forward(sequence: ILifSurrogateNetworkTrainingSequence, _mode: LifSurrogateMode, _neuronModes?: ReadonlyArray<LifSurrogateMode>): ILifSurrogateNetworkForwardTrace {
         validateSequence(sequence, this.inputCount, this._outputIndices.length, this.timeStep);
         const membranePotentials = this.network.neurons.map((neuron) => neuron.config.initialPotential);
         const lastEventTimes = this.network.neurons.map(() => null as number | null);
@@ -324,9 +383,10 @@ export class ConstrainedLifNetworkBpttTrainer {
                         amplitude = sequence.inputs[t][edge.inputIndex];
                         emitted = amplitude !== 0;
                     } else if (edge.synapse.enabled && edge.sourceNeuron !== undefined) {
-                        const sourceStep = neuronSteps[edge.sourceNeuron];
-                        emitted = mode === "hard" ? sourceStep.probability === 1 : sourceStep.canFire;
-                        if (emitted) amplitude = this.network.neurons[edge.sourceNeuron].config.spikeAmplitude * sourceStep.probability;
+                        const sourceTime = t - edge.delay;
+                        const sourceStep = sourceTime < 0 ? null : edge.delay === 0 ? neuronSteps[edge.sourceNeuron] : steps[sourceTime].neurons[edge.sourceNeuron];
+                        emitted = sourceStep !== null && sourceStep.probability === 1;
+                        if (emitted && sourceStep) amplitude = this.network.neurons[edge.sourceNeuron].config.spikeAmplitude * sourceStep.probability;
                     }
                     incomingAmplitudes.push(amplitude);
                     if (emitted) hasEvent = true;
@@ -335,6 +395,7 @@ export class ConstrainedLifNetworkBpttTrainer {
 
                 let leakFactor = 1;
                 let integratedPotential = previousPotential;
+                let localSurrogateDerivative = 0;
                 let probability = 0;
                 const canFire = hasEvent && weightedInput !== 0;
                 if (hasEvent) {
@@ -344,13 +405,9 @@ export class ConstrainedLifNetworkBpttTrainer {
                         integratedPotential = config.restingPotential + (previousPotential - config.restingPotential) * leakFactor;
                     }
                     integratedPotential += weightedInput;
-                    if (mode === "hard") {
-                        probability = canFire && integratedPotential >= config.threshold ? 1 : 0;
-                        membranePotentials[neuron] = probability === 1 ? config.resetPotential : integratedPotential;
-                    } else {
-                        probability = canFire ? surrogateProbability(integratedPotential, config.threshold, config.surrogateSlope) : 0;
-                        membranePotentials[neuron] = (1 - probability) * integratedPotential + probability * config.resetPotential;
-                    }
+                    probability = canFire && integratedPotential >= config.threshold ? 1 : 0;
+                    localSurrogateDerivative = canFire ? surrogateDerivative(integratedPotential, config.threshold, config.surrogateSlope) : 0;
+                    membranePotentials[neuron] = probability === 1 ? config.resetPotential : integratedPotential;
                     lastEventTimes[neuron] = timestamp;
                 }
 
@@ -362,6 +419,7 @@ export class ConstrainedLifNetworkBpttTrainer {
                     leakFactor,
                     previousPotential,
                     integratedPotential,
+                    surrogateDerivative: localSurrogateDerivative,
                     probability,
                     membranePotential: membranePotentials[neuron],
                 });
@@ -374,7 +432,17 @@ export class ConstrainedLifNetworkBpttTrainer {
             steps.push({ timestamp, neurons: neuronSteps, outputs });
         }
 
-        return { steps, loss: totalLoss / lossWeightSum(sequence, this._outputIndices.length) };
+        const temporalLoss = totalLoss / lossWeightSum(sequence, this._outputIndices.length);
+        const objective = normalizedRuntimeDecoderObjective(sequence.runtimeDecoderObjective);
+        const decoder = objective ? runtimeDecoderOfTrace(steps, this._outputIndices, this.network.neurons, objective) : null;
+        return {
+            steps,
+            temporalLoss,
+            runtimeDecoderLoss: decoder?.loss ?? null,
+            runtimeDecoderScores: decoder?.scores ?? null,
+            runtimeDecoderProbabilities: decoder?.probabilities ?? null,
+            loss: (objective?.temporalLossWeight ?? 1) * temporalLoss + (decoder ? objective!.classificationLossWeight * decoder.loss : 0),
+        };
     }
 }
 
@@ -389,6 +457,7 @@ function validateSequence(sequence: ILifSurrogateNetworkTrainingSequence, inputC
     if (sequence.lossWeights && sequence.lossWeights.length !== sequence.inputs.length) {
         throw new Error(`Loss-weight sequence length ${sequence.lossWeights.length} does not match input length ${sequence.inputs.length}.`);
     }
+    validateRuntimeDecoderObjective(sequence.runtimeDecoderObjective, outputCount);
 
     let previousTimestamp = Number.NEGATIVE_INFINITY;
     for (let t = 0; t < sequence.inputs.length; t++) {
@@ -406,6 +475,86 @@ function validateSequence(sequence: ILifSurrogateNetworkTrainingSequence, inputC
         if (!Number.isFinite(timestamp) || timestamp < previousTimestamp) throw new Error("Constrained LIF timestamps must be finite and monotonic.");
         previousTimestamp = timestamp;
     }
+}
+
+interface INormalizedRuntimeDecoderObjective {
+    targetOutput: number;
+    spikeCountScale: number;
+    membranePotentialScale: number;
+    temperature: number;
+    classificationLossWeight: number;
+    temporalLossWeight: number;
+}
+
+interface IRuntimeDecoderEvaluation {
+    scores: number[];
+    probabilities: number[];
+    loss: number;
+}
+
+function normalizedRuntimeDecoderObjective(objective: ILifSurrogateRuntimeDecoderObjective | undefined): INormalizedRuntimeDecoderObjective | null {
+    if (!objective) return null;
+    return {
+        targetOutput: objective.targetOutput,
+        spikeCountScale: objective.spikeCountScale ?? 2,
+        membranePotentialScale: objective.membranePotentialScale ?? 1,
+        temperature: objective.temperature ?? 1,
+        classificationLossWeight: objective.classificationLossWeight ?? 1,
+        temporalLossWeight: objective.temporalLossWeight ?? 1,
+    };
+}
+
+function validateRuntimeDecoderObjective(objective: ILifSurrogateRuntimeDecoderObjective | undefined, outputCount: number): void {
+    if (!objective) return;
+    const normalized = normalizedRuntimeDecoderObjective(objective)!;
+    if (!Number.isInteger(normalized.targetOutput) || normalized.targetOutput < 0 || normalized.targetOutput >= outputCount) {
+        throw new Error(`Runtime decoder target ${normalized.targetOutput} is outside the supervised output range.`);
+    }
+    if (!Number.isFinite(normalized.spikeCountScale) || normalized.spikeCountScale < 0) {
+        throw new Error("Runtime decoder spike-count scale must be finite and non-negative.");
+    }
+    if (!Number.isFinite(normalized.membranePotentialScale) || normalized.membranePotentialScale < 0) {
+        throw new Error("Runtime decoder membrane-potential scale must be finite and non-negative.");
+    }
+    if (!Number.isFinite(normalized.temperature) || normalized.temperature <= 0) {
+        throw new Error("Runtime decoder temperature must be finite and positive.");
+    }
+    if (!Number.isFinite(normalized.classificationLossWeight) || normalized.classificationLossWeight < 0) {
+        throw new Error("Runtime decoder classification-loss weight must be finite and non-negative.");
+    }
+    if (!Number.isFinite(normalized.temporalLossWeight) || normalized.temporalLossWeight < 0) {
+        throw new Error("Runtime decoder temporal-loss weight must be finite and non-negative.");
+    }
+    if (!(normalized.classificationLossWeight > 0 || normalized.temporalLossWeight > 0)) {
+        throw new Error("Runtime decoder objective requires a positive classification or temporal loss weight.");
+    }
+    if (normalized.classificationLossWeight > 0 && !(normalized.spikeCountScale > 0 || normalized.membranePotentialScale > 0)) {
+        throw new Error("Runtime decoder classification requires a positive spike-count or membrane-potential scale.");
+    }
+}
+
+function runtimeDecoderOfTrace(
+    steps: ReadonlyArray<ILifSurrogateNetworkForwardStep>,
+    outputIndices: ReadonlyArray<number>,
+    neurons: ReadonlyArray<ConstrainedLifSurrogateSubgraph>,
+    objective: INormalizedRuntimeDecoderObjective
+): IRuntimeDecoderEvaluation {
+    const finalStep = steps[steps.length - 1];
+    const scores = outputIndices.map((neuron, output) => {
+        let spikeCount = 0;
+        for (const step of steps) spikeCount += step.outputs[output];
+        return objective.spikeCountScale * spikeCount + objective.membranePotentialScale * (finalStep.neurons[neuron].membranePotential / neurons[neuron].config.threshold);
+    });
+    const logits = scores.map((score) => score / objective.temperature);
+    const maximum = Math.max(...logits);
+    const exponentials = logits.map((logit) => Math.exp(logit - maximum));
+    const total = exponentials.reduce((sum, value) => sum + value, 0);
+    const probabilities = exponentials.map((value) => value / total);
+    return {
+        scores,
+        probabilities,
+        loss: -Math.log(Math.max(probabilities[objective.targetOutput], 1e-12)),
+    };
 }
 
 function lossWeightSum(sequence: ILifSurrogateNetworkTrainingSequence, outputCount: number): number {

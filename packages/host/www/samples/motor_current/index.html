@@ -51,7 +51,7 @@
                     <p>
                         <strong>Why stator currents?</strong> - Historically, broken bars were detected with vibration sensors, but vibration pickups must be physically attached to
                         the motor housing. Motor Current Signature Analysis (MCSA) uses only the stator phase currents, which are already measured by the drive or by non-invasive
-                        clamp-on probes. No extra sensor, no machine modification — the fault signature lives in sidebands around the line frequency caused by the rotor asymmetry.
+                        clamp-on probes. No extra sensor, no machine modification; the fault signature lives in sidebands around the line frequency caused by the rotor asymmetry.
                     </p>
                     <p>
                         <strong>Edge-side MCSA</strong> - A small RNN running on an MCU next to a current clamp can classify the rotor state continuously without ever sending raw
@@ -95,8 +95,8 @@
                     <p>
                         <strong>Envelope preprocessing</strong> - The key design decision in the prep script is that the RNN does <em>not</em> see the raw 60&nbsp;Hz stator
                         currents. Instead, each phase current is passed through a moving RMS filter whose window is one half-cycle of the line frequency (~463 raw samples). This
-                        cancels the 60&nbsp;Hz fundamental and leaves only the slow amplitude envelope — which is exactly where the broken-bar fault signature lives. The envelope
-                        is then decimated to ~60&nbsp;Hz so a 64-timestep window covers ~1&nbsp;second of motor running, capturing 2-5 periods of the 2-5&nbsp;Hz slip-frequency
+                        cancels the 60&nbsp;Hz fundamental and leaves only the slow amplitude envelope, which is exactly where the broken-bar fault signature lives. The envelope is
+                        then decimated to ~120&nbsp;Hz so a 128-timestep window covers ~1.07&nbsp;seconds of motor running, capturing 2-5 periods of the 2-5&nbsp;Hz slip-frequency
                         modulation. Earlier attempts that fed the raw 60&nbsp;Hz current to the LSTM failed because the fundamental dominates the signal and the fault modulation is
                         buried in a 256+ step BPTT chain that the gradient cannot traverse.
                     </p>
@@ -109,10 +109,10 @@
                     <p>
                         <strong>Synthetic fallback</strong> - When real UFU data is not available, the sample falls back to a synthetic 3-phase <em>raw</em> sinusoid generator with
                         4 electrical fault classes (Normal, OpenPhase, ShortCircuit, Unbalanced). Note that the synthetic path trains on raw sinusoids while the real-data path
-                        trains on envelopes — the two are visually different but share the same 3-channel, windowed, [0,1]-normalized JSON schema.
+                        trains on envelopes. The two are visually different but share the same 3-channel, windowed, [0,1]-normalized JSON schema.
                     </p>
                     <p>
-                        <strong>Normalization</strong> - The UFU envelope path subtracts the mean of each 64-step window independently for every phase, multiplies the residual
+                        <strong>Normalization</strong> - The UFU envelope path subtracts the mean of each 128-step window independently for every phase, multiplies the residual
                         modulation by a fixed gain of 6, shifts it around 0.5, and clamps it to [0, 1]. This removes load level, which is a nuisance variable because every rotor
                         state is represented at every load, while preserving the slow broken-bar modulation. Global per-channel min/max normalization is used only by the generic
                         CSV path.
@@ -142,13 +142,62 @@
                     <p>
                         <strong>LSTM vs GRU</strong> - LSTM (Long Short-Term Memory) uses 4 gates (forget, input, candidate, output) and maintains a separate cell state for
                         long-term memory. GRU (Gated Recurrent Unit) uses 3 gates (reset, update, candidate) and merges the cell state into the hidden state, making it simpler and
-                        faster. For short current windows, GRU typically matches LSTM accuracy with fewer parameters — a good default for edge deployment.
+                        faster. For short current windows, GRU typically matches LSTM accuracy with fewer parameters, a good default for edge deployment.
                     </p>
                     <p>
                         <strong>SNN wave sensor</strong> - The SNN does not receive scalar deltas. A replaceable runtime sensor analyzes each current phase through a small IIR band
-                        bank, then emits separate spikes for rising and falling phase crossings. On the UFU RMS envelope, the default bands are 2 Hz, 3.5 Hz and 5 Hz. On raw
-                        current, the same interface can instead target the line fundamental, harmonics and sidebands. Frequency is carried by spike timing and by the configured
-                        output port, keeping the inference payload small enough for an MCU.
+                        bank, then emits separate spikes for rising and falling phase crossings. For the UFU envelope, three DFT bins are selected by class separability using only
+                        the training partition. The binary, normalized-amplitude and three-level encoders reuse the same filters. In three-level mode, one IIR state drives three
+                        threshold ports instead of recomputing the band three times. Frequency is carried by spike timing and by the configured output port, keeping the hot path
+                        suitable for a future MCU implementation. Every band also exposes a sensor-cell phenotype containing its nominal frequency range, quality factor, remanence,
+                        settling time, adaptation bandwidth, thresholds and output ports. Changing any of these sensor responses defines a new learning architecture and requires
+                        new weights.
+                    </p>
+                    <p>
+                        <strong>SNN topology</strong> - The dense option connects every sensor port to every hidden LIF. The phase-fusion option first analyzes Ia, Ib and Ic in
+                        separate branches, then merges them in a small fusion layer. Both options keep the same total hidden-LIF budget, so their parameter count and accuracy can
+                        be compared without silently increasing model capacity. The explicit sensor-cell phenotype is also the mutation boundary intended for future topological
+                        plasticity, where cells and their connections can be added, removed or replaced before retraining.
+                    </p>
+                    <p>
+                        <strong>Contrat hard-forward</strong> - Le calcul avant de l'apprentissage utilise exactement le seuil binaire, les spikes et le reset du LIF natif. La
+                        fonction continue n'est jamais envoyée à un autre neurone et ne modifie jamais la membrane. Elle intervient uniquement pendant la rétropropagation pour
+                        fournir une dérivée exploitable autour du seuil. Le bouton de vérification rejoue la validation et compare les sorties du trainer au graphe LIF compilé.
+                    </p>
+                    <p>
+                        <strong>Objectif SNN</strong> - L'option recommandée calcule une entropie croisée sur le score exact qui sera utilisé par le runtime : deux points par spike
+                        émis pendant la fenêtre, puis la membrane finale normalisée par le seuil. Le gradient atteint donc tous les spikes de sortie et la membrane finale. La MSE
+                        temporelle historique reste disponible comme témoin expérimental, avec un poids réduit à 0,25 dans l'objectif recommandé. Cette loss ne crée aucun
+                        pseudo-spike : toutes les valeurs propagées au forward restent binaires.
+                    </p>
+                    <p>
+                        <strong>SNN band selection</strong> - The baseline ranks candidate DFT bins with a multiclass Fisher score and keeps three separated frequencies. The
+                        replacement experiment reserves one band for the pairwise Fisher score between Healthy and BRB1, then keeps the two strongest baseline bands. The additive
+                        experiment instead preserves all three baseline bands and adds the pairwise band as a fourth frequency. The graph topology, decoder and training objective
+                        remain unchanged, while the additive sensor exposes 72 ports instead of 54. The specialist experiment keeps the 54 baseline multilevel ports connected to
+                        32 principal LIF neurons, then routes six binary ports from the Healthy/BRB1 band through four additional LIF neurons connected only to the Healthy and BRB1
+                        outputs. The local-loss variant keeps this exact inference graph and mixes the temporal MSE with a final-frame Healthy/BRB1 MSE of weight 0.25, only for
+                        samples from these two classes. The confined-gradient variant instead performs a separate pairwise pass whose gradient can update only the 24
+                        sensor-to-specialist and eight specialist-to-pair runtime weights. The main path is absent from that auxiliary computation. All scores and sensor thresholds
+                        are computed exclusively from the training partition, never from validation or test samples.
+                    </p>
+                    <p>
+                        <strong>Champs récepteurs appris</strong> - Cette option conserve la baseline dense de 32 LIF et ses trois cellules par phase. Elle change uniquement la
+                        manière de régler le capteur. Les trois bins DFT fournissent des valeurs de départ. Pour chaque cellule, la page fait ensuite varier continûment la fréquence
+                        centrale et la largeur du filtre passe-bande. Elle mesure, sur les seules fenêtres d'apprentissage, l'énergie RMS produite par le vrai biquad causal et
+                        conserve les paramètres qui séparent le mieux les cinq classes selon le score de Fisher. Les centres restent chacun dans leur voisinage initial, délimité
+                        par les milieux entre deux centres voisins, afin d'éviter que les trois cellules ne se confondent. Une fois ce pré-entraînement terminé, les centres et les
+                        largeurs sont figés, les seuils de spikes sont recalibrés, puis le SNN est entraîné normalement. La validation et le test ne participent jamais à ce réglage.
+                        Il ne s'agit pas encore d'un apprentissage conjoint du capteur et des LIF : cette première option isole volontairement l'effet du champ récepteur.
+                    </p>
+                    <p>
+                        <strong>Champs appris sur les spikes</strong> - Cette seconde option corrige le principal défaut du critère RMS. Pour chaque filtre candidat, elle reproduit
+                        les passages par zéro du runtime, sépare les phases montantes et descendantes, puis remplace temporairement chaque seuil binaire par une sigmoïde. Quatre
+                        traces exponentielles de 4, 8, 16 et 32 échantillons représentent ce que peuvent retenir les quatre constantes de temps des LIF cachés. Le score de Fisher
+                        est calculé sur ces traces de spikes lissés et sur leur version binaire. Une pénalité limite enfin la redondance avec les champs déjà retenus. Seules les
+                        données d'apprentissage règlent les centres, les largeurs et les seuils temporaires. Après la recherche, les centres et les largeurs sont figés, les vrais
+                        seuils sont recalibrés et le runtime reprend ses franchissements strictement binaires. La sigmoïde et le calcul du score ne sont donc jamais embarqués sur le
+                        MCU. Cette version reste un pré-entraînement du capteur, pas encore une rétropropagation conjointe à travers les poids du SNN.
                     </p>
                     <p>
                         <strong>Hidden size</strong> - The number of recurrent units in the hidden layer. For 5-class broken-bar classification, 16 units is usually enough. Push to
@@ -160,10 +209,9 @@
                     </p>
                     <p>
                         <strong>Window size</strong> - The number of timesteps per sample. On the real-data path the prep script computes a moving-RMS envelope of the raw
-                        55.6&nbsp;kHz currents and decimates it to ~60&nbsp;Hz, so a 64-step window covers ~1.0&nbsp;s of motor running — long enough to see 2-5 periods of the
-                        2-5&nbsp;Hz slip-frequency modulation where the broken-bar signature lives. 64 steps is also short enough for the LSTM's BPTT gradients to flow easily
-                        during training (vanishing gradients were the main failure mode of an earlier 256-step raw-current attempt). The dropdown only affects the in-browser
-                        synthetic fallback; real UFU data always uses whatever window size the JSON file declares.
+                        55.6&nbsp;kHz currents and decimates it to ~120&nbsp;Hz, so a 128-step window covers ~1.07&nbsp;s of motor running, long enough to see 2-5 periods of the
+                        2-5&nbsp;Hz slip-frequency modulation where the broken-bar signature lives. The doubled sampling rate improves sensor timing resolution without shortening
+                        the observation. The dropdown only affects the in-browser synthetic fallback; real UFU data always uses whatever window size the JSON file declares.
                     </p>
                 </div>
             </div>
@@ -184,13 +232,15 @@
                 <div class="collapsible-body metrics-help">
                     <p>
                         <strong>Accuracy</strong> - Percentage of test windows correctly classified. Random guessing on a balanced 5-class problem gives 20 %. A trained model on
-                        UFU real data should reach 70-90 %+ depending on hidden size and epoch count. If accuracy stays near 20 %, the model has not learned — increase epochs or
+                        UFU real data should reach 70-90 %+ depending on hidden size and epoch count. If accuracy stays near 20 %, the model has not learned; increase epochs or
                         hidden size.
                     </p>
                     <p>
                         <strong>Best checkpoint</strong> - A deterministic validation subset is held out from the training file. After every epoch, the page measures validation
                         accuracy and immediately saves the best weights in browser storage. Ties are resolved with the lower training loss. At the end of training, those best
-                        weights are restored before test or ONNX export. The separate test file is never used to choose the checkpoint.
+                        weights are restored before test or ONNX export. For the SNN, this accuracy uses the deployed runtime decoder over the complete window:
+                        <code>2 × total spike count + final membrane / threshold</code>. The obsolete last-timestep spike decision is not used. The separate test file is never used
+                        to choose the checkpoint.
                     </p>
                     <p>
                         <strong>Recovery after reload</strong> - The most recent best checkpoint is restored automatically when the page opens. The JSON backup button saves the
@@ -233,6 +283,41 @@
                         </select>
                     </div>
                     <div>
+                        <label for="snnSensorEncoding">SNN sensor:</label><br />
+                        <select id="snnSensorEncoding" disabled>
+                            <option value="phase-multilevel" selected>Phase + 3 levels</option>
+                            <option value="phase-binary">Phase binary</option>
+                            <option value="phase-amplitude">Phase + amplitude</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="snnBandSelection">SNN bands:</label><br />
+                        <select id="snnBandSelection" disabled>
+                            <option value="multiclass" selected>3 × multiclass Fisher</option>
+                            <option value="multiclass-receptive-fields">3 champs appris sur RMS</option>
+                            <option value="multiclass-spike-receptive-fields">3 champs appris sur spikes</option>
+                            <option value="healthy-brb1">1 × Healthy/BRB1 + 2 × multiclass</option>
+                            <option value="healthy-brb1-extra">3 × multiclass + 1 × Healthy/BRB1</option>
+                            <option value="healthy-brb1-specialist">3 × multiclass + branche H/BRB1</option>
+                            <option value="healthy-brb1-specialist-aux">Branche H/BRB1 + loss pair pondérée</option>
+                            <option value="healthy-brb1-specialist-scoped">Branche H/BRB1 + gradient confiné</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="snnTopology">SNN topology:</label><br />
+                        <select id="snnTopology" disabled>
+                            <option value="phase-fusion">Ia/Ib/Ic + fusion</option>
+                            <option value="dense" selected>Dense sensor to LIF</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="snnTrainingObjective">SNN training objective:</label><br />
+                        <select id="snnTrainingObjective" disabled>
+                            <option value="runtime-decoder-ce" selected>Runtime decoder CE</option>
+                            <option value="temporal-mse">Temporal MSE baseline</option>
+                        </select>
+                    </div>
+                    <div>
                         <label for="hiddenSize">Hidden size:</label><br />
                         <select id="hiddenSize">
                             <option value="8">8</option>
@@ -248,9 +333,21 @@
                         <label for="lr">Learning rate:</label><br />
                         <input type="number" id="lr" value="0.003" step="0.001" min="0.0001" style="width: 90px" />
                     </div>
-                    <div>
-                        <label for="numSamples">Samples:</label><br />
-                        <input type="number" id="numSamples" value="200" min="20" max="2000" step="10" style="width: 80px" />
+                    <div id="numSamplesControl">
+                        <label for="numSamples">Synthetic samples:</label><br />
+                        <input
+                            type="number"
+                            id="numSamples"
+                            value="200"
+                            min="20"
+                            max="2000"
+                            step="10"
+                            style="width: 80px"
+                            aria-describedby="numSamplesHint"
+                        />
+                        <small id="numSamplesHint" style="display: block; max-width: 180px; margin-top: 4px; color: #999">
+                            Used only if the legacy JSON dataset is unavailable. Split 80% train, 20% test.
+                        </small>
                     </div>
                     <div>
                         <label for="windowSize">Window size:</label><br />
@@ -266,6 +363,7 @@
                         <button id="btnLoad">Load / Generate Data</button>
                         <button id="btnTrain" disabled>Train</button>
                         <button id="btnTest" disabled>Test</button>
+                        <button id="btnProfileConversion" disabled>Vérifier forward hard</button>
                         <button id="btnExport" disabled>Export ONNX</button>
                         <select id="exportMode" style="margin-left: 4px">
                             <option value="none" selected>Preprocessed input [64,1,3]</option>
@@ -295,6 +393,10 @@
                 </div>
                 <div class="log" id="log">Ready.</div>
                 <canvas class="loss-canvas" id="lossCanvas"></canvas>
+                <details id="conversionProfileDetails" style="display: none; margin-top: 14px">
+                    <summary>Mesures complètes de la dernière vérification hard-forward</summary>
+                    <pre id="conversionProfileOutput" style="max-height: 420px; overflow: auto; white-space: pre-wrap"></pre>
+                </details>
             </div>
 
             <div class="panel" id="resultsPanel" style="display: none">
@@ -406,7 +508,7 @@ python packages/dev/tools/python/prepare_motor_current.py \
                     </div>
                     <p>
                         The script auto-detects the <strong>UFU .mat</strong> format (dataset #2 in <code>packages/dev/tools/python/README.md</code>), extracts a moving-RMS
-                        envelope from the ~55.6 kHz currents, decimates it to ~60 Hz, removes the first ~6 seconds, and emits 64-step sequences. The UFU path applies per-window
+                        envelope from the ~55.6 kHz currents, decimates it to ~120 Hz, removes the first ~6 seconds, and emits 128-step sequences. The UFU path applies per-window
                         centering with gain 6. The grouped command writes <code>train_grouped.json</code> and <code>test_grouped.json</code>; it leaves <code>train.json</code> and
                         <code>test.json</code> untouched. When no source directory is provided in legacy mode, a synthetic 4-class generator keeps the sample available offline.
                     </p>
@@ -511,7 +613,7 @@ console.log("Predicted rotor state:", predicted);</pre
         <script src="../../bundle/spikypanda-core.js"></script>
         <script src="../../bundle/spikypanda-onnx.js"></script>
         <script src="../../js/common.js"></script>
-        <script src="motor_current_snn.js?v=wave-sensor-v2"></script>
-        <script src="motor_current.js?v=checkpoint-scope-v2"></script>
+        <script src="motor_current_snn.js?v=runtime-decoder-loss-v21"></script>
+        <script src="motor_current.js?v=runtime-decoder-loss-v21"></script>
     </body>
 </html>

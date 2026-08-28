@@ -89,25 +89,29 @@ function makeSurrogateNetwork(config: Partial<IConstrainedLifSurrogateConfig> = 
 }
 
 describe("Constrained LIF surrogate subgraph", () => {
-    test("emits a continuous spike and exposes the local surrogate derivative", () => {
-        const fixture = makeSurrogateNetwork({ threshold: 1, surrogateSlope: 4, mode: "soft" });
-        fixture.source.schedule.set(1, [0.5]);
-        const session = new Session(fixture.graph);
+    test("never emits below threshold and keeps the surrogate derivative out of the forward state", () => {
+        const below = makeSurrogateNetwork({ threshold: 1, surrogateSlope: 1.25, mode: "training" });
+        below.source.schedule.set(1, [0.5]);
+        const belowSession = new Session(below.graph);
+        belowSession.run(0);
 
-        session.run(0);
+        expect(below.sink.spikesOf(belowSession)).toEqual([]);
+        const belowFeedback = below.graph.links.indexOf(below.surrogate.stateFeedbackLink);
+        expect(belowSession.peek(belowFeedback)).toMatchObject({ membranePotential: 0.5, spikeCount: 0 });
 
-        const spikes = fixture.sink.spikesOf(session) as ReadonlyArray<ISurrogateSpike>;
-        const expected = 1 / (1 + Math.exp(2));
+        const above = makeSurrogateNetwork({ threshold: 1, surrogateSlope: 1.25, mode: "training" });
+        above.source.schedule.set(1, [1.1]);
+        const aboveSession = new Session(above.graph);
+        aboveSession.run(0);
+
+        const spikes = above.sink.spikesOf(aboveSession) as ReadonlyArray<ISurrogateSpike>;
         expect(spikes).toHaveLength(1);
-        expect(spikes[0].probability).toBeCloseTo(expected, 12);
-        expect(spikes[0].amplitude).toBeCloseTo(expected, 12);
-        expect(spikes[0].surrogateDerivative).toBeCloseTo(4 * expected * (1 - expected), 12);
-        expect(spikes[0].hardSpike).toBe(false);
-
-        const feedbackIndex = fixture.graph.links.indexOf(fixture.surrogate.stateFeedbackLink);
-        const nextState = session.peek(feedbackIndex) as ILifSurrogateState;
-        expect(nextState.membranePotential).toBeCloseTo((1 - expected) * 0.5, 12);
-        expect(nextState.spikeCount).toBeCloseTo(expected, 12);
+        expect(spikes[0].probability).toBe(1);
+        expect(spikes[0].amplitude).toBe(1);
+        expect(spikes[0].surrogateDerivative).toBeCloseTo(1.25 * (1 - 1.25 * 0.1), 12);
+        expect(spikes[0].hardSpike).toBe(true);
+        const aboveFeedback = above.graph.links.indexOf(above.surrogate.stateFeedbackLink);
+        expect(aboveSession.peek(aboveFeedback)).toMatchObject({ membranePotential: 0, spikeCount: 1 });
     });
 
     test("hard mode produces the same spike trace before and after compilation", () => {
@@ -153,7 +157,7 @@ describe("Constrained LIF surrogate subgraph", () => {
             membraneTimeConstant: 0.03,
             spikeAmplitude: 1.5,
             surrogateSlope: 8,
-            mode: "soft",
+            mode: "training",
         });
 
         const result = compileConstrainedLifSubgraph(fixture.graph, fixture.surrogate);
@@ -181,7 +185,7 @@ describe("Constrained LIF surrogate subgraph", () => {
     });
 
     test("keeps the constrained parameters serializable and synchronized", () => {
-        const surrogate = new ConstrainedLifSurrogateSubgraph("serializable", { mode: "soft" });
+        const surrogate = new ConstrainedLifSurrogateSubgraph("serializable", { mode: "training" });
         surrogate.configure({ initialPotential: 0.25, threshold: 0.75, surrogateSlope: 6, mode: "hard" });
 
         expect(surrogate.config).toMatchObject({

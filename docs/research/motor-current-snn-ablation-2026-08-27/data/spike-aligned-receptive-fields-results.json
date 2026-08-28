@@ -1,0 +1,130 @@
+{
+  "date": "2026-08-27",
+  "option": "multiclass-spike-receptive-fields",
+  "protocol": {
+    "datasetSelection": "grouped",
+    "trainingSamples": 1400,
+    "validationSamples": 200,
+    "independentTestSamples": 400,
+    "hiddenLif": 32,
+    "requestedEpochs": 80,
+    "learningRate": 0.003,
+    "batchSize": 16,
+    "trainingVersion": "supervised-soft-phase-spike-fisher-grid-v1",
+    "objective": "multiclass-fisher-of-soft-phase-threshold-traces-v1",
+    "temperatureRatio": 0.12,
+    "traceTauSamples": [4, 8, 16, 32],
+    "traceTauSeconds": [0.03330276389378613, 0.06660552778757226, 0.1332110555751445, 0.266422111150289],
+    "redundancyWeight": 1.0,
+    "validationSamplesUsedBySensor": 0,
+    "testSamplesUsedBySensor": 0
+  },
+  "fields": [
+    {
+      "initialCenterFrequencyHz": 1.876721109375,
+      "initialBandwidthHz": 0.9383605546875,
+      "learnedCenterFrequencyHz": 2.123298921386719,
+      "learnedBandwidthHz": 1.7594260400390627,
+      "initialObjectiveScore": 0.05697678155242966,
+      "learnedObjectiveScore": 0.08628877356647707,
+      "initialSoftFisherScore": 0.057109851601623116,
+      "learnedSoftFisherScore": 0.08213746387411622,
+      "initialHardFisherScore": 0.05657757140484931,
+      "learnedHardFisherScore": 0.09874270264355962,
+      "learnedRedundancy": 0.0,
+      "initialHardEventsPerSample": 33.49785714285714,
+      "learnedHardEventsPerSample": 43.21142857142857
+    },
+    {
+      "initialCenterFrequencyHz": 3.75344221875,
+      "initialBandwidthHz": 1.876721109375,
+      "learnedCenterFrequencyHz": 4.5745077041015625,
+      "learnedBandwidthHz": 1.1729506933593752,
+      "initialObjectiveScore": 0.05485841768145376,
+      "learnedObjectiveScore": 0.06950957913450966,
+      "initialSoftFisherScore": 0.08339079310108219,
+      "learnedSoftFisherScore": 0.09828423099397009,
+      "initialHardFisherScore": 0.08286604786065506,
+      "learnedHardFisherScore": 0.08607846753205288,
+      "learnedRedundancy": 0.3700671377135449,
+      "initialHardEventsPerSample": 51.863571428571426,
+      "learnedHardEventsPerSample": 55.027142857142856
+    },
+    {
+      "initialCenterFrequencyHz": 5.6301633281250005,
+      "initialBandwidthHz": 2.8150816640625003,
+      "learnedCenterFrequencyHz": 4.6918027734375,
+      "learnedBandwidthHz": 1.2315982280273439,
+      "initialObjectiveScore": 0.028804231766176167,
+      "learnedObjectiveScore": 0.05516792348593956,
+      "initialSoftFisherScore": 0.040754976511372394,
+      "learnedSoftFisherScore": 0.09363429510170798,
+      "initialHardFisherScore": 0.05222429526950883,
+      "learnedHardFisherScore": 0.08360185462675686,
+      "learnedRedundancy": 0.6517965372794063,
+      "initialHardEventsPerSample": 64.61857142857143,
+      "learnedHardEventsPerSample": 55.71142857142857
+    }
+  ],
+  "learnedModel": {
+    "architectureSignature": "2cc3a0ae",
+    "bestEpoch": 35,
+    "validationAccuracy": 0.78,
+    "validationCorrect": 156,
+    "validationTotal": 200,
+    "validationConfusionMatrix": [
+      [37, 2, 1, 0, 0],
+      [6, 30, 2, 2, 0],
+      [3, 1, 32, 1, 3],
+      [2, 1, 6, 25, 6],
+      [1, 1, 2, 4, 32]
+    ],
+    "testAccuracy": 0.7125,
+    "testCorrect": 285,
+    "testTotal": 400,
+    "testWilson95Low": 0.6663,
+    "testWilson95High": 0.7547,
+    "testConfusionMatrix": [
+      [73, 4, 0, 0, 3],
+      [13, 59, 7, 0, 1],
+      [7, 4, 62, 3, 4],
+      [8, 1, 17, 35, 19],
+      [3, 1, 7, 13, 56]
+    ],
+    "trainingMilliseconds": 1365222.3,
+    "testMilliseconds": 16156.6,
+    "testMillisecondsPerSample": 40.3915,
+    "inputEventsPerTrainingSample": 153.9,
+    "inputEventsPerTestSample": 151.745,
+    "neuronSpikesPerTestSample": 38.9225,
+    "trainingGraphNodes": 113,
+    "trainingGraphLinks": 2005,
+    "trainableWeights": 1893,
+    "compiledGraphNodes": 39,
+    "compiledGraphLinks": 1894,
+    "compiledNativeLif": 37,
+    "checkpointFile": "motor_current_snn_h32_2cc3a0ae_best_val_78p0.json",
+    "checkpointSha256": "AB2E1E7C35E1416452F81DB73BFFA6E3B3B08802063939B7729B47D693D922E7"
+  },
+  "comparisons": {
+    "fixedBaseline": {
+      "validationAccuracy": 0.79,
+      "testAccuracy": 0.7425,
+      "testCorrect": 297,
+      "inputEventsPerSample": 147.2
+    },
+    "rmsReceptiveFields": {
+      "validationAccuracy": 0.72,
+      "testAccuracy": 0.6625,
+      "testCorrect": 265,
+      "inputEventsPerSample": 146.025
+    },
+    "spikeAlignedReceptiveFields": {
+      "validationAccuracy": 0.78,
+      "testAccuracy": 0.7125,
+      "testCorrect": 285,
+      "inputEventsPerSample": 151.745
+    }
+  },
+  "conclusion": "Le critere aligne sur les passages de phase recupere 20 bonnes reponses par rapport au critere RMS, mais reste 12 reponses sous la baseline fixe. Le troisieme champ reste fortement redondant avec les deux premiers."
+}

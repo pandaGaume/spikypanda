@@ -85,48 +85,39 @@ function temporalOrderDataset(): ILifSurrogateTrainingSequence[] {
 }
 
 describe("Constrained LIF surrogate BPTT", () => {
-    test("matches a numerical gradient through the membrane recurrence", () => {
+    test("uses a surrogate derivative to cross the hard threshold without changing the forward value", () => {
         const sourceA = new TemporalSpikeSource();
-        const sourceB = new TemporalSpikeSource();
         const surrogate = new ConstrainedLifSurrogateSubgraph("gradient-lif", {
-            initialPotential: 0.1,
-            threshold: 0.8,
-            resetPotential: -0.05,
+            threshold: 1,
+            resetPotential: 0,
             membraneTimeConstant: 0.03,
-            surrogateSlope: 5,
-            mode: "soft",
+            surrogateSlope: 1.25,
+            mode: "training",
         });
-        const synapses = [new SpikeSynapse(sourceA, surrogate.inputNode, "spike", "spike", 0.35), new SpikeSynapse(sourceB, surrogate.inputNode, "spike", "spike", 0.55)];
+        const synapses = [new SpikeSynapse(sourceA, surrogate.inputNode, "spike", "spike", 0.8)];
         const trainer = new ConstrainedLifBpttTrainer(surrogate, synapses, {
-            timeStep: 0.02,
+            learningRate: 0.3,
             lossFunction: LossFunctions.MSE,
+            optimizer: Optimizers.SGD(),
         });
         const sequence: ILifSurrogateTrainingSequence = {
-            inputs: [
-                [1, 0],
-                [0, 1],
-                [1, 0],
-            ],
-            targets: [0, 1, 0],
-            timestamps: [0, 0.02, 0.05],
+            inputs: [[1]],
+            targets: [1],
         };
 
-        const analytical = trainer.gradients(sequence).gradients;
-        const epsilon = 1e-6;
-        for (let input = 0; input < synapses.length; input++) {
-            const original = synapses[input].weight;
-            synapses[input].weight = original + epsilon;
-            const positive = trainer.forward(sequence).loss;
-            synapses[input].weight = original - epsilon;
-            const negative = trainer.forward(sequence).loss;
-            synapses[input].weight = original;
-            const numerical = (positive - negative) / (2 * epsilon);
+        const before = trainer.gradients(sequence);
+        expect(before.steps[0].probability).toBe(0);
+        expect(before.steps[0].membranePotential).toBe(0.8);
+        expect(before.steps[0].surrogateDerivative).toBeGreaterThan(0);
+        expect(before.gradients[0]).toBeLessThan(0);
 
-            expect(analytical[input]).toBeCloseTo(numerical, 6);
-        }
+        trainer.trainStep(sequence);
+
+        expect(synapses[0].weight).toBeGreaterThanOrEqual(1);
+        expect(trainer.forward(sequence).steps[0].probability).toBe(1);
     });
 
-    test("matches the Session soft-mode forward trace", () => {
+    test("matches the Session hard forward trace in training mode", () => {
         const sourceA = new TemporalSpikeSource();
         const sourceB = new TemporalSpikeSource();
         const collector = new SpikeCollector();
@@ -135,11 +126,11 @@ describe("Constrained LIF surrogate BPTT", () => {
             threshold: 0.9,
             resetPotential: -0.1,
             membraneTimeConstant: 0.025,
-            surrogateSlope: 7,
-            mode: "soft",
+            surrogateSlope: 1.25,
+            mode: "training",
         });
         const inputA = new SpikeSynapse(sourceA, surrogate.inputNode, "spike", "spike", 0.35);
-        const inputB = new SpikeSynapse(sourceB, surrogate.inputNode, "spike", "spike", 0.65);
+        const inputB = new SpikeSynapse(sourceB, surrogate.inputNode, "spike", "spike", 0.75);
         const output = new SpikeSynapse(surrogate.outputNode, collector);
         const graph = new RuntimeGraphBuilder<IRuntimeNode, IChannel>()
             .withMode("dynamic")
@@ -155,20 +146,21 @@ describe("Constrained LIF surrogate BPTT", () => {
             timestamps: [0, 0.02],
         };
         const trainer = new ConstrainedLifBpttTrainer(surrogate, [inputA, inputB]);
-        const analytical = trainer.forward(sequence, "soft");
+        const analytical = trainer.forward(sequence, "training");
 
         sourceA.schedule.set(1, 1);
         sourceB.schedule.set(2, 1);
         const session = new Session(graph);
+        const feedbackIndex = graph.links.indexOf(surrogate.stateFeedbackLink);
         session.run(0);
+        const firstRuntimeState = { ...(session.peek(feedbackIndex) as { membranePotential: number }) };
         session.run(0.02);
         const runtimeProbabilities = collector.trace(session).map((spike) => spike.amplitude);
-        const feedbackIndex = graph.links.indexOf(surrogate.stateFeedbackLink);
         const runtimeState = session.peek(feedbackIndex) as { membranePotential: number };
 
-        expect(runtimeProbabilities).toHaveLength(2);
-        expect(runtimeProbabilities[0]).toBeCloseTo(analytical.steps[0].probability, 12);
-        expect(runtimeProbabilities[1]).toBeCloseTo(analytical.steps[1].probability, 12);
+        expect(analytical.steps.map((step) => step.probability)).toEqual([0, 1]);
+        expect(runtimeProbabilities).toEqual([1]);
+        expect(firstRuntimeState.membranePotential).toBeCloseTo(analytical.steps[0].membranePotential, 12);
         expect(runtimeState.membranePotential).toBeCloseTo(analytical.steps[1].membranePotential, 12);
     });
 
@@ -184,8 +176,8 @@ describe("Constrained LIF surrogate BPTT", () => {
             threshold: 1,
             resetPotential: 0,
             membraneTimeConstant: 0.02,
-            surrogateSlope: 10,
-            mode: "soft",
+            surrogateSlope: 1.25,
+            mode: "training",
         });
         const inputA = new SpikeSynapse(sourceA, surrogate.inputNode, "spike", "spike", 0.2);
         const inputB = new SpikeSynapse(sourceB, surrogate.inputNode, "spike", "spike", 0.2);

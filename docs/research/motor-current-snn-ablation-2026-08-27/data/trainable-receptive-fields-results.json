@@ -1,0 +1,95 @@
+{
+  "date": "2026-08-27",
+  "option": "multiclass-receptive-fields",
+  "protocol": {
+    "datasetSelection": "grouped",
+    "trainingSamples": 1400,
+    "validationSamples": 200,
+    "independentTestSamples": 400,
+    "hiddenLif": 32,
+    "requestedEpochs": 80,
+    "learningRate": 0.003,
+    "batchSize": 16,
+    "receptiveFieldTrainingVersion": "supervised-soft-biquad-fisher-grid-v1",
+    "receptiveFieldObjective": "multiclass-fisher-of-causal-biquad-rms-v1",
+    "validationSamplesUsedBySensor": 0,
+    "testSamplesUsedBySensor": 0
+  },
+  "fields": [
+    {
+      "initialCenterFrequencyHz": 1.876721109375,
+      "initialBandwidthHz": 0.9383605546875,
+      "learnedCenterFrequencyHz": 2.53426194140625,
+      "learnedBandwidthHz": 1.7594260400390627,
+      "initialFisherScore": 0.25520820293230206,
+      "learnedFisherScore": 0.339702835161243
+    },
+    {
+      "initialCenterFrequencyHz": 3.75344221875,
+      "initialBandwidthHz": 1.876721109375,
+      "learnedCenterFrequencyHz": 2.8150816640625003,
+      "learnedBandwidthHz": 1.9940161787109376,
+      "initialFisherScore": 0.27044049469612086,
+      "learnedFisherScore": 0.3377778985157803
+    },
+    {
+      "initialCenterFrequencyHz": 5.6301633281250005,
+      "initialBandwidthHz": 2.8150816640625003,
+      "learnedCenterFrequencyHz": 4.6918027734375,
+      "learnedBandwidthHz": 1.2315982280273439,
+      "initialFisherScore": 0.054937002676150606,
+      "learnedFisherScore": 0.1791298439814466
+    }
+  ],
+  "learnedModel": {
+    "architectureSignature": "6dd28ae0",
+    "bestEpoch": 43,
+    "validationAccuracy": 0.72,
+    "validationCorrect": 144,
+    "validationTotal": 200,
+    "validationConfusionMatrix": [
+      [33, 5, 0, 2, 0],
+      [6, 33, 0, 0, 1],
+      [1, 5, 22, 10, 2],
+      [4, 2, 1, 29, 4],
+      [0, 2, 2, 9, 27]
+    ],
+    "testAccuracy": 0.6625,
+    "testCorrect": 265,
+    "testTotal": 400,
+    "testConfusionMatrix": [
+      [74, 5, 0, 1, 0],
+      [23, 53, 2, 0, 2],
+      [8, 8, 39, 19, 6],
+      [6, 2, 7, 51, 14],
+      [4, 3, 3, 22, 48]
+    ],
+    "trainingMilliseconds": 591315.8,
+    "testMilliseconds": 4781.6,
+    "testMillisecondsPerSample": 11.954,
+    "inputEventsPerTrainingSample": 148.885,
+    "inputEventsPerTestSample": 146.025,
+    "neuronSpikesPerTestSample": 33.735,
+    "trainingGraphNodes": 113,
+    "trainingGraphLinks": 2005,
+    "trainableWeights": 1893,
+    "compiledGraphNodes": 39,
+    "compiledGraphLinks": 1894,
+    "compiledNativeLif": 37,
+    "checkpointFile": "motor_current_snn_h32_6dd28ae0_best_val_72p0.json",
+    "checkpointSha256": "2278B96E61FA83835806386D1ED9AE23C4C4A2CE12E200A1A0FB492910C065DF"
+  },
+  "referenceBaseline": {
+    "description": "Trois bandes DFT fixes, largeur egale a la moitie de la frequence centrale",
+    "architectureSignature": "b47ebba9",
+    "validationAccuracy": 0.79,
+    "validationCorrect": 158,
+    "validationTotal": 200,
+    "testAccuracy": 0.7425,
+    "testCorrect": 297,
+    "testTotal": 400,
+    "trainableWeights": 1893,
+    "inputEventsPerSample": 147.2
+  },
+  "conclusion": "Le score de Fisher continu augmente pour les trois champs, mais la validation runtime et le test independant baissent. La RMS du biquad ne constitue donc pas un objectif suffisamment aligne avec la generation discrete de spikes de phase et de seuil."
+}

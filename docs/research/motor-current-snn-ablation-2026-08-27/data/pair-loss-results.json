@@ -1,0 +1,57 @@
+{
+    "experimentId": "motor-current-snn-specialist-pair-loss-2026-08-27",
+    "parentArchitecture": "healthy-brb1-specialist-binary-v1",
+    "architectureSignature": "065276ab",
+    "datasetFingerprint": "ec00f5c3",
+    "training": {
+        "epochs": 80,
+        "learningRate": 0.003,
+        "elapsedSeconds": 675.7,
+        "objective": {
+            "base": "temporal-mse-v1",
+            "auxiliary": "final-frame-pair-mse-v1",
+            "labels": ["Healthy", "BRB1"],
+            "mixtureWeight": 0.25,
+            "activeOnlyForPairSamples": true
+        }
+    },
+    "checkpoint": {
+        "epoch": 73,
+        "validationAccuracy": 0.78,
+        "validationCorrect": 156,
+        "validationTotal": 200,
+        "trainLoss": 0.002417059870925704,
+        "validationLoss": 0.013748889869754678,
+        "continuousSurrogateAccuracy": 0.865,
+        "meanContinuousMargin": 0.6345383361682021,
+        "meanRuntimeMargin": 2.402203277468228,
+        "mainHiddenFiringRateMeanHz": 1.1125437326513652,
+        "mainHiddenFiringRateStdHz": 0.9183415561447833,
+        "outputFiringRatesHz": [0.42226224960937425, 0.43164585515624926, 0.4128786440624993, 0.5536327272656241, 0.9524359630078109],
+        "validationConfusionMatrix": [
+            [33, 4, 0, 2, 1],
+            [7, 31, 1, 0, 1],
+            [0, 2, 30, 5, 3],
+            [1, 1, 2, 28, 8],
+            [0, 1, 3, 2, 34]
+        ],
+        "downloadedFile": "motor_current_snn_h32_065276ab_best_val_78p0.json",
+        "sha256": "156f5b1c3f3b95da02d5d5e4cb608cc6c97d0e541d5b368f6850da665cea28ad"
+    },
+    "heldOutTest": {
+        "accuracy": 0.7,
+        "correct": 280,
+        "total": 400,
+        "elapsedMilliseconds": 5889,
+        "millisecondsPerSample": 14.7,
+        "inputEventsPerSample": 155.5,
+        "neuronSpikesPerSample": 43.2,
+        "confusionMatrix": [
+            [65, 9, 2, 4, 0],
+            [12, 61, 4, 3, 0],
+            [6, 4, 44, 16, 10],
+            [4, 2, 9, 49, 16],
+            [3, 6, 3, 7, 61]
+        ]
+    }
+}

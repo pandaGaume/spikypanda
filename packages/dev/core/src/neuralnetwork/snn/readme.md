@@ -67,14 +67,19 @@ ordinary runtime nodes during training:
 
 ```text
 weighted spikes -> analytical leak and integration
-                -> continuous or hard threshold
-                -> differentiable or hard reset
+                -> exact binary threshold
+                -> exact hard reset
                 -> recurrent membrane state
+                              ^
+                              |
+                    backward-only surrogate derivative
 ```
 
-Soft mode emits an `ISurrogateSpike`. Its amplitude is continuous and the
-token includes the local threshold derivative. Hard mode uses the same
-parameters but emits binary events and resets exactly like `LifNeuronNode`.
+Training mode and hard mode execute the same forward equations. A sub-threshold
+state emits no event. A threshold crossing emits exactly one spike amplitude,
+and the membrane is reset exactly like `LifNeuronNode`. The surrogate is a
+compact triangular derivative used only during backpropagation. It is never a
+forward value, a transmitted amplitude or a membrane reset coefficient.
 
 The motif is added directly to a dynamic `RuntimeGraph`:
 
@@ -82,8 +87,8 @@ The motif is added directly to a dynamic `RuntimeGraph`:
 const teacher = new ConstrainedLifSurrogateSubgraph("hidden-0", {
     threshold: 0.8,
     membraneTimeConstant: 0.02,
-    surrogateSlope: 8,
-    mode: "soft",
+    surrogateSlope: 1.25,
+    mode: "training",
 });
 
 const graph = new RuntimeGraphBuilder<IRuntimeNode, IChannel>()
@@ -105,17 +110,17 @@ external synapses are reconnected to the new `LifNeuronNode`, and only the LIF
 parameters remain. Existing sessions must not be reused after compilation.
 
 The first constrained version deliberately fixes `refractoryPeriod` to zero.
-This keeps the soft training state simple and makes hard-mode equivalence with
-the compiled LIF directly testable. Refractory surrogate dynamics can be added
-later as a separate, explicitly validated extension.
+This keeps the training state identical to the compiled LIF. Refractory
+dynamics can be added later as a separate, explicitly validated extension.
 
 ## Temporal training with BPTT
 
 `ConstrainedLifBpttTrainer` trains the real `SpikeSynapse.weight` values that
 enter one constrained teacher. Its analytical tape follows the same
 event-driven dynamics as `Session`: an empty timestep does not advance the
-membrane, while a delivered event applies analytical leak, integration, soft
-threshold and differentiable reset.
+membrane, while a delivered event applies analytical leak, integration, the
+binary threshold and the hard reset. Backpropagation substitutes only the
+undefined threshold derivative with the configured triangular derivative.
 
 ```ts
 const trainer = new ConstrainedLifBpttTrainer(teacher, [inputA, inputB], {
@@ -143,7 +148,6 @@ const samples = [
 ];
 
 const result = trainer.fit(samples, { epochs: 300 });
-teacher.configure({ mode: "hard" });
 compileConstrainedLifSubgraph(graph, teacher);
 ```
 
@@ -177,9 +181,38 @@ const trainer = new ConstrainedLifNetworkBpttTrainer(
 );
 
 trainer.fit(dataset, { epochs: 1500 });
-for (const teacher of trainer.network.neurons) teacher.configure({ mode: "hard" });
 compileConstrainedLifNetwork(graph, trainer.network.neurons);
 ```
+
+For a classifier decoded from activity over the complete sequence, each
+training sample can add a runtime-decoder objective:
+
+```ts
+const sample = {
+    inputs,
+    targets,
+    runtimeDecoderObjective: {
+        targetOutput: classIndex,
+        spikeCountScale: 2,
+        membranePotentialScale: 1,
+        temperature: 2,
+        classificationLossWeight: 1,
+        temporalLossWeight: 0.25,
+    },
+};
+```
+
+The class score is computed from the same hard values used by native
+inference:
+
+```text
+score[c] = 2 * sum_t spike[t,c] + finalMembrane[c] / threshold[c]
+```
+
+Cross-entropy is applied to these class scores. Its gradient reaches every
+binary output-spike decision and the final membrane. The temperature changes
+only the loss gradient and does not change the score ordering. No soft value
+is propagated during the forward pass.
 
 Network `fit` uses the mean gradient of the supplied sequence batch for one
 deterministic Adam update per epoch. This prevents dataset order from deciding

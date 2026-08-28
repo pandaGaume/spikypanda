@@ -9,7 +9,12 @@ export const LIF_SURROGATE_STATE_SLOT = "lif-state";
 export const LIF_SURROGATE_INTEGRATED_SLOT = "lif-integrated";
 export const LIF_SURROGATE_DECISION_SLOT = "lif-decision";
 
-export type LifSurrogateMode = "soft" | "hard";
+/**
+ * Both modes execute the exact hard LIF dynamics. `training` only indicates
+ * that callers may use the surrogate derivative during backpropagation.
+ * `soft` remains accepted as a legacy alias and is normalized to `training`.
+ */
+export type LifSurrogateMode = "training" | "hard" | "soft";
 
 /**
  * Parameters intentionally limited to the subset that maps exactly to the
@@ -49,8 +54,9 @@ export interface ILifSurrogateDecision {
     hardSpike: boolean;
 }
 
-/** Continuous training token emitted by the soft threshold stage. */
+/** Binary spike emitted by the hard threshold, with backward-only metadata. */
 export interface ISurrogateSpike extends ISpike {
+    /** Exact forward value, always one for an emitted spike. */
     probability: number;
     surrogateDerivative: number;
     hardSpike: boolean;
@@ -63,8 +69,8 @@ const DEFAULT_CONFIG: Readonly<IConstrainedLifSurrogateConfig> = Object.freeze({
     resetPotential: 0,
     membraneTimeConstant: 0.02,
     spikeAmplitude: 1,
-    surrogateSlope: 10,
-    mode: "soft",
+    surrogateSlope: 1.25,
+    mode: "training",
 });
 
 const SPIKE_INPUT_PORT: IPortDescriptor = {
@@ -142,7 +148,7 @@ export class LifSurrogateIntegrateNode extends RuntimeNode implements IDeclaresP
     }
 }
 
-/** Second stage: trainable continuous threshold or exact hard threshold. */
+/** Second stage: exact hard threshold with gradient metadata for training. */
 export class LifSurrogateThresholdNode extends RuntimeNode implements IDeclaresPorts {
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
         { slot: LIF_SURROGATE_INTEGRATED_SLOT, optional: false, type: "lif-surrogate-integrated", kind: "stream", capacity: 1024 },
@@ -172,10 +178,9 @@ export class LifSurrogateThresholdNode extends RuntimeNode implements IDeclaresP
         const value = this.consumeLatest(session, LIF_SURROGATE_INTEGRATED_SLOT);
         if (!isIntegrated(value)) return;
 
-        const distance = value.state.membranePotential - this.threshold;
-        const probability = value.canFire ? stableSigmoid(this.surrogateSlope * distance) : 0;
         const hardSpike = value.canFire && value.state.membranePotential >= this.threshold;
-        const derivative = value.canFire ? this.surrogateSlope * probability * (1 - probability) : 0;
+        const probability = hardSpike ? 1 : 0;
+        const derivative = value.canFire ? surrogateDerivative(value.state.membranePotential, this.threshold, this.surrogateSlope) : 0;
         const decision: ILifSurrogateDecision = {
             integrated: value,
             probability,
@@ -184,11 +189,10 @@ export class LifSurrogateThresholdNode extends RuntimeNode implements IDeclaresP
         };
         this.publishAll(session, LIF_SURROGATE_DECISION_SLOT, decision);
 
-        if ((this.mode === "hard" && !hardSpike) || (this.mode === "soft" && !value.canFire)) return;
-        const activation = this.mode === "hard" ? 1 : probability;
+        if (!hardSpike) return;
         const spike: ISurrogateSpike = {
             timestamp: value.timestamp,
-            amplitude: this.spikeAmplitude * activation,
+            amplitude: this.spikeAmplitude,
             source: this,
             probability,
             surrogateDerivative: derivative,
@@ -198,7 +202,7 @@ export class LifSurrogateThresholdNode extends RuntimeNode implements IDeclaresP
     }
 }
 
-/** Third stage: hard reset for equivalence or differentiable reset blend. */
+/** Third stage: exact hard reset. The surrogate exists only in the backward pass. */
 export class LifSurrogateResetNode extends RuntimeNode implements IDeclaresPorts {
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
         { slot: LIF_SURROGATE_DECISION_SLOT, optional: false, type: "lif-surrogate-decision", kind: "stream", capacity: 1024 },
@@ -223,15 +227,10 @@ export class LifSurrogateResetNode extends RuntimeNode implements IDeclaresPorts
 
         const source = value.integrated.state;
         const next: ILifSurrogateState = { ...source };
-        if (this.mode === "hard") {
-            if (value.hardSpike) {
-                next.membranePotential = this.resetPotential;
-                next.lastSpikeTime = value.integrated.timestamp;
-                next.spikeCount += 1;
-            }
-        } else {
-            next.membranePotential = (1 - value.probability) * source.membranePotential + value.probability * this.resetPotential;
-            next.spikeCount += value.probability;
+        if (value.hardSpike) {
+            next.membranePotential = this.resetPotential;
+            next.lastSpikeTime = value.integrated.timestamp;
+            next.spikeCount += 1;
         }
         this.publishAll(session, LIF_SURROGATE_STATE_SLOT, next);
     }
@@ -326,6 +325,17 @@ export function surrogateProbability(membranePotential: number, threshold: numbe
     return stableSigmoid(positiveOr(slope, DEFAULT_CONFIG.surrogateSlope) * (membranePotential - threshold));
 }
 
+/**
+ * Compact triangular surrogate derivative used only by backpropagation.
+ * The forward value remains the exact binary threshold. With slope `k`, the
+ * derivative is non-zero only within `1 / k` of the threshold and integrates
+ * to one over that interval.
+ */
+export function surrogateDerivative(membranePotential: number, threshold: number, slope: number): number {
+    const normalizedSlope = positiveOr(slope, DEFAULT_CONFIG.surrogateSlope);
+    return normalizedSlope * Math.max(0, 1 - normalizedSlope * Math.abs(membranePotential - threshold));
+}
+
 function normalizeConfig(config: Partial<IConstrainedLifSurrogateConfig>): IConstrainedLifSurrogateConfig {
     return {
         restingPotential: finiteOr(config.restingPotential, DEFAULT_CONFIG.restingPotential),
@@ -379,7 +389,7 @@ function positiveOr(value: number | undefined, fallback: number): number {
 }
 
 function normalizeMode(mode: LifSurrogateMode | undefined): LifSurrogateMode {
-    return mode === "hard" ? "hard" : "soft";
+    return mode === "hard" ? "hard" : "training";
 }
 
 function isSpike(value: unknown): value is ISpike {

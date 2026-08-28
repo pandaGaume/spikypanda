@@ -110,6 +110,55 @@ describe("wave spike sensor", () => {
         expect(sensor.stateOf(second)?.encoder.spikeCount).toBe(0);
     });
 
+    test("shares one IIR band across multiple binary amplitude levels", () => {
+        const encoder = new WaveSpikeEncoder({
+            sampleRateHz: 200,
+            bands: [
+                {
+                    id: "ten-hz-levels",
+                    channel: 0,
+                    centerFrequencyHz: 10,
+                    bandwidthHz: 4,
+                    threshold: 0.01,
+                    thresholds: [0.01, 0.1, 0.3],
+                    polarity: "rising",
+                },
+            ],
+        });
+        const state = encoder.createState();
+        const levels = new Set<number>();
+
+        for (let sample = 0; sample < 200; sample++) {
+            const timestamp = sample / 200;
+            const value = Math.sin(2 * Math.PI * 10 * timestamp);
+            for (const emission of encoder.encode({ timestamp, values: [value] }, state)) levels.add(emission.thresholdLevel);
+        }
+
+        expect(state.bands).toHaveLength(1);
+        expect(encoder.outputPorts.map((port) => port.slot)).toEqual([
+            waveSpikeSlot("ten-hz-levels", "rising", 0),
+            waveSpikeSlot("ten-hz-levels", "rising", 1),
+            waveSpikeSlot("ten-hz-levels", "rising", 2),
+        ]);
+        expect(levels).toEqual(new Set([0, 1, 2]));
+        expect(encoder.outputPorts[2]).toMatchObject({ thresholdLevel: 2, threshold: 0.3 });
+        expect(encoder.cells).toHaveLength(1);
+        expect(encoder.cells[0]).toMatchObject({
+            id: "ten-hz-levels",
+            responseKind: "iir-band-pass-phase-crossing",
+            centerFrequencyHz: 10,
+            bandwidthHz: 4,
+            nominalLowerFrequencyHz: 8,
+            nominalUpperFrequencyHz: 12,
+            qualityFactor: 2.5,
+            maximumAdaptationFrequencyHz: 2,
+            thresholds: [0.01, 0.1, 0.3],
+        });
+        expect(encoder.cells[0].remanenceTimeConstantSeconds).toBeCloseTo(1 / (4 * Math.PI), 10);
+        expect(encoder.cells[0].settlingTimeSeconds).toBeCloseTo(1 / Math.PI, 10);
+        expect(encoder.cells[0].outputSlots).toEqual(encoder.outputPorts.map((port) => port.slot));
+    });
+
     test("round-trips the complete band configuration through the registry", () => {
         const original = new WaveSpikeSensorNode({
             sampleRateHz: 60,
@@ -120,6 +169,7 @@ describe("wave spike sensor", () => {
                     centerFrequencyHz: 3,
                     bandwidthHz: 1.5,
                     threshold: 0.07,
+                    thresholds: [0.03, 0.07, 0.12],
                     polarity: "both",
                     amplitudeMode: "normalized-peak",
                 },
@@ -133,7 +183,15 @@ describe("wave spike sensor", () => {
 
         expect(restored).toBeInstanceOf(WaveSpikeSensorNode);
         expect(restored.config).toEqual(original.config);
-        expect(restored.outputPorts.map((port) => port.slot)).toEqual([waveSpikeSlot("envelope-3hz", "rising"), waveSpikeSlot("envelope-3hz", "falling"), "frame-end"]);
+        expect(restored.outputPorts.map((port) => port.slot)).toEqual([
+            waveSpikeSlot("envelope-3hz", "rising", 0),
+            waveSpikeSlot("envelope-3hz", "rising", 1),
+            waveSpikeSlot("envelope-3hz", "rising", 2),
+            waveSpikeSlot("envelope-3hz", "falling", 0),
+            waveSpikeSlot("envelope-3hz", "falling", 1),
+            waveSpikeSlot("envelope-3hz", "falling", 2),
+            "frame-end",
+        ]);
     });
 });
 

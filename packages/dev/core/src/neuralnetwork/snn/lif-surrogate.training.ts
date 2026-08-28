@@ -1,7 +1,7 @@
 import type { ILossFunction, IOptimizer, ITrainingContext } from "../nn.training";
 import { LossFunctions } from "../nn.loss";
 import { Optimizers } from "../nn.optimizers";
-import { ConstrainedLifSurrogateSubgraph, surrogateProbability, type LifSurrogateMode } from "./lif-surrogate.subgraph";
+import { ConstrainedLifSurrogateSubgraph, surrogateDerivative, type LifSurrogateMode } from "./lif-surrogate.subgraph";
 import { SpikeSynapse } from "./spike.synapse";
 
 export interface ILifSurrogateTrainingSequence {
@@ -22,6 +22,9 @@ export interface ILifSurrogateForwardStep {
     leakFactor: number;
     previousPotential: number;
     integratedPotential: number;
+    /** Backward-only derivative evaluated around the exact hard threshold. */
+    surrogateDerivative: number;
+    /** Exact binary forward spike, retained under the historical name. */
     probability: number;
     membranePotential: number;
 }
@@ -64,10 +67,10 @@ export interface ILifSurrogateFitResult {
  * Full BPTT trainer for one constrained LIF teacher motif.
  *
  * It updates the actual incoming SpikeSynapse instances. The forward tape is
- * an analytical view of the same event-driven leak, soft threshold and reset
- * used by ConstrainedLifSurrogateSubgraph. No editor object participates in
- * training, and the learned edges remain valid when the motif is compiled to
- * one LifNeuronNode.
+ * an analytical view of the same event-driven leak, binary threshold and hard
+ * reset used by the native LIF. Only the backward derivative is substituted.
+ * No editor object participates in training, and the learned edges remain
+ * valid when the motif is compiled to one LifNeuronNode.
  */
 export class ConstrainedLifBpttTrainer {
     private readonly _context: ITrainingContext = { iteration: 0 };
@@ -100,14 +103,14 @@ export class ConstrainedLifBpttTrainer {
         return this._context;
     }
 
-    /** Run the differentiable teacher without changing any parameter. */
-    public forward(sequence: ILifSurrogateTrainingSequence, mode: LifSurrogateMode = "soft"): ILifSurrogateForwardTrace {
+    /** Run the exact hard teacher without changing any parameter. */
+    public forward(sequence: ILifSurrogateTrainingSequence, mode: LifSurrogateMode = "training"): ILifSurrogateForwardTrace {
         return this._forward(sequence, mode);
     }
 
     /** Compute full temporal gradients without applying them. */
     public gradients(sequence: ILifSurrogateTrainingSequence): ILifSurrogateGradientResult {
-        const trace = this._forward(sequence, "soft");
+        const trace = this._forward(sequence, "training");
         const gradients = new Array(this.inputSynapses.length).fill(0) as number[];
         const config = this.surrogate.config;
         let dStateFromFuture = 0;
@@ -131,7 +134,7 @@ export class ConstrainedLifBpttTrainer {
             }
 
             const dLossDProbability = this.lossFunction.dLoss(step.probability, sequence.targets[t]) / trace.steps.length;
-            const dProbabilityDIntegrated = config.surrogateSlope * step.probability * (1 - step.probability);
+            const dProbabilityDIntegrated = step.surrogateDerivative;
             const dStateDProbability = config.resetPotential - step.integratedPotential;
             const dLossDIntegrated = dStateFromFuture * (1 - step.probability) + (dLossDProbability + dStateFromFuture * dStateDProbability) * dProbabilityDIntegrated;
 
@@ -158,7 +161,7 @@ export class ConstrainedLifBpttTrainer {
         return result.loss;
     }
 
-    public evaluate(dataset: ReadonlyArray<ILifSurrogateTrainingSequence>, mode: LifSurrogateMode = "soft"): number {
+    public evaluate(dataset: ReadonlyArray<ILifSurrogateTrainingSequence>, mode: LifSurrogateMode = "training"): number {
         if (dataset.length === 0) throw new Error("Cannot evaluate an empty constrained LIF dataset.");
         let loss = 0;
         for (const sequence of dataset) loss += this._forward(sequence, mode).loss;
@@ -232,7 +235,7 @@ export class ConstrainedLifBpttTrainer {
         this._context.loss = undefined;
     }
 
-    private _forward(sequence: ILifSurrogateTrainingSequence, mode: LifSurrogateMode): ILifSurrogateForwardTrace {
+    private _forward(sequence: ILifSurrogateTrainingSequence, _mode: LifSurrogateMode): ILifSurrogateForwardTrace {
         validateSequence(sequence, this.inputSynapses.length, this.timeStep);
         const config = this.surrogate.config;
         const steps: ILifSurrogateForwardStep[] = [];
@@ -247,6 +250,7 @@ export class ConstrainedLifBpttTrainer {
             const hasEvent = inputs.some((amplitude) => amplitude !== 0);
             let leakFactor = 1;
             let integratedPotential = previousPotential;
+            let localSurrogateDerivative = 0;
             let probability = 0;
             let canFire = false;
 
@@ -263,13 +267,9 @@ export class ConstrainedLifBpttTrainer {
                 integratedPotential += weightedInput;
                 canFire = weightedInput !== 0;
 
-                if (mode === "hard") {
-                    probability = canFire && integratedPotential >= config.threshold ? 1 : 0;
-                    membranePotential = probability === 1 ? config.resetPotential : integratedPotential;
-                } else {
-                    probability = canFire ? surrogateProbability(integratedPotential, config.threshold, config.surrogateSlope) : 0;
-                    membranePotential = (1 - probability) * integratedPotential + probability * config.resetPotential;
-                }
+                probability = canFire && integratedPotential >= config.threshold ? 1 : 0;
+                localSurrogateDerivative = canFire ? surrogateDerivative(integratedPotential, config.threshold, config.surrogateSlope) : 0;
+                membranePotential = probability === 1 ? config.resetPotential : integratedPotential;
                 lastEventTime = timestamp;
             }
 
@@ -283,6 +283,7 @@ export class ConstrainedLifBpttTrainer {
                 leakFactor,
                 previousPotential,
                 integratedPotential,
+                surrogateDerivative: localSurrogateDerivative,
                 probability,
                 membranePotential,
             });
