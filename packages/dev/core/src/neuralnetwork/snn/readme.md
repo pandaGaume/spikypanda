@@ -220,3 +220,77 @@ which temporal or spatial pattern dominates a small experiment. The current
 network trainer accepts only acyclic, zero-delay inter-neuron connections.
 Every teacher keeps its own recurrent membrane state, and every teacher is
 still removed one-for-one by `compileConstrainedLifNetwork`.
+
+## Optional oscillatory experiments
+
+The baseline above remains unchanged. `OscillatorySnnModel` and
+`OscillatorySnnNode` provide a separate experimental path with four configured
+variants:
+
+```text
+A  real LIF, no collective field
+B  explicit complex state, no collective field
+C  real LIF, real field formed from spikes
+D  explicit complex state, complex field formed from neuron states
+```
+
+A complex state is stored as two real scalars. For elapsed time `dt`, the
+state transition uses:
+
+```text
+a = exp(-dt / tau) * cos(omega * dt)
+b = exp(-dt / tau) * sin(omega * dt)
+
+xNext = resting + a * (x - resting) - b * y + inputReal
+yNext =           b * (x - resting) + a * y + inputImaginary
+```
+
+The hard decision compares `x*x + y*y` with `threshold*threshold`. The runtime
+does not need a square root or a native complex type. `angularFrequency`
+defaults to zero, so the architecture does not impose a global frequency.
+Oscillation may instead arise from synaptic delays, complex weights and field
+feedback.
+
+Collective modes are low-rank paths. `alpha[neuron][mode]` projects neuron
+activity into `K` modes. `gamma[neuron][mode]` projects the previous timestep's
+mode state back into each neuron. This costs `O(NK)`, not `O(N*N)`. Both alpha
+and gamma are updated by `OscillatorySnnBpttTrainer` unless their collective
+configuration sets `trainable: false`.
+
+Training uses the same `OscillatorySnnModel.step` method as the graph node.
+Every forward spike and reset is hard and binary. Only the derivative of the
+threshold decision is replaced during BPTT.
+
+`OscillatorySnnBpttTrainer.fit` accepts `batchSize` and `shuffleSeed`. The
+motor-current experiment uses mini-batches of 16, matching the historical SNN
+protocol, and applies the same deterministic sample order to every ablation
+variant. One epoch therefore contains one Adam update per mini-batch rather
+than one update for the complete training split.
+
+`TemporalDeltaSpikeEncoder` is the frequency-free input alternative. It
+converts signed changes in the sampled signal to events and has no center
+frequency, bandwidth, FFT bin or spectral loss. `WaveSpikeSensorNode` remains
+available as the fixed-band baseline. `TemporalDeltaSpikeSensorNode` publishes
+both individual positive or negative spike ports and one aggregate
+`temporal-vector` on every sample, including an all-zero vector when no event
+occurred. The aggregate port connects directly to `OscillatorySnnNode`:
+
+```ts
+const observation = new Channel(source, deltaSensor, "observation", false, undefined, true, "observation");
+const temporal = new Channel(deltaSensor, oscillatoryNetwork, "temporal-vector", false, undefined, true, "temporal-input");
+
+const graph = new RuntimeGraphBuilder().withMode("dynamic").withNodes(source, deltaSensor, oscillatoryNetwork).withLinks(observation, temporal).build();
+```
+
+The experiment utilities include:
+
+- `runOscillatoryAblation`, which trains A, B, C and D on the exact same array
+  instances for train, validation and independent test splits;
+- `profileOscillatoryDataset`, which reports loss, hard accuracy, margin,
+  firing rates, event count and measured latency;
+- `compareOscillatoryTraces`, which compares real state, imaginary state,
+  amplitude, phase, spike timing and decision scores;
+- `analyzeCollectiveSpectrum`, a post-training DFT that is never called by the
+  model or trainer;
+- `profileOscillatoryCost`, which estimates parameters, state memory and
+  operations per timestep.

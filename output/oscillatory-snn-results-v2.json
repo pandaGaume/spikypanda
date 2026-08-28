@@ -1,0 +1,775 @@
+{
+  "protocol": "oscillatory-snn-encoder-architecture-matrix-v2",
+  "createdAt": "2026-08-28T14:58:01.222Z",
+  "dataset": {
+    "splitProtocol": "grouped-acquisition-v2-120hz",
+    "validationProtocol": "train-holdout-12.5-v1-grouped",
+    "sampleRateHz": 120.110151,
+    "classes": [
+      "Healthy",
+      "BRB1",
+      "BRB2",
+      "BRB3",
+      "BRB4"
+    ],
+    "trainingSamples": 1400,
+    "validationSamples": 200,
+    "independentTestSamples": 400,
+    "chanceAccuracy": 0.2
+  },
+  "temporalEncoders": [
+    {
+      "id": "historical-wave-bands",
+      "kind": "historical-wave-spike-sensor",
+      "role": "historical-input-control",
+      "frequencyParameters": 3,
+      "selectedFrequenciesHz": [
+        1.876721109375,
+        3.75344221875,
+        5.6301633281250005
+      ],
+      "selectionSource": [
+        "train-fisher-dft",
+        "train-fisher-dft",
+        "train-fisher-dft"
+      ],
+      "encoding": "phase-multilevel",
+      "percentile": 0.85,
+      "inputSize": 54
+    },
+    {
+      "id": "frequency-free-delta",
+      "kind": "send-on-delta",
+      "role": "frequency-free-experimental",
+      "frequencyParameters": 0,
+      "percentile": 0.75,
+      "thresholds": [
+        0.2672,
+        0.2599,
+        0.2768
+      ],
+      "inputSize": 6
+    }
+  ],
+  "training": {
+    "epochs": 40,
+    "batchSize": 16,
+    "deterministicShuffleSeed": 1330856780,
+    "hiddenNeurons": 32,
+    "collectiveModes": 3,
+    "seed": 1330856780,
+    "minimumBaselineLift": 0.02,
+    "baselineSignificanceAlpha": 0.05
+  },
+  "historicalReference": {
+    "architecture": "snn-wave-lif-hard-forward-v5",
+    "topology": "dense",
+    "encoder": "historical-wave-bands",
+    "hiddenNeurons": 32,
+    "batchSize": 16,
+    "bestEpoch": 33,
+    "chanceAccuracy": 0.2,
+    "validationLiftOverChance": 0.625,
+    "oneSidedChancePValue": 2.8178229549440826e-80,
+    "train": {
+      "loss": 0.3496048345213007,
+      "accuracy": 0.8671428571428571,
+      "correct": 1214,
+      "sampleCount": 1400,
+      "meanMargin": 8.472330894818617,
+      "sensorEvents": 209972,
+      "hiddenFiringRateHz": 2.086092808139634,
+      "outputFiringRateHz": 1.590923294718739
+    },
+    "validation": {
+      "loss": 0.4866427091284469,
+      "accuracy": 0.825,
+      "correct": 165,
+      "sampleCount": 200,
+      "meanMargin": 8.081384325561967,
+      "sensorEvents": 30085,
+      "hiddenFiringRateHz": 2.0903447544030724,
+      "outputFiringRateHz": 1.5426647519062475
+    },
+    "test": {
+      "loss": 0.6124255225740568,
+      "accuracy": 0.7625,
+      "correct": 305,
+      "sampleCount": 400,
+      "meanMargin": 7.119741798237921,
+      "sensorEvents": 58897,
+      "hiddenFiringRateHz": 2.0690117136675927,
+      "outputFiringRateHz": 1.5407880307968675
+    },
+    "history": [
+      {
+        "epoch": 0,
+        "trainLoss": 1.3653643140083576,
+        "validationLoss": 1.175130178358682,
+        "validationAccuracy": 0.48
+      },
+      {
+        "epoch": 1,
+        "trainLoss": 1.0726599917000543,
+        "validationLoss": 0.9522243557708613,
+        "validationAccuracy": 0.605
+      },
+      {
+        "epoch": 2,
+        "trainLoss": 0.8983234160886014,
+        "validationLoss": 0.8351463725666034,
+        "validationAccuracy": 0.665
+      },
+      {
+        "epoch": 3,
+        "trainLoss": 0.8062187942345124,
+        "validationLoss": 0.7543016373307389,
+        "validationAccuracy": 0.705
+      },
+      {
+        "epoch": 4,
+        "trainLoss": 0.7483981790008596,
+        "validationLoss": 0.7028266127327876,
+        "validationAccuracy": 0.745
+      },
+      {
+        "epoch": 5,
+        "trainLoss": 0.6967880238835953,
+        "validationLoss": 0.6679589152730656,
+        "validationAccuracy": 0.77
+      },
+      {
+        "epoch": 6,
+        "trainLoss": 0.6649296693341331,
+        "validationLoss": 0.6609906745618371,
+        "validationAccuracy": 0.75
+      },
+      {
+        "epoch": 7,
+        "trainLoss": 0.6398168196494903,
+        "validationLoss": 0.6852439372536854,
+        "validationAccuracy": 0.74
+      },
+      {
+        "epoch": 8,
+        "trainLoss": 0.6348248589188652,
+        "validationLoss": 0.6688812604875117,
+        "validationAccuracy": 0.755
+      },
+      {
+        "epoch": 9,
+        "trainLoss": 0.6196720320598127,
+        "validationLoss": 0.6458599576120537,
+        "validationAccuracy": 0.735
+      },
+      {
+        "epoch": 10,
+        "trainLoss": 0.5885934575353903,
+        "validationLoss": 0.6271071610164951,
+        "validationAccuracy": 0.78
+      },
+      {
+        "epoch": 11,
+        "trainLoss": 0.5553626502602452,
+        "validationLoss": 0.5935934608332524,
+        "validationAccuracy": 0.795
+      },
+      {
+        "epoch": 12,
+        "trainLoss": 0.5326499607268355,
+        "validationLoss": 0.5978849027594775,
+        "validationAccuracy": 0.755
+      },
+      {
+        "epoch": 13,
+        "trainLoss": 0.5248881674565881,
+        "validationLoss": 0.5946286507088359,
+        "validationAccuracy": 0.72
+      },
+      {
+        "epoch": 14,
+        "trainLoss": 0.5082432652613721,
+        "validationLoss": 0.5757987433725696,
+        "validationAccuracy": 0.755
+      },
+      {
+        "epoch": 15,
+        "trainLoss": 0.5055949054466795,
+        "validationLoss": 0.5692607477690498,
+        "validationAccuracy": 0.75
+      },
+      {
+        "epoch": 16,
+        "trainLoss": 0.48619148890842406,
+        "validationLoss": 0.5736353163958685,
+        "validationAccuracy": 0.76
+      },
+      {
+        "epoch": 17,
+        "trainLoss": 0.4876340351678247,
+        "validationLoss": 0.5165717568627725,
+        "validationAccuracy": 0.8
+      },
+      {
+        "epoch": 18,
+        "trainLoss": 0.4750254181793339,
+        "validationLoss": 0.5441067959911554,
+        "validationAccuracy": 0.79
+      },
+      {
+        "epoch": 19,
+        "trainLoss": 0.44784598575270335,
+        "validationLoss": 0.5312705364920467,
+        "validationAccuracy": 0.785
+      },
+      {
+        "epoch": 20,
+        "trainLoss": 0.4417087285688538,
+        "validationLoss": 0.5186294760516317,
+        "validationAccuracy": 0.76
+      },
+      {
+        "epoch": 21,
+        "trainLoss": 0.44523737831329196,
+        "validationLoss": 0.5044890050611031,
+        "validationAccuracy": 0.78
+      },
+      {
+        "epoch": 22,
+        "trainLoss": 0.42280256805597477,
+        "validationLoss": 0.5373042751220694,
+        "validationAccuracy": 0.78
+      },
+      {
+        "epoch": 23,
+        "trainLoss": 0.41693407627552737,
+        "validationLoss": 0.5511064820744249,
+        "validationAccuracy": 0.765
+      },
+      {
+        "epoch": 24,
+        "trainLoss": 0.41131355336982217,
+        "validationLoss": 0.5447541106114879,
+        "validationAccuracy": 0.79
+      },
+      {
+        "epoch": 25,
+        "trainLoss": 0.39091597702439723,
+        "validationLoss": 0.5628817926503283,
+        "validationAccuracy": 0.76
+      },
+      {
+        "epoch": 26,
+        "trainLoss": 0.3858341636694289,
+        "validationLoss": 0.5294391015810413,
+        "validationAccuracy": 0.775
+      },
+      {
+        "epoch": 27,
+        "trainLoss": 0.3787104844559578,
+        "validationLoss": 0.508223713399031,
+        "validationAccuracy": 0.79
+      },
+      {
+        "epoch": 28,
+        "trainLoss": 0.3638260936708701,
+        "validationLoss": 0.5184241934072662,
+        "validationAccuracy": 0.8
+      },
+      {
+        "epoch": 29,
+        "trainLoss": 0.36040599263738704,
+        "validationLoss": 0.5079701621756212,
+        "validationAccuracy": 0.8
+      },
+      {
+        "epoch": 30,
+        "trainLoss": 0.35802466552881645,
+        "validationLoss": 0.48855138561077377,
+        "validationAccuracy": 0.825
+      },
+      {
+        "epoch": 31,
+        "trainLoss": 0.3504602496860062,
+        "validationLoss": 0.49018264858241833,
+        "validationAccuracy": 0.815
+      },
+      {
+        "epoch": 32,
+        "trainLoss": 0.33971513950647264,
+        "validationLoss": 0.5023369357467186,
+        "validationAccuracy": 0.805
+      },
+      {
+        "epoch": 33,
+        "trainLoss": 0.33873056291771814,
+        "validationLoss": 0.4866427091284469,
+        "validationAccuracy": 0.825
+      },
+      {
+        "epoch": 34,
+        "trainLoss": 0.3342117625106162,
+        "validationLoss": 0.5011047083516018,
+        "validationAccuracy": 0.805
+      },
+      {
+        "epoch": 35,
+        "trainLoss": 0.34749658440991643,
+        "validationLoss": 0.5120479819342488,
+        "validationAccuracy": 0.8
+      },
+      {
+        "epoch": 36,
+        "trainLoss": 0.3450897278558784,
+        "validationLoss": 0.528548383177392,
+        "validationAccuracy": 0.81
+      },
+      {
+        "epoch": 37,
+        "trainLoss": 0.3338305173063041,
+        "validationLoss": 0.5315144559025703,
+        "validationAccuracy": 0.8
+      },
+      {
+        "epoch": 38,
+        "trainLoss": 0.32204205640105205,
+        "validationLoss": 0.5131593206564548,
+        "validationAccuracy": 0.82
+      },
+      {
+        "epoch": 39,
+        "trainLoss": 0.3281892928948833,
+        "validationLoss": 0.504317799935555,
+        "validationAccuracy": 0.8
+      }
+    ]
+  },
+  "experiments": [
+    {
+      "encoder": "historical-wave-bands",
+      "baselineGate": {
+        "chanceAccuracy": 0.2,
+        "minimumLift": 0.02,
+        "observedAccuracy": 0.825,
+        "observedLift": 0.625,
+        "correct": 165,
+        "sampleCount": 200,
+        "oneSidedChancePValue": 2.8178229549440826e-80,
+        "significanceAlpha": 0.05,
+        "bypassed": false,
+        "passed": true
+      },
+      "variants": [
+        {
+          "variant": "A",
+          "bestEpoch": 30,
+          "trainLoss": 0.3950954772290288,
+          "validationLoss": 0.46719302347271957,
+          "hardTrainAccuracy": 0.8542857142857143,
+          "hardValidationAccuracy": 0.825,
+          "independentTestAccuracy": 0.76,
+          "surrogateAccuracy": 0.825,
+          "surrogateToHardGap": 0,
+          "validationMargin": 6.598625463953721,
+          "firingRateByLayerHz": {
+            "hidden": 5.9264799970358775,
+            "output": 0.0009383605546874938
+          },
+          "firingRateByClassHz": [
+            5.21741148954286,
+            5.143864310932218,
+            4.8858151583931555,
+            4.951119980780191,
+            5.430444696552994
+          ],
+          "collectiveSpectrum": [],
+          "eventCount": 138175,
+          "meanLatencyMilliseconds": 1.444500499997812,
+          "cost": {
+            "parameterCount": 2073,
+            "stateScalarCount": 148,
+            "estimatedMemoryBytesFloat32": 8884,
+            "estimatedOperationsPerTimestep": 4072,
+            "maximumDelayTicks": 0,
+            "asymptoticCollectiveCost": "none"
+          },
+          "validationLiftOverChance": 0.625
+        },
+        {
+          "variant": "B",
+          "bestEpoch": 1,
+          "trainLoss": 1.4248461505806065,
+          "validationLoss": 1.4267582526104325,
+          "hardTrainAccuracy": 0.41714285714285715,
+          "hardValidationAccuracy": 0.425,
+          "independentTestAccuracy": 0.41,
+          "surrogateAccuracy": 0.425,
+          "surrogateToHardGap": 0,
+          "validationMargin": 0.4796576708888125,
+          "firingRateByLayerHz": {
+            "hidden": 6.599167219677589,
+            "output": 0.0919593343593744
+          },
+          "firingRateByClassHz": [
+            5.476728696885554,
+            5.79881461700802,
+            5.548373793290748,
+            5.722731328790115,
+            6.052425577734371
+          ],
+          "collectiveSpectrum": [],
+          "eventCount": 146348,
+          "meanLatencyMilliseconds": 1.5851822499930859,
+          "cost": {
+            "parameterCount": 4035,
+            "stateScalarCount": 185,
+            "estimatedMemoryBytesFloat32": 16880,
+            "estimatedOperationsPerTimestep": 8218,
+            "maximumDelayTicks": 0,
+            "asymptoticCollectiveCost": "none"
+          },
+          "validationLiftOverChance": 0.22499999999999998
+        },
+        {
+          "variant": "C",
+          "bestEpoch": 35,
+          "trainLoss": 0.6595113006990155,
+          "validationLoss": 0.6511095931823941,
+          "hardTrainAccuracy": 0.7414285714285714,
+          "hardValidationAccuracy": 0.775,
+          "independentTestAccuracy": 0.6425,
+          "surrogateAccuracy": 0.775,
+          "surrogateToHardGap": 0,
+          "validationMargin": 5.291312919578986,
+          "firingRateByLayerHz": {
+            "hidden": 10.684554484648956,
+            "output": 0
+          },
+          "firingRateByClassHz": [
+            11.94824638722022,
+            10.685263802802991,
+            8.11681879804687,
+            7.407342135414902,
+            8.045807729043492
+          ],
+          "collectiveSpectrum": [
+            {
+              "mode": 0,
+              "dominantFrequencyHz": 0.9383605546875,
+              "halfPowerBandHz": [
+                0.9383605546875,
+                0.9383605546875
+              ],
+              "dominantPower": 0.026643880946545587
+            },
+            {
+              "mode": 1,
+              "dominantFrequencyHz": 0.9383605546875,
+              "halfPowerBandHz": [
+                0.9383605546875,
+                7.5068844375
+              ],
+              "dominantPower": 0.010422814343029229
+            },
+            {
+              "mode": 2,
+              "dominantFrequencyHz": 0.9383605546875,
+              "halfPowerBandHz": [
+                0.9383605546875,
+                1.876721109375
+              ],
+              "dominantPower": 0.018640487599650188
+            }
+          ],
+          "eventCount": 202724,
+          "meanLatencyMilliseconds": 2.0923432500025956,
+          "cost": {
+            "parameterCount": 2295,
+            "stateScalarCount": 151,
+            "estimatedMemoryBytesFloat32": 9784,
+            "estimatedOperationsPerTimestep": 4516,
+            "maximumDelayTicks": 0,
+            "asymptoticCollectiveCost": "O(NK)"
+          },
+          "validationLiftOverChance": 0.575
+        },
+        {
+          "variant": "D",
+          "bestEpoch": 0,
+          "trainLoss": 1.3555962850591388,
+          "validationLoss": 1.371235451492939,
+          "hardTrainAccuracy": 0.42928571428571427,
+          "hardValidationAccuracy": 0.445,
+          "independentTestAccuracy": 0.4075,
+          "surrogateAccuracy": 0.445,
+          "surrogateToHardGap": 0,
+          "validationMargin": 0.14998871258351124,
+          "firingRateByLayerHz": {
+            "hidden": 6.27074102553691,
+            "output": 0.34250160246093525
+          },
+          "firingRateByClassHz": [
+            5.488775217520056,
+            5.5921216840160435,
+            5.221849681355571,
+            5.387964860631331,
+            5.6574265064030795
+          ],
+          "collectiveSpectrum": [
+            {
+              "mode": 0,
+              "dominantFrequencyHz": 1.876721109375,
+              "halfPowerBandHz": [
+                0.9383605546875,
+                13.137047765625
+              ],
+              "dominantPower": 0.0016004961766614926
+            },
+            {
+              "mode": 1,
+              "dominantFrequencyHz": 0.9383605546875,
+              "halfPowerBandHz": [
+                0.9383605546875,
+                1.876721109375
+              ],
+              "dominantPower": 0.0007793093817369395
+            },
+            {
+              "mode": 2,
+              "dominantFrequencyHz": 0.9383605546875,
+              "halfPowerBandHz": [
+                0.9383605546875,
+                2.8150816640625003
+              ],
+              "dominantPower": 0.0018911644232537923
+            }
+          ],
+          "eventCount": 143169,
+          "meanLatencyMilliseconds": 1.709641000010306,
+          "cost": {
+            "parameterCount": 4479,
+            "stateScalarCount": 191,
+            "estimatedMemoryBytesFloat32": 18680,
+            "estimatedOperationsPerTimestep": 9994,
+            "maximumDelayTicks": 0,
+            "asymptoticCollectiveCost": "O(NK)"
+          },
+          "validationLiftOverChance": 0.245
+        }
+      ]
+    },
+    {
+      "encoder": "frequency-free-delta",
+      "baselineGate": {
+        "chanceAccuracy": 0.2,
+        "minimumLift": 0.02,
+        "observedAccuracy": 0.305,
+        "observedLift": 0.10499999999999998,
+        "correct": 61,
+        "sampleCount": 200,
+        "oneSidedChancePValue": 0.0002779079972883921,
+        "significanceAlpha": 0.05,
+        "bypassed": false,
+        "passed": true
+      },
+      "variants": [
+        {
+          "variant": "A",
+          "bestEpoch": 30,
+          "trainLoss": 1.9275593918347549,
+          "validationLoss": 1.9591209925548814,
+          "hardTrainAccuracy": 0.30142857142857143,
+          "hardValidationAccuracy": 0.305,
+          "independentTestAccuracy": 0.2875,
+          "surrogateAccuracy": 0.305,
+          "surrogateToHardGap": 0,
+          "validationMargin": -1.8745330731158152,
+          "firingRateByLayerHz": {
+            "hidden": 24.523466621415125,
+            "output": 0
+          },
+          "firingRateByClassHz": [
+            21.11374650787055,
+            21.477678236512865,
+            20.995183383730982,
+            20.815753629017088,
+            21.645061470592257
+          ],
+          "collectiveSpectrum": [],
+          "eventCount": 392484,
+          "meanLatencyMilliseconds": 0.7036747499916237,
+          "cost": {
+            "parameterCount": 537,
+            "stateScalarCount": 148,
+            "estimatedMemoryBytesFloat32": 2740,
+            "estimatedOperationsPerTimestep": 1000,
+            "maximumDelayTicks": 0,
+            "asymptoticCollectiveCost": "none"
+          },
+          "validationLiftOverChance": 0.10499999999999998
+        },
+        {
+          "variant": "B",
+          "bestEpoch": 1,
+          "trainLoss": 2.0338842439714826,
+          "validationLoss": 1.9544012173950827,
+          "hardTrainAccuracy": 0.185,
+          "hardValidationAccuracy": 0.245,
+          "independentTestAccuracy": 0.1625,
+          "surrogateAccuracy": 0.245,
+          "surrogateToHardGap": 0,
+          "validationMargin": -1.9442490780956083,
+          "firingRateByLayerHz": {
+            "hidden": 27.600849384280618,
+            "output": 1.0096759568437434
+          },
+          "firingRateByClassHz": [
+            23.171165426763075,
+            24.155809981783136,
+            23.849574746706065,
+            23.886982363413203,
+            24.973705330125618
+          ],
+          "collectiveSpectrum": [],
+          "eventCount": 434319,
+          "meanLatencyMilliseconds": 0.7745002500002738,
+          "cost": {
+            "parameterCount": 963,
+            "stateScalarCount": 185,
+            "estimatedMemoryBytesFloat32": 4592,
+            "estimatedOperationsPerTimestep": 2074,
+            "maximumDelayTicks": 0,
+            "asymptoticCollectiveCost": "none"
+          },
+          "validationLiftOverChance": 0.044999999999999984
+        },
+        {
+          "variant": "C",
+          "bestEpoch": 13,
+          "trainLoss": 1.600305010013504,
+          "validationLoss": 1.5898354352102646,
+          "hardTrainAccuracy": 0.3107142857142857,
+          "hardValidationAccuracy": 0.305,
+          "independentTestAccuracy": 0.29,
+          "surrogateAccuracy": 0.305,
+          "surrogateToHardGap": 0,
+          "validationMargin": -0.8053989690929604,
+          "firingRateByLayerHz": {
+            "hidden": 11.725254987332232,
+            "output": 0
+          },
+          "firingRateByClassHz": [
+            10.143170374250415,
+            10.264269607997248,
+            9.939013550865702,
+            9.883219139505906,
+            10.474132677998304
+          ],
+          "collectiveSpectrum": [
+            {
+              "mode": 0,
+              "dominantFrequencyHz": 32.8426194140625,
+              "halfPowerBandHz": [
+                26.27409553125,
+                53.4865516171875
+              ],
+              "dominantPower": 0.004328707460494601
+            },
+            {
+              "mode": 1,
+              "dominantFrequencyHz": 13.137047765625,
+              "halfPowerBandHz": [
+                13.137047765625,
+                53.4865516171875
+              ],
+              "dominantPower": 0.0038640473348806365
+            },
+            {
+              "mode": 2,
+              "dominantFrequencyHz": 53.4865516171875,
+              "halfPowerBandHz": [
+                13.137047765625,
+                59.1167149453125
+              ],
+              "dominantPower": 0.00048688659593474904
+            }
+          ],
+          "eventCount": 217715,
+          "meanLatencyMilliseconds": 1.1449117500137072,
+          "cost": {
+            "parameterCount": 759,
+            "stateScalarCount": 151,
+            "estimatedMemoryBytesFloat32": 3640,
+            "estimatedOperationsPerTimestep": 1444,
+            "maximumDelayTicks": 0,
+            "asymptoticCollectiveCost": "O(NK)"
+          },
+          "validationLiftOverChance": 0.10499999999999998
+        },
+        {
+          "variant": "D",
+          "bestEpoch": 29,
+          "trainLoss": 1.874990374318512,
+          "validationLoss": 1.9168565354374052,
+          "hardTrainAccuracy": 0.235,
+          "hardValidationAccuracy": 0.305,
+          "independentTestAccuracy": 0.2275,
+          "surrogateAccuracy": 0.305,
+          "surrogateToHardGap": 0,
+          "validationMargin": -1.7696794532649514,
+          "firingRateByLayerHz": {
+            "hidden": 30.529120790252772,
+            "output": 0.7000169737968704
+          },
+          "firingRateByClassHz": [
+            26.18406364019213,
+            26.577160629317973,
+            26.24239416115919,
+            26.2988225999208,
+            27.188363044668478
+          ],
+          "collectiveSpectrum": [
+            {
+              "mode": 0,
+              "dominantFrequencyHz": 13.137047765625,
+              "halfPowerBandHz": [
+                13.137047765625,
+                60.0550755
+              ],
+              "dominantPower": 0.0098243433533618
+            },
+            {
+              "mode": 1,
+              "dominantFrequencyHz": 26.27409553125,
+              "halfPowerBandHz": [
+                26.27409553125,
+                60.0550755
+              ],
+              "dominantPower": 0.011559795497977468
+            },
+            {
+              "mode": 2,
+              "dominantFrequencyHz": 13.137047765625,
+              "halfPowerBandHz": [
+                13.137047765625,
+                13.137047765625
+              ],
+              "dominantPower": 0.17263508517853665
+            }
+          ],
+          "eventCount": 474425,
+          "meanLatencyMilliseconds": 1.0528260000038427,
+          "cost": {
+            "parameterCount": 1407,
+            "stateScalarCount": 191,
+            "estimatedMemoryBytesFloat32": 6392,
+            "estimatedOperationsPerTimestep": 3850,
+            "maximumDelayTicks": 0,
+            "asymptoticCollectiveCost": "O(NK)"
+          },
+          "validationLiftOverChance": 0.10499999999999998
+        }
+      ]
+    }
+  ]
+}

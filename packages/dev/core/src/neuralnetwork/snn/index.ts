@@ -8,4 +8,8 @@ export * from "./lif-surrogate.compiler";
 export * from "./lif-surrogate.training";
 export * from "./lif-surrogate-network.training";
 export * from "./wave-spike.sensor";
+export * from "./temporal-delta.sensor";
+export * from "./oscillatory-snn.model";
+export * from "./oscillatory-snn.training";
+export * from "./oscillatory-snn.metrics";
 export * from "./spike.registry";
