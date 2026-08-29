@@ -220,3 +220,19 @@ which temporal or spatial pattern dominates a small experiment. The current
 network trainer accepts only acyclic, zero-delay inter-neuron connections.
 Every teacher keeps its own recurrent membrane state, and every teacher is
 still removed one-for-one by `compileConstrainedLifNetwork`.
+
+## Motor-current topology experiment
+
+The grouped BRB sample includes a controlled topology runner that keeps the
+historical wave-band encoder fixed and compares a five-class dense baseline,
+four BRBi-vs-Healthy specialists, a Healthy/BRB cascade and four cumulative
+ordinal heads:
+
+```powershell
+npm run experiment:snn-topology -- --full --epochs 40 --batch-size 16
+```
+
+The JSON report includes confusion matrices, per-class recall, balanced
+accuracy, macro F1, validation-only decision thresholds and exact parameter
+counts. The four-head and cascade configurations use approximately the same
+total number of trainable weights as the 32-hidden-neuron baseline.

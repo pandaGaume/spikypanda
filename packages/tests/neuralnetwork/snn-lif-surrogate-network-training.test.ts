@@ -209,6 +209,12 @@ describe("Constrained multi-LIF network BPTT", () => {
             },
             { timeStep: 0.01, lossFunction: LossFunctions.MSE }
         );
+        expect(trainer.learningRate).toBe(0.01);
+        trainer.learningRate = 0.005;
+        expect(trainer.learningRate).toBe(0.005);
+        expect(() => {
+            trainer.learningRate = 0;
+        }).toThrow("learning rate must be positive");
         const sequence: ILifSurrogateNetworkTrainingSequence = {
             inputs: [[0.75], [0], [0]],
             targets: [[0.2], [0.8], [0.1]],

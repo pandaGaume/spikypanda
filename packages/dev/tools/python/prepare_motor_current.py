@@ -26,7 +26,7 @@ electrical domain (harmonics, sideband frequencies, phase asymmetry).
 
 2. Rotor Broken Bar - 3-phase induction motor (IEEE DataPort, UFU)
    - 3x voltage + 3x current + 5x vibration (DE/NDE, axial/radial,
-     horizontal/vertical), all sampled simultaneously for 18 s per run
+     horizontal/vertical), all sampled simultaneously for about 20 s per run
    - Motor: 1 hp, 220/380 V, 4 poles, 60 Hz, 1715 rpm, 34-bar squirrel cage
    - 8 load levels (12.5..100 % full load) x 5 rotor states
      (healthy + 1..4 adjacent broken bars) x 10 repetitions
@@ -83,8 +83,8 @@ HDF5 structure (MATLAB v7.3):
             Vib_base, Vib_carc
 
 Each referenced array is shape (1, N):
-  - currents/voltages: N ~= 1,001,000  (~55.6 kHz x 18 s)
-  - vibration:         N ~=   153,504  (~ 8.5 kHz x 18 s)
+  - currents/voltages: N ~= 1,001,000  (50 kHz x about 20 s)
+  - vibration:         N ~=   153,504
 
 5 rotors x 8 loads x 10 repetitions = 400 raw current traces per run set.
 
@@ -156,8 +156,14 @@ import math
 # Configuration
 # --------------------------------------------------------------------------
 
+# Time-series design rule: window size and stride are physical parameters,
+# not merely dataset-volume controls. The window must cover the relevant
+# phenomenon, while the stride sets decision-time resolution, motif alignment
+# and correlation between adjacent examples. Derive both from the characteristic
+# periods and transition durations of the fault signature, then validate them
+# across acquisition groups and multiple training seeds.
 WINDOW_SIZE = 128
-STRIDE = 64
+STRIDE = 32
 TRAIN_RATIO = 0.8
 MAX_SAMPLES_PER_CLASS = 400
 GROUPED_SPLIT_SEED = 42
@@ -175,17 +181,21 @@ GROUPED_SPLIT_PROTOCOL = "grouped-acquisition-v2-120hz"
 #   - 128 samples at ~120 Hz retain an approximately 1.07 s observation
 #   - The sensor gets twice the temporal resolution of the previous 60 Hz data
 #
-# Raw rate ~55.6 kHz, line frequency 60 Hz -> half-cycle = 463 raw
+# Raw rate 50 kHz, line frequency 60 Hz -> half-cycle = 417 raw
 # samples. After RMS we decimate by ENV_DECIMATE to land at a manageable
 # effective rate (~120 Hz envelope rate) so a 128-step window covers ~1 s
 # of motor running, capturing 2..5 envelope periods.
-UFU_RAW_SAMPLE_RATE_HZ = 55611.0
+UFU_RAW_SAMPLE_RATE_HZ = 50000.0
+UFU_LINE_FREQUENCY_HZ = 60.0
 UFU_TARGET_ENV_RATE_HZ = 120.0
-UFU_RAW_HALF_CYCLE = 463
+UFU_RAW_HALF_CYCLE = round(
+    UFU_RAW_SAMPLE_RATE_HZ / (2.0 * UFU_LINE_FREQUENCY_HZ)
+)
 UFU_ENV_DECIMATE = round(UFU_RAW_SAMPLE_RATE_HZ / UFU_TARGET_ENV_RATE_HZ)
 
-# Each 18 s acquisition contains a startup transient (zero current then a
-# large inrush, settling into steady state after ~4..5 s). We skip this
+# Each approximately 20 s acquisition contains a startup transient (zero
+# current then a large inrush, settling into steady state after ~4..5 s).
+# We skip this
 # many ENVELOPE samples (post-decimation) from the start of every trace
 # before computing global stats and before windowing. At ~120 Hz envelope
 # rate, 720 samples ~= 6 s, safely past the worst startup transients.
@@ -343,7 +353,7 @@ def collect_ufu_traces(filepath):
     """Collect 3-phase ENVELOPE traces from one UFU .mat file.
 
     For every (load level, repetition) we:
-      1. Dereference the raw Ia/Ib/Ic arrays at ~55.6 kHz
+      1. Dereference the raw Ia/Ib/Ic arrays at 50 kHz
       2. Compute moving RMS over a half-cycle of the line frequency
          (UFU_RAW_HALF_CYCLE samples). This is the envelope: the 60 Hz
          fundamental cancels out, only the slow modulation remains.
@@ -568,7 +578,7 @@ def _normalize_window_centered(raw_w, gain):
 
     Why this works: the UFU dataset samples every broken-bar class at
     every load level. The absolute envelope mean is therefore dominated
-    by load (a pure confound), NOT by rotor state — and on earlier runs
+    by load (a pure confound), NOT by rotor state, and on earlier runs
     it was taking up ~75 % of the input dynamic range, burying the
     modulation the LSTM actually needs to see. Per-window centering
     removes that confound entirely and the gain term then maps the
@@ -902,6 +912,8 @@ def process_source_dir(source_dir):
 
 
 def main():
+    global WINDOW_SIZE, STRIDE, OUTPUT_DIR
+
     parser = argparse.ArgumentParser(description=__doc__.split("---")[0].strip())
     parser.add_argument("--source-dir", default=None,
                         help="Local path to an extracted electrical-fault dataset. "
@@ -924,7 +936,32 @@ def main():
         default=GROUPED_SPLIT_SEED,
         help="Deterministic seed used by the grouped acquisition split.",
     )
+    parser.add_argument(
+        "--window-size",
+        type=int,
+        default=WINDOW_SIZE,
+        help=f"Sliding-window length after envelope decimation (default: {WINDOW_SIZE}).",
+    )
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=STRIDE,
+        help=f"Sliding-window stride after envelope decimation (default: {STRIDE}).",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=OUTPUT_DIR,
+        help="Directory receiving the generated JSON datasets.",
+    )
     args = parser.parse_args()
+
+    if args.window_size <= 0:
+        parser.error("--window-size must be positive")
+    if args.stride <= 0 or args.stride > args.window_size:
+        parser.error("--stride must be positive and cannot exceed --window-size")
+    WINDOW_SIZE = args.window_size
+    STRIDE = args.stride
+    OUTPUT_DIR = os.path.abspath(args.output_dir)
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -944,7 +981,7 @@ def main():
             "stride": STRIDE,
             "signalDomain": "envelope",
             "sampleRateHz": round(UFU_RAW_SAMPLE_RATE_HZ / UFU_ENV_DECIMATE, 6),
-            "lineFrequencyHz": 60.0,
+            "lineFrequencyHz": UFU_LINE_FREQUENCY_HZ,
             "preprocessing": {
                 "envelope": "moving-rms-half-cycle",
                 "rmsWindowSamples": UFU_RAW_HALF_CYCLE,
@@ -990,7 +1027,7 @@ def main():
                 "schemaVersion": 2,
                 "signalDomain": "envelope",
                 "sampleRateHz": round(UFU_RAW_SAMPLE_RATE_HZ / UFU_ENV_DECIMATE, 6),
-                "lineFrequencyHz": 60.0,
+                "lineFrequencyHz": UFU_LINE_FREQUENCY_HZ,
                 "preprocessing": {
                     "envelope": "moving-rms-half-cycle",
                     "rmsWindowSamples": UFU_RAW_HALF_CYCLE,

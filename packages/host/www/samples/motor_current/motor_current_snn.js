@@ -20,9 +20,12 @@
     const TOPOLOGY_DENSE = "dense";
     const TOPOLOGY_DENSE_RECURRENT = "dense-recurrent";
     const TOPOLOGY_PHASE_FUSION = "phase-fusion";
+    const TOPOLOGY_PHASE_DELAY_FUSION = "phase-delay-fusion";
     const RECURRENT_CORE_VERSION = "sparse-ring-delay-v1";
     const DEFAULT_RECURRENT_FAN_IN = 4;
     const DEFAULT_RECURRENT_DELAY_TICKS = 1;
+    const PHASE_DELAY_CORE_VERSION = "fixed-phase-delay-bank-v1";
+    const DEFAULT_PHASE_DELAY_TICKS = [0, 1, 2, 4];
     const TEMPORAL_POLICY = "per-branch-4-8-16-32dt-v1";
     const SENSOR_PHENOTYPE_VERSION = "wave-cell-phenotype-v1";
     const RECEPTIVE_FIELD_TRAINING_VERSION = "supervised-soft-biquad-fisher-grid-v1";
@@ -230,8 +233,7 @@
                 }
             }
             const multiclassScore = between / Math.max(within, 1e-12);
-            const targetedScore =
-                selectionStrategy === FREQUENCY_SELECTION_TARGETED_PAIR ? fisherScoreForLabels(byClass, targetLabels, channelCount) : null;
+            const targetedScore = selectionStrategy === FREQUENCY_SELECTION_TARGETED_PAIR ? fisherScoreForLabels(byClass, targetLabels, channelCount) : null;
             candidates.push({
                 frequencyHz: (bin * sampleRateHz) / sampleCount,
                 score: multiclassScore,
@@ -587,7 +589,7 @@
                         for (let tauIndex = 0; tauIndex < traceTauSamples.length; tauIndex++) {
                             const ageSamples = Math.max(0, sequenceLength - event.timestep);
                             const trace = Math.exp(-ageSamples / traceTauSamples[tauIndex]);
-                            const featureIndex = (((channel * 2 + event.polarityIndex) * thresholds.length + thresholdLevel) * traceTauSamples.length) + tauIndex;
+                            const featureIndex = ((channel * 2 + event.polarityIndex) * thresholds.length + thresholdLevel) * traceTauSamples.length + tauIndex;
                             soft[featureIndex] += softGate * trace;
                             hard[featureIndex] += hardGate * trace;
                         }
@@ -750,9 +752,11 @@
             return clamp(center + offset * step, minimum, maximum);
         });
         return candidates.filter(function (value, index) {
-            return candidates.findIndex(function (candidate) {
-                return Math.abs(candidate - value) < 1e-12;
-            }) === index;
+            return (
+                candidates.findIndex(function (candidate) {
+                    return Math.abs(candidate - value) < 1e-12;
+                }) === index
+            );
         });
     }
 
@@ -966,6 +970,7 @@
         const sensorEncoding = normalizeEncodingMode(options.sensorEncoding);
         const topology = normalizeTopology(options.topology);
         const recurrentEnabled = topology === TOPOLOGY_DENSE_RECURRENT;
+        const phaseDelayEnabled = topology === TOPOLOGY_PHASE_DELAY_FUSION;
         const pairAuxiliaryLoss = normalizePairAuxiliaryLoss(options.pairAuxiliaryLoss, outputSize);
         const scopedPairAuxiliary = normalizeScopedPairAuxiliary(options.scopedPairAuxiliary, outputSize);
         const runtimeDecoderObjective = normalizeRuntimeDecoderObjective(options.runtimeDecoderObjective);
@@ -998,6 +1003,7 @@
         const specialistHidden = [];
         const phaseHidden = [[], [], []];
         const fusionHidden = [];
+        const phaseRelayBySlot = new Map();
         const specialistOptions = options.specialistBranch && typeof options.specialistBranch === "object" ? options.specialistBranch : null;
         const specialistBandIds = new Set(
             specialistOptions && Array.isArray(specialistOptions.bandIds)
@@ -1028,7 +1034,17 @@
             return teacher;
         }
 
-        if (topology === TOPOLOGY_PHASE_FUSION) {
+        if (phaseDelayEnabled) {
+            for (let portIndex = 0; portIndex < sensorPorts.length; portIndex++) {
+                const port = sensorPorts[portIndex];
+                const relay = createHidden(hidden, "snn:phase-delay-relay-" + portIndex, portIndex, sensorPorts.length);
+                phaseHidden[port.channel].push(relay);
+                phaseRelayBySlot.set(port.slot, relay);
+            }
+            for (let neuron = 0; neuron < hiddenSize; neuron++) {
+                fusionHidden.push(createHidden(hidden, "snn:phase-delay-fusion-" + neuron, neuron, hiddenSize));
+            }
+        } else if (topology === TOPOLOGY_PHASE_FUSION) {
             const phaseWidth = Math.floor(hiddenSize / 4);
             if (phaseWidth < 1 || hiddenSize - phaseWidth * 3 < 1) {
                 throw new Error("Phase-fusion topology requires at least 4 hidden LIF neurons.");
@@ -1074,9 +1090,10 @@
         for (let portIndex = 0; portIndex < sensorPorts.length; portIndex++) {
             const port = sensorPorts[portIndex];
             if (specialistEnabled && specialistBandIds.has(port.bandId)) continue;
-            const targets = topology === TOPOLOGY_PHASE_FUSION ? phaseHidden[port.channel] || [] : hidden;
+            const targets = phaseDelayEnabled ? [phaseRelayBySlot.get(port.slot)] : topology === TOPOLOGY_PHASE_FUSION ? phaseHidden[port.channel] || [] : hidden;
             for (let neuron = 0; neuron < targets.length; neuron++) {
-                const synapse = new S.SpikeSynapse(sensor, targets[neuron].inputNode, port.slot, "spike", symmetric(random, hiddenInputScale));
+                const initialWeight = phaseDelayEnabled ? 0.9 + symmetric(random, 0.05) : symmetric(random, hiddenInputScale);
+                const synapse = new S.SpikeSynapse(sensor, targets[neuron].inputNode, port.slot, "spike", initialWeight);
                 sensorSynapses.push(synapse);
                 inputBindings.push({ inputIndex: inputIndexBySlot.get(port.slot), synapse: synapse });
             }
@@ -1084,7 +1101,8 @@
 
         const connections = [];
         const recurrentSynapses = [];
-        const outputSources = topology === TOPOLOGY_PHASE_FUSION ? fusionHidden : hidden;
+        const phaseDelaySynapses = [];
+        const outputSources = topology === TOPOLOGY_PHASE_FUSION || phaseDelayEnabled ? fusionHidden : hidden;
         if (topology === TOPOLOGY_PHASE_FUSION) {
             const fusionScale = 0.6 / Math.sqrt(Math.max(1, hiddenSize - fusionHidden.length));
             for (let neuron = 0; neuron < hiddenSize - fusionHidden.length; neuron++) {
@@ -1092,6 +1110,33 @@
                     connections.push(new S.SpikeSynapse(hidden[neuron].outputNode, fusionHidden[fusion].inputNode, "spike", "spike", symmetric(random, fusionScale)));
                 }
             }
+        }
+        let phaseDelayCore = null;
+        if (phaseDelayEnabled) {
+            const requestedCore = options.phaseDelayCore && typeof options.phaseDelayCore === "object" ? options.phaseDelayCore : {};
+            const delayTicks = normalizeDelayTicks(requestedCore.delayTicks);
+            const delayScale = positiveOr(requestedCore.initialWeightScale, 0.5 / Math.sqrt(delayTicks.length));
+            for (let relay = 0; relay < sensorPorts.length; relay++) {
+                for (let fusion = 0; fusion < fusionHidden.length; fusion++) {
+                    for (let delayIndex = 0; delayIndex < delayTicks.length; delayIndex++) {
+                        const delay = delayTicks[delayIndex];
+                        const synapse = new S.SpikeSynapse(hidden[relay].outputNode, fusionHidden[fusion].inputNode, "spike", "spike", symmetric(random, delayScale), delay);
+                        phaseDelaySynapses.push(synapse);
+                        connections.push(synapse);
+                    }
+                }
+            }
+            phaseDelayCore = {
+                version: requestedCore.version || PHASE_DELAY_CORE_VERSION,
+                delayTicks: delayTicks,
+                delaySeconds: delayTicks.map(function (delay) {
+                    return delay * dt;
+                }),
+                relayNeuronCount: sensorPorts.length,
+                fusionNeuronCount: fusionHidden.length,
+                synapseCount: phaseDelaySynapses.length,
+                denseTrainingTimesteps: true,
+            };
         }
         const outputScale = 0.6 / Math.sqrt(outputSources.length);
         for (let neuron = 0; neuron < outputSources.length; neuron++) {
@@ -1110,14 +1155,7 @@
                 const sources = recurrentSources(target, hidden.length, fanIn);
                 for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex++) {
                     const source = sources[sourceIndex];
-                    const synapse = new S.SpikeSynapse(
-                        hidden[source].outputNode,
-                        hidden[target].inputNode,
-                        "spike",
-                        "spike",
-                        symmetric(random, weightScale),
-                        delayTicks
-                    );
+                    const synapse = new S.SpikeSynapse(hidden[source].outputNode, hidden[target].inputNode, "spike", "spike", symmetric(random, weightScale), delayTicks);
                     recurrentSynapses.push(synapse);
                     connections.push(synapse);
                 }
@@ -1146,13 +1184,7 @@
                 const port = sensorPorts[portIndex];
                 if (!specialistBandIds.has(port.bandId)) continue;
                 for (let neuron = 0; neuron < specialistHidden.length; neuron++) {
-                    const synapse = new S.SpikeSynapse(
-                        sensor,
-                        specialistHidden[neuron].inputNode,
-                        port.slot,
-                        "spike",
-                        symmetric(random, specialistInputScale)
-                    );
+                    const synapse = new S.SpikeSynapse(sensor, specialistHidden[neuron].inputNode, port.slot, "spike", symmetric(random, specialistInputScale));
                     specialistSynapses.push(synapse);
                     const binding = { inputIndex: inputIndexBySlot.get(port.slot), synapse: synapse };
                     inputBindings.push(binding);
@@ -1163,13 +1195,7 @@
             for (let neuron = 0; neuron < specialistHidden.length; neuron++) {
                 for (let outputIndex = 0; outputIndex < specialistOutputLabels.length; outputIndex++) {
                     const output = specialistOutputLabels[outputIndex];
-                    const synapse = new S.SpikeSynapse(
-                        specialistHidden[neuron].outputNode,
-                        outputs[output].inputNode,
-                        "spike",
-                        "spike",
-                        symmetric(random, specialistOutputScale)
-                    );
+                    const synapse = new S.SpikeSynapse(specialistHidden[neuron].outputNode, outputs[output].inputNode, "spike", "spike", symmetric(random, specialistOutputScale));
                     connections.push(synapse);
                     specialistOutputSynapses.push(synapse);
                 }
@@ -1230,10 +1256,12 @@
             fusionHidden: fusionHidden,
             recurrentSynapses: recurrentSynapses,
             recurrentCore: recurrentCore,
+            phaseDelaySynapses: phaseDelaySynapses,
+            phaseDelayCore: phaseDelayCore,
             outputs: outputs,
             teachers: teachers,
-            hiddenSize: hiddenSize,
-            totalHiddenSize: hiddenSize + specialistHidden.length,
+            hiddenSize: hidden.length,
+            totalHiddenSize: hidden.length + specialistHidden.length,
             specialistBranch: specialistEnabled
                 ? {
                       version: specialistOptions.version || "specialist-branch-v1",
@@ -1250,6 +1278,7 @@
             seed: seed,
             tauBank: tauBank,
             temporalPolicy: TEMPORAL_POLICY,
+            requiresDenseTimesteps: recurrentEnabled || phaseDelayEnabled,
             sensorPhenotypeVersion: SENSOR_PHENOTYPE_VERSION,
             topology: topology,
             sensorEncoding: sensorEncoding,
@@ -1257,19 +1286,19 @@
             runtimeDecoderObjective: runtimeDecoderObjective,
             scopedPairAuxiliary: scopedPairTraining ? scopedPairTraining.config : null,
             scopedPairTraining: scopedPairTraining,
-            hiddenShape:
-                topology === TOPOLOGY_PHASE_FUSION
-                    ? phaseHidden
-                          .map(function (branch) {
-                              return branch.length;
-                          })
-                          .join("+") +
-                      " -> " +
-                      fusionHidden.length
-                    :
-                      String(hiddenSize) +
-                      (recurrentCore ? " + " + recurrentCore.synapseCount + " recurrent delay-" + recurrentCore.delayTicks : "") +
-                      (specialistEnabled ? " + " + specialistHidden.length + " specialist" : ""),
+            hiddenShape: phaseDelayEnabled
+                ? sensorPorts.length + " relays -> delays " + phaseDelayCore.delayTicks.join("/") + " -> " + fusionHidden.length + " fusion"
+                : topology === TOPOLOGY_PHASE_FUSION
+                  ? phaseHidden
+                        .map(function (branch) {
+                            return branch.length;
+                        })
+                        .join("+") +
+                    " -> " +
+                    fusionHidden.length
+                  : String(hiddenSize) +
+                    (recurrentCore ? " + " + recurrentCore.synapseCount + " recurrent delay-" + recurrentCore.delayTicks : "") +
+                    (specialistEnabled ? " + " + specialistHidden.length + " specialist" : ""),
             trainableWeightCount: trainer.synapses.length,
             compiled: false,
         };
@@ -1311,13 +1340,7 @@
         for (let outputIndex = 0; outputIndex < pairOutputs.length; outputIndex++) {
             auxiliaryInputs.push({
                 inputIndex: frameInputIndex,
-                synapse: new S.SpikeSynapse(
-                    options.frameSource,
-                    pairOutputs[outputIndex].inputNode,
-                    "scoped-pair-frame-" + outputIndex,
-                    "spike",
-                    0.1
-                ),
+                synapse: new S.SpikeSynapse(options.frameSource, pairOutputs[outputIndex].inputNode, "scoped-pair-frame-" + outputIndex, "spike", 0.1),
             });
         }
         const network = {
@@ -1386,7 +1409,7 @@
             inputIndexBySlot: model.inputIndexBySlot,
             pairAuxiliaryLoss: model.pairAuxiliaryLoss,
             runtimeDecoderObjective: model.runtimeDecoderObjective,
-            preserveEmptyTimesteps: !!model.recurrentCore,
+            preserveEmptyTimesteps: model.requiresDenseTimesteps === true,
         });
         const hardTrace = model.trainer.forward(encoded, "hard");
         const hardFinalStep = hardTrace.steps[hardTrace.steps.length - 1];
@@ -1459,7 +1482,7 @@
             inputIndexBySlot: model.inputIndexBySlot,
             pairAuxiliaryLoss: model.pairAuxiliaryLoss,
             runtimeDecoderObjective: model.runtimeDecoderObjective,
-            preserveEmptyTimesteps: !!model.recurrentCore,
+            preserveEmptyTimesteps: model.requiresDenseTimesteps === true,
         });
         const totalHiddenSize = model.totalHiddenSize || model.hiddenSize;
         const trainingTrace = model.trainer.forward(encoded, "training");
@@ -1501,7 +1524,7 @@
             inputIndexBySlot: model.inputIndexBySlot,
             pairAuxiliaryLoss: model.pairAuxiliaryLoss,
             runtimeDecoderObjective: model.runtimeDecoderObjective,
-            preserveEmptyTimesteps: !!model.recurrentCore,
+            preserveEmptyTimesteps: model.requiresDenseTimesteps === true,
         });
         const totalHiddenSize = model.totalHiddenSize || model.hiddenSize;
         const teacherCount = model.teachers.length;
@@ -1525,11 +1548,7 @@
         for (let count = Math.min(size, totalHiddenSize); ; count = Math.min(totalHiddenSize, count + size)) {
             const modes = new Array(teacherCount).fill("soft");
             for (let neuron = 0; neuron < count; neuron++) modes[neuron] = "hard";
-            appendStage(
-                "hidden-0-" + (count - 1) + "-hard",
-                "LIF cachés 0.." + (count - 1) + " hard, sorties soft",
-                model.trainer.forwardMixed(encoded, modes)
-            );
+            appendStage("hidden-0-" + (count - 1) + "-hard", "LIF cachés 0.." + (count - 1) + " hard, sorties soft", model.trainer.forwardMixed(encoded, modes));
             if (count === totalHiddenSize) break;
         }
         const outputHardModes = new Array(teacherCount).fill("soft");
@@ -1555,9 +1574,7 @@
         for (let timestep = 0; timestep < softTrace.steps.length; timestep++) {
             let difference = 0;
             for (let neuron = 0; neuron < neuronCount; neuron++) {
-                difference += Math.abs(
-                    softTrace.steps[timestep].neurons[neuron].membranePotential - hardTrace.steps[timestep].neurons[neuron].membranePotential
-                );
+                difference += Math.abs(softTrace.steps[timestep].neurons[neuron].membranePotential - hardTrace.steps[timestep].neurons[neuron].membranePotential);
             }
             divergenceByTimestep.push(difference / Math.max(1, neuronCount));
         }
@@ -1769,9 +1786,26 @@
     }
 
     function normalizeTopology(value) {
+        if (value === TOPOLOGY_PHASE_DELAY_FUSION) return TOPOLOGY_PHASE_DELAY_FUSION;
         if (value === TOPOLOGY_PHASE_FUSION) return TOPOLOGY_PHASE_FUSION;
         if (value === TOPOLOGY_DENSE_RECURRENT) return TOPOLOGY_DENSE_RECURRENT;
         return TOPOLOGY_DENSE;
+    }
+
+    function normalizeDelayTicks(value) {
+        const requested = Array.isArray(value) ? value : DEFAULT_PHASE_DELAY_TICKS;
+        const normalized = requested
+            .filter(function (delay) {
+                return Number.isInteger(delay) && delay >= 0;
+            })
+            .filter(function (delay, index, delays) {
+                return delays.indexOf(delay) === index;
+            })
+            .sort(function (left, right) {
+                return left - right;
+            });
+        if (normalized.length === 0) throw new Error("Phase-delay fusion requires at least one non-negative integer delay.");
+        return normalized;
     }
 
     function recurrentSources(target, neuronCount, fanIn) {
@@ -1908,7 +1942,9 @@
         TOPOLOGY_DENSE: TOPOLOGY_DENSE,
         TOPOLOGY_DENSE_RECURRENT: TOPOLOGY_DENSE_RECURRENT,
         TOPOLOGY_PHASE_FUSION: TOPOLOGY_PHASE_FUSION,
+        TOPOLOGY_PHASE_DELAY_FUSION: TOPOLOGY_PHASE_DELAY_FUSION,
         RECURRENT_CORE_VERSION: RECURRENT_CORE_VERSION,
+        PHASE_DELAY_CORE_VERSION: PHASE_DELAY_CORE_VERSION,
         TEMPORAL_POLICY: TEMPORAL_POLICY,
         SENSOR_PHENOTYPE_VERSION: SENSOR_PHENOTYPE_VERSION,
         RECEPTIVE_FIELD_TRAINING_VERSION: RECEPTIVE_FIELD_TRAINING_VERSION,

@@ -94,7 +94,7 @@ export class ConstrainedLifNetworkBpttTrainer {
     private readonly _outputIndices: ReadonlyArray<number>;
     private readonly _synapses: ReadonlyArray<SpikeSynapse>;
 
-    public readonly learningRate: number;
+    private _learningRate = 0.01;
     public readonly lossFunction: ILossFunction;
     public readonly optimizer: IOptimizer;
     public readonly timeStep: number;
@@ -165,6 +165,15 @@ export class ConstrainedLifNetworkBpttTrainer {
 
     public get trainingContext(): Readonly<ITrainingContext> {
         return this._context;
+    }
+
+    public get learningRate(): number {
+        return this._learningRate;
+    }
+
+    public set learningRate(value: number) {
+        if (!Number.isFinite(value) || value <= 0) throw new Error("Constrained LIF network learning rate must be positive.");
+        this._learningRate = value;
     }
 
     public get synapses(): ReadonlyArray<SpikeSynapse> {

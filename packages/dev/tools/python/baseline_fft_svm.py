@@ -25,7 +25,7 @@ from collections import defaultdict
 # ---------------------------------------------------------------------------
 # Constants (same as prepare_motor_current.py)
 # ---------------------------------------------------------------------------
-RAW_RATE_HZ = 55611.0
+RAW_RATE_HZ = 50000.0
 LINE_FREQ_HZ = 60.0
 TRANSIENT_SKIP_S = 6.0          # seconds to skip at start of each trace
 WINDOW_DURATION_S = 1.0         # seconds per FFT window

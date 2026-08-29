@@ -8,4 +8,5 @@ export * from "./lif-surrogate.compiler";
 export * from "./lif-surrogate.training";
 export * from "./lif-surrogate-network.training";
 export * from "./wave-spike.sensor";
+export * from "./classification-topology";
 export * from "./spike.registry";
