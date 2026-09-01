@@ -13,6 +13,8 @@
             "spikypanda-onnx/*":    ["dev/onnx/src/*"],
             "spikypanda-nodeeditor":   ["dev/nodeeditor/src/index.ts"],
             "spikypanda-nodeeditor/*": ["dev/nodeeditor/src/*"],
+            "spikypanda-mcp": ["dev/mcp/src/index.ts"],
+            "spikypanda-mcp/*": ["dev/mcp/src/*"],
             "spikypanda-applications-mpc":      ["dev/applications/mpc/src/index.ts"],
             "spikypanda-applications-mpc/*":    ["dev/applications/mpc/src/*"],
             "spikypanda-applications-cardriver":   ["dev/applications/privates/cardriver/src/index.ts"],

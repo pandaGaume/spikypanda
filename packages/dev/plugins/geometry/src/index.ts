@@ -52,6 +52,7 @@ const plugin: IPlugin = {
         ctx.nodes.register("spk.geometry:cartesian3-split", () => new Cartesian3SplitNode(), {
             label: "Cartesian3 Split",
             category: "geometry",
+            docPath: ctx.assetUrl("docs/geometry/cartesian3-split.md"),
             inputPorts: [{ slot: "vec3", optional: true, type: "vec3" }],
             outputPorts: [
                 { slot: "x", optional: false, type: "float" },

@@ -65,6 +65,7 @@ export const loadSubPlugin: IPlugin = {
         // `applyTo` (-> motor.fault_0). Speed feeds back from the motor.
         ctx.nodes.register("Physics.Mechanical.Load:turbine", () => createTurbinePayloadNode() as never, {
             label: "Turbine Payload",
+            docPath: ctx.assetUrl("docs/physics/load/turbine.md"),
             category: "Physics.Mechanical.Load",
             inputPorts: [
                 { slot: "local", optional: true, type: "matrix44" },

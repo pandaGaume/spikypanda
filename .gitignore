@@ -75,3 +75,7 @@ internals/
 
 # do not ignore the node-editor-v2.js file in the node-editor-v2 package
 !/packages/host/www/node-editor-v2/node-editor-v2.js
+
+# mcp-broker: la configuration est versionnee, le materiel TLS et les mounts locaux non
+/.mcp-broker/certs/
+/.mcp-broker/www/

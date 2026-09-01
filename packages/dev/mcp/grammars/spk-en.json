@@ -1,0 +1,85 @@
+{
+    "registry_list_nodes": {
+        "description": "List every node type the activated plugins registered, with ports, declared interop standards and resolved documentation. Consult this before wiring anything: a port declares a type, a stream/signal kind and often a physical unit, and connecting on a guess produces a graph the runtime refuses.",
+        "properties": {
+            "locale": "Preferred documentation locale, e.g. \"fr\". Falls back to English. Nodes vary in which locales they carry; `docLocales` in the result says which exist."
+        }
+    },
+    "registry_describe_node": {
+        "description": "Describe one node type before instantiating it. Ports carry a declared unit where the node has one, which is the only machine-readable physical typing available: honour it rather than inferring from the name.",
+        "properties": {
+            "type": "Node type id exactly as `registry_list_nodes` reports it, e.g. \"Physics.Scene\". Labels are not type ids.",
+            "locale": "Preferred documentation locale."
+        }
+    },
+    "graph_describe": {
+        "description": "The current graph: node ids, types, positions and connections. Every other tool addresses nodes by the ids found here, so this is normally the first call of a session."
+    },
+    "graph_add_node": {
+        "description": "Instantiate a node from the catalogue. Ports come from the node's own registry declaration, never from the caller.",
+        "properties": {
+            "type": "Node type id from `registry_list_nodes`.",
+            "x": "Canvas position. Layout only, with no effect on the simulation.",
+            "y": "Canvas position. Layout only, with no effect on the simulation."
+        }
+    },
+    "graph_connect": {
+        "description": "Connect an output port to an input port. The link type is resolved from the two port types and is never supplied. A refusal means the types are incompatible, not that the call was malformed.",
+        "properties": {
+            "from": "Source, as { nodeId, port }, naming an output port.",
+            "to": "Destination, as { nodeId, port }, naming an input port."
+        }
+    },
+    "graph_configure": {
+        "description": "Apply properties across several nodes in one call, validated entirely before anything is written. Use this for one cell of an experiment: writing gravity and orientation separately makes an intermediate state observable that corresponds to no condition you meant to test.",
+        "properties": {
+            "nodes": "One entry per node: { nodeId, properties: { key: value } }."
+        }
+    },
+    "node_describe": {
+        "description": "A node's properties with their current values, types and editability. `propertySource` reports whether these were declared by the node or reflected from its public fields; reflected properties are still writable, but their type and editability are inferred rather than chosen, so treat them as a hint.",
+        "properties": { "nodeId": "Node id from `graph_describe`. Labels are never accepted: they are not unique." }
+    },
+    "node_set_property": {
+        "description": "Write one property. This is how gravity, orientation and fault severity are set: they are node properties, not dedicated commands. A refusal carries the node's own explanation of why the property is read-only.",
+        "properties": {
+            "nodeId": "Node id from `graph_describe`.",
+            "key": "Property key from `node_describe`.",
+            "value": "New value, matching the property's declared type."
+        }
+    },
+    "sim_run": {
+        "description": "Advance the live session by an explicit number of ticks, sampling every armed capture as it goes. Read nothing before transients have decayed: a controller loop needs its settling time and a low-pass filter several of its time constants, and a window taken too early measures the transient rather than the steady state. The runner is paused first if it was playing, so only one driver advances time.",
+        "properties": {
+            "steps": "Number of ticks. Multiply by dt to get the span covered.",
+            "dt": "Seconds per tick. Match the graph's own time step: too coarse a dt changes the result rather than merely coarsening it."
+        }
+    },
+    "sim_reset": {
+        "description": "Stop the runner and return to the initial state. Tears down the session, so a following `sim_run` has nothing to step until the runner is started again. Armed captures survive."
+    },
+    "sim_status": {
+        "description": "Runner state, whether a live session exists, current time, tick index and rate. `hasSession` false is normal while idle, not an error."
+    },
+    "capture_arm": {
+        "description": "Record node properties on every subsequent tick. A port only holds its value at the current tick, so any windowed reading needs this: arm, step, then read back. For a periodic quantity, plan a span covering a whole number of periods, since a partial period biases every single-frequency estimate. Arming resets an existing capture rather than appending, which would splice two unrelated spans of time into one apparently continuous series.",
+        "properties": {
+            "captureId": "Name for this capture. Defaults to \"default\".",
+            "signals": "Signals to record, as { nodeId, property }."
+        }
+    },
+    "capture_read": {
+        "description": "Return the recorded window: the simulation time of every sample and one value series per signal, index-aligned. A sample that was missing or non-numeric is NaN rather than absent, so series never misalign against their timestamps.",
+        "properties": { "captureId": "Capture name. Defaults to \"default\"." }
+    },
+    "sweep_run": {
+        "description": "Run a grid of configurations and return one recorded window per cell. Each cell is configured, settled without recording, then captured, so a window never straddles the transient and the steady state. Prefer this over a manual loop: a scene by orientation by fault grid is dozens of cells, and three round trips per cell turns a measurement into an afternoon.",
+        "properties": {
+            "cells": "One entry per cell: { label?, nodes: [{ nodeId, properties }] }. The label is echoed back, which is what makes a large result readable.",
+            "signals": "Signals recorded in every cell, as { nodeId, property }.",
+            "dt": "Seconds per tick.",
+            "settleSteps": "Ticks run before recording starts, so transients decay. Not recorded.",
+            "captureSteps": "Ticks recorded. For a periodic reading, span a whole number of periods."
+        }
+    }
+}

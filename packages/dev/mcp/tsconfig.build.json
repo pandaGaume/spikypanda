@@ -1,0 +1,25 @@
+{
+    "extends": "../../../tsconfig.build.json",
+    "compilerOptions": {
+        "composite": true,
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "skipLibCheck": true,
+        // The repository resolves modules the classic way, which predates
+        // subpath exports. mcp-core publishes its server and node entry points
+        // that way ("@cyanmycelium/mcp-core/server"), so this package alone
+        // needs a resolver that understands them. Scoped here rather than
+        // raised at the root, where it would change how every package resolves.
+        "moduleResolution": "bundler",
+        // Grammar files are imported so they are bundled with the studio
+        // rather than fetched, which would make publishing asynchronous for
+        // no benefit: they are a few kilobytes and never change at runtime.
+        "resolveJsonModule": true
+    },
+    "references": [
+        { "path": "../core/tsconfig.build.json" },
+        { "path": "../nodeeditor/tsconfig.build.json" }
+    ],
+    "include": ["./src/**/*.ts", "./grammars/*.json"],
+    "exclude": ["**/node_modules", "**/dist"]
+}

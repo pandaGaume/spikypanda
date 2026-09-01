@@ -109,7 +109,7 @@ export class ScopeWidget {
         this._buildDom();
         if (this._bus && this._streamId) this._wireBus();
 
-        // Register in the global scope-widget registry so window.__spk.captureScope()
+        // Register in the global scope-widget registry so a capture tool
         // can look up widgets by title without needing a direct module reference.
         if (this._title) {
             if (!window._spkScopeWidgets) window._spkScopeWidgets = new Map();
@@ -154,7 +154,7 @@ export class ScopeWidget {
     /**
      * Capture the current canvas frame as a PNG data URL (base64-encoded).
      * Returns null if the canvas has not been rendered yet (zero dimensions).
-     * Used by window.__spk.captureScope() for the MCP measure_capture_scope tool.
+     * Used by the MCP controller's capture tools to read a scope's window.
      */
     getSnapshot() {
         if (!this._canvas || !this._canvas.width || !this._canvas.height) return null;

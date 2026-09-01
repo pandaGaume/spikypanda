@@ -3,6 +3,7 @@ export * from "./cnn";
 export * from "./rnn";
 export * from "./snn";
 export * from "./transformer";
+export * from "./windowing.adapters";
 export * from "./nn.weights";
 export * from "./nn.interfaces";
 export * from "./nn.interfaces.builder";

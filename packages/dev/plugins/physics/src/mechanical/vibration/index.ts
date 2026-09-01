@@ -30,6 +30,7 @@ export const vibrationSubPlugin: IPlugin = {
         // the measured specific force (vec3) a real accelerometer would read.
         ctx.nodes.register("Physics.Mechanical.Vibration:imu", () => createImuNode() as never, {
             label: "IMU (3-axis)",
+            docPath: ctx.assetUrl("docs/physics/vibration/imu.md"),
             category: "Physics.Mechanical.Vibration",
             inputPorts: [
                 { slot: "local", ...MAT44_IN },

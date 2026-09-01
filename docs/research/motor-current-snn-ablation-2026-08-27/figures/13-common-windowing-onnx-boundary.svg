@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
+  <title id="title">Frontière commune de fenêtrage et export ONNX</title>
+  <desc id="desc">Architecture recommandée pour produire une fenêtre identifiée commune, puis alimenter un capteur SNN ou un modèle GRU ONNX. Une seconde ligne montre l'équivalent ONNX hors ligne fondé sur Gather.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .title { font: 600 30px Inter, "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 16px Inter, "Segoe UI", Arial, sans-serif; fill: #475569; }
+      .lane-title { font: 600 17px Inter, "Segoe UI", Arial, sans-serif; fill: #1e293b; }
+      .box-title { font: 600 18px Inter, "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+      .box-text { font: 400 14px Inter, "Segoe UI", Arial, sans-serif; fill: #334155; }
+      .mono { font: 500 14px Consolas, "SFMono-Regular", monospace; fill: #1e293b; }
+      .small { font: 400 13px Inter, "Segoe UI", Arial, sans-serif; fill: #475569; }
+      .arrow { fill: none; stroke: #334155; stroke-width: 2.5; marker-end: url(#arrow); }
+      .arrow-label { font: 500 13px Inter, "Segoe UI", Arial, sans-serif; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="900" fill="#ffffff"/>
+  <text class="title" x="52" y="52">Frontière commune de fenêtrage et export ONNX</text>
+  <text class="subtitle" x="52" y="80">Le fenêtrage stateful reste dans le runtime commun. ONNX reçoit une entrée fixe et sans ambiguïté.</text>
+
+  <rect x="40" y="112" width="970" height="470" rx="14" fill="#eff6ff" stroke="#60a5fa" stroke-width="2"/>
+  <text class="lane-title" x="62" y="145">Runtime de flux commun, TypeScript puis CyanMycelium C++</text>
+
+  <rect x="1030" y="112" width="370" height="470" rx="14" fill="#faf5ff" stroke="#a855f7" stroke-width="2" stroke-dasharray="8 6"/>
+  <text class="lane-title" x="1052" y="145">Frontière ONNX</text>
+  <text class="small" x="1052" y="168">Inférence stateless, tenseurs de forme fixe</text>
+
+  <rect x="72" y="226" width="210" height="174" rx="12" fill="#ffffff" stroke="#64748b" stroke-width="2" filter="url(#shadow)"/>
+  <text class="box-title" x="177" y="260" text-anchor="middle">Flux signal</text>
+  <text class="mono" x="92" y="294">values [C]</text>
+  <text class="mono" x="92" y="320">sampleIndex</text>
+  <text class="mono" x="92" y="346">acquisitionId</text>
+  <text class="small" x="92" y="378">Un échantillon par appel</text>
+
+  <rect x="344" y="194" width="286" height="238" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="2.5" filter="url(#shadow)"/>
+  <text class="box-title" x="487" y="230" text-anchor="middle">IWindowingService</text>
+  <text class="mono" x="370" y="264">push(sample)</text>
+  <text class="mono" x="370" y="290">windowSize = 128</text>
+  <text class="mono" x="370" y="316">stride = 32</text>
+  <line x1="370" y1="335" x2="604" y2="335" stroke="#93c5fd" stroke-width="1.5"/>
+  <text class="box-text" x="370" y="360">Buffer et recouvrement</text>
+  <text class="box-text" x="370" y="384">Continuité des indices</text>
+  <text class="box-text" x="370" y="408">Frontières d'acquisition</text>
+
+  <rect x="690" y="210" width="250" height="206" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="2.5" filter="url(#shadow)"/>
+  <text class="box-title" x="815" y="246" text-anchor="middle">IdentifiedWindow</text>
+  <text class="mono" x="714" y="280">values [128, 3]</text>
+  <text class="mono" x="714" y="306">windowIndex</text>
+  <text class="mono" x="714" y="332">start / end</text>
+  <text class="mono" x="714" y="358">acquisitionId</text>
+  <text class="small" x="714" y="390">Snapshot commun et immuable</text>
+
+  <path class="arrow" d="M 282 313 L 344 313"/>
+  <text class="arrow-label" x="313" y="299" text-anchor="middle">sample</text>
+  <path class="arrow" d="M 630 313 L 690 313"/>
+  <text class="arrow-label" x="660" y="299" text-anchor="middle">0 ou 1 fenêtre</text>
+
+  <circle cx="982" cy="313" r="5" fill="#334155"/>
+  <path class="arrow" d="M 940 313 L 982 313 L 982 250 L 1070 250"/>
+  <path class="arrow" d="M 940 313 L 982 313 L 982 446 L 1070 446"/>
+  <text class="arrow-label" x="1018" y="232" text-anchor="end">SnnWindowAdapter</text>
+  <text class="arrow-label" x="1018" y="428" text-anchor="end">GruWindowAdapter</text>
+
+  <rect x="1070" y="196" width="286" height="120" rx="12" fill="#ffffff" stroke="#7c3aed" stroke-width="2.5" filter="url(#shadow)"/>
+  <text class="box-title" x="1213" y="234" text-anchor="middle">SNN Sensor</text>
+  <text class="mono" x="1096" y="265">observations [128]</text>
+  <text class="small" x="1096" y="292">Horodatage et frameEnd</text>
+
+  <rect x="1070" y="390" width="286" height="120" rx="12" fill="#ffffff" stroke="#7c3aed" stroke-width="2.5" filter="url(#shadow)"/>
+  <text class="box-title" x="1213" y="428" text-anchor="middle">GRU ONNX</text>
+  <text class="mono" x="1096" y="459">input [1, 128, 3]</text>
+  <text class="small" x="1096" y="486">Aucun état de fenêtrage</text>
+
+  <rect x="40" y="612" width="1360" height="242" rx="14" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
+  <text class="lane-title" x="62" y="646">Équivalent ONNX hors ligne, optionnel</text>
+  <text class="small" x="62" y="670">Applicable quand le signal complet est déjà disponible sous forme de tenseur.</text>
+
+  <rect x="86" y="706" width="190" height="92" rx="10" fill="#ffffff" stroke="#64748b" stroke-width="2"/>
+  <text class="box-title" x="181" y="742" text-anchor="middle">Signal complet</text>
+  <text class="mono" x="181" y="773" text-anchor="middle">X [T, C]</text>
+
+  <rect x="358" y="706" width="230" height="92" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <text class="box-title" x="473" y="742" text-anchor="middle">Indices constants</text>
+  <text class="mono" x="473" y="773" text-anchor="middle">I [N, 128]</text>
+
+  <rect x="670" y="706" width="190" height="92" rx="10" fill="#fefce8" stroke="#ca8a04" stroke-width="2"/>
+  <text class="box-title" x="765" y="742" text-anchor="middle">ONNX Gather</text>
+  <text class="mono" x="765" y="773" text-anchor="middle">axis = 0</text>
+
+  <rect x="942" y="706" width="210" height="92" rx="10" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+  <text class="box-title" x="1047" y="742" text-anchor="middle">Fenêtres</text>
+  <text class="mono" x="1047" y="773" text-anchor="middle">[N, 128, C]</text>
+
+  <path class="arrow" d="M 276 752 L 358 752"/>
+  <path class="arrow" d="M 588 752 L 670 752"/>
+  <path class="arrow" d="M 860 752 L 942 752"/>
+
+  <rect x="1202" y="696" width="164" height="112" rx="10" fill="#fff1f2" stroke="#e11d48" stroke-width="2"/>
+  <text class="box-title" x="1284" y="730" text-anchor="middle">Non couvert</text>
+  <text class="small" x="1284" y="756" text-anchor="middle">continuité</text>
+  <text class="small" x="1284" y="778" text-anchor="middle">acquisitionId</text>
+  <text class="small" x="1284" y="800" text-anchor="middle">identité runtime</text>
+
+  <text class="mono" x="62" y="832">N = floor((T - 128) / 32) + 1</text>
+</svg>

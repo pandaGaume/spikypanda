@@ -151,6 +151,25 @@ export class GraphRunner implements IDisposable {
         this._viewer = viewer;
     }
 
+    /**
+     * The live session, or null while the runner is idle.
+     *
+     * Read-only on purpose: the runner owns the session's lifecycle, builds it
+     * in `_bootstrapSession` and tears it down in `_tearDownSession`. Exposing
+     * it lets an out-of-band observer (the MCP controller, a probe, a test)
+     * read ports and drive steps against the session the editor is actually
+     * showing, instead of calling `buildSessionFromViewer` again and ending up
+     * with a second graph that no view reflects.
+     */
+    public get session(): Session | null {
+        return this._session;
+    }
+
+    /** The viewer this runner draws its graph from. */
+    public get viewer(): GraphViewer {
+        return this._viewer;
+    }
+
     public setSpeed(speed: number): void {
         if (!Number.isFinite(speed) || speed < 0) return;
         this.speed = speed;

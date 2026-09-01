@@ -94,6 +94,9 @@
     <script src="../bundle/SpkPluginViz.js?v=p46"></script>
     <script src="../bundle/SpkPluginHelios.js?v=p46"></script>
     <script src="../bundle/SpkPluginIso.js?v=p46"></script>
+    <!-- MCP controller. Loaded after the plugins so the registry it reads is
+         already populated, and before the page script, which publishes it. -->
+    <script src="../bundle/SpkMcp.js?v=p46"></script>
     <script type="module" src="node-editor-v2.js?v=p46"></script>
 </body>
 </html>

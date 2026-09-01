@@ -67,18 +67,21 @@ export const faultSubPlugin: IPlugin = {
         const APPLY_TO_OUT = [{ slot: "applyTo", optional: false, type: "fault" }];
         ctx.nodes.register("Physics.Mechanical.Fault:rotor-sag", () => createRotorSagFaultNode() as never, {
             label: "Rotor Sag (gravity cause)",
+            docPath: ctx.assetUrl("docs/physics/fault/rotor-sag.md"),
             category: "Physics.Mechanical.Fault",
             inputPorts: [],
             outputPorts: APPLY_TO_OUT,
         });
         ctx.nodes.register("Physics.Mechanical.Fault:rotor-eccentricity", () => createRotorEccentricityFaultNode() as never, {
             label: "Rotor Eccentricity (static cause)",
+            docPath: ctx.assetUrl("docs/physics/fault/rotor-eccentricity.md"),
             category: "Physics.Mechanical.Fault",
             inputPorts: [],
             outputPorts: APPLY_TO_OUT,
         });
         ctx.nodes.register("Physics.Mechanical.Fault:rotor-imbalance", () => createRotorImbalanceFaultNode() as never, {
             label: "Rotor Imbalance (mechanical cause)",
+            docPath: ctx.assetUrl("docs/physics/fault/rotor-imbalance.md"),
             category: "Physics.Mechanical.Fault",
             inputPorts: [],
             outputPorts: APPLY_TO_OUT,

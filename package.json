@@ -34,13 +34,15 @@
         "test:watch": "jest --watch"
     },
     "dependencies": {
-        "@cyanmycelium/mcp-core": "^0.2.1",
+        "@cyanmycelium/mcp-broker-provider": "^0.1.1",
+        "@cyanmycelium/mcp-core": "^0.7.0",
         "marked": "^12.0.2",
         "nexusui": "^2.1.6",
         "reflect-metadata": "^0.2.2",
         "tslib": "^2.8.1"
     },
     "devDependencies": {
+        "@cyanmycelium/mcp-broker": "^1.2.1",
         "@types/jest": "^29.5.14",
         "@types/node": "^18.15.10",
         "@typescript-eslint/eslint-plugin": "^7.0.0",

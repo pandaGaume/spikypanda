@@ -1,0 +1,429 @@
+<title>mcp-broker Field Report</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --ink:        #11161d;
+    --ink-2:      #47525f;
+    --ink-3:      #6d7987;
+    --paper:      #f6f7f9;
+    --surface:    #ffffff;
+    --line:       #dde2e8;
+    --line-soft:  #e9edf1;
+    --accent:     #0d6f86;
+    --accent-dim: #e3f0f3;
+    --critical:   #9c1a3d;
+    --critical-d: #fbe9ee;
+    --warn:       #9a5b0b;
+    --warn-dim:   #fbefdd;
+    --good:       #1c6b3f;
+    --good-dim:   #e4f2ea;
+    --code-bg:    #f0f3f6;
+
+    --measure: 68ch;
+    --step-0: 1rem;
+    --step-1: 1.15rem;
+    --step-2: 1.4rem;
+    --step-3: 1.85rem;
+    --step-4: 2.6rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink:        #e8ecf1;
+      --ink-2:      #a7b2bf;
+      --ink-3:      #7d8895;
+      --paper:      #0e1319;
+      --surface:    #151b23;
+      --line:       #28313c;
+      --line-soft:  #202832;
+      --accent:     #52b8d0;
+      --accent-dim: #10303a;
+      --critical:   #e88ca4;
+      --critical-d: #331520;
+      --warn:       #d9a54e;
+      --warn-dim:   #33240f;
+      --good:       #6dc38f;
+      --good-dim:   #122a1c;
+      --code-bg:    #101720;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink:        #e8ecf1;
+    --ink-2:      #a7b2bf;
+    --ink-3:      #7d8895;
+    --paper:      #0e1319;
+    --surface:    #151b23;
+    --line:       #28313c;
+    --line-soft:  #202832;
+    --accent:     #52b8d0;
+    --accent-dim: #10303a;
+    --critical:   #e88ca4;
+    --critical-d: #331520;
+    --warn:       #d9a54e;
+    --warn-dim:   #33240f;
+    --good:       #6dc38f;
+    --good-dim:   #122a1c;
+    --code-bg:    #101720;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 62rem; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+
+  header.masthead { border-bottom: 2px solid var(--ink); padding-bottom: 1.5rem; margin-bottom: 2.5rem; }
+  .kicker {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .74rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 .6rem;
+  }
+  h1 { font-size: var(--step-4); line-height: 1.1; margin: 0 0 .6rem; letter-spacing: -.02em; text-wrap: balance; }
+  .standfirst { font-size: var(--step-1); color: var(--ink-2); max-width: var(--measure); margin: 0; text-wrap: pretty; }
+
+  .meta { display: flex; flex-wrap: wrap; gap: 1.75rem; margin-top: 1.5rem;
+          font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .8rem; color: var(--ink-3); }
+  .meta b { display: block; color: var(--ink); font-weight: 600; }
+
+  h2 { font-size: var(--step-3); margin: 3rem 0 .35rem; letter-spacing: -.015em; text-wrap: balance; }
+  h2 + .section-note { color: var(--ink-3); max-width: var(--measure); margin: 0 0 1.5rem; }
+  h3 { font-size: var(--step-2); margin: 0 0 .5rem; letter-spacing: -.01em; text-wrap: balance; }
+  p { max-width: var(--measure); text-wrap: pretty; }
+
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .875em; }
+  :not(pre) > code { background: var(--code-bg); padding: .1em .35em; border-radius: 3px; }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--line-soft); border-radius: 6px;
+    padding: .85rem 1rem; overflow-x: auto; margin: 1rem 0 0;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .82rem; line-height: 1.55;
+  }
+
+  .findings { display: flex; flex-direction: column; gap: 1.25rem; }
+  .finding {
+    background: var(--surface); border: 1px solid var(--line);
+    border-left: 3px solid var(--sev, var(--accent));
+    border-radius: 4px; padding: 1.25rem 1.4rem;
+  }
+  .finding-head { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; margin-bottom: .5rem; }
+  .chip {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .68rem; letter-spacing: .09em; text-transform: uppercase; font-weight: 600;
+    padding: .18rem .5rem; border-radius: 3px; white-space: nowrap;
+    background: var(--sev-bg, var(--accent-dim)); color: var(--sev, var(--accent));
+  }
+  .sev-silent   { --sev: var(--critical); --sev-bg: var(--critical-d); }
+  .sev-friction { --sev: var(--warn);     --sev-bg: var(--warn-dim); }
+  .sev-docs     { --sev: var(--accent);   --sev-bg: var(--accent-dim); }
+  .finding h3 { margin: 0; flex: 1 1 18rem; }
+  .finding p { margin: .5rem 0 0; }
+  .ask {
+    margin-top: 1rem; padding-top: .85rem; border-top: 1px dashed var(--line);
+    display: flex; gap: .6rem; align-items: flex-start;
+  }
+  .ask-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .7rem; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--ink-3); padding-top: .2rem; white-space: nowrap; font-weight: 600;
+  }
+  .ask p { margin: 0; }
+
+  .praise { background: var(--good-dim); border: 1px solid var(--line); border-left: 3px solid var(--good);
+            border-radius: 4px; padding: 1.25rem 1.4rem; }
+  .praise ul { margin: .5rem 0 0; padding-left: 1.1rem; }
+  .praise li { margin: .45rem 0; max-width: var(--measure); }
+  .praise strong { color: var(--good); }
+
+  ol.timeline { counter-reset: step; list-style: none; padding: 0; margin: 1rem 0 0; }
+  ol.timeline li {
+    counter-increment: step; position: relative; padding: 0 0 1.1rem 2.4rem;
+    border-left: 1px solid var(--line); margin-left: .6rem;
+  }
+  ol.timeline li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  ol.timeline li::before {
+    content: counter(step); position: absolute; left: -.72rem; top: 0;
+    width: 1.45rem; height: 1.45rem; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--line); color: var(--ink-3);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .72rem; font-weight: 600;
+    display: grid; place-items: center;
+  }
+  ol.timeline li p { margin: 0; }
+  ol.timeline b { font-weight: 600; }
+
+  .table-scroll { overflow-x: auto; margin-top: 1rem; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { text-align: left; padding: .55rem .7rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .72rem; letter-spacing: .08em;
+       text-transform: uppercase; color: var(--ink-3); border-bottom: 1px solid var(--line); }
+  td code { white-space: nowrap; }
+
+  .samples { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); margin-top: 1rem; }
+  .sample { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1.1rem 1.2rem; }
+  .sample h3 { font-size: var(--step-1); }
+  .sample p { margin: .4rem 0 0; font-size: .92rem; color: var(--ink-2); }
+
+  footer { margin-top: 4rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+           color: var(--ink-3); font-size: .85rem; }
+  footer p { max-width: var(--measure); }
+  a { color: var(--accent); }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker">Integration report &middot; @cyanmycelium/mcp-broker 1.2.1</p>
+  <h1>Publishing a browser to a broker slot</h1>
+  <p class="standfirst">Notes from wiring a browser-hosted MCP server into a broker slot and reaching it from an external client. The path works. Getting there cost far more than it should have, and every wrong turn failed silently.</p>
+  <div class="meta">
+    <span><b>Packages</b>mcp-broker 1.2.1 &middot; mcp-core 0.7.0 &middot; mcp-broker-provider 0.1.1</span>
+    <span><b>Topology</b>Browser provider &rarr; WS tunnel &rarr; broker &rarr; Streamable HTTP client</span>
+    <span><b>Platform</b>Windows 11 &middot; Node 22.20</span>
+  </div>
+</header>
+
+<h2>What we were building</h2>
+<p class="section-note">Context for the findings below.</p>
+<p>A graph editor that runs entirely in the browser publishes itself as an MCP server so an agent can drive it: list the node catalogue, compose a graph, set node properties, step the simulation, read back a recorded window. The runtime has to stay in the page, because the view and its time-series plots need it locally. That makes the broker the only way out.</p>
+<p>This is exactly the row in the mcp-core README that reads <em>&ldquo;MCP server inside a browser, exposed to the outside &rarr; mcp-core + mcp-broker-provider &rarr; MultiplexTransport&rdquo;</em>. We followed it, and that turned out to be the single most expensive decision of the integration.</p>
+
+<h2>What worked well</h2>
+<p class="section-note">Worth saying first, because the rest of this document is problems.</p>
+<div class="praise">
+  <ul>
+    <li><strong>The <code>_broker</code> introspection tools are what made diagnosis possible.</strong> <code>providers_list</code> and <code>provider_status</code> turned a black-box hang into a precise measurement. Without <code>pendingCount</code> we would still be guessing.</li>
+    <li><strong>&ldquo;What to import for what&rdquo; answered our exact question in one row.</strong> Most libraries make you infer that table.</li>
+    <li><strong>&ldquo;Two readings that trip people up&rdquo; pre-empted two mistakes we were actively making</strong> &mdash; bundling the broker as a dependency, and thinking it was required to write a server. Documentation that predicts the reader's error is rare.</li>
+    <li><strong>The startup banner is excellent.</strong> Every endpoint, plus auth state spelled out as &ldquo;trusted network only&rdquo;. Security posture visible without reading config.</li>
+    <li><strong>Keeping the tunnel out of mcp-core was the right call</strong>, and the README says why: topology, not protocol. Paying a breaking change in 0.5.0 for that principle is unusual and correct.</li>
+    <li><strong><code>--help</code> was fixed the same day it was reported</strong>, covering <code>-h</code> and <code>--version</code> too.</li>
+  </ul>
+</div>
+
+<h2>Silent failures</h2>
+<p class="section-note">Ranked by how long each one cost us. Every item here produced a working-looking system that did nothing.</p>
+
+<div class="findings">
+
+  <div class="finding sev-silent">
+    <div class="finding-head">
+      <span class="chip">Silent &middot; highest cost</span>
+      <h3>Multiplex transport on a slot-scoped URL registers, reports healthy, and never answers</h3>
+    </div>
+    <p>We used <code>MultiplexTransport.create(slot, "ws://host:3000/provider/&lt;slot&gt;")</code>. The socket opened. The broker registered the provider and refused a second one with <code>1008 &quot;already connected&quot;</code>. <code>providers_list</code> reported it as connected. Every client request then hung forever.</p>
+    <p>Multiplex wraps messages in a named envelope so one socket can carry several servers. A slot-scoped URL carries plain messages. The transport therefore registered correctly and silently dropped everything afterwards. The only visible trace was in the broker's own accounting:</p>
+    <pre>{"name":"spikypanda","transport":"ws","connected":true,
+ "clientCount":0,"sessionCount":1,"pendingCount":1}</pre>
+    <p><code>connected: true</code> with a permanently rising <code>pendingCount</code> is the signature. Switching to <code>new DirectTransport(url)</code> fixed it immediately, and 21 tools appeared on the first call.</p>
+    <div class="ask">
+      <span class="ask-label">Ask</span>
+      <p>Detect the mismatch and say so. A registration frame arriving on a slot-scoped path, or a plain frame arriving at a multiplex transport, is unambiguous and could close with a reason instead of going quiet. Failing that, a warning after the first unanswered request would have saved hours.</p>
+    </div>
+  </div>
+
+  <div class="finding sev-silent">
+    <div class="finding-head">
+      <span class="chip">Silent</span>
+      <h3>Every WebSocket path accepts the handshake, including ones that do not exist</h3>
+    </div>
+    <p>All three of these opened cleanly against a running broker:</p>
+    <pre>ws://localhost:3000/providers              &rarr; OPEN
+ws://localhost:3000/provider               &rarr; OPEN
+ws://localhost:3000/provider/demo-slot     &rarr; OPEN   (never configured)</pre>
+    <p>A wrong provider URL therefore gives no signal at connect time. Combined with the finding above, a typo in the tunnel URL is indistinguishable from a working setup until a client times out.</p>
+    <div class="ask">
+      <span class="ask-label">Ask</span>
+      <p>Reject unknown paths at the handshake, or at minimum log the connection with the path and the shape the broker expects on it.</p>
+    </div>
+  </div>
+
+  <div class="finding sev-silent">
+    <div class="finding-head">
+      <span class="chip">Silent &middot; mcp-core</span>
+      <h3><code>server.start()</code> resolves even when the transport never connected</h3>
+    </div>
+    <p>Our publish routine logged &ldquo;published to broker slot&rdquo; on a page where the WebSocket had failed outright. The console showed the failure one line earlier; <code>start()</code> reported success anyway. We shipped a false positive into our own logs and trusted it for two debugging rounds.</p>
+    <div class="ask">
+      <span class="ask-label">Ask</span>
+      <p>Either reject when the transport reports a connect failure, or document clearly that <code>start()</code> is not a connection guarantee so integrators add their own gate.</p>
+    </div>
+  </div>
+
+  <div class="finding sev-silent">
+    <div class="finding-head">
+      <span class="chip">Silent</span>
+      <h3><code>MultiplexTransport.isOpen</code> read <code>false</code> on a tunnel the broker considered live</h3>
+    </div>
+    <p>Observed against a broker that was actively refusing a second provider for that slot &mdash; so the tunnel was demonstrably up. We tried to build a health check on <code>isOpen</code> and had to remove it, because it would have rejected working setups.</p>
+    <div class="ask">
+      <span class="ask-label">Ask</span>
+      <p>Clarify what <code>isOpen</code> tracks on a shared socket, and expose something an integrator can trust for a readiness check.</p>
+    </div>
+  </div>
+
+  <div class="finding sev-silent">
+    <div class="finding-head">
+      <span class="chip">Silent</span>
+      <h3>Port already in use exits quietly; the client sees only <code>CONNECTION_CLOSED</code></h3>
+    </div>
+    <p>Because the broker both binds a port and serves an stdio bridge, a host that spawns it per MCP server entry produces a second instance that cannot bind. It exits, and the client reports <code>Connection closed</code> with no cause. We chased this for a full round before finding a stray broker process holding port 3000.</p>
+    <div class="ask">
+      <span class="ask-label">Ask</span>
+      <p>Catch <code>EADDRINUSE</code> and print the port, the holding process if resolvable, and the suggestion to attach rather than spawn. This one is cheap and would pay for itself immediately.</p>
+    </div>
+  </div>
+
+</div>
+
+<h2>Operational friction</h2>
+<p class="section-note">Nothing broken, but each one cost a cycle.</p>
+
+<div class="findings">
+
+  <div class="finding sev-friction">
+    <div class="finding-head">
+      <span class="chip">Friction</span>
+      <h3>A reloaded browser page orphans its slot</h3>
+    </div>
+    <p>Reloading the provider page leaves the previous registration in place. The new connection is refused with <code>1008 &quot;Provider &lt;name&gt; is already connected&quot;</code>, and clients then route to a socket nobody is on. We fixed our side by releasing the slot on <code>pagehide</code>, but a browser tab that crashes or is killed cannot do that.</p>
+    <div class="ask">
+      <span class="ask-label">Ask</span>
+      <p>Consider treating a new registration for an unresponsive slot as a takeover, or add a liveness check. At minimum, document that a browser provider must release explicitly, because reload is the normal development loop.</p>
+    </div>
+  </div>
+
+  <div class="finding sev-friction">
+    <div class="finding-head">
+      <span class="chip">Friction</span>
+      <h3><code>MCP_BROKER_STDIO_PROVIDER=&lt;slot&gt;</code> creates a startup ordering dependency</h3>
+    </div>
+    <p>Pinning the bridge to a provider slot means the connection fails whenever the provider is not up yet &mdash; which, for a browser provider, is every single time the host starts before the page is open. The error is accurate (<code>Provider &lt;slot&gt; not connected</code>) but the setup is unusable as a default.</p>
+    <p>Pointing the bridge at <code>_broker</code> instead solves it completely: that server is always present, and <code>providers_list</code> then tells you whether the real provider has arrived. We found this by reading <code>dist/</code>.</p>
+    <div class="ask">
+      <span class="ask-label">Ask</span>
+      <p>Document <code>_broker</code> as the recommended stdio target for hosts that start before their providers, with the two-entry pattern below.</p>
+    </div>
+  </div>
+
+  <div class="finding sev-friction">
+    <div class="finding-head">
+      <span class="chip">Friction</span>
+      <h3>Origin checks apply even when the broker serves the page itself</h3>
+    </div>
+    <p>Once the broker was serving the studio from its own <code>www</code> mount, we assumed same-origin requests would pass. They do not &mdash; the browser still sends <code>Origin</code>, and the endpoint answers <code>403 invalid_origin</code>. Reasonable behavior, genuinely surprising in that configuration.</p>
+    <p>Related: <code>allowedOrigins</code> works as a config key (array or <code>{pattern, flags}</code>), but it appears in neither the example <code>config.json</code> nor the configuration reference &mdash; only <code>MCP_BROKER_ALLOWED_ORIGINS</code> shows up, in <code>--help</code>.</p>
+    <div class="ask">
+      <span class="ask-label">Ask</span>
+      <p>Add <code>allowedOrigins</code> to the example config, and note that a <code>www</code> mount does not exempt the served origin.</p>
+    </div>
+  </div>
+
+  <div class="finding sev-friction">
+    <div class="finding-head">
+      <span class="chip">Friction</span>
+      <h3><code>www.open</code> can only open the root</h3>
+    </div>
+    <p>The broker serving the provider page is an elegant topology &mdash; one process, one origin, no ordering problem. But <code>open</code> is a boolean that launches <code>/</code>, and a real app usually lives at a sub-path. Ours opens a landing page that publishes nothing.</p>
+    <div class="ask">
+      <span class="ask-label">Ask</span>
+      <p>Let <code>www.open</code> take a path or URL. It turns a nice-to-have into the thing that removes the ordering dependency entirely.</p>
+    </div>
+  </div>
+
+</div>
+
+<h2>Documentation gaps</h2>
+<p class="section-note">Where we went looking and did not find, or found two answers.</p>
+
+<div class="findings">
+
+  <div class="finding sev-docs">
+    <div class="finding-head">
+      <span class="chip">Docs</span>
+      <h3>Two provider paths across two READMEs</h3>
+    </div>
+    <p>The broker documents providers connecting to <code>ws://&lt;host&gt;/provider/&lt;name&gt;</code>, and <code>paths.provider</code> defaults to <code>/provider</code>. The provider README's multiplex example uses <code>ws://localhost:3000/providers</code>, plural. Since every path accepts the handshake, neither reader gets corrected.</p>
+    <p>The transport table itself is correct and clear. The failure is that choosing the wrong row has no visible consequence.</p>
+    <div class="ask">
+      <span class="ask-label">Ask</span>
+      <p>Align the example URLs, and state the pairing as a rule: <code>DirectTransport</code> with <code>/provider/&lt;name&gt;</code>, <code>MultiplexTransport</code> with the shared base.</p>
+    </div>
+  </div>
+
+  <div class="finding sev-docs">
+    <div class="finding-head">
+      <span class="chip">Docs</span>
+      <h3>The <code>_broker</code> slot and its tools are undocumented</h3>
+    </div>
+    <p><code>broker_info</code>, <code>providers_list</code> and <code>provider_status</code> are the most useful things in the package for anyone integrating, and we found them by grepping <code>dist/</code>. <code>_all</code> is mentioned twice in the README, but only in the context of policy filtering, never as an addressable slot.</p>
+    <p>Worth clarifying too: <code>_all</code> aggregates upstream servers, prefixed as <code>_broker-providers_list</code> and so on. It does <em>not</em> surface the tools of connected provider slots, which is what we first assumed from the name.</p>
+    <div class="ask">
+      <span class="ask-label">Ask</span>
+      <p>Give <code>_broker</code> and <code>_all</code> a short section: what each exposes, what it does not, and when to point a client at either.</p>
+    </div>
+  </div>
+
+</div>
+
+<h2>How the failure actually unfolded</h2>
+<p class="section-note">A real sequence, because the order is the point: each step looked like progress.</p>
+<ol class="timeline">
+  <li><p><b>Followed the README row</b> for a browser server and chose <code>MultiplexTransport</code>.</p></li>
+  <li><p><b>Publish logged success.</b> <code>server.start()</code> resolved. We believed it.</p></li>
+  <li><p><b>First client hung</b> on <code>initialize</code>. We assumed our hand-written client was wrong and discarded it.</p></li>
+  <li><p><b>A raw HTTP probe hung too.</b> We assumed a self-deadlock, since the same page was both provider and client.</p></li>
+  <li><p><b>A probe from a second tab hung as well.</b> The deadlock theory died. First real evidence of a product-side problem.</p></li>
+  <li><p><b><code>provider_status</code> reported <code>pendingCount: 1</code>.</b> The request reached the tunnel and was waiting. This one measurement moved the fault decisively to our transport choice.</p></li>
+  <li><p><b>Swapped to <code>DirectTransport</code>.</b> 21 tools on the first call, and a full round trip: catalogue read, node created, property written and read back.</p></li>
+</ol>
+<p>Five of those seven steps were spent forming and discarding wrong theories, because nothing in the stack said no. Step six worked because <code>provider_status</code> exists.</p>
+
+<h2>Configuration that ended up working</h2>
+<p class="section-note">Offered as a candidate recipe, since the two-entry shape is not obvious.</p>
+<p>One entry spawns the broker and bridges stdio to its own server, so it connects whether or not any provider is up. The second reaches the provider slot over HTTP and deliberately spawns nothing, which is what avoids the port collision described above.</p>
+<pre>{
+  "mcpServers": {
+    "broker": {
+      "command": "npx",
+      "args": ["-y", "@cyanmycelium/mcp-broker"],
+      "env": { "MCP_BROKER_STDIO_PROVIDER": "_broker" }
+    },
+    "studio": {
+      "type": "http",
+      "url": "http://localhost:3000/studio/mcp"
+    }
+  }
+}</pre>
+
+<h2>Samples worth shipping</h2>
+<p class="section-note">In the order we would have wanted them.</p>
+<div class="samples">
+  <div class="sample">
+    <h3>Browser provider, end to end</h3>
+    <p>The case the transport table names, as runnable code: page publishes, broker relays, external client calls a tool. Correct transport, correct URL, release on unload. This one sample would have prevented every silent failure above.</p>
+  </div>
+  <div class="sample">
+    <h3>Host configuration recipe</h3>
+    <p>The two-entry pattern, with the reasoning: why the stdio entry targets <code>_broker</code>, and why the slot entry must not spawn a second process.</p>
+  </div>
+  <div class="sample">
+    <h3>Provider lifecycle</h3>
+    <p>Connect, register, release. What a browser must do on unload, and what happens to a slot when it does not.</p>
+  </div>
+  <div class="sample">
+    <h3>Broker as application host</h3>
+    <p>Serving the provider page from the broker's own <code>www</code> mount: one process, one origin, no ordering dependency. Including the origin allowlist that is still required.</p>
+  </div>
+</div>
+
+<h2>The one-line summary</h2>
+<p>The architecture is sound and the introspection tools are genuinely good. What cost us the day is that this stack fails quietly: a wrong transport, a wrong path, a dead socket and an occupied port all present as a healthy system. Most of the asks above are one log line each.</p>
+
+<footer>
+  <p>Reported from an integration of a browser-hosted graph editor against mcp-broker 1.2.1. Every observation here was reproduced against a running broker; quoted output is verbatim. Happy to supply the reproduction if useful.</p>
+</footer>
+
+</div>

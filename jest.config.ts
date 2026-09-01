@@ -32,6 +32,8 @@ const config: Config = {
         "^spikypanda-onnx/(.*)$":    "<rootDir>/packages/dev/onnx/src/$1",
         "^spikypanda-nodeeditor$":      "<rootDir>/packages/dev/nodeeditor/src/index.ts",
         "^spikypanda-nodeeditor/(.*)$": "<rootDir>/packages/dev/nodeeditor/src/$1",
+        "^spikypanda-mcp$":             "<rootDir>/packages/dev/mcp/src/index.ts",
+        "^spikypanda-mcp/(.*)$":        "<rootDir>/packages/dev/mcp/src/$1",
         "^spikypanda-applications-stereo$":      "<rootDir>/packages/dev/applications/stereo/src/index.ts",
         "^spikypanda-applications-stereo/(.*)$": "<rootDir>/packages/dev/applications/stereo/src/$1",
         "^spikypanda-applications-mpc$":      "<rootDir>/packages/dev/applications/mpc/src/index.ts",

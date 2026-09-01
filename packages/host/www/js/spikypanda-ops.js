@@ -15,7 +15,7 @@
 //   - "processor" : has inputs and outputs; runs in the graph-runner.
 //   - "sink"      : no outputs (or passthrough); runs in a detail-page tab.
 // `detailPage` is a path relative to samples/ (the editor lives at
-// samples/nodeeditor/ and resolves URLs as `../<detailPage>`).
+// the studio page and resolves URLs as `../<detailPage>`).
 //
 // `attrSchema` is the per-op editable surface. Each entry: { key, label,
 // type, ...constraints }. Types: "number" | "int" | "string" | "boolean" | "select".

@@ -334,6 +334,74 @@
     const runner = new NODEEDITOR.GraphRunner(viewer);
     window.__nev2.inferrer = inferrer;
     window.__nev2.runner = runner;
+
+    // ── window.Studio — the studio's supported surface ────────────────────
+    //
+    // `__nev2` is a debug handle: it grew field by field, its shape is not a
+    // contract and it exposes internals nobody outside should hold. `Studio`
+    // is the opposite: a small, stable seam for anything driving this page
+    // from outside, starting with the MCP controller, which needs the live
+    // runner to read and step the very session the view is drawing.
+    //
+    // Accessors rather than fields, because the objects behind them are
+    // rebuilt over a page's life (the runner tears its session down on stop)
+    // and a captured reference would quietly go stale.
+    window.Studio = {
+        /** The live GraphRunner. Its `session` is null while idle, by design. */
+        getRunner: () => runner,
+        /** The graph the runner draws from: nodes, connections, registries. */
+        getViewer: () => viewer,
+        /** The node catalogue the activated plugins populated. */
+        getRegistry: () => viewer.getNodeRegistry(),
+
+        /**
+         * Publish this studio into a broker slot, so an agent can drive it.
+         *
+         * Opt-in rather than automatic: dialling a broker that is not running
+         * would put a failed WebSocket in the console of every page load, for
+         * a feature most sessions do not use. Add `?mcp` to the URL, or call
+         * this from the console.
+         *
+         * Returns the publication, whose `stop()` releases the slot.
+         */
+        publishMcp: (options) => {
+            if (!window.SpkMcp || typeof window.SpkMcp.publishToBroker !== "function") {
+                return Promise.reject(new Error("SpkMcp bundle not loaded"));
+            }
+            return window.SpkMcp.publishToBroker(runner, options || {});
+        },
+    };
+
+    // Publish by default, opt out with `?mcp=0`. `?mcp=<name>` picks a slot.
+    //
+    // Publishing used to be opt-in, to avoid a failed WebSocket in the console
+    // of every page load when no broker was running. That reason is gone: the
+    // studio is served BY the broker, so a page that exists at all was handed
+    // over by a broker that is listening. Opting out stays available for the
+    // case where the page is served from somewhere else.
+    //
+    // The broker must list this page's origin in MCP_BROKER_ALLOWED_ORIGINS,
+    // or the client endpoint refuses the browser.
+    {
+        const params = new URLSearchParams(window.location.search);
+        const asked = params.get("mcp");
+        if (asked !== "0" && asked !== "off" && asked !== "false") {
+            const slot = asked && asked !== "1" ? asked : undefined;
+            window.Studio.publishMcp(slot ? { slot } : {})
+                .then((pub) => {
+                    window.__nev2.mcp = pub;
+                    console.log(`[nev2/mcp] published to broker slot "${slot || "spikypanda"}"`);
+                    // Release the slot when the page goes away. Without this a
+                    // reload leaves the previous registration in place and the
+                    // broker refuses the new one with "already connected",
+                    // leaving clients to hang against a socket nobody is on.
+                    // `pagehide` rather than `beforeunload`: it fires for the
+                    // back/forward cache too, where `beforeunload` does not.
+                    window.addEventListener("pagehide", () => { try { pub.stop(); } catch {} }, { once: true });
+                })
+                .catch((err) => console.warn("[nev2/mcp] publish failed:", err && err.message ? err.message : err));
+        }
+    }
     inferrer.onError = (err) => console.error("[nev2/runOnce]", err);
 
     const player = (() => {

@@ -2,9 +2,10 @@
 #
 # Téléchargement à la demande des données ouvertes NASA (PIMS/SAMS et PCoE).
 #
-# Les données ne doivent jamais atterrir dans le dépôt. Ce script écrit
-# systématiquement dans $NASA_DATA_DIR, qui est un frère du dépôt, et refuse
-# de démarrer si la destination se trouve à l'intérieur d'un dépôt git.
+# Les données ne doivent jamais être versionnées. Ce script écrit par défaut dans
+# <depot>/data/nasa, que le .gitignore exclut, et refuse de démarrer si la
+# destination est dans un dépôt git sans y être effectivement ignorée. Le critère
+# est vérifié auprès de git à chaque exécution, il n'est pas supposé.
 #
 # Deux pièges du serveur PIMS, tous deux contournés ici :
 #   - il répond 500 ou 403 aux requêtes HEAD sur des chemins qu'il sert en 200
@@ -20,7 +21,8 @@ HANDBOOK_ROOT="https://gipoc.grc.nasa.gov/pims/pimsdocs/public/ISS%20Handbook"
 HANDBOOK_INDEX="https://gipoc.grc.nasa.gov/wp/pims/handbook/"
 PCOE_ROOT="https://phm-datasets.s3.amazonaws.com/NASA"
 
-DEST_ROOT="${NASA_DATA_DIR:-$HOME/Documents/spikypanda-data/microg-nasa}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+DEST_ROOT="${NASA_DATA_DIR:-$REPO_ROOT/data/nasa}"
 ASSUME_YES=0
 
 usage() {
@@ -29,7 +31,7 @@ Usage : fetch_nasa_data.sh [-y] [-d DEST] <commande> [arguments]
 
 Commandes
   list <AAAA-MM-JJ>              Liste les flux capteurs disponibles ce jour-là
-  pad <capteur> <AAAA-MM-JJ>     Un jour de mesures pour un capteur (~691 Mo à 500 Hz)
+  pad <capteur> <AAAA-MM-JJ>     Un jour de mesures pour un capteur (~660 Mo à 500 Hz)
   header <capteur> <AAAA-MM-JJ>  Les en-têtes XML seuls, sans les données (~150 Ko)
   catalog                        Rafraîchit la liste des 270 PDF du manuel PIMS
   case <nom>                     Une étude de cas du manuel, par nom de fichier
@@ -37,7 +39,7 @@ Commandes
 
 Options
   -y        Ne pas demander de confirmation avant les téléchargements volumineux
-  -d DEST   Racine de destination (défaut : $NASA_DATA_DIR ou ~/Documents/spikypanda-data/microg-nasa)
+  -d DEST   Racine de destination (défaut : $NASA_DATA_DIR ou <depot>/data/nasa, ignore par git)
 
 Exemples
   ./fetch_nasa_data.sh list 2024-01-13
@@ -53,13 +55,17 @@ USAGE
 
 die() { echo "erreur : $*" >&2; exit 1; }
 
-# Refuse toute destination située dans un dépôt git : les données restent locales.
+# Le critère n'est pas "hors du dépôt" mais "jamais versionné". Une destination
+# située dans un dépôt git n'est acceptée que si git l'ignore effectivement,
+# ce qui est vérifié auprès de git plutôt que supposé.
 guard_destination() {
     mkdir -p "$DEST_ROOT"
-    local resolved
+    local resolved toplevel
     resolved="$(cd "$DEST_ROOT" && pwd -P)"
-    if git -C "$resolved" rev-parse --show-toplevel >/dev/null 2>&1; then
-        die "la destination $resolved est dans le dépôt git $(git -C "$resolved" rev-parse --show-toplevel). Les données doivent rester hors du dépôt."
+    toplevel="$(git -C "$resolved" rev-parse --show-toplevel 2>/dev/null || true)"
+    [ -z "$toplevel" ] && return 0 # hors de tout dépôt, rien à vérifier
+    if ! git -C "$resolved" check-ignore -q "$resolved"; then
+        die "la destination $resolved est dans le dépôt $toplevel et n'y est PAS ignorée par git. Les données ne doivent jamais être versionnées : choisir un chemin ignoré (data/) ou un chemin hors dépôt."
     fi
 }
 
