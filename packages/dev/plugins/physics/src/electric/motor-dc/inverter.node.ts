@@ -72,7 +72,7 @@ export class DcInverterNode extends IntegrableRuntimeNode implements IDeclaresPo
     }
 
     // ── Editables ─────────────────────────────────────────────────────
-    @editable("number", { unit: "armatureVoltage" })
+    @editable("number", { unit: { quantity: "Voltage", unit: "volt" } })
     public get dcBusVoltage(): number {
         return this._dcBusVoltage;
     }
@@ -83,7 +83,7 @@ export class DcInverterNode extends IntegrableRuntimeNode implements IDeclaresPo
         });
     }
 
-    @editable("number", { unit: "Hz" })
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } })
     public get pwmFrequency(): number {
         return this._pwmFrequency;
     }
@@ -108,7 +108,7 @@ export class DcInverterNode extends IntegrableRuntimeNode implements IDeclaresPo
         });
     }
 
-    @editable("number", { unit: "s" })
+    @editable("number", { unit: { quantity: "Timespan", unit: "s" } })
     public get deadTime(): number {
         return this._deadTime;
     }

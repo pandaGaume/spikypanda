@@ -76,7 +76,7 @@ export class Iso20816SeverityNode extends RuntimeNode implements IDeclaresPorts 
     }
 
     /** Operating speed (rpm). 0 = unknown; below 600 rpm drops the band edge to 2 Hz. */
-    @editable("number", { unit: "rpm" })
+    @editable("number", { unit: { quantity: "Frequency", unit: "rpm" } })
     public get operating_rpm(): number {
         return this._operatingRpm;
     }
@@ -88,7 +88,7 @@ export class Iso20816SeverityNode extends RuntimeNode implements IDeclaresPorts 
     }
 
     /** Declared shaft power (kW). 0 = unknown; below 15 kW refuses (out of ISO scope). */
-    @editable("number", { unit: "kW" })
+    @editable("number", { unit: { quantity: "Power", unit: "kwatt" } })
     public get power_kw(): number {
         return this._powerKw;
     }

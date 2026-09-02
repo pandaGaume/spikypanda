@@ -93,7 +93,7 @@ export class SteadyStateGateNode extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @editable("number", { unit: "samples" })
+    @editable("number", { unit: { quantity: "Count", unit: "samples" } })
     public get settle(): number {
         return this._settle;
     }
@@ -104,7 +104,7 @@ export class SteadyStateGateNode extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @editable("number", { unit: "samples" })
+    @editable("number", { unit: { quantity: "Count", unit: "samples" } })
     public get breakHold(): number {
         return this._breakHold;
     }

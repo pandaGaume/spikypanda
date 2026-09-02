@@ -132,7 +132,7 @@ export class CompositionNode extends GraphItem {
         this.display_name = v;
     }
 
-    @editable("number", { unit: "Pa" })
+    @editable("number", { unit: { quantity: "Pressure", unit: "Pa" } })
     public get reference_pressure(): number {
         return this._referencePressurePa;
     }

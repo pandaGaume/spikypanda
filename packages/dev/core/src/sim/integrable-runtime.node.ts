@@ -86,7 +86,7 @@ export class IntegrableRuntimeNode<B = unknown> extends RuntimeNode<B> implement
      * (pinned value or computed). Write either pins a new value or
      * unpins (when a non-positive / NaN value is entered).
      */
-    @editable("number", { unit: "Hz" })
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } })
     public get requiredSampleRateHz(): number {
         return this.requiredHz;
     }

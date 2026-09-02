@@ -33,7 +33,7 @@ export class LifNeuronNode extends RuntimeNode implements IDeclaresPorts {
     private _spikeAmplitude: number = 1;
 
     @cloneable
-    @editable("number", { unit: "V" })
+    @editable("number", { unit: { quantity: "Voltage", unit: "volt" } })
     public get restingPotential(): number {
         return this._restingPotential;
     }
@@ -42,7 +42,7 @@ export class LifNeuronNode extends RuntimeNode implements IDeclaresPorts {
     }
 
     @cloneable
-    @editable("number", { unit: "V" })
+    @editable("number", { unit: { quantity: "Voltage", unit: "volt" } })
     public get initialPotential(): number {
         return this._initialPotential;
     }
@@ -51,7 +51,7 @@ export class LifNeuronNode extends RuntimeNode implements IDeclaresPorts {
     }
 
     @cloneable
-    @editable("number", { unit: "V" })
+    @editable("number", { unit: { quantity: "Voltage", unit: "volt" } })
     public get threshold(): number {
         return this._threshold;
     }
@@ -60,7 +60,7 @@ export class LifNeuronNode extends RuntimeNode implements IDeclaresPorts {
     }
 
     @cloneable
-    @editable("number", { unit: "V" })
+    @editable("number", { unit: { quantity: "Voltage", unit: "volt" } })
     public get resetPotential(): number {
         return this._resetPotential;
     }
@@ -69,7 +69,7 @@ export class LifNeuronNode extends RuntimeNode implements IDeclaresPorts {
     }
 
     @cloneable
-    @editable("number", { min: 1e-9, unit: "s" })
+    @editable("number", { min: 1e-9, unit: { quantity: "Timespan", unit: "s" } })
     public get membraneTimeConstant(): number {
         return this._membraneTimeConstant;
     }
@@ -79,7 +79,7 @@ export class LifNeuronNode extends RuntimeNode implements IDeclaresPorts {
     }
 
     @cloneable
-    @editable("number", { min: 0, unit: "s" })
+    @editable("number", { min: 0, unit: { quantity: "Timespan", unit: "s" } })
     public get refractoryPeriod(): number {
         return this._refractoryPeriod;
     }

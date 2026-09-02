@@ -19,7 +19,6 @@
  * so, instead of inventing a provenance.
  */
 import type { SerializedGraph } from "spikypanda-nodeeditor";
-import type { PropertyEntry } from "spikypanda-nodeeditor/inspectable.js";
 
 /** A port as the registry declares it, flattened for transport. */
 export interface PortState {
@@ -79,6 +78,46 @@ export interface SimulationState {
     readonly simRate: number | null;
 }
 
+/**
+ * One settable or observable property of a node instance.
+ *
+ * Shaped for what a node *declares*, not for what reflection can guess. It
+ * deliberately does not reuse the editor's `PropertyEntry`: that type has no
+ * room for a unit, and a unit is the whole point of the declaration.
+ */
+export interface NodePropertyState {
+    readonly key: string;
+    readonly value: unknown;
+    /** False for `@viewable`: computed or derived, writes are refused. */
+    readonly editable: boolean;
+    /** JSON-ish type, when the declared editor kind maps onto one. */
+    readonly type: "string" | "number" | "boolean" | "select" | null;
+    /**
+     * Editor kind exactly as declared, e.g. "vector3", "matrix4", "slider".
+     * Richer than `type`, which collapses everything structured to null.
+     */
+    readonly kind: string | null;
+    /**
+     * Canonical UCUM code of the declared unit, e.g. "Hz", "N.m", "Cel".
+     *
+     * Resolved through the unit system rather than copied from the
+     * declaration, so what a client receives is the machine identity and not
+     * a display symbol. Null when the property carries no unit, which is the
+     * ordinary case for a string or a boolean.
+     */
+    readonly unit: string | null;
+    /**
+     * What the value measures, e.g. "ElectricCurrent" for a unit of "A".
+     *
+     * The half of the identity UCUM cannot express. It is what tells apparent
+     * power from reactive power, both of which are "V.A", and it is the term
+     * a semantic exposition maps onto a QUDT quantity kind.
+     */
+    readonly quantityKind: string | null;
+    /** Why a write is refused, when it is. Null when the property is settable. */
+    readonly hint: string | null;
+}
+
 /** `spk://graph/node/<id>`: one node instance, as the property panel sees it. */
 export interface NodeState {
     readonly id: string;
@@ -86,22 +125,20 @@ export interface NodeState {
     readonly typeId: string | null;
     readonly displayName: string;
     /**
-     * Whether the node implements the `Inspectable` contract.
+     * Where `properties` came from, and therefore how much to trust them.
      *
-     * Today no node in the repository does: they are plain `RuntimeNode`
-     * subclasses with public fields, and `UIItemBase` reflects over them. So
-     * this is false everywhere, and it does **not** mean writes are refused.
-     * Reflected properties are still written, by direct field assignment.
+     * `declared` means the node used `@editable` / `@viewable`, so every entry
+     * is one the node chose to expose, with the editability and unit it stated.
+     * That is the case for the overwhelming majority: 596 properties across the
+     * plugins carry a decorator.
      *
-     * What changes with the source is the quality of the metadata, which is
-     * why `propertySource` is reported alongside: declared properties can
-     * carry a type, an editability and a hint the node chose, while reflected
-     * ones only carry what can be inferred from the value's JavaScript type.
+     * `reflected` is the fallback for a node that declares nothing. Its public
+     * fields are enumerated instead, which surfaces internal machinery
+     * (`_onsc`, `inputPorts`, link observers) alongside real settings and can
+     * infer nothing beyond the JavaScript type of a value.
      */
-    readonly inspectable: boolean;
-    /** Where `properties` came from, and therefore how much to trust them. */
     readonly propertySource: "declared" | "reflected";
-    readonly properties: ReadonlyArray<PropertyEntry>;
+    readonly properties: ReadonlyArray<NodePropertyState>;
     readonly inputs: ReadonlyArray<string>;
     readonly outputs: ReadonlyArray<string>;
 }

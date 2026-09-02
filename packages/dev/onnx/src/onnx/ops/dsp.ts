@@ -187,7 +187,7 @@ class SpFFTNode extends OnnxOpNode {
         this._outputType = this.attrInt("output_type", FFT_OUTPUT_POWER);
     }
 
-    @editable("number", { min: 16, step: 16, unit: "bins" })
+    @editable("number", { min: 16, step: 16, unit: { quantity: "Count", unit: "bins" } })
     public get nfft(): number {
         return this._nfft;
     }
@@ -233,7 +233,7 @@ class SpFFTNode extends OnnxOpNode {
      * with a pipe-separated unit, so the built-in string editor renders
      * a dropdown with these three options.
      */
-    @editable("string", { unit: "power | magnitude | complex" })
+    @editable("string", { enum: ["power", "magnitude", "complex"] })
     public get outputMode(): "power" | "magnitude" | "complex" {
         switch (this._outputType) {
             case FFT_OUTPUT_MAGNITUDE: return "magnitude";
@@ -318,7 +318,7 @@ class SpIFFTNode extends OnnxOpNode {
         this._nfft = this.attrInt("nfft", 512);
     }
 
-    @editable("number", { min: 16, step: 16, unit: "bins" })
+    @editable("number", { min: 16, step: 16, unit: { quantity: "Count", unit: "bins" } })
     public get nfft(): number {
         return this._nfft;
     }
@@ -393,7 +393,7 @@ class SpWindowNode extends OnnxOpNode {
         this._alpha = this.attr("alpha", 0.5);
     }
 
-    @editable("number", { min: 0, max: 5, step: 1, unit: "0=hann 1=hamm 2=black 3=bart 4=rect 5=tukey" })
+    @editable("number", { min: 0, max: 5, step: 1, enum: [0, 1, 2, 3, 4, 5], enumTitles: ["hann", "hamming", "blackman", "bartlett", "rectangular", "tukey"] })
     public get windowType(): number {
         return this._windowType;
     }
@@ -447,7 +447,7 @@ class SpFrameNode extends OnnxOpNode {
         this._padMode = this.attrInt("pad_mode", 0);
     }
 
-    @editable("number", { min: 2, step: 2, unit: "samples" })
+    @editable("number", { min: 2, step: 2, unit: { quantity: "Count", unit: "samples" } })
     public get frameSize(): number {
         return this._frameSize;
     }
@@ -457,7 +457,7 @@ class SpFrameNode extends OnnxOpNode {
         });
     }
 
-    @editable("number", { min: 1, step: 1, unit: "samples" })
+    @editable("number", { min: 1, step: 1, unit: { quantity: "Count", unit: "samples" } })
     public get hopLength(): number {
         return this._hopLength;
     }
@@ -467,7 +467,7 @@ class SpFrameNode extends OnnxOpNode {
         });
     }
 
-    @editable("number", { min: 0, max: 1, step: 1, unit: "0=drop 1=zero-pad" })
+    @editable("number", { min: 0, max: 1, step: 1, enum: [0, 1], enumTitles: ["drop", "zero-pad"] })
     public get padMode(): number {
         return this._padMode;
     }
@@ -598,7 +598,7 @@ class SpBiquadFilterNode extends OnnxOpNode {
         this._q = this.attr("q", Math.SQRT1_2);
     }
 
-    @editable("number", { min: 0, max: 3, step: 1, unit: "0=LP 1=HP 2=BP 3=Notch" })
+    @editable("number", { min: 0, max: 3, step: 1, enum: [0, 1, 2, 3], enumTitles: ["low-pass", "high-pass", "band-pass", "notch"] })
     public get filterType(): number {
         return this._filterType;
     }
@@ -608,7 +608,7 @@ class SpBiquadFilterNode extends OnnxOpNode {
         });
     }
 
-    @editable("number", { min: 1, step: 1, unit: "Hz" })
+    @editable("number", { min: 1, step: 1, unit: { quantity: "Frequency", unit: "Hz" } })
     public get sampleRate(): number {
         return this._sampleRate;
     }
@@ -618,7 +618,7 @@ class SpBiquadFilterNode extends OnnxOpNode {
         });
     }
 
-    @editable("number", { min: 0, step: 10, unit: "Hz" })
+    @editable("number", { min: 0, step: 10, unit: { quantity: "Frequency", unit: "Hz" } })
     public get cutoffHz(): number {
         return this._cutoffHz;
     }
@@ -802,7 +802,7 @@ class SpMovingAverageNode extends OnnxOpNode {
         this._windowSize = Math.max(1, this.attrInt("window_size", 5));
     }
 
-    @editable("number", { min: 1, step: 1, unit: "samples" })
+    @editable("number", { min: 1, step: 1, unit: { quantity: "Count", unit: "samples" } })
     public get windowSize(): number {
         return this._windowSize;
     }
@@ -844,7 +844,7 @@ class SpDetrendNode extends OnnxOpNode {
         this._mode = this.attrInt("mode", 1);
     }
 
-    @editable("number", { min: 0, max: 1, step: 1, unit: "0=constant 1=linear" })
+    @editable("number", { min: 0, max: 1, step: 1, enum: [0, 1], enumTitles: ["constant", "linear"] })
     public get mode(): number {
         return this._mode;
     }
@@ -906,7 +906,7 @@ class SpMelFilterbankNode extends OnnxOpNode {
         this._sampleRate = this.attrInt("sample_rate", 16000);
     }
 
-    @editable("number", { min: 1, step: 1, unit: "bands" })
+    @editable("number", { min: 1, step: 1, unit: { quantity: "Count", unit: "bands" } })
     public get nMels(): number {
         return this._nMels;
     }
@@ -917,7 +917,7 @@ class SpMelFilterbankNode extends OnnxOpNode {
         });
     }
 
-    @editable("number", { min: 16, step: 16, unit: "bins" })
+    @editable("number", { min: 16, step: 16, unit: { quantity: "Count", unit: "bins" } })
     public get nfft(): number {
         return this._nfft;
     }
@@ -928,7 +928,7 @@ class SpMelFilterbankNode extends OnnxOpNode {
         });
     }
 
-    @editable("number", { min: 1, step: 1, unit: "Hz" })
+    @editable("number", { min: 1, step: 1, unit: { quantity: "Frequency", unit: "Hz" } })
     public get sampleRate(): number {
         return this._sampleRate;
     }
@@ -1008,7 +1008,7 @@ class SpDCTNode extends OnnxOpNode {
         this._nOutput = this.attrInt("n_output", 40);
     }
 
-    @editable("number", { min: 1, step: 1, unit: "coeffs" })
+    @editable("number", { min: 1, step: 1, unit: { quantity: "Count", unit: "coeffs" } })
     public get nOutput(): number {
         return this._nOutput;
     }
@@ -1067,7 +1067,7 @@ class SpMFCCNode extends OnnxOpNode {
         this.fftEngine = null;
     }
 
-    @editable("number", { min: 1, step: 1, unit: "Hz" })
+    @editable("number", { min: 1, step: 1, unit: { quantity: "Frequency", unit: "Hz" } })
     public get sampleRate(): number {
         return this._sampleRate;
     }
@@ -1078,7 +1078,7 @@ class SpMFCCNode extends OnnxOpNode {
         });
     }
 
-    @editable("number", { min: 1, step: 1, unit: "coeffs" })
+    @editable("number", { min: 1, step: 1, unit: { quantity: "Count", unit: "coeffs" } })
     public get nMfcc(): number {
         return this._nMfcc;
     }
@@ -1088,7 +1088,7 @@ class SpMFCCNode extends OnnxOpNode {
         });
     }
 
-    @editable("number", { min: 16, step: 16, unit: "bins" })
+    @editable("number", { min: 16, step: 16, unit: { quantity: "Count", unit: "bins" } })
     public get nFft(): number {
         return this._nFft;
     }
@@ -1099,7 +1099,7 @@ class SpMFCCNode extends OnnxOpNode {
         });
     }
 
-    @editable("number", { min: 1, step: 1, unit: "samples" })
+    @editable("number", { min: 1, step: 1, unit: { quantity: "Count", unit: "samples" } })
     public get hopLength(): number {
         return this._hopLength;
     }
@@ -1109,7 +1109,7 @@ class SpMFCCNode extends OnnxOpNode {
         });
     }
 
-    @editable("number", { min: 1, step: 1, unit: "bands" })
+    @editable("number", { min: 1, step: 1, unit: { quantity: "Count", unit: "bands" } })
     public get nMels(): number {
         return this._nMels;
     }
@@ -1120,7 +1120,7 @@ class SpMFCCNode extends OnnxOpNode {
         });
     }
 
-    @editable("number", { min: 0, max: 1, step: 1, unit: "0=hann 1=hamm" })
+    @editable("number", { min: 0, max: 1, step: 1, enum: [0, 1], enumTitles: ["hann", "hamming"] })
     public get windowType(): number {
         return this._windowType;
     }
@@ -1273,7 +1273,7 @@ class SpDTWNode extends OnnxOpNode {
         });
     }
 
-    @editable("number", { min: -1, step: 1, unit: "frames (-1=no constraint)" })
+    @editable("number", { min: -1, step: 1, unit: { quantity: "Count", unit: "frames" }, description: "-1 means no constraint" })
     public get band(): number {
         return this._band;
     }

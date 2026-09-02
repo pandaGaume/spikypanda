@@ -80,7 +80,7 @@ export class PowerMeterNode extends RuntimeNode implements IDeclaresPorts {
         super(onsc, opsc, position);
     }
 
-    @editable("number", { unit: "Hz" }) public get averagingFrequencyHz(): number {
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } }) public get averagingFrequencyHz(): number {
         return this._averagingFrequencyHz;
     }
     public set averagingFrequencyHz(v: number) {
@@ -88,28 +88,28 @@ export class PowerMeterNode extends RuntimeNode implements IDeclaresPorts {
         this.setField("averagingFrequencyHz", this._averagingFrequencyHz, next, (n) => (this._averagingFrequencyHz = n));
     }
 
-    @viewable("number", { unit: "W" }) public get activePower(): number {
+    @viewable("number", { unit: { quantity: "Power", unit: "watt" } }) public get activePower(): number {
         return this._activePower;
     }
-    @viewable("number", { unit: "var" }) public get reactivePower(): number {
+    @viewable("number", { unit: { quantity: "ReactivePower", unit: "var" } }) public get reactivePower(): number {
         return this._reactivePower;
     }
-    @viewable("number", { unit: "VA" }) public get apparentPower(): number {
+    @viewable("number", { unit: { quantity: "ApparentPower", unit: "VA" } }) public get apparentPower(): number {
         return this._apparentPower;
     }
     @viewable("number") public get powerFactor(): number {
         return this._powerFactor;
     }
-    @viewable("number", { unit: "J" }) public get activeEnergy(): number {
+    @viewable("number", { unit: { quantity: "Energy", unit: "J" } }) public get activeEnergy(): number {
         return this._activeEnergy;
     }
     @viewable("number") public get reactiveEnergy(): number {
         return this._reactiveEnergy;
     }
-    @viewable("number", { unit: "W" }) public get activePowerDq(): number {
+    @viewable("number", { unit: { quantity: "Power", unit: "watt" } }) public get activePowerDq(): number {
         return this._activePowerDq;
     }
-    @viewable("number", { unit: "var" }) public get reactivePowerDq(): number {
+    @viewable("number", { unit: { quantity: "ReactivePower", unit: "var" } }) public get reactivePowerDq(): number {
         return this._reactivePowerDq;
     }
 

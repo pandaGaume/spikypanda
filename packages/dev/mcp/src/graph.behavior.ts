@@ -188,6 +188,25 @@ export class GraphBehavior extends McpBehavior {
                 inputSchema: { type: "object", properties: { ...NODE_ID_PROPERTY }, required: ["nodeId"] },
             },
             {
+                name: "registry_thing_model",
+                description:
+                    "W3C WoT Thing Model of one node type: its properties as JSON Schema affordances with their UCUM unit and QUDT annotations, and its ports as links. A Thing Model rather than a Thing Description because a catalogue type has no instance and therefore no address to form a link to.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        type: { type: "string", description: "Node type id as listed by `registry_list_nodes`." },
+                        locale: { type: "string", description: "Preferred documentation locale." },
+                    },
+                    required: ["type"],
+                },
+            },
+            {
+                name: "node_thing_description",
+                description:
+                    "W3C WoT Thing Description 1.1 of one live node: each declared property as an affordance carrying its JSON Schema type, its UCUM unit, its QUDT quantity kind, its bounds and its read-only status. Use it to hand a node's interface to a tool that speaks WoT rather than this protocol.",
+                inputSchema: { type: "object", properties: { ...NODE_ID_PROPERTY }, required: ["nodeId"] },
+            },
+            {
                 name: "node_list_ports",
                 description: "Input and output port names of one node instance, as the editor renders them.",
                 inputSchema: { type: "object", properties: { ...NODE_ID_PROPERTY }, required: ["nodeId"] },

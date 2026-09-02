@@ -109,25 +109,25 @@ export class PmsmFocNode extends RuntimeNode implements IDeclaresPorts {
     public set currentIntegralGain(v: number) {
         this.setField("currentIntegralGain", this._currentIntegralGain, v, (n) => (this._currentIntegralGain = n));
     }
-    @editable("number", { unit: "A" }) public get maxCurrent(): number {
+    @editable("number", { unit: { quantity: "Current", unit: "amp" } }) public get maxCurrent(): number {
         return this._maxCurrent;
     }
     public set maxCurrent(v: number) {
         this.setField("maxCurrent", this._maxCurrent, v, (n) => (this._maxCurrent = n));
     }
-    @editable("number", { unit: "V" }) public get maxVoltagePerAxis(): number {
+    @editable("number", { unit: { quantity: "Voltage", unit: "volt" } }) public get maxVoltagePerAxis(): number {
         return this._maxVoltagePerAxis;
     }
     public set maxVoltagePerAxis(v: number) {
         this.setField("maxVoltagePerAxis", this._maxVoltagePerAxis, v, (n) => (this._maxVoltagePerAxis = n));
     }
-    @editable("number", { unit: "V" }) public get dcBusVoltage(): number {
+    @editable("number", { unit: { quantity: "Voltage", unit: "volt" } }) public get dcBusVoltage(): number {
         return this._dcBusVoltage;
     }
     public set dcBusVoltage(v: number) {
         this.setField("dcBusVoltage", this._dcBusVoltage, v, (n) => (this._dcBusVoltage = n));
     }
-    @editable("number", { unit: "A" }) public get directAxisCurrentReference(): number {
+    @editable("number", { unit: { quantity: "Current", unit: "amp" } }) public get directAxisCurrentReference(): number {
         return this._directAxisCurrentReference;
     }
     public set directAxisCurrentReference(v: number) {

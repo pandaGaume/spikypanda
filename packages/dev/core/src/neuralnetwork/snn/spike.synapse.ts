@@ -47,7 +47,7 @@ export class SpikeSynapse extends Channel<ISpike> implements ISpikeSynapse {
 
     /** Integer scheduler-tick delay. Zero delivers in the current dispatch. */
     @cloneable
-    @editable("int", { min: 0, unit: "tick" })
+    @editable("int", { min: 0, unit: { quantity: "Timespan", unit: "tick" } })
     public get delay(): number {
         return this._delay;
     }

@@ -80,7 +80,7 @@ export class RotorImbalanceFaultNode extends RuntimeNode implements IFault, IDec
         this.setField("severity", this._severity, v, (n) => (this._severity = n));
     }
 
-    @editable("number", { unit: "rad" }) public get phaseOffset(): number {
+    @editable("number", { unit: { quantity: "Angle", unit: "r" } }) public get phaseOffset(): number {
         return this._phaseOffset;
     }
     public set phaseOffset(v: number) {
@@ -114,7 +114,7 @@ export class RotorImbalanceFaultNode extends RuntimeNode implements IFault, IDec
         return this._forceZ;
     }
     /** The 1x gravity torque ripple on the shaft (0 without gravity coupling). */
-    @viewable("number", { unit: "N.m" }) public get gravityTorque(): number {
+    @viewable("number", { unit: { quantity: "Torque", unit: "Nm" } }) public get gravityTorque(): number {
         return this._gravityTorque;
     }
 

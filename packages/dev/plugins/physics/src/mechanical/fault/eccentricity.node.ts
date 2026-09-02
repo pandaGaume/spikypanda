@@ -54,7 +54,7 @@ export class EccentricityFaultNode extends RuntimeNode implements IDeclaresPorts
     public set maxEccentricity(v: number) {
         this.setField("maxEccentricity", this._maxEccentricity, v, (n) => (this._maxEccentricity = n));
     }
-    @editable("number", { unit: "rad" }) public get eccentricityPhase(): number {
+    @editable("number", { unit: { quantity: "Angle", unit: "r" } }) public get eccentricityPhase(): number {
         return this._eccentricityPhase;
     }
     public set eccentricityPhase(v: number) {

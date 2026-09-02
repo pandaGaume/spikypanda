@@ -49,7 +49,7 @@ export class CurrentSensorNode extends RuntimeNode implements IDeclaresPorts {
         super(onsc, opsc, position);
     }
 
-    @editable("number", { unit: "A" })
+    @editable("number", { unit: { quantity: "Current", unit: "amp" } })
     public get noiseStdDev(): number {
         return this._noiseStdDev;
     }
@@ -60,7 +60,7 @@ export class CurrentSensorNode extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @editable("number", { unit: "A" })
+    @editable("number", { unit: { quantity: "Current", unit: "amp" } })
     public get resolution(): number {
         return this._resolution;
     }
@@ -71,7 +71,7 @@ export class CurrentSensorNode extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @editable("number", { unit: "Hz" })
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } })
     public get bandwidthHz(): number {
         return this._bandwidthHz;
     }

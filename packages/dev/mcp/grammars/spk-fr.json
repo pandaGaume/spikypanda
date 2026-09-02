@@ -12,6 +12,13 @@
             "locale": "Langue de documentation préférée."
         }
     },
+    "registry_thing_model": {
+        "description": "Thing Model W3C WoT d'un type de noeud : ses proprietes en affordances JSON Schema avec leur unite UCUM et leurs annotations QUDT, et ses ports en liens. Un Thing Model et non une Thing Description, parce qu'un type du catalogue n'a pas d'instance et donc aucune adresse vers laquelle pointer un formulaire.",
+        "properties": {
+            "type": "Identifiant de type exactement tel que `registry_list_nodes` le rapporte.",
+            "locale": "Langue de documentation preferee."
+        }
+    },
     "graph_describe": {
         "description": "Le graphe courant : identifiants de nœuds, types, positions et connexions. Tous les autres outils adressent les nœuds par les identifiants trouvés ici, c'est donc normalement le premier appel d'une session."
     },
@@ -38,7 +45,15 @@
     },
     "node_describe": {
         "description": "Les propriétés d'un nœud avec leurs valeurs, types et modifiabilité. Le champ `propertySource` indique si elles ont été déclarées par le nœud ou reflétées depuis ses champs publics ; les propriétés reflétées restent modifiables, mais leur type et leur modifiabilité sont déduits et non choisis, donc à prendre comme une indication.",
-        "properties": { "nodeId": "Identifiant issu de `graph_describe`. Les libellés ne sont jamais acceptés : ils ne sont pas uniques." }
+        "properties": {
+            "nodeId": "Identifiant issu de `graph_describe`. Les libellés ne sont jamais acceptés : ils ne sont pas uniques."
+        }
+    },
+    "node_thing_description": {
+        "description": "Thing Description W3C WoT 1.1 d'un noeud vivant : chaque propriete declaree devient une affordance portant son type JSON Schema, son unite UCUM, son genre de grandeur QUDT, ses bornes et son caractere lisible seul. A utiliser pour transmettre l'interface d'un noeud a un outil qui parle WoT plutot que ce protocole.",
+        "properties": {
+            "nodeId": "Identifiant de noeud tel que `graph_describe` le rapporte."
+        }
     },
     "node_set_property": {
         "description": "Écrit une propriété. C'est ainsi que se règlent la gravité, l'orientation et la sévérité d'un défaut : ce sont des propriétés de nœuds, pas des commandes dédiées. Un refus rapporte l'explication du nœud lui-même sur la raison de la lecture seule.",
@@ -70,7 +85,9 @@
     },
     "capture_read": {
         "description": "Restitue la fenêtre enregistrée : le temps de simulation de chaque échantillon et une série de valeurs par signal, alignées par index. Un échantillon manquant ou non numérique vaut NaN plutôt que d'être absent, pour que les séries ne se désalignent jamais de leurs horodatages.",
-        "properties": { "captureId": "Nom de la capture. Par défaut « default »." }
+        "properties": {
+            "captureId": "Nom de la capture. Par défaut « default »."
+        }
     },
     "sweep_run": {
         "description": "Exécute une grille de configurations et rend une fenêtre enregistrée par cellule. Chaque cellule est configurée, stabilisée sans enregistrement, puis capturée, de sorte qu'une fenêtre ne chevauche jamais le transitoire et le régime établi. À préférer à une boucle manuelle : une grille scène par orientation par défaut compte des dizaines de cellules, et trois allers-retours par cellule transforment une mesure en après-midi.",

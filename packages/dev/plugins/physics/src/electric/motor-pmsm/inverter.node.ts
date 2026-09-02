@@ -52,7 +52,7 @@ export class PmsmInverterNode extends RuntimeNode implements IDeclaresPorts {
     }
 
     // ── Editables ──────────────────────────────────────────────────────
-    @editable("number", { unit: "V" }) public get dcBusVoltage(): number {
+    @editable("number", { unit: { quantity: "Voltage", unit: "volt" } }) public get dcBusVoltage(): number {
         return this._dcBusVoltage;
     }
     public set dcBusVoltage(v: number) {

@@ -1,10 +1,20 @@
+import { unitSymbol, type IFieldOptions } from "spikypanda-core";
 import { EditorFactory, IEditor } from "../editor-registry";
 
-interface INumberOptions {
-    readonly unit?: string;
-    readonly step?: number;
-    readonly min?: number;
-    readonly max?: number;
+/**
+ * Legend for a numerically coded enumeration, e.g. "0=hann 1=hamming".
+ *
+ * These used to live in the `unit` string, which is where the panel's
+ * two-row layout comes from: a legend is far too long to sit inline next to
+ * an input. Now that they are declared as `enum` + `enumTitles`, the legend
+ * is rebuilt for display instead of being authored as prose.
+ */
+function enumLegend(opts: IFieldOptions): string | undefined {
+    const values = opts.enum;
+    const titles = opts.enumTitles;
+    if (!values || values.length === 0) return undefined;
+    if (!titles || titles.length !== values.length) return values.join(" | ");
+    return values.map((v, i) => `${v}=${titles[i]}`).join(" ");
 }
 
 /**
@@ -21,7 +31,10 @@ interface INumberOptions {
 export const numberEditor: EditorFactory = (host, model, propertyName, options, editable): IEditor => {
     if (!propertyName) return { dispose: () => {} };
 
-    const opts = options && typeof options === "object" ? (options as INumberOptions) : {};
+    const opts = options && typeof options === "object" ? (options as IFieldOptions) : {};
+    // The caption is the unit symbol when there is one, and the enumeration
+    // legend otherwise. Never both: a coded enumeration has no unit.
+    const caption = unitSymbol(opts.unit) ?? enumLegend(opts);
 
     // Layout modulationStrategy: short unit strings (≤ 8 chars, e.g. "K", "Hz",
     // "samples") stay inline next to the input — compact, scans well.
@@ -29,7 +42,7 @@ export const numberEditor: EditorFactory = (host, model, propertyName, options, 
     // wrap to a second row BELOW the input as a caption — keeps the
     // input full-width and the legend readable instead of squeezing
     // both into one line.
-    const unitInline = !opts.unit || opts.unit.length <= 8;
+    const unitInline = !caption || caption.length <= 8;
 
     const wrap = document.createElement("div");
     wrap.style.cssText = unitInline ? "display:flex;align-items:center;gap:6px;width:100%;" : "display:flex;flex-direction:column;gap:2px;width:100%;";
@@ -59,12 +72,12 @@ export const numberEditor: EditorFactory = (host, model, propertyName, options, 
     });
     row.appendChild(input);
 
-    if (opts.unit) {
+    if (caption) {
         const unit = document.createElement("span");
-        unit.textContent = opts.unit;
+        unit.textContent = caption;
         // Title (tooltip) carries the full text in case truncation
         // hides part of it on narrow panels.
-        unit.title = opts.unit;
+        unit.title = caption;
         if (unitInline) {
             // Inline + truncatable: ellipsis when the panel is narrow,
             // hover for the full text. max-width caps at 60% of the

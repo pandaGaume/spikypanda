@@ -81,7 +81,7 @@ export class TransducerNode extends RuntimeNode implements IDeclaresPorts {
         super(onsc, opsc, position);
     }
 
-    @editable("number", { unit: "Hz" })
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } })
     public get cutoffHz(): number {
         return this._cutoffHz;
     }
@@ -118,7 +118,7 @@ export class TransducerNode extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @editable("number", { unit: "units/s" })
+    @editable("number", { unit: { quantity: "Frequency", unit: "unitsps" } })
     public get driftPerSec(): number {
         return this._driftPerSec;
     }

@@ -97,7 +97,7 @@ export class PixiWaterfallNode extends RuntimeNode implements IDeclaresPorts, IR
         position?: ICartesian,
     ) { super(onsc, opsc, position); }
 
-    @editable("number", { unit: "bins" })
+    @editable("number", { unit: { quantity: "Count", unit: "bins" } })
     public get numBins(): number { return this._numBins; }
     public set numBins(v: number) {
         const next = Math.max(2, Math.floor(v));
@@ -107,7 +107,7 @@ export class PixiWaterfallNode extends RuntimeNode implements IDeclaresPorts, IR
         });
     }
 
-    @editable("number", { unit: "rows" })
+    @editable("number", { unit: { quantity: "Count", unit: "rows" } })
     public get historyRows(): number { return this._historyRows; }
     public set historyRows(v: number) {
         const next = Math.max(2, Math.floor(v));
@@ -129,11 +129,11 @@ export class PixiWaterfallNode extends RuntimeNode implements IDeclaresPorts, IR
         this.setField("dbScale", this._dbScale, v, (n) => { this._dbScale = n; });
     }
 
-    @editable("number", { unit: "dB" })
+    @editable("number", { unit: { quantity: "Level", unit: "dB" } })
     public get vmin(): number { return this._vmin; }
     public set vmin(v: number) { this.setField("vmin", this._vmin, v, (n) => { this._vmin = n; }); }
 
-    @editable("number", { unit: "dB" })
+    @editable("number", { unit: { quantity: "Level", unit: "dB" } })
     public get vmax(): number { return this._vmax; }
     public set vmax(v: number) { this.setField("vmax", this._vmax, v, (n) => { this._vmax = n; }); }
 

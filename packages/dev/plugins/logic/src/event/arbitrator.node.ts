@@ -95,7 +95,7 @@ export class ArbitratorNode extends RuntimeNode implements IDeclaresPorts {
      *  serves as an inline cheat-sheet. Invalid inputs clamp to the
      *  default `"priority"` rather than throwing — the node should
      *  never crash a session over a typo. */
-    @editable("string", { unit: "priority | blend | vote" })
+    @editable("string", { enum: ["priority", "blend", "vote"] })
     public get policy(): ArbitratorPolicy {
         return this._policy;
     }

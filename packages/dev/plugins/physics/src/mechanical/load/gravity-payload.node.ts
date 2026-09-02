@@ -54,19 +54,19 @@ export class GravityPayloadLoadNode extends TransformNode implements IDeclaresPo
     }
 
     // ── Editables ──────────────────────────────────────────────────────
-    @editable("number", { unit: "kg" }) public get payloadMass(): number {
+    @editable("number", { unit: { quantity: "Mass", unit: "kg" } }) public get payloadMass(): number {
         return this._payloadMass;
     }
     public set payloadMass(v: number) {
         this.setField("payloadMass", this._payloadMass, v, (n) => (this._payloadMass = n));
     }
-    @editable("number", { unit: "m" }) public get armRadius(): number {
+    @editable("number", { unit: { quantity: "Length", unit: "m" } }) public get armRadius(): number {
         return this._armRadius;
     }
     public set armRadius(v: number) {
         this.setField("armRadius", this._armRadius, v, (n) => (this._armRadius = n));
     }
-    @editable("number", { unit: "rad" }) public get armPhase(): number {
+    @editable("number", { unit: { quantity: "Angle", unit: "r" } }) public get armPhase(): number {
         return this._armPhase;
     }
     public set armPhase(v: number) {
@@ -74,17 +74,17 @@ export class GravityPayloadLoadNode extends TransformNode implements IDeclaresPo
     }
 
     // ── Viewables ──────────────────────────────────────────────────────
-    @viewable("number", { unit: "N.m" }) public get loadTorque(): number {
+    @viewable("number", { unit: { quantity: "Torque", unit: "Nm" } }) public get loadTorque(): number {
         return this._tauLoad;
     }
-    @viewable("number", { unit: "N" }) public get axialForce(): number {
+    @viewable("number", { unit: { quantity: "Force", unit: "N" } }) public get axialForce(): number {
         return this._fAxial;
     }
-    @viewable("number", { unit: "N" }) public get radialForce(): number {
+    @viewable("number", { unit: { quantity: "Force", unit: "N" } }) public get radialForce(): number {
         return this._fRadial;
     }
     /** The 1x torque-ripple amplitude m * g_radial * r (signature magnitude). */
-    @viewable("number", { unit: "N.m" }) public get tau_ripple_amplitude(): number {
+    @viewable("number", { unit: { quantity: "Torque", unit: "Nm" } }) public get tau_ripple_amplitude(): number {
         return this._payloadMass * this._gRadial * this._armRadius;
     }
 

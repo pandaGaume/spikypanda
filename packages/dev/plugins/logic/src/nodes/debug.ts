@@ -175,7 +175,7 @@ export class WatchNode extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @editable("number", { unit: "Hz", min: 0 })
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" }, min: 0 })
     public get maxRateHz(): number {
         return this._maxRateHz;
     }

@@ -78,19 +78,19 @@ export class TurbinePayloadNode extends FaultableNode implements IFault, IDeclar
     }
 
     // ── Editables ──────────────────────────────────────────────────────
-    @editable("number", { unit: "kg" }) public get payloadMass(): number {
+    @editable("number", { unit: { quantity: "Mass", unit: "kg" } }) public get payloadMass(): number {
         return this._payloadMass;
     }
     public set payloadMass(v: number) {
         this.setField("payloadMass", this._payloadMass, v, (n) => (this._payloadMass = n));
     }
-    @editable("number", { unit: "m" }) public get unbalanceRadius(): number {
+    @editable("number", { unit: { quantity: "Length", unit: "m" } }) public get unbalanceRadius(): number {
         return this._unbalanceRadius;
     }
     public set unbalanceRadius(v: number) {
         this.setField("unbalanceRadius", this._unbalanceRadius, v, (n) => (this._unbalanceRadius = n));
     }
-    @editable("number", { unit: "rad" }) public get comPhase(): number {
+    @editable("number", { unit: { quantity: "Angle", unit: "r" } }) public get comPhase(): number {
         return this._comPhase;
     }
     public set comPhase(v: number) {
@@ -102,13 +102,13 @@ export class TurbinePayloadNode extends FaultableNode implements IFault, IDeclar
     public set fanCoefficient(v: number) {
         this.setField("fanCoefficient", this._fanCoefficient, v, (n) => (this._fanCoefficient = n));
     }
-    @editable("number", { unit: "m" }) public get airGap(): number {
+    @editable("number", { unit: { quantity: "Length", unit: "m" } }) public get airGap(): number {
         return this._airGap;
     }
     public set airGap(v: number) {
         this.setField("airGap", this._airGap, v, (n) => (this._airGap = n));
     }
-    @editable("number", { unit: "N/m" }) public get bearingRadialStiffness(): number {
+    @editable("number", { unit: { quantity: "Stiffness", unit: "Npm" } }) public get bearingRadialStiffness(): number {
         return this._bearingRadialStiffness;
     }
     public set bearingRadialStiffness(v: number) {
@@ -122,10 +122,10 @@ export class TurbinePayloadNode extends FaultableNode implements IFault, IDeclar
     }
 
     // ── Viewables ──────────────────────────────────────────────────────
-    @viewable("number", { unit: "N.m" }) public get loadTorque(): number {
+    @viewable("number", { unit: { quantity: "Torque", unit: "Nm" } }) public get loadTorque(): number {
         return this._tauAero;
     }
-    @viewable("number", { unit: "rad/s" }) public get observedSpeed(): number {
+    @viewable("number", { unit: { quantity: "AngularVelocity", unit: "radps" } }) public get observedSpeed(): number {
         return this._omega;
     }
 

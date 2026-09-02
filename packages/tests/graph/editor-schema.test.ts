@@ -1,3 +1,4 @@
+import type { IFieldOptions } from "spikypanda-core";
 import { editable, editor, getEditorSchema, viewable } from "spikypanda-core";
 
 describe("editor schema decorators", () => {
@@ -133,7 +134,10 @@ describe("editor schema decorators", () => {
     });
 
     test("options payload is preserved verbatim", () => {
-        const opts = { unit: "rad", precision: 3, label: "Yaw" };
+        // Same object identity out as in: core stores the payload and does
+        // not normalise, copy or validate it. The editors and the
+        // description layer both read the one instance the node declared.
+        const opts: IFieldOptions = { unit: { quantity: "Angle", unit: "r" }, step: 3, title: "Yaw" };
 
         class Sensor {
             @editable("number", opts)

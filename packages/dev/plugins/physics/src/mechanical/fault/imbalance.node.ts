@@ -59,7 +59,7 @@ export class ImbalanceFaultNode extends RuntimeNode implements IDeclaresPorts {
     public set severity(v: number) {
         this.setField("severity", this._severity, v, (n) => (this._severity = n));
     }
-    @editable("number", { unit: "kg.m" }) public get maxUnbalanceProduct(): number {
+    @editable("number", { unit: { quantity: "MassMoment", unit: "kgm" } }) public get maxUnbalanceProduct(): number {
         return this._maxUnbalanceProduct;
     }
     public set maxUnbalanceProduct(v: number) {

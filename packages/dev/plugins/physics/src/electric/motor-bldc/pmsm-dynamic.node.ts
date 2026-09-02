@@ -51,7 +51,7 @@ export class PmsmMotorDynamicNode extends FaultableNode implements IDeclaresPort
         return this.computeRequiredHz();
     }
 
-    @editable("number", { unit: "Hz" })
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } })
     public get requiredSampleRateHz(): number {
         return this.requiredHz;
     }

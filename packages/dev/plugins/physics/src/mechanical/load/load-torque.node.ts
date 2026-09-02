@@ -112,7 +112,7 @@ export class LoadTorqueNode extends RuntimeNode implements IDeclaresPorts {
      *  an inline cheat-sheet. Invalid inputs clamp to the default
      *  `"constant"` rather than throwing: the node should never crash a
      *  session over a typo. */
-    @editable("string", { unit: "constant | step | ramp | quadratic | periodic" })
+    @editable("string", { enum: ["constant", "step", "ramp", "quadratic", "periodic"] })
     public get profile(): LoadProfile {
         return this._profile;
     }
@@ -178,7 +178,7 @@ export class LoadTorqueNode extends RuntimeNode implements IDeclaresPorts {
             this._frequency = n;
         });
     }
-    @editable("number", { unit: "s" }) public get duration(): number {
+    @editable("number", { unit: { quantity: "Timespan", unit: "s" } }) public get duration(): number {
         return this._duration;
     }
     public set duration(v: number) {

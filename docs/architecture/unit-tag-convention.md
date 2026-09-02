@@ -115,6 +115,18 @@ Le **nœud sévérité ISO 20816-3** (trou #2 de la note pmm) est le premier con
 accel→vitesse si besoin, et émet son verdict de zone. La convention est le prérequis propre de ce
 nœud, et elle bénéficie ensuite à tout le graphe (tout nœud physique peut refuser proprement).
 
+## Un troisieme niveau : la declaration de propriete
+
+Depuis, un troisieme porteur de tag s'est ajoute aux deux ci-dessus : la **declaration de
+propriete**, `@editable("number", { unit: { quantity, unit } })`. Le niveau 1 est l'unite reelle
+d'une arete, le niveau 2 le contrat d'un port, et celui-ci l'unite d'un reglage. Il alimente le
+panneau de proprietes et la couche de description.
+
+Chaque `Unit` porte desormais son **code UCUM**, identifiant canonique obligatoire, et chaque
+classe `Quantity` son **genre de grandeur**. Voir
+[`unit-projection.md`](unit-projection.md) pour la facon dont ces deux composantes se projettent
+vers QUDT, WoT, OPC UA ou Sparkplug B.
+
 *Réfs : [`../multipath-frequentiel/A-AJOUTER-inspire-pmm.md`](../multipath-frequentiel/A-AJOUTER-inspire-pmm.md),
 `core/src/math/math.units.ts` (le type `Unit`/`Quantity`),
 `core/src/compute/compute.interfaces.ts` (`ITensor`), `core/src/execution/execution.interfaces.ts` (`IPortDescriptor`).*

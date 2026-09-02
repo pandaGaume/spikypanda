@@ -132,7 +132,7 @@ export class MotionWatchNode extends RuntimeNode implements IDeclaresPorts {
 
     /** Vectors consumed before the reference freezes. Changing it
      *  RE-BASELINES (re-enters warmup); counter totals are kept. */
-    @editable("number", { unit: "samples" })
+    @editable("number", { unit: { quantity: "Count", unit: "samples" } })
     public get warmup(): number {
         return this._warmup;
     }
@@ -147,7 +147,7 @@ export class MotionWatchNode extends RuntimeNode implements IDeclaresPorts {
 
     /** Rolling path window, in steps. Changing it RE-BASELINES
      *  (re-enters warmup); counter totals are kept. */
-    @editable("number", { unit: "steps" })
+    @editable("number", { unit: { quantity: "Count", unit: "steps" } })
     public get window(): number {
         return this._window;
     }

@@ -38,7 +38,7 @@ export class Attitude extends RuntimeNode implements IDeclaresPorts {
         super(onsc, opsc, position);
     }
 
-    @editable("number", { unit: "deg" })
+    @editable("number", { unit: { quantity: "Angle", unit: "d" } })
     public get yaw(): number {
         return this._yaw;
     }
@@ -48,7 +48,7 @@ export class Attitude extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @editable("number", { unit: "deg" })
+    @editable("number", { unit: { quantity: "Angle", unit: "d" } })
     public get pitch(): number {
         return this._pitch;
     }
@@ -58,7 +58,7 @@ export class Attitude extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @editable("number", { unit: "deg" })
+    @editable("number", { unit: { quantity: "Angle", unit: "d" } })
     public get roll(): number {
         return this._roll;
     }

@@ -145,7 +145,7 @@ export class GasNode extends GraphItem implements IGasMetadata {
     /** Molar mass in g/mol (storage in kg/mol). The g/mol scale is the
      *  one chemistry tables quote; storing canonical SI internally
      *  keeps the IGasMetadata contract uniform across the codebase. */
-    @editable("number", { unit: "g/mol" })
+    @editable("number", { unit: { quantity: "MolarMass", unit: "gpmol" } })
     public get molar_mass_g_per_mol(): number {
         return this._molarMassKgPerMol * 1000;
     }
@@ -162,7 +162,7 @@ export class GasNode extends GraphItem implements IGasMetadata {
         this.molar_mass_g_per_mol = v;
     }
 
-    @editable("number", { unit: "kg/m³" })
+    @editable("number", { unit: { quantity: "Density", unit: "kgpm3" } })
     public get density_kg_per_m3(): number {
         return this._densityKgPerM3;
     }
@@ -179,7 +179,7 @@ export class GasNode extends GraphItem implements IGasMetadata {
         this.density_kg_per_m3 = v;
     }
 
-    @editable("number", { unit: "J/(kg·K)" })
+    @editable("number", { unit: { quantity: "MassSpecificHeat", unit: "JpkgK" } })
     public get specific_heat_j_per_kg_k(): number {
         return this._specificHeatJPerKgK;
     }
@@ -196,7 +196,7 @@ export class GasNode extends GraphItem implements IGasMetadata {
         this.specific_heat_j_per_kg_k = v;
     }
 
-    @editable("number", { unit: "W/(m·K)" })
+    @editable("number", { unit: { quantity: "ThermalConductivity", unit: "WpmK" } })
     public get thermal_conductivity_w_per_m_k(): number {
         return this._thermalConductivityWPerMK;
     }
@@ -217,7 +217,7 @@ export class GasNode extends GraphItem implements IGasMetadata {
      *  are order 10 to 30 μPa·s: using the μ-scale at the user
      *  interface avoids the "0.0000178" trap and matches gas-tables
      *  convention. */
-    @editable("number", { unit: "µPa·s" })
+    @editable("number", { unit: { quantity: "DynamicViscosity", unit: "uPas" } })
     public get viscosity_micro_pa_s(): number {
         return this._viscosityPas * 1e6;
     }
@@ -239,7 +239,7 @@ export class GasNode extends GraphItem implements IGasMetadata {
     /** OEL TWA (8 h time-weighted average) in ppm. Panel renderers
      *  compare this against the live `ppm_<sp>` output on the wired
      *  atmosphere to flag chronic-exposure alarms. 0 = not regulated. */
-    @editable("number", { unit: "ppm" })
+    @editable("number", { unit: { quantity: "Dimensionless", unit: "ppm" } })
     public get oel_twa_ppm(): number {
         return this._oelTwaPpm;
     }
@@ -254,7 +254,7 @@ export class GasNode extends GraphItem implements IGasMetadata {
     }
 
     /** OEL STEL (15-minute short-term exposure limit) in ppm. */
-    @editable("number", { unit: "ppm" })
+    @editable("number", { unit: { quantity: "Dimensionless", unit: "ppm" } })
     public get oel_stel_ppm(): number {
         return this._oelStelPpm;
     }
@@ -269,7 +269,7 @@ export class GasNode extends GraphItem implements IGasMetadata {
     }
 
     /** IDLH (Immediately Dangerous to Life or Health) in ppm. */
-    @editable("number", { unit: "ppm" })
+    @editable("number", { unit: { quantity: "Dimensionless", unit: "ppm" } })
     public get idlh_ppm(): number {
         return this._idlhPpm;
     }

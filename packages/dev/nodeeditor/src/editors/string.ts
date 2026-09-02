@@ -1,26 +1,16 @@
+import { unitSymbol, type IFieldOptions } from "spikypanda-core";
 import { EditorFactory, IEditor } from "../editor-registry";
-
-interface IStringOptions {
-    readonly unit?: string;
-    readonly choices?: ReadonlyArray<string>;
-    readonly placeholder?: string;
-}
 
 /**
  * Built-in editor for scalar string properties.
  *
- * Convention-over-configuration: if the @editable options carry a
- * `choices` array OR the `unit` string follows the enum-legend pattern
- * (`"linear | dB"`, `"magnitude | power"`, `"line | area | bars"`), the
- * field renders as a `<select>` dropdown. Otherwise a plain text
- * `<input type="text">` is shown.
+ * An `@editable` that declares `enum` renders as a `<select>` dropdown;
+ * anything else is a plain `<input type="text">`.
  *
- * Why the unit-pipe convention: the rest of the editable surface
- * already used `unit: "linear | dB"` as a documentation hint for enums
- * without a dedicated `choices` field. Parsing the same legend turns
- * that hint into a real interactive picker, so legacy `@editable` sites
- * (UplotSpectrumNode.fillStyle, …) become first-class dropdowns
- * without touching the decorator call.
+ * The dropdown used to be recovered by parsing a pipe-separated legend out
+ * of the `unit` string, `"linear | dB"` being a set of admissible values
+ * wearing a unit's clothes for want of a field to hold it. `enum` is that
+ * field, so the parsing is gone and the declaration says what it means.
  *
  * Refreshes from model.onPropertyChanged when present, so a
  * programmatic mutation (deserialization, sibling field side effect)
@@ -29,7 +19,7 @@ interface IStringOptions {
 export const stringEditor: EditorFactory = (host, model, propertyName, options, editable): IEditor => {
     if (!propertyName) return { dispose: () => {} };
 
-    const opts = options && typeof options === "object" ? (options as IStringOptions) : {};
+    const opts = options && typeof options === "object" ? (options as IFieldOptions) : {};
     const choices = _resolveChoices(opts);
     const readOnly = editable === false;
 
@@ -83,10 +73,11 @@ export const stringEditor: EditorFactory = (host, model, propertyName, options, 
     // (i.e. plain text mode AND a unit is set), show it as a small hint
     // below the input. For dropdowns the unit IS the choices legend, so
     // there's no point repeating it.
-    if (opts.unit && !choices) {
+    const caption = unitSymbol(opts.unit);
+    if (caption && !choices) {
         const unit = document.createElement("span");
-        unit.textContent = opts.unit;
-        unit.title = opts.unit;
+        unit.textContent = caption;
+        unit.title = caption;
         unit.style.cssText = "font-size:0.7em;color:var(--ne-color-text-muted);white-space:normal;word-break:break-word;line-height:1.3;";
         wrap.appendChild(unit);
     }
@@ -113,22 +104,14 @@ export const stringEditor: EditorFactory = (host, model, propertyName, options, 
 };
 
 /**
- * Resolve the option set the dropdown should show.
+ * The admissible values the dropdown should show, or null for a text input.
  *
- * 1. Explicit `choices` array on the options object wins outright.
- * 2. `unit` strings of the form `"a | b | c"` (two or more pipe-
- *    separated tokens, each non-empty after trim) are treated as an
- *    inline enum legend and parsed into a choices array.
- * 3. Anything else (no choices + no pipe-separated unit) returns null,
- *    which makes the editor fall back to a plain text input.
+ * Titles win over raw values when both are declared and aligned, so a coded
+ * enumeration reads as words. The value written back is still the raw one,
+ * resolved positionally by the caller.
  */
-function _resolveChoices(opts: IStringOptions): ReadonlyArray<string> | null {
-    if (Array.isArray(opts.choices) && opts.choices.length > 0) {
-        return opts.choices.map(String);
-    }
-    if (typeof opts.unit === "string" && opts.unit.includes("|")) {
-        const parts = opts.unit.split("|").map((s) => s.trim()).filter((s) => s.length > 0);
-        if (parts.length >= 2) return parts;
-    }
-    return null;
+function _resolveChoices(opts: IFieldOptions): ReadonlyArray<string> | null {
+    const values = opts.enum;
+    if (!Array.isArray(values) || values.length === 0) return null;
+    return values.map(String);
 }

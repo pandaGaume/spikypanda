@@ -85,7 +85,7 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
     }
 
     // ── Editables ──────────────────────────────────────────────────────
-    @editable("number", { unit: "kg" }) public get massX(): number {
+    @editable("number", { unit: { quantity: "Mass", unit: "kg" } }) public get massX(): number {
         return this._massX;
     }
     public set massX(v: number) {
@@ -94,7 +94,7 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
         });
         this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number", { unit: "kg" }) public get massY(): number {
+    @editable("number", { unit: { quantity: "Mass", unit: "kg" } }) public get massY(): number {
         return this._massY;
     }
     public set massY(v: number) {
@@ -102,7 +102,7 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
             this._massY = n;
         });
     }
-    @editable("number", { unit: "kg" }) public get massZ(): number {
+    @editable("number", { unit: { quantity: "Mass", unit: "kg" } }) public get massZ(): number {
         return this._massZ;
     }
     public set massZ(v: number) {
@@ -110,7 +110,7 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
             this._massZ = n;
         });
     }
-    @editable("number", { unit: "Hz" }) public get naturalFrequencyX(): number {
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } }) public get naturalFrequencyX(): number {
         return this._naturalFrequencyX;
     }
     public set naturalFrequencyX(v: number) {
@@ -119,7 +119,7 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
         });
         this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number", { unit: "Hz" }) public get naturalFrequencyY(): number {
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } }) public get naturalFrequencyY(): number {
         return this._naturalFrequencyY;
     }
     public set naturalFrequencyY(v: number) {
@@ -128,7 +128,7 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
         });
         this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number", { unit: "Hz" }) public get naturalFrequencyZ(): number {
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } }) public get naturalFrequencyZ(): number {
         return this._naturalFrequencyZ;
     }
     public set naturalFrequencyZ(v: number) {
@@ -191,7 +191,7 @@ export class HousingMechanicsNode extends TransformNode implements IDeclaresPort
         return 8 * fnMax;
     }
 
-    @editable("number", { unit: "Hz" }) public get requiredSampleRateHz(): number {
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } }) public get requiredSampleRateHz(): number {
         return this.requiredHz;
     }
     public set requiredSampleRateHz(v: number) {

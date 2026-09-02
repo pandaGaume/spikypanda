@@ -57,7 +57,7 @@ export class PmsmSvpwmNode extends RuntimeNode implements IDeclaresPorts {
     }
 
     // ── Editables ──────────────────────────────────────────────────────
-    @editable("number", { unit: "Hz" }) public get pwmFrequencyHz(): number {
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } }) public get pwmFrequencyHz(): number {
         return this._pwmFrequencyHz;
     }
     public set pwmFrequencyHz(v: number) {
@@ -75,7 +75,7 @@ export class PmsmSvpwmNode extends RuntimeNode implements IDeclaresPorts {
     public set maxDutyCycle(v: number) {
         this.setField("maxDutyCycle", this._maxDutyCycle, v, (n) => (this._maxDutyCycle = n));
     }
-    @editable("number", { unit: "V" }) public get dcBusVoltage(): number {
+    @editable("number", { unit: { quantity: "Voltage", unit: "volt" } }) public get dcBusVoltage(): number {
         return this._dcBusVoltage;
     }
     public set dcBusVoltage(v: number) {

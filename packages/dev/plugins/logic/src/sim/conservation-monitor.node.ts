@@ -76,7 +76,7 @@ export class ConservationMonitorNode extends RuntimeNode implements IDeclaresPor
         });
     }
 
-    @editable("string", { unit: "absolute | relative" })
+    @editable("string", { enum: ["absolute", "relative"] })
     public get mode(): Mode {
         return this._mode;
     }

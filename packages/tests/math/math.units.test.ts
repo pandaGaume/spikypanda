@@ -19,6 +19,16 @@
  */
 import {
     Acceleration,
+    AngularVelocity,
+    ApparentPower,
+    Energy,
+    Level,
+    MassMoment,
+    MomentOfInertia,
+    quantityNames,
+    quantityUnits,
+    ReactivePower,
+    resolveQuantityKind,
     Angle,
     Area,
     Current,
@@ -515,4 +525,114 @@ describe("Symbol uniqueness within each Quantity", () => {
             expect(unique.size).toBe(symbols.length);
         });
     }
+});
+
+/**
+ * UCUM is the canonical machine identity of a unit in this repository, so the
+ * interesting property is not that a few codes are right but that none is
+ * missing. A unit reaching an exposition without a code is invisible to every
+ * projection built on top, and the failure is silent at the point where it
+ * matters.
+ */
+describe("UCUM codes", () => {
+    /**
+     * The units UCUM genuinely cannot name, and why.
+     *
+     * Kept as an explicit list rather than a lenient assertion: the whole
+     * value of the coverage test is that adding a unit without a code fails
+     * loudly, and a new entry here has to be argued for in review.
+     */
+    const NO_UCUM: ReadonlyArray<string> = [
+        // Not in UCUM, and not expressible: the factor is not an integer
+        // multiple of any unit UCUM defines.
+        "Mass.pm", // planck mass
+        "Mass.Sm", // solar mass
+        "Luminosity.Lsun", // solar luminosity
+        "Length.Sr", // solar radius
+    ];
+
+    it("every unit of every registered quantity carries one, or is a listed exception", () => {
+        const missing: string[] = [];
+        for (const quantity of quantityNames()) {
+            const units = quantityUnits(quantity);
+            expect(units).toBeDefined();
+            for (const [key, unit] of Object.entries(units!)) {
+                const id = `${quantity}.${key}`;
+                if (!unit.ucum && !NO_UCUM.includes(id)) missing.push(id);
+            }
+        }
+        expect(missing).toEqual([]);
+    });
+
+    it("the exception list holds no unit that has since been given a code", () => {
+        for (const id of NO_UCUM) {
+            const [quantity, key] = id.split(".");
+            expect(quantityUnits(quantity)?.[key]?.ucum).toBeUndefined();
+        }
+    });
+
+    it("spells the codes that are traps, not the ones that are obvious", () => {
+        // Celsius is "Cel", never "C" (which is the coulomb), and never the
+        // display symbol.
+        expect(Temperature.Units.c.ucum).toBe("Cel");
+        expect(Temperature.Units.c.symbol).toBe("°C");
+        // "g" is gram in one quantity and standard gravity in another; the
+        // display symbol collides, the UCUM code does not.
+        expect(Mass.Units.g.ucum).toBe("g");
+        expect(Acceleration.Units.g.ucum).toBe("[g]");
+        // A revolution is a dimensionless count, carried as an annotation.
+        expect(Frequency.Units.rpm.ucum).toBe("{rev}/min");
+        // Non-ASCII never reaches the code.
+        for (const quantity of quantityNames()) {
+            for (const unit of Object.values(quantityUnits(quantity)!)) {
+                if (unit.ucum) expect(unit.ucum).toMatch(/^[\x21-\x7e]+$/);
+            }
+        }
+    });
+
+    it("gives every quantity a kind, since UCUM alone cannot carry meaning", () => {
+        for (const quantity of quantityNames()) {
+            expect(resolveQuantityKind(quantity)).toBeTruthy();
+        }
+        expect(resolveQuantityKind("Current")).toBe("ElectricCurrent");
+        expect(resolveQuantityKind("Angle")).toBe("PlaneAngle");
+        // The case that proves the second level is needed: same code, and the
+        // kind is the only thing telling apparent from reactive power.
+        expect(ApparentPower.Units.VA.ucum).toBe(ReactivePower.Units.var.ucum);
+        expect(resolveQuantityKind("ApparentPower")).not.toBe(resolveQuantityKind("ReactivePower"));
+    });
+});
+
+/**
+ * The quantities added for the decorated declarations that had no home. Their
+ * conversion factors are the part worth pinning: each was a literal at a call
+ * site before, and a wrong factor here is wrong everywhere at once.
+ */
+describe("added quantities", () => {
+    it("converts angular velocity against frequency without losing the 2*pi", () => {
+        // 3000 rpm is 50 Hz mechanically and 100*pi rad/s angularly.
+        expect(new Frequency(3000, Frequency.Units.rpm).getValue(Frequency.Units.Hz)).toBeCloseTo(50, 9);
+        expect(new AngularVelocity(3000, AngularVelocity.Units.rpm).getValue(AngularVelocity.Units.radps)).toBeCloseTo(
+            100 * Math.PI,
+            9
+        );
+    });
+
+    it("converts the balancing unit, which is six orders below its base", () => {
+        expect(new MassMoment(1, MassMoment.Units.kgm).getValue(MassMoment.Units.gmm)).toBeCloseTo(1e6, 3);
+    });
+
+    it("converts inertia in the unit a datasheet states it in", () => {
+        // 1 g.cm2 = 1e-3 kg * 1e-4 m2.
+        expect(new MomentOfInertia(1, MomentOfInertia.Units.kgm2).getValue(MomentOfInertia.Units.gcm2)).toBeCloseTo(1e7, 1);
+    });
+
+    it("keeps a watt-hour a watt-hour", () => {
+        expect(new Energy(1, Energy.Units.kWh).getValue(Energy.Units.J)).toBeCloseTo(3.6e6, 3);
+    });
+
+    it("keeps the decibel out of Dimensionless, where linear conversion would apply to it", () => {
+        expect(Dimensionless.Units.dB).toBeUndefined();
+        expect(new Level(20, Level.Units.dB).getValue(Level.Units.B)).toBeCloseTo(2, 9);
+    });
 });

@@ -137,25 +137,25 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     }
 
     // ── Editables ──────────────────────────────────────────────────────
-    @editable("number", { unit: "ohm" }) public get armatureResistance(): number {
+    @editable("number", { unit: { quantity: "Resistance", unit: "ohm" } }) public get armatureResistance(): number {
         return this._armatureResistance;
     }
     public set armatureResistance(v: number) {
         if (this.setField("armatureResistance", this._armatureResistance, v, (n) => (this._armatureResistance = n))) this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number", { unit: "H" }) public get directAxisInductance(): number {
+    @editable("number", { unit: { quantity: "Inductance", unit: "H" } }) public get directAxisInductance(): number {
         return this._directAxisInductance;
     }
     public set directAxisInductance(v: number) {
         if (this.setField("directAxisInductance", this._directAxisInductance, v, (n) => (this._directAxisInductance = n))) this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number", { unit: "H" }) public get quadratureAxisInductance(): number {
+    @editable("number", { unit: { quantity: "Inductance", unit: "H" } }) public get quadratureAxisInductance(): number {
         return this._quadratureAxisInductance;
     }
     public set quadratureAxisInductance(v: number) {
         if (this.setField("quadratureAxisInductance", this._quadratureAxisInductance, v, (n) => (this._quadratureAxisInductance = n))) this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number", { unit: "Wb" }) public get magnetFluxLinkage(): number {
+    @editable("number", { unit: { quantity: "MagneticFlux", unit: "Wb" } }) public get magnetFluxLinkage(): number {
         return this._magnetFluxLinkage;
     }
     public set magnetFluxLinkage(v: number) {
@@ -167,7 +167,7 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     public set polePairs(v: number) {
         if (this.setField("polePairs", this._polePairs, v, (n) => (this._polePairs = n))) this._notifyRequiredHzMayHaveChanged();
     }
-    @editable("number", { unit: "kg.m^2" }) public get rotorInertia(): number {
+    @editable("number", { unit: { quantity: "MomentOfInertia", unit: "kgm2" } }) public get rotorInertia(): number {
         return this._rotorInertia;
     }
     public set rotorInertia(v: number) {
@@ -187,7 +187,7 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     public set gravityCoupling(v: boolean) {
         this.setField("gravityCoupling", this._gravityCoupling, v, (n) => (this._gravityCoupling = n));
     }
-    @editable("number", { unit: "kg" }) public get rotorMass(): number {
+    @editable("number", { unit: { quantity: "Mass", unit: "kg" } }) public get rotorMass(): number {
         return this._rotorMass;
     }
     public set rotorMass(v: number) {
@@ -196,7 +196,7 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
             this._sagConstantsDirty = true;
         });
     }
-    @editable("number", { unit: "N/m" }) public get bearingRadialStiffness(): number {
+    @editable("number", { unit: { quantity: "Stiffness", unit: "Npm" } }) public get bearingRadialStiffness(): number {
         return this._bearingRadialStiffness;
     }
     public set bearingRadialStiffness(v: number) {
@@ -205,7 +205,7 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
             this._sagConstantsDirty = true;
         });
     }
-    @editable("number", { unit: "m" }) public get airGap(): number {
+    @editable("number", { unit: { quantity: "Length", unit: "m" } }) public get airGap(): number {
         return this._airGap;
     }
     public set airGap(v: number) {
@@ -214,7 +214,7 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
             this._sagConstantsDirty = true;
         });
     }
-    @editable("number", { unit: "N" }) public get nominalAxialPreload(): number {
+    @editable("number", { unit: { quantity: "Force", unit: "N" } }) public get nominalAxialPreload(): number {
         return this._nominalAxialPreload;
     }
     public set nominalAxialPreload(v: number) {
@@ -223,7 +223,7 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
             this._sagConstantsDirty = true;
         });
     }
-    @editable("number", { unit: "N" }) public get nominalRadialPreload(): number {
+    @editable("number", { unit: { quantity: "Force", unit: "N" } }) public get nominalRadialPreload(): number {
         return this._nominalRadialPreload;
     }
     public set nominalRadialPreload(v: number) {
@@ -232,7 +232,7 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
             this._sagConstantsDirty = true;
         });
     }
-    @editable("number", { unit: "N/m" }) public get umpRadialStiffness(): number {
+    @editable("number", { unit: { quantity: "Stiffness", unit: "Npm" } }) public get umpRadialStiffness(): number {
         return this._umpRadialStiffness;
     }
     public set umpRadialStiffness(v: number) {
@@ -304,18 +304,18 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
     }
     /** Gravity-augmented bearing preloads (operating point for a future
      *  bearing-race fault; metadata otherwise). */
-    @viewable("number", { unit: "N" }) public get F_axial_eff(): number {
+    @viewable("number", { unit: { quantity: "Force", unit: "N" } }) public get F_axial_eff(): number {
         return this._fAxialEff;
     }
-    @viewable("number", { unit: "N" }) public get F_radial_eff(): number {
+    @viewable("number", { unit: { quantity: "Force", unit: "N" } }) public get F_radial_eff(): number {
         return this._fRadialEff;
     }
     /** UMP rotor-sag vibration force the motor exerts on its housing
      *  (body radial plane, 1x f_mech). 0 without gravity / scene / UMP. */
-    @viewable("number", { unit: "N" }) public get forceY(): number {
+    @viewable("number", { unit: { quantity: "Force", unit: "N" } }) public get forceY(): number {
         return this._fy;
     }
-    @viewable("number", { unit: "N" }) public get forceZ(): number {
+    @viewable("number", { unit: { quantity: "Force", unit: "N" } }) public get forceZ(): number {
         return this._fz;
     }
 
@@ -338,7 +338,7 @@ export class PmsmMachineDqNode extends FaultableNode implements IDeclaresPorts, 
         if (this._requiredHzUserDefined && this._requiredHzValue > 0) return this._requiredHzValue;
         return this.computeRequiredHz();
     }
-    @editable("number", { unit: "Hz" }) public get requiredSampleRateHz(): number {
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } }) public get requiredSampleRateHz(): number {
         return this.requiredHz;
     }
     public set requiredSampleRateHz(v: number) {

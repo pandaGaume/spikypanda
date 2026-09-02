@@ -1,3 +1,4 @@
+import { unitSymbol, type IFieldOptions } from "spikypanda-core";
 import { EditorFactory, IEditor } from "../editor-registry";
 
 /**
@@ -21,11 +22,11 @@ function buildVectorFactory(axes: ReadonlyArray<string>): EditorFactory {
             return { dispose: () => {} };
         }
 
-        // Decorator options live on _options as a Record. We pick up
-        // `unit` to mirror the number editor's behaviour: editables
-        // tagged with @editable("vector3", { unit: "m/s²" }) get a
-        // trailing greyed-out unit span after the last component.
-        const opts = (_options ?? {}) as { unit?: string };
+        // Mirrors the number editor: an editable tagged
+        // @editable("vector3", { unit: { quantity: "Acceleration", unit: "mps2" } })
+        // gets a trailing greyed-out symbol after the last component.
+        const opts = (_options ?? {}) as IFieldOptions;
+        const caption = unitSymbol(opts.unit);
 
         const wrap = document.createElement("div");
         wrap.style.cssText = "display:flex;gap:4px;align-items:center;width:100%;";
@@ -59,13 +60,13 @@ function buildVectorFactory(axes: ReadonlyArray<string>): EditorFactory {
             inputs[axis] = input;
         }
 
-        if (opts.unit) {
+        if (caption) {
             const unit = document.createElement("span");
-            unit.textContent = opts.unit;
+            unit.textContent = caption;
             // Same approach as the number editor: ellipsis-truncated
             // inline with a hover title for the full text, so long
             // unit strings can't push the vector components off-screen.
-            unit.title = opts.unit;
+            unit.title = caption;
             unit.style.cssText = "flex:0 1 auto;max-width:30%;overflow:hidden;text-overflow:ellipsis;" + "white-space:nowrap;font-size:0.7em;color:var(--ne-color-text-muted);";
             wrap.appendChild(unit);
         }

@@ -144,7 +144,7 @@ export class AtmosphereGateNode extends IntegrableRuntimeNode implements IDeclar
         });
     }
 
-    @editable("number", { unit: "m²" })
+    @editable("number", { unit: { quantity: "Area", unit: "m2" } })
     public get area(): number {
         return this._areaM2;
     }
@@ -172,7 +172,7 @@ export class AtmosphereGateNode extends IntegrableRuntimeNode implements IDeclar
         });
     }
 
-    @editable("number", { unit: "m³/s" })
+    @editable("number", { unit: { quantity: "VolumetricFlow", unit: "m3ps" } })
     public get forcedFlow(): number {
         return this._forcedFlowM3ps;
     }

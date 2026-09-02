@@ -15,10 +15,28 @@ export interface IUnitConverter {
 }
 
 export class Unit {
+    /**
+     * @param name    Human-readable name, e.g. "millimeter per second".
+     * @param symbol  Display symbol, e.g. "mm/s". For humans, not machines: it
+     *                carries typographic characters ("\u00b5", "\u00b3", "\u00b7") that no
+     *                interchange format accepts, and it collides across
+     *                quantities ("g" is both gram and standard gravity).
+     * @param value   Conversion factor to the quantity's base unit, as
+     *                "1 <this> = value <base>".
+     * @param ucum    Canonical machine identifier: the case-sensitive UCUM
+     *                code. This is the repository's mandatory unit identity,
+     *                the one every exposition derives from (QUDT, WoT, OPC UA,
+     *                Sparkplug). Undefined only where UCUM genuinely has no
+     *                code, which is documented at the declaration site; an
+     *                approximate code would be worse than none, since it
+     *                travels without signalling that it is approximate.
+     * @param converter Non-linear conversion strategy, for affine scales.
+     */
     public constructor(
         public name: string,
         public symbol: string,
         public value: number = 0,
+        public ucum?: string,
         public converter?: IUnitConverter
     ) {}
 }
@@ -249,25 +267,27 @@ export class Timespan extends Quantity {
         return value ? new Timespan(value, defaultUnit) : new Timespan(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "Time";
+
     public static Units: { [key: string]: Unit } = {
-        ys: new Unit("yoctosecond", "ys", 1e-24),
-        zs: new Unit("zeptosecond", "zs", 1e-21),
-        as: new Unit("attosecond", "as", 1e-18),
-        fs: new Unit("femtosecond", "fs", 1e-15),
-        ps: new Unit("picosecond", "ps", 1e-12),
-        ns: new Unit("nanosecond", "ns", 1e-9),
+        ys: new Unit("yoctosecond", "ys", 1e-24, "ys"),
+        zs: new Unit("zeptosecond", "zs", 1e-21, "zs"),
+        as: new Unit("attosecond", "as", 1e-18, "as"),
+        fs: new Unit("femtosecond", "fs", 1e-15, "fs"),
+        ps: new Unit("picosecond", "ps", 1e-12, "ps"),
+        ns: new Unit("nanosecond", "ns", 1e-9, "ns"),
         // "tick" is a UE5-flavoured 100 ns sample; symbol made
         // distinct from "ns" to remove the legacy collision.
-        tick: new Unit("tick", "tk", 1e-7),
-        mis: new Unit("microsecond", "µs", 1e-6),
-        ms: new Unit("millisecond", "ms", 1e-3),
-        s: new Unit("second", "s", 1),
-        Min: new Unit("minute", "m", 60),
-        Hour: new Unit("hour", "h", 3600),
-        Day: new Unit("day", "d", 86400),
-        Week: new Unit("week", "w", 86400 * 7),
-        Yr: new Unit("year", "y", 86400 * 365.25),
-        Cy: new Unit("century", "c", 86400 * 36525),
+        tick: new Unit("tick", "tk", 1e-7, "100.ns"),
+        mis: new Unit("microsecond", "µs", 1e-6, "us"),
+        ms: new Unit("millisecond", "ms", 1e-3, "ms"),
+        s: new Unit("second", "s", 1, "s"),
+        Min: new Unit("minute", "m", 60, "min"),
+        Hour: new Unit("hour", "h", 3600, "h"),
+        Day: new Unit("day", "d", 86400, "d"),
+        Week: new Unit("week", "w", 86400 * 7, "wk"),
+        Yr: new Unit("year", "y", 86400 * 365.25, "a_j"),
+        Cy: new Unit("century", "c", 86400 * 36525, "100.a_j"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -345,10 +365,12 @@ export class Temperature extends Quantity {
         return value ? new Temperature(value, defaultUnit) : new Temperature(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "Temperature";
+
     public static Units: { [key: string]: Unit } = {
-        k: new Unit("kelvin", "K", 1, new KConverter()),
-        c: new Unit("celsius", "°C", 1, new CConverter()),
-        f: new Unit("fahrenheit", "°F", 1, new FConverter()),
+        k: new Unit("kelvin", "K", 1, "K", new KConverter()),
+        c: new Unit("celsius", "°C", 1, "Cel", new CConverter()),
+        f: new Unit("fahrenheit", "°F", 1, "[degF]", new FConverter()),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -367,16 +389,18 @@ export class Mass extends Quantity {
         return value ? new Mass(value, defaultUnit) : new Mass(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "Mass";
+
     public static Units: { [key: string]: Unit } = {
-        u: new Unit("atomic mass unit", "u", 1.66053906660e-27),
-        pm: new Unit("planck mass", "pm", 2.176434e-8),
-        mug: new Unit("microgram", "µg", 1e-9),
-        mg: new Unit("milligram", "mg", 1e-6),
-        g: new Unit("gram", "g", 1e-3),
-        pound: new Unit("pound", "lb", 0.45359237),
-        kg: new Unit("kilogram", "kg", 1),
-        T: new Unit("metric ton", "t", 1000),
-        Sm: new Unit("solar mass", "M☉", 1.98855e30),
+        u: new Unit("atomic mass unit", "u", 1.66053906660e-27, "u"),
+        pm: new Unit("planck mass", "pm", 2.176434e-8, undefined),
+        mug: new Unit("microgram", "µg", 1e-9, "ug"),
+        mg: new Unit("milligram", "mg", 1e-6, "mg"),
+        g: new Unit("gram", "g", 1e-3, "g"),
+        pound: new Unit("pound", "lb", 0.45359237, "[lb_av]"),
+        kg: new Unit("kilogram", "kg", 1, "kg"),
+        T: new Unit("metric ton", "t", 1000, "t"),
+        Sm: new Unit("solar mass", "M☉", 1.98855e30, undefined),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -388,10 +412,12 @@ export class Power extends Quantity {
     public static ForParameter(value: Power | number, defaultValue: number, defaultUnit: Unit): Power {
         return value ? new Power(value, defaultUnit) : new Power(defaultValue, defaultUnit);
     }
+    public static QuantityKind = "Power";
+
     public static Units: { [key: string]: Unit } = {
-        watt: new Unit("watt", "W", 1),
-        kwatt: new Unit("kilowatt", "kW", 1e3),
-        Mwatt: new Unit("megawatt", "MW", 1e6),
+        watt: new Unit("watt", "W", 1, "W"),
+        kwatt: new Unit("kilowatt", "kW", 1e3, "kW"),
+        Mwatt: new Unit("megawatt", "MW", 1e6, "MW"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -404,10 +430,12 @@ export class Voltage extends Quantity {
         return value ? new Voltage(value, defaultUnit) : new Voltage(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "Voltage";
+
     public static Units: { [key: string]: Unit } = {
-        volt: new Unit("volt", "V", 1),
-        mvolt: new Unit("millivolt", "mV", 1e-3),
-        kvolt: new Unit("kilovolt", "kV", 1e3),
+        volt: new Unit("volt", "V", 1, "V"),
+        mvolt: new Unit("millivolt", "mV", 1e-3, "mV"),
+        kvolt: new Unit("kilovolt", "kV", 1e3, "kV"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -420,9 +448,11 @@ export class Current extends Quantity {
         return value ? new Current(value, defaultUnit) : new Current(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "ElectricCurrent";
+
     public static Units: { [key: string]: Unit } = {
-        amp: new Unit("ampere", "A", 1),
-        mamp: new Unit("milliampere", "mA", 1e-3),
+        amp: new Unit("ampere", "A", 1, "A"),
+        mamp: new Unit("milliampere", "mA", 1e-3, "mA"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -435,9 +465,11 @@ export class Luminosity extends Quantity {
         return value ? new Luminosity(value, defaultUnit) : new Luminosity(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "Power";
+
     public static Units: { [key: string]: Unit } = {
-        watt: new Unit("watt", "W", 1),
-        Lsun: new Unit("solar luminosity", "L☉", 3.846e26),
+        watt: new Unit("watt", "W", 1, "W"),
+        Lsun: new Unit("solar luminosity", "L☉", 3.846e26, undefined),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -456,11 +488,13 @@ export class Volume extends Quantity {
         return value ? new Volume(value, defaultUnit) : new Volume(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "Volume";
+
     public static Units: { [key: string]: Unit } = {
-        m3: new Unit("cubic meter", "m³", 1),
-        L: new Unit("litre", "L", 1e-3),
-        mL: new Unit("millilitre", "mL", 1e-6),
-        cm3: new Unit("cubic centimeter", "cm³", 1e-6),
+        m3: new Unit("cubic meter", "m³", 1, "m3"),
+        L: new Unit("litre", "L", 1e-3, "L"),
+        mL: new Unit("millilitre", "mL", 1e-6, "mL"),
+        cm3: new Unit("cubic centimeter", "cm³", 1e-6, "cm3"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -481,14 +515,16 @@ export class Area extends Quantity {
         return value ? new Area(value, defaultUnit) : new Area(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "Area";
+
     public static Units: { [key: string]: Unit } = {
-        m2: new Unit("square meter", "m²", 1),
-        cm2: new Unit("square centimeter", "cm²", 1e-4),
-        mm2: new Unit("square millimeter", "mm²", 1e-6),
-        km2: new Unit("square kilometer", "km²", 1e6),
-        in2: new Unit("square inch", "in²", 0.00064516),
-        ft2: new Unit("square foot", "ft²", 0.09290304),
-        ha: new Unit("hectare", "ha", 1e4),
+        m2: new Unit("square meter", "m²", 1, "m2"),
+        cm2: new Unit("square centimeter", "cm²", 1e-4, "cm2"),
+        mm2: new Unit("square millimeter", "mm²", 1e-6, "mm2"),
+        km2: new Unit("square kilometer", "km²", 1e6, "km2"),
+        in2: new Unit("square inch", "in²", 0.00064516, "[sin_i]"),
+        ft2: new Unit("square foot", "ft²", 0.09290304, "[sft_i]"),
+        ha: new Unit("hectare", "ha", 1e4, "har"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -516,14 +552,16 @@ export class VolumetricFlow extends Quantity {
         return value ? new VolumetricFlow(value, defaultUnit) : new VolumetricFlow(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "VolumeFlowRate";
+
     public static Units: { [key: string]: Unit } = {
-        m3ps: new Unit("cubic meter per second", "m³/s", 1),
-        Lps: new Unit("litre per second", "L/s", 1e-3),
-        Lpmin: new Unit("litre per minute", "L/min", 1e-3 / 60),
-        mLpmin: new Unit("millilitre per minute", "mL/min", 1e-6 / 60),
-        m3ph: new Unit("cubic meter per hour", "m³/h", 1 / 3600),
-        cfm: new Unit("cubic feet per minute", "cfm", 0.02831684659 / 60),
-        gpm: new Unit("US gallon per minute", "gpm", 3.785411784e-3 / 60),
+        m3ps: new Unit("cubic meter per second", "m³/s", 1, "m3/s"),
+        Lps: new Unit("litre per second", "L/s", 1e-3, "L/s"),
+        Lpmin: new Unit("litre per minute", "L/min", 1e-3 / 60, "L/min"),
+        mLpmin: new Unit("millilitre per minute", "mL/min", 1e-6 / 60, "mL/min"),
+        m3ph: new Unit("cubic meter per hour", "m³/h", 1 / 3600, "m3/h"),
+        cfm: new Unit("cubic feet per minute", "cfm", 0.02831684659 / 60, "[cft_i]/min"),
+        gpm: new Unit("US gallon per minute", "gpm", 3.785411784e-3 / 60, "[gal_us]/min"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -542,9 +580,11 @@ export class Angle extends Quantity {
     public static RA2DE = 180 / Math.PI;
     public static DE2RABY2 = Math.PI / 360;
 
+    public static QuantityKind = "PlaneAngle";
+
     public static Units: { [key: string]: Unit } = {
-        d: new Unit("degree", "°", 1),
-        r: new Unit("radian", "rad", Angle.RA2DE),
+        d: new Unit("degree", "°", 1, "deg"),
+        r: new Unit("radian", "rad", Angle.RA2DE, "rad"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -564,36 +604,38 @@ export class Length extends Quantity {
         return value ? new Length(value, defaultUnit) : new Length(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "Length";
+
     public static Units: { [key: string]: Unit } = {
-        ym: new Unit("yoctometer", "ym", 1e-24),
-        zm: new Unit("zeptometer", "zm", 1e-21),
-        am: new Unit("attometer", "am", 1e-18),
-        fm: new Unit("femtometer", "fm", 1e-15),
-        pm: new Unit("picometer", "pm", 1e-12),
-        nm: new Unit("nanometer", "nm", 1e-9),
-        mim: new Unit("micrometer", "µm", 1e-6),
-        mm: new Unit("millimeter", "mm", 1e-3),
-        cm: new Unit("centimeter", "cm", 1e-2),
-        in: new Unit("inch", "in", 0.0254),
-        dm: new Unit("decimeter", "dm", 1e-1),
-        m: new Unit("meter", "m", 1),
-        Mi: new Unit("mile", "mi", 1609.344),
-        Nmi: new Unit("nautical mile", "Nmi", 1852),
-        Dam: new Unit("decameter", "dam", 10),
-        Hm: new Unit("hectometer", "hm", 100),
-        Km: new Unit("kilometer", "km", 1000),
-        Sr: new Unit("solar radius", "R☉", 6.957e8),
-        Mm: new Unit("megameter", "Mm", 1e6),
-        Ls: new Unit("light second", "Ls", 299792458),
-        Gm: new Unit("gigameter", "Gm", 1e9),
-        Au: new Unit("astronomical unit", "AU", 1.495978707e11),
-        Tm: new Unit("terameter", "Tm", 1e12),
-        Pm: new Unit("petameter", "Pm", 1e15),
-        Ly: new Unit("light year", "ly", 9.4607304725808e15),
-        Pc: new Unit("parsec", "pc", 3.0857e16),
-        Em: new Unit("exameter", "Em", 1e18),
-        Zm: new Unit("zettameter", "Zm", 1e21),
-        Ym: new Unit("yottameter", "Ym", 1e24),
+        ym: new Unit("yoctometer", "ym", 1e-24, "ym"),
+        zm: new Unit("zeptometer", "zm", 1e-21, "zm"),
+        am: new Unit("attometer", "am", 1e-18, "am"),
+        fm: new Unit("femtometer", "fm", 1e-15, "fm"),
+        pm: new Unit("picometer", "pm", 1e-12, "pm"),
+        nm: new Unit("nanometer", "nm", 1e-9, "nm"),
+        mim: new Unit("micrometer", "µm", 1e-6, "um"),
+        mm: new Unit("millimeter", "mm", 1e-3, "mm"),
+        cm: new Unit("centimeter", "cm", 1e-2, "cm"),
+        in: new Unit("inch", "in", 0.0254, "[in_i]"),
+        dm: new Unit("decimeter", "dm", 1e-1, "dm"),
+        m: new Unit("meter", "m", 1, "m"),
+        Mi: new Unit("mile", "mi", 1609.344, "[mi_i]"),
+        Nmi: new Unit("nautical mile", "Nmi", 1852, "[nmi_i]"),
+        Dam: new Unit("decameter", "dam", 10, "dam"),
+        Hm: new Unit("hectometer", "hm", 100, "hm"),
+        Km: new Unit("kilometer", "km", 1000, "km"),
+        Sr: new Unit("solar radius", "R☉", 6.957e8, undefined),
+        Mm: new Unit("megameter", "Mm", 1e6, "Mm"),
+        Ls: new Unit("light second", "Ls", 299792458, "[c].s"),
+        Gm: new Unit("gigameter", "Gm", 1e9, "Gm"),
+        Au: new Unit("astronomical unit", "AU", 1.495978707e11, "AU"),
+        Tm: new Unit("terameter", "Tm", 1e12, "Tm"),
+        Pm: new Unit("petameter", "Pm", 1e15, "Pm"),
+        Ly: new Unit("light year", "ly", 9.4607304725808e15, "[ly]"),
+        Pc: new Unit("parsec", "pc", 3.0857e16, "pc"),
+        Em: new Unit("exameter", "Em", 1e18, "Em"),
+        Zm: new Unit("zettameter", "Zm", 1e21, "Zm"),
+        Ym: new Unit("yottameter", "Ym", 1e24, "Ym"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -611,13 +653,15 @@ export class Speed extends Quantity {
         return value ? new Speed(value, defaultUnit) : new Speed(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "Speed";
+
     public static Units: { [key: string]: Unit } = {
-        mps: new Unit("meter per second", "m/s", 1),
+        mps: new Unit("meter per second", "m/s", 1, "m/s"),
         // mm/s is the ISO 20816-3 broadband velocity-RMS unit (severity node).
-        mmps: new Unit("millimeter per second", "mm/s", 1e-3),
-        kph: new Unit("kilometer per hour", "km/h", 1000 / 3600),
-        mph: new Unit("mile per hour", "mph", 1609.344 / 3600),
-        knot: new Unit("knot", "kn", 1852 / 3600),
+        mmps: new Unit("millimeter per second", "mm/s", 1e-3, "mm/s"),
+        kph: new Unit("kilometer per hour", "km/h", 1000 / 3600, "km/h"),
+        mph: new Unit("mile per hour", "mph", 1609.344 / 3600, "[mi_i]/h"),
+        knot: new Unit("knot", "kn", 1852 / 3600, "[kn_i]"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -630,13 +674,19 @@ export class Frequency extends Quantity {
         return value ? new Frequency(value, defaultUnit) : new Frequency(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "Frequency";
+
     public static Units: { [key: string]: Unit } = {
-        Hz: new Unit("hertz", "Hz", 1),
-        kHz: new Unit("kilohertz", "kHz", 1e3),
-        MHz: new Unit("megahertz", "MHz", 1e6),
-        GHz: new Unit("gigahertz", "GHz", 1e9),
-        rps: new Unit("revolutions per second", "rps", 1),
-        rpm: new Unit("revolutions per minute", "rpm", 1 / 60),
+        Hz: new Unit("hertz", "Hz", 1, "Hz"),
+        kHz: new Unit("kilohertz", "kHz", 1e3, "kHz"),
+        MHz: new Unit("megahertz", "MHz", 1e6, "MHz"),
+        GHz: new Unit("gigahertz", "GHz", 1e9, "GHz"),
+        rps: new Unit("revolutions per second", "rps", 1, "{rev}/s"),
+        rpm: new Unit("revolutions per minute", "rpm", 1 / 60, "{rev}/min"),
+        // A slew rate expressed in whatever engineering unit the signal
+        // carries, so only the "per second" is dimensioned. Same annotation
+        // pattern as rps: the count is named, not measured.
+        unitsps: new Unit("engineering units per second", "units/s", 1, "{units}/s"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -649,9 +699,11 @@ export class Acceleration extends Quantity {
         return value ? new Acceleration(value, defaultUnit) : new Acceleration(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "Acceleration";
+
     public static Units: { [key: string]: Unit } = {
-        mps2: new Unit("meter per second squared", "m/s²", 1),
-        g: new Unit("standard gravity", "g", 9.80665),
+        mps2: new Unit("meter per second squared", "m/s²", 1, "m/s2"),
+        g: new Unit("standard gravity", "g", 9.80665, "[g]"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -664,16 +716,18 @@ export class Pressure extends Quantity {
         return value ? new Pressure(value, defaultUnit) : new Pressure(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "Pressure";
+
     public static Units: { [key: string]: Unit } = {
-        Pa: new Unit("pascal", "Pa", 1),
-        hPa: new Unit("hectopascal", "hPa", 1e2),
-        kPa: new Unit("kilopascal", "kPa", 1e3),
-        MPa: new Unit("megapascal", "MPa", 1e6),
-        bar: new Unit("bar", "bar", 1e5),
-        mbar: new Unit("millibar", "mbar", 1e2),
-        atm: new Unit("atmosphere", "atm", 101325),
-        psi: new Unit("pound per square inch", "psi", 6894.757),
-        torr: new Unit("torr", "Torr", 133.322368),
+        Pa: new Unit("pascal", "Pa", 1, "Pa"),
+        hPa: new Unit("hectopascal", "hPa", 1e2, "hPa"),
+        kPa: new Unit("kilopascal", "kPa", 1e3, "kPa"),
+        MPa: new Unit("megapascal", "MPa", 1e6, "MPa"),
+        bar: new Unit("bar", "bar", 1e5, "bar"),
+        mbar: new Unit("millibar", "mbar", 1e2, "mbar"),
+        atm: new Unit("atmosphere", "atm", 101325, "atm"),
+        psi: new Unit("pound per square inch", "psi", 6894.757, "[psi]"),
+        torr: new Unit("torr", "Torr", 133.322368, "mm[Hg]"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -686,12 +740,18 @@ export class Dimensionless extends Quantity {
         return value ? new Dimensionless(value, defaultUnit) : new Dimensionless(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "Dimensionless";
+
     public static Units: { [key: string]: Unit } = {
-        none: new Unit("dimensionless", "", 1),
-        ratio: new Unit("ratio", "ratio", 1),
-        percent: new Unit("percent", "%", 0.01),
-        ppm: new Unit("parts per million", "ppm", 1e-6),
-        ppb: new Unit("parts per billion", "ppb", 1e-9),
+        none: new Unit("dimensionless", "", 1, "1"),
+        ratio: new Unit("ratio", "ratio", 1, "1"),
+        percent: new Unit("percent", "%", 0.01, "%"),
+        ppm: new Unit("parts per million", "ppm", 1e-6, "[ppm]"),
+        ppb: new Unit("parts per billion", "ppb", 1e-9, "[ppb]"),
+        // A scale factor written as "2x". A pure ratio, kept apart from
+        // `ratio` only so the panel can print the multiplication sign the
+        // scene editor has always shown.
+        times: new Unit("times", "×", 1, "1"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -722,9 +782,11 @@ export class MolarMass extends Quantity {
         return value ? new MolarMass(value, defaultUnit) : new MolarMass(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "MolarMass";
+
     public static Units: { [key: string]: Unit } = {
-        kgpmol: new Unit("kilogram per mole", "kg/mol", 1),
-        gpmol: new Unit("gram per mole", "g/mol", 1e-3),
+        kgpmol: new Unit("kilogram per mole", "kg/mol", 1, "kg/mol"),
+        gpmol: new Unit("gram per mole", "g/mol", 1e-3, "g/mol"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -745,10 +807,12 @@ export class Density extends Quantity {
         return value ? new Density(value, defaultUnit) : new Density(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "Density";
+
     public static Units: { [key: string]: Unit } = {
-        kgpm3: new Unit("kilogram per cubic meter", "kg/m³", 1),
-        gpcm3: new Unit("gram per cubic centimeter", "g/cm³", 1000),
-        gpL: new Unit("gram per litre", "g/L", 1),
+        kgpm3: new Unit("kilogram per cubic meter", "kg/m³", 1, "kg/m3"),
+        gpcm3: new Unit("gram per cubic centimeter", "g/cm³", 1000, "g/cm3"),
+        gpL: new Unit("gram per litre", "g/L", 1, "g/L"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -768,12 +832,14 @@ export class MassConcentration extends Quantity {
         return value ? new MassConcentration(value, defaultUnit) : new MassConcentration(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "MassConcentration";
+
     public static Units: { [key: string]: Unit } = {
-        kgpm3: new Unit("kilogram per cubic meter", "kg/m³", 1),
-        mgpm3: new Unit("milligram per cubic meter", "mg/m³", 1e-6),
-        ugpm3: new Unit("microgram per cubic meter", "µg/m³", 1e-9),
-        mgpL: new Unit("milligram per litre", "mg/L", 1e-3),
-        ugpL: new Unit("microgram per litre", "µg/L", 1e-6),
+        kgpm3: new Unit("kilogram per cubic meter", "kg/m³", 1, "kg/m3"),
+        mgpm3: new Unit("milligram per cubic meter", "mg/m³", 1e-6, "mg/m3"),
+        ugpm3: new Unit("microgram per cubic meter", "µg/m³", 1e-9, "ug/m3"),
+        mgpL: new Unit("milligram per litre", "mg/L", 1e-3, "mg/L"),
+        ugpL: new Unit("microgram per litre", "µg/L", 1e-6, "ug/L"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -791,9 +857,11 @@ export class MassSpecificHeat extends Quantity {
         return value ? new MassSpecificHeat(value, defaultUnit) : new MassSpecificHeat(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "SpecificHeatCapacity";
+
     public static Units: { [key: string]: Unit } = {
-        JpkgK: new Unit("joule per kilogram per kelvin", "J/(kg·K)", 1),
-        kJpkgK: new Unit("kilojoule per kilogram per kelvin", "kJ/(kg·K)", 1e3),
+        JpkgK: new Unit("joule per kilogram per kelvin", "J/(kg·K)", 1, "J/(kg.K)"),
+        kJpkgK: new Unit("kilojoule per kilogram per kelvin", "kJ/(kg·K)", 1e3, "kJ/(kg.K)"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -811,9 +879,11 @@ export class ThermalConductivity extends Quantity {
         return value ? new ThermalConductivity(value, defaultUnit) : new ThermalConductivity(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "ThermalConductivity";
+
     public static Units: { [key: string]: Unit } = {
-        WpmK: new Unit("watt per meter per kelvin", "W/(m·K)", 1),
-        mWpmK: new Unit("milliwatt per meter per kelvin", "mW/(m·K)", 1e-3),
+        WpmK: new Unit("watt per meter per kelvin", "W/(m·K)", 1, "W/(m.K)"),
+        mWpmK: new Unit("milliwatt per meter per kelvin", "mW/(m·K)", 1e-3, "mW/(m.K)"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
@@ -831,15 +901,365 @@ export class DynamicViscosity extends Quantity {
         return value ? new DynamicViscosity(value, defaultUnit) : new DynamicViscosity(defaultValue, defaultUnit);
     }
 
+    public static QuantityKind = "DynamicViscosity";
+
     public static Units: { [key: string]: Unit } = {
-        Pas: new Unit("pascal-second", "Pa·s", 1),
-        cP: new Unit("centipoise", "cP", 1e-3),
-        mPas: new Unit("millipascal-second", "mPa·s", 1e-3),
-        uPas: new Unit("micropascal-second", "µPa·s", 1e-6),
+        Pas: new Unit("pascal-second", "Pa·s", 1, "Pa.s"),
+        cP: new Unit("centipoise", "cP", 1e-3, "cP"),
+        mPas: new Unit("millipascal-second", "mPa·s", 1e-3, "mPa.s"),
+        uPas: new Unit("micropascal-second", "µPa·s", 1e-6, "uPa.s"),
     };
 
     public unitForSymbol(str: string): Unit | undefined {
         return DynamicViscosity.Units[str] || undefined;
+    }
+}
+
+/**
+ * Force: base = newton. Declared eight times across the mechanical
+ * plugins (bearing load, unbalance force, contact force) with no
+ * quantity behind it until now.
+ */
+export class Force extends Quantity {
+    public static ForParameter(value: Force | number, defaultValue: number, defaultUnit: Unit): Force {
+        return value ? new Force(value, defaultUnit) : new Force(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "Force";
+
+    public static Units: { [key: string]: Unit } = {
+        N: new Unit("newton", "N", 1, "N"),
+        mN: new Unit("millinewton", "mN", 1e-3, "mN"),
+        kN: new Unit("kilonewton", "kN", 1e3, "kN"),
+        lbf: new Unit("pound-force", "lbf", 4.4482216152605, "[lbf_av]"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return Force.Units[str] || undefined;
+    }
+}
+
+/**
+ * Translational stiffness: base = newton per metre. This is the
+ * bearing stiffness `k` of the gravity-sag relation
+ * `delta = m_rotor * g_radial / k_bearing`, so it is a load-bearing
+ * quantity of the microgravity work rather than a convenience.
+ */
+export class Stiffness extends Quantity {
+    public static ForParameter(value: Stiffness | number, defaultValue: number, defaultUnit: Unit): Stiffness {
+        return value ? new Stiffness(value, defaultUnit) : new Stiffness(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "ForcePerLength";
+
+    public static Units: { [key: string]: Unit } = {
+        Npm: new Unit("newton per meter", "N/m", 1, "N/m"),
+        kNpm: new Unit("kilonewton per meter", "kN/m", 1e3, "kN/m"),
+        MNpm: new Unit("meganewton per meter", "MN/m", 1e6, "MN/m"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return Stiffness.Units[str] || undefined;
+    }
+}
+
+/**
+ * Torque: base = newton-metre. Dimensionally an energy, kept apart
+ * deliberately: a load torque and a joule are not interchangeable at a
+ * port, and the separation is the only thing that says so.
+ */
+export class Torque extends Quantity {
+    public static ForParameter(value: Torque | number, defaultValue: number, defaultUnit: Unit): Torque {
+        return value ? new Torque(value, defaultUnit) : new Torque(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "Torque";
+
+    public static Units: { [key: string]: Unit } = {
+        Nm: new Unit("newton meter", "N·m", 1, "N.m"),
+        mNm: new Unit("millinewton meter", "mN·m", 1e-3, "mN.m"),
+        kNm: new Unit("kilonewton meter", "kN·m", 1e3, "kN.m"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return Torque.Units[str] || undefined;
+    }
+}
+
+/**
+ * Inductance: base = henry. The dq machine model declares Ld and Lq
+ * in henries and millihenries.
+ */
+export class Inductance extends Quantity {
+    public static ForParameter(value: Inductance | number, defaultValue: number, defaultUnit: Unit): Inductance {
+        return value ? new Inductance(value, defaultUnit) : new Inductance(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "Inductance";
+
+    public static Units: { [key: string]: Unit } = {
+        H: new Unit("henry", "H", 1, "H"),
+        mH: new Unit("millihenry", "mH", 1e-3, "mH"),
+        uH: new Unit("microhenry", "\u00b5H", 1e-6, "uH"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return Inductance.Units[str] || undefined;
+    }
+}
+
+/**
+ * Magnetic flux: base = weber. Permanent-magnet flux linkage, the
+ * term that turns rotor angle into back-EMF.
+ */
+export class MagneticFlux extends Quantity {
+    public static ForParameter(value: MagneticFlux | number, defaultValue: number, defaultUnit: Unit): MagneticFlux {
+        return value ? new MagneticFlux(value, defaultUnit) : new MagneticFlux(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "MagneticFlux";
+
+    public static Units: { [key: string]: Unit } = {
+        Wb: new Unit("weber", "Wb", 1, "Wb"),
+        mWb: new Unit("milliweber", "mWb", 1e-3, "mWb"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return MagneticFlux.Units[str] || undefined;
+    }
+}
+
+/**
+ * Electrical resistance: base = ohm. Stator winding resistance, and
+ * the only quantity here whose UCUM code is spelled out rather than
+ * symbolic, "Ohm" and not the greek letter.
+ */
+export class Resistance extends Quantity {
+    public static ForParameter(value: Resistance | number, defaultValue: number, defaultUnit: Unit): Resistance {
+        return value ? new Resistance(value, defaultUnit) : new Resistance(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "Resistance";
+
+    public static Units: { [key: string]: Unit } = {
+        ohm: new Unit("ohm", "\u03a9", 1, "Ohm"),
+        mohm: new Unit("milliohm", "m\u03a9", 1e-3, "mOhm"),
+        kohm: new Unit("kiloohm", "k\u03a9", 1e3, "kOhm"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return Resistance.Units[str] || undefined;
+    }
+}
+
+/**
+ * Apparent power: base = volt-ampere. Separate from `Power` because
+ * the distinction between S, P and Q is the whole content of a power
+ * factor, and a port that accepts watts must not silently accept VA.
+ */
+export class ApparentPower extends Quantity {
+    public static ForParameter(value: ApparentPower | number, defaultValue: number, defaultUnit: Unit): ApparentPower {
+        return value ? new ApparentPower(value, defaultUnit) : new ApparentPower(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "ApparentPower";
+
+    public static Units: { [key: string]: Unit } = {
+        VA: new Unit("volt-ampere", "VA", 1, "V.A"),
+        kVA: new Unit("kilovolt-ampere", "kVA", 1e3, "kV.A"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return ApparentPower.Units[str] || undefined;
+    }
+}
+
+/**
+ * Reactive power: base = var.
+ *
+ * UCUM has no code for the var, and none is possible: it is
+ * dimensionally identical to the watt and the volt-ampere, the three
+ * being told apart by what they mean and not by what they measure.
+ * "V.A" is therefore exact as a unit and insufficient as an identity,
+ * which is precisely why the quantity kind travels alongside the code
+ * rather than being derived from it.
+ */
+export class ReactivePower extends Quantity {
+    public static ForParameter(value: ReactivePower | number, defaultValue: number, defaultUnit: Unit): ReactivePower {
+        return value ? new ReactivePower(value, defaultUnit) : new ReactivePower(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "ReactivePower";
+
+    public static Units: { [key: string]: Unit } = {
+        var: new Unit("volt-ampere reactive", "var", 1, "V.A"),
+        kvar: new Unit("kilovolt-ampere reactive", "kvar", 1e3, "kV.A"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return ReactivePower.Units[str] || undefined;
+    }
+}
+
+/**
+ * Energy: base = joule. Watt-hours included because consumption
+ * budgets are stated in them and converting at the call site is how
+ * factors of 3600 get lost.
+ */
+export class Energy extends Quantity {
+    public static ForParameter(value: Energy | number, defaultValue: number, defaultUnit: Unit): Energy {
+        return value ? new Energy(value, defaultUnit) : new Energy(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "Energy";
+
+    public static Units: { [key: string]: Unit } = {
+        J: new Unit("joule", "J", 1, "J"),
+        kJ: new Unit("kilojoule", "kJ", 1e3, "kJ"),
+        Wh: new Unit("watt hour", "Wh", 3600, "W.h"),
+        kWh: new Unit("kilowatt hour", "kWh", 3.6e6, "kW.h"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return Energy.Units[str] || undefined;
+    }
+}
+
+/**
+ * Mass moment of inertia: base = kilogram square metre. The rotor
+ * inertia J of the mechanical equation of motion.
+ */
+export class MomentOfInertia extends Quantity {
+    public static ForParameter(value: MomentOfInertia | number, defaultValue: number, defaultUnit: Unit): MomentOfInertia {
+        return value ? new MomentOfInertia(value, defaultUnit) : new MomentOfInertia(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "MomentOfInertia";
+
+    public static Units: { [key: string]: Unit } = {
+        kgm2: new Unit("kilogram square meter", "kg\u00b7m\u00b2", 1, "kg.m2"),
+        gcm2: new Unit("gram square centimeter", "g\u00b7cm\u00b2", 1e-7, "g.cm2"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return MomentOfInertia.Units[str] || undefined;
+    }
+}
+
+/**
+ * First moment of mass: base = kilogram-metre.
+ *
+ * This is static unbalance, `m * r`, the quantity a balancing machine
+ * reports and the input of the unbalance fault. Balancing practice
+ * states it in gram-millimetres, six orders of magnitude below the
+ * base, which is exactly the kind of gap that must not be left to a
+ * literal at the call site.
+ */
+export class MassMoment extends Quantity {
+    public static ForParameter(value: MassMoment | number, defaultValue: number, defaultUnit: Unit): MassMoment {
+        return value ? new MassMoment(value, defaultUnit) : new MassMoment(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "MassMoment";
+
+    public static Units: { [key: string]: Unit } = {
+        kgm: new Unit("kilogram meter", "kg\u00b7m", 1, "kg.m"),
+        gmm: new Unit("gram millimeter", "g\u00b7mm", 1e-6, "g.mm"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return MassMoment.Units[str] || undefined;
+    }
+}
+
+/**
+ * Angular velocity: base = radian per second.
+ *
+ * Distinct from `Frequency` even though rpm appears in both. A shaft
+ * turning at 3000 rpm has a mechanical frequency of 50 Hz and an
+ * angular velocity of 314 rad/s; the factor of 2*pi between them is
+ * the single most reliable source of error in rotating-machine code,
+ * and it belongs in the unit system rather than in each formula.
+ */
+export class AngularVelocity extends Quantity {
+    public static ForParameter(value: AngularVelocity | number, defaultValue: number, defaultUnit: Unit): AngularVelocity {
+        return value ? new AngularVelocity(value, defaultUnit) : new AngularVelocity(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "AngularVelocity";
+
+    public static Units: { [key: string]: Unit } = {
+        radps: new Unit("radian per second", "rad/s", 1, "rad/s"),
+        degps: new Unit("degree per second", "\u00b0/s", Math.PI / 180, "deg/s"),
+        rpm: new Unit("revolutions per minute", "rpm", (2 * Math.PI) / 60, "{rev}/min"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return AngularVelocity.Units[str] || undefined;
+    }
+}
+
+/**
+ * Logarithmic level: base = decibel.
+ *
+ * Its own quantity, and not a member of `Dimensionless`, because the
+ * generic linear conversion is meaningless on a logarithmic scale: a
+ * class holding both dB and percent would let `Convert` turn one into
+ * the other and produce a number that looks like an answer. Within
+ * this class conversion is legitimate, one bel being ten decibels.
+ */
+export class Level extends Quantity {
+    public static ForParameter(value: Level | number, defaultValue: number, defaultUnit: Unit): Level {
+        return value ? new Level(value, defaultUnit) : new Level(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "Level";
+
+    public static Units: { [key: string]: Unit } = {
+        dB: new Unit("decibel", "dB", 1, "dB"),
+        B: new Unit("bel", "B", 10, "B"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return Level.Units[str] || undefined;
+    }
+}
+
+/**
+ * A count of things: base = one, of whatever is being counted.
+ *
+ * Window lengths, FFT bins, filter coefficients, octave bands. All are
+ * dimensionless, and writing them as such would be true and useless: the
+ * panel would print nothing where it used to print "samples", and a port
+ * expecting bins would accept frames.
+ *
+ * UCUM's answer is the annotation, a name in braces carrying no dimension:
+ * "{samples}" is the number one, labelled. So the label survives into every
+ * exposition instead of being a display string the unit system never saw.
+ *
+ * Separate from `Dimensionless` because conversion between members is
+ * meaningless here: 8 bins is not 8 frames in any factor, whereas a ratio
+ * really does convert to a percentage.
+ */
+export class Count extends Quantity {
+    public static ForParameter(value: Count | number, defaultValue: number, defaultUnit: Unit): Count {
+        return value ? new Count(value, defaultUnit) : new Count(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "Dimensionless";
+
+    public static Units: { [key: string]: Unit } = {
+        samples: new Unit("samples", "samples", 1, "{samples}"),
+        bins: new Unit("bins", "bins", 1, "{bins}"),
+        bands: new Unit("bands", "bands", 1, "{bands}"),
+        coeffs: new Unit("coefficients", "coeffs", 1, "{coeffs}"),
+        steps: new Unit("steps", "steps", 1, "{steps}"),
+        rows: new Unit("rows", "rows", 1, "{rows}"),
+        frames: new Unit("frames", "frames", 1, "{frames}"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return Count.Units[str] || undefined;
     }
 }
 
@@ -852,11 +1272,42 @@ export class DynamicViscosity extends Quantity {
 // AFTER every class so the registry references initialized bindings.
 // ─────────────────────────────────────────────────────────────────────
 
-const QUANTITY_REGISTRY: { [quantity: string]: { Units: { [key: string]: Unit } } } = {
+interface IQuantityClass {
+    QuantityKind: string;
+    Units: { [key: string]: Unit };
+}
+
+const QUANTITY_REGISTRY: { [quantity: string]: IQuantityClass } = {
     Timespan, Temperature, Mass, Power, Voltage, Current, Luminosity, Volume, Area,
     VolumetricFlow, Angle, Length, Speed, Frequency, Acceleration, Pressure, Dimensionless,
     MolarMass, Density, MassConcentration, MassSpecificHeat, ThermalConductivity, DynamicViscosity,
+    Force, Stiffness, Torque, Inductance, MagneticFlux, Resistance, ApparentPower, ReactivePower,
+    Energy, MomentOfInertia, MassMoment, AngularVelocity, Level, Count,
 };
+
+/** Every registered quantity name, for tooling that has to walk the system. */
+export function quantityNames(): ReadonlyArray<string> {
+    return Object.keys(QUANTITY_REGISTRY);
+}
+
+/** The `Units` map of one registered quantity, or undefined if unknown. */
+export function quantityUnits(quantity: string): { [key: string]: Unit } | undefined {
+    return QUANTITY_REGISTRY[quantity]?.Units;
+}
+
+/**
+ * The semantic kind a quantity measures, e.g. "ElectricCurrent" for
+ * `Current`.
+ *
+ * Declared on each class rather than derived from its name: the two coincide
+ * often enough to make derivation tempting and not always, `Current` giving
+ * `ElectricCurrent` and `Angle` giving `PlaneAngle`. It is the second half of
+ * an identity whose first half is the UCUM code, and it is what carries the
+ * distinctions UCUM cannot express, watt against volt-ampere against var.
+ */
+export function resolveQuantityKind(quantity: string): string | undefined {
+    return QUANTITY_REGISTRY[quantity]?.QuantityKind;
+}
 
 /**
  * Resolve a serializable {@link IUnitTag} to the concrete {@link Unit}
@@ -865,4 +1316,16 @@ const QUANTITY_REGISTRY: { [quantity: string]: { Units: { [key: string]: Unit } 
 export function resolveUnit(tag: IUnitTag): Unit | undefined {
     const q = QUANTITY_REGISTRY[tag.quantity];
     return q ? q.Units[tag.unit] : undefined;
+}
+
+/**
+ * The display symbol of a tagged unit, for a panel or a label.
+ *
+ * The one place a display string is legitimate is the last step before a
+ * human reads it. Everywhere else the tag travels, so that the symbol's
+ * typographic characters and its cross-quantity collisions ("g" is gram and
+ * standard gravity) stay a rendering concern rather than an identity.
+ */
+export function unitSymbol(tag?: IUnitTag): string | undefined {
+    return tag ? resolveUnit(tag)?.symbol : undefined;
 }

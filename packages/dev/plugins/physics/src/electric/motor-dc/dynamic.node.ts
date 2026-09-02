@@ -104,7 +104,7 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         return this.computeRequiredHz();
     }
 
-    @editable("number", { unit: "Hz" })
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } })
     public get requiredSampleRateHz(): number {
         return this.requiredHz;
     }
@@ -300,7 +300,7 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         });
     }
 
-    @editable("number", { unit: "rad" }) public get initialRotorAngle(): number {
+    @editable("number", { unit: { quantity: "Angle", unit: "r" } }) public get initialRotorAngle(): number {
         return this._initialRotorAngle;
     }
     public set initialRotorAngle(v: number) {
@@ -310,7 +310,7 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
     }
 
     // ── Mass / inertia editables ───────────────────────────────────────
-    @editable("number", { unit: "kg" }) public get motorMass(): number {
+    @editable("number", { unit: { quantity: "Mass", unit: "kg" } }) public get motorMass(): number {
         return this._motorMass;
     }
     public set motorMass(v: number) {
@@ -319,7 +319,7 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         });
     }
 
-    @editable("number", { unit: "kg" }) public get rotorMass(): number {
+    @editable("number", { unit: { quantity: "Mass", unit: "kg" } }) public get rotorMass(): number {
         return this._rotorMass;
     }
     public set rotorMass(v: number) {
@@ -328,7 +328,7 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         });
     }
 
-    @editable("number", { unit: "m" }) public get rotorGyrationRadius(): number {
+    @editable("number", { unit: { quantity: "Length", unit: "m" } }) public get rotorGyrationRadius(): number {
         return this._rotorGyrationRadius;
     }
     public set rotorGyrationRadius(v: number) {
@@ -337,7 +337,7 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         });
     }
 
-    @editable("number", { unit: "m" }) public get comOffset(): number {
+    @editable("number", { unit: { quantity: "Length", unit: "m" } }) public get comOffset(): number {
         return this._comOffset;
     }
     public set comOffset(v: number) {
@@ -346,7 +346,7 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         });
     }
 
-    @editable("number", { unit: "rad" }) public get comPhase(): number {
+    @editable("number", { unit: { quantity: "Angle", unit: "r" } }) public get comPhase(): number {
         return this._comPhase;
     }
     public set comPhase(v: number) {
@@ -356,7 +356,7 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
     }
 
     // ── Geometry editables ─────────────────────────────────────────────
-    @editable("number", { unit: "m" }) public get airGap(): number {
+    @editable("number", { unit: { quantity: "Length", unit: "m" } }) public get airGap(): number {
         return this._airGap;
     }
     public set airGap(v: number) {
@@ -365,7 +365,7 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         });
     }
 
-    @editable("number", { unit: "N/m" }) public get bearingRadialStiffness(): number {
+    @editable("number", { unit: { quantity: "Stiffness", unit: "Npm" } }) public get bearingRadialStiffness(): number {
         return this._bearingRadialStiffness;
     }
     public set bearingRadialStiffness(v: number) {
@@ -374,7 +374,7 @@ export class DcMotorDynamicNode extends FaultableNode implements IDeclaresPorts,
         });
     }
 
-    @editable("number", { unit: "N/m" }) public get umpRadialStiffness(): number {
+    @editable("number", { unit: { quantity: "Stiffness", unit: "Npm" } }) public get umpRadialStiffness(): number {
         return this._umpRadialStiffness;
     }
     public set umpRadialStiffness(v: number) {

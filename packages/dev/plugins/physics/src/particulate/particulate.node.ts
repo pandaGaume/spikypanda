@@ -98,7 +98,7 @@ export class ParticulateNode extends GraphItem implements IParticulateMetadata {
      *  unit for PM nomenclature (PM2.5 → 2.5 μm, PM10 → 10 μm); SI
      *  storage stays canonical so V2 settling laws can use the value
      *  directly without an extra conversion. */
-    @editable("number", { unit: "µm" })
+    @editable("number", { unit: { quantity: "Length", unit: "mim" } })
     public get characteristic_diameter_um(): number {
         return this._characteristicDiameterM * 1e6;
     }
@@ -112,7 +112,7 @@ export class ParticulateNode extends GraphItem implements IParticulateMetadata {
         return this._characteristicDiameterM;
     }
 
-    @editable("number", { unit: "kg/m³" })
+    @editable("number", { unit: { quantity: "Density", unit: "kgpm3" } })
     public get material_density_kg_per_m3(): number {
         return this._materialDensityKgPerM3;
     }

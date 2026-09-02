@@ -18,11 +18,12 @@
  * so it will happily write to a property the node declared read-only. This
  * checks `editable` first and refuses, returning the node's own `hint`.
  */
-import type { IPortDescriptor } from "spikypanda-core";
+import { getEditorSchema, resolveQuantityKind, resolveUnit, type IFieldOptions, type IPortDescriptor } from "spikypanda-core";
 import { enrichNodeDefFromMeta, listDocLocales, resolveDocPath, type GraphRunner, type NodeUI, type Port } from "spikypanda-nodeeditor";
 import type { PropertyEntry } from "spikypanda-nodeeditor/inspectable.js";
 import { URI_GRAPH, URI_GRAPH_STATE, URI_PLUGINS, URI_REGISTRY, uriForCapture, uriForNode } from "./resource.uri.js";
-import type { GraphState, NodeState, NodeTypeState, PluginsState, PortState, RegistryState, SimulationState } from "./state.js";
+import { thingDescription, thingModel } from "./wot.js";
+import type { GraphState, NodePropertyState, NodeState, NodeTypeState, PluginsState, PortState, RegistryState, SimulationState } from "./state.js";
 
 /** A resource body, in the shape MCP expects but without depending on it. */
 export interface ResourceContent {
@@ -96,6 +97,15 @@ interface Capture {
  * the node's shape is still legible, without pretending the value is transport
  * material.
  */
+function safeValue(v: unknown): unknown {
+    if (v === null || v === undefined) return v;
+    const t = typeof v;
+    if (t === "string" || t === "number" || t === "boolean") return v;
+    if (t === "function") return "[function]";
+    if (Array.isArray(v) && v.every((x) => x === null || ["string", "number", "boolean"].includes(typeof x))) return v;
+    return `[${(v as object).constructor?.name ?? "object"}]`;
+}
+
 function safeProperty(entry: PropertyEntry): PropertyEntry {
     const v = entry.value;
     if (v === null || v === undefined) return entry;
@@ -155,6 +165,49 @@ function withAccessorName(entry: PropertyEntry, data: unknown): PropertyEntry {
         key: publicName,
         editable: accessor.set,
         hint: accessor.set ? entry.hint : (entry.hint ?? "computed by the node, no setter"),
+    };
+}
+
+/**
+ * Map a declared editor kind onto a JSON-ish type.
+ *
+ * The kind is the node's own word for how the value should be edited
+ * ("number", "slider", "vector3", "matrix4"). Only the scalar kinds collapse
+ * onto a JSON type; anything structured returns null rather than a guess, and
+ * the caller reads `kind` instead.
+ */
+function typeForKind(kind: string): NodePropertyState["type"] {
+    switch (kind) {
+        case "number":
+        case "slider":
+            return "number";
+        case "string":
+            return "string";
+        case "boolean":
+            return "boolean";
+        case "select":
+        case "enum":
+            return "select";
+        default:
+            return null;
+    }
+}
+
+/**
+ * The canonical identity of a property's unit, or nulls.
+ *
+ * Two fields because one is not enough. The UCUM code says what is measured
+ * in a form every standard can consume; the quantity kind says what it means,
+ * which UCUM deliberately does not carry. Apparent and reactive power share
+ * the code "V.A" and differ only in the kind, and a client that sees only the
+ * code cannot tell a power factor from a tautology.
+ */
+function declaredUnit(options?: IFieldOptions): { unit: string | null; quantityKind: string | null } {
+    const tag = options?.unit;
+    if (!tag) return { unit: null, quantityKind: null };
+    return {
+        unit: resolveUnit(tag)?.ucum ?? null,
+        quantityKind: resolveQuantityKind(tag.quantity) ?? null,
     };
 }
 
@@ -327,6 +380,10 @@ export class GraphController {
 
             case "registry_describe_node":
                 return this._registryDescribeNode(args);
+            case "registry_thing_model":
+                return this._registryThingModel(args);
+            case "node_thing_description":
+                return this._nodeThingDescription(args);
 
             case "plugin_list":
                 return ok(this._readPlugins());
@@ -523,6 +580,32 @@ export class GraphController {
         return found ? ok(found) : fail(`unknown node type: ${type}`);
     }
 
+    /**
+     * Thing Model of one catalogue type.
+     *
+     * An instance is created to read the declared properties, then dropped.
+     * The catalogue holds constructors, not objects, and a type's properties
+     * are only knowable from something that has them. The instance never
+     * reaches the graph.
+     */
+    private _registryThingModel(args: Record<string, unknown>): ControllerResult {
+        const type = String(args.type ?? "");
+        const described = this._registryDescribeNode(args);
+        if (!described.ok) return described;
+        const registry = this._runner.viewer.getNodeRegistry();
+        const probe = registry?.create(type) ?? null;
+        return ok(thingModel(described.data as NodeTypeState, probe as object | null));
+    }
+
+    /** Thing Description of one live node instance. */
+    private _nodeThingDescription(args: Record<string, unknown>): ControllerResult {
+        return this._withNode(args, (node) => {
+            const data = (node.item as unknown as { data: unknown }).data;
+            if (!data || typeof data !== "object") return fail(`node "${node.id}" has no runtime instance to describe`);
+            return ok(thingDescription(node.id, this._displayNameOf(node), data, uriForNode(node.id)));
+        });
+    }
+
     /** Resolve `args.nodeId` once, so every node tool reports the same error. */
     private _withNode(args: Record<string, unknown>, use: (node: NodeUI) => ControllerResult): ControllerResult {
         const nodeId = String(args.nodeId ?? "");
@@ -678,35 +761,94 @@ export class GraphController {
 
     // -- Helpers ----------------------------------------------------------────────
 
+    /**
+     * Describe one node instance from what it declares.
+     *
+     * `@editable` / `@viewable` are the node's own statement of what it
+     * exposes, and the editor's property panel already reads exactly this
+     * schema. Going through it rather than reflecting public fields is what
+     * keeps the controller and the view showing the same thing, and it is the
+     * difference between three meaningful properties and twelve entries where
+     * nine are link observers and port descriptors.
+     *
+     * Reflection stays as a fallback for a node that declares nothing, flagged
+     * by `propertySource` so a caller knows how much the metadata is worth.
+     */
     private _describeNode(node: NodeUI): NodeState {
-        // Private backing fields are renamed onto their public accessor, so a
-        // caller sees `severity` rather than `_severity` and a write goes
-        // through the node's own validation instead of around it.
         const data = (node.item as unknown as { data: unknown }).data;
-        const seen = new Set<string>();
-        const properties: PropertyEntry[] = [];
-        for (const raw of node.item.getProperties()) {
-            const named = withAccessorName(raw, data);
-            // A node exposing both `_x` and a plain `x` field would otherwise
-            // produce two entries under one key.
-            if (seen.has(named.key)) continue;
-            seen.add(named.key);
-            properties.push(safeProperty(named));
-        }
+        const schema = data && typeof data === "object" ? getEditorSchema(data as object) : { classEditors: [], fields: [] };
+
+        const properties: NodePropertyState[] =
+            schema.fields.length > 0
+                ? schema.fields.map((field) => ({
+                      key: field.propertyName,
+                      // Read through the accessor, so a computed value is
+                      // computed and a getter's validation is respected.
+                      value: safeValue((data as Record<string, unknown>)[field.propertyName]),
+                      editable: field.editable,
+                      type: typeForKind(field.kind),
+                      kind: field.kind,
+                      ...declaredUnit(field.options),
+                      // `@viewable` is the node saying this value is computed.
+                      // Stating the reason turns a bare refusal into guidance.
+                      hint: field.editable ? null : "declared @viewable: computed or derived, no setter",
+                  }))
+                : this._reflectProperties(node, data);
+
         return {
             id: node.id,
             uri: uriForNode(node.id),
             typeId: node.typeId ?? null,
-            displayName: node.item.getDisplayName(),
-            // False for every node today: none implements Inspectable, so the
-            // properties below are reflected from public fields. Writes still
-            // land, by direct assignment; only the metadata is poorer.
-            inspectable: node.item.isInspectable(),
-            propertySource: node.item.isInspectable() ? "declared" : "reflected",
+            displayName: this._displayNameOf(node),
+            propertySource: schema.fields.length > 0 ? "declared" : "reflected",
             properties,
             inputs: node.inputs.map((p) => p.name),
             outputs: node.outputs.map((p) => p.name),
         };
+    }
+
+    /**
+     * Fallback for a node that declares nothing.
+     *
+     * Everything here exists to make raw reflection survivable: private
+     * backing fields are renamed onto their public accessor so a write goes
+     * through the node's validation, and non-scalar values are tagged rather
+     * than serialized, because live objects hold cycles. None of it is needed
+     * on the declared path.
+     */
+    private _reflectProperties(node: NodeUI, data: unknown): NodePropertyState[] {
+        const seen = new Set<string>();
+        const out: NodePropertyState[] = [];
+        for (const raw of node.item.getProperties()) {
+            const named = withAccessorName(raw, data);
+            if (seen.has(named.key)) continue;
+            seen.add(named.key);
+            const safe = safeProperty(named);
+            out.push({
+                key: safe.key,
+                value: safe.value,
+                editable: safe.editable !== false,
+                type: safe.type ?? null,
+                kind: null,
+                unit: null,
+                quantityKind: null,
+                hint: safe.hint ?? null,
+            });
+        }
+        return out;
+    }
+
+    /**
+     * Prefer the registry's label over the instance's own name.
+     *
+     * `UIItemBase.getDisplayName()` falls back to `constructor.name`, which a
+     * production bundle has minified: real nodes report names like "f" or
+     * "_t". The registry label is authored and survives minification.
+     */
+    private _displayNameOf(node: NodeUI): string {
+        const registry = this._runner.viewer.getNodeRegistry();
+        const label = node.typeId && registry ? registry.meta(node.typeId)?.label : undefined;
+        return label ?? node.item.getDisplayName();
     }
 
     private _nodeById(id: string): NodeUI | undefined {

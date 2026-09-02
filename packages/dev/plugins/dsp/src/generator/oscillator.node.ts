@@ -67,7 +67,7 @@ export class OscillatorNode extends RuntimeNode implements IDeclaresPorts {
         super(onsc, opsc, position);
     }
 
-    @editable("number", { unit: "Hz" })
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } })
     public get frequency(): number {
         return this._frequency;
     }
@@ -87,7 +87,7 @@ export class OscillatorNode extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @editable("number", { unit: "rad" })
+    @editable("number", { unit: { quantity: "Angle", unit: "r" } })
     public get phase(): number {
         return this._phase;
     }
@@ -97,7 +97,7 @@ export class OscillatorNode extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @editable("string", { unit: "sin | cos" })
+    @editable("string", { enum: ["sin", "cos"] })
     public get waveform(): Waveform {
         return this._waveform;
     }

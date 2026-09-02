@@ -185,7 +185,7 @@ export class AtmosphereLayerNode extends IntegrableRuntimeNode implements IDecla
         return 100;
     }
 
-    @editable("number", { unit: "m³" })
+    @editable("number", { unit: { quantity: "Volume", unit: "m3" } })
     public get volume(): number {
         return this._volumeM3;
     }
@@ -201,7 +201,7 @@ export class AtmosphereLayerNode extends IntegrableRuntimeNode implements IDecla
      *  kelvin; the property panel renders Temperature so users can
      *  edit in °C). The Atmosphere container exposes a paralle
      *  editable that routes to its internal default layer. */
-    @editable("number", { unit: "K" })
+    @editable("number", { unit: { quantity: "Temperature", unit: "k" } })
     public get temperature_k(): number {
         return this._temperatureK;
     }

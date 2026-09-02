@@ -76,7 +76,7 @@ export class UplotLineNode extends RuntimeNode implements IDeclaresPorts, IRende
         super(onsc, opsc, position);
     }
 
-    @editable("number", { unit: "samples" })
+    @editable("number", { unit: { quantity: "Count", unit: "samples" } })
     public get maxSamples(): number {
         return this._maxSamples;
     }
@@ -153,7 +153,7 @@ export class UplotLineNode extends RuntimeNode implements IDeclaresPorts, IRende
         if (this._yAuto) this.yAuto = false;
     }
 
-    @editable("number", { unit: "Hz", min: 0 })
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" }, min: 0 })
     public get maxPushHz(): number {
         return this._maxPushHz;
     }

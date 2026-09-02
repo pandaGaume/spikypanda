@@ -41,6 +41,6 @@ export {
 export { GraphController, ok, fail, type ControllerResult, type ResourceContent } from "./graph.controller.js";
 export { GraphAdapter } from "./graph.adapter.js";
 export { GraphBehavior } from "./graph.behavior.js";
-export type { PortState, NodeTypeState, RegistryState, PluginsState, GraphState, SimulationState, NodeState } from "./state.js";
+export type { PortState, NodeTypeState, RegistryState, PluginsState, GraphState, SimulationState, NodeState, NodePropertyState } from "./state.js";
 
 export { publishToBroker, type PublishOptions, type Publication } from "./provider.js";

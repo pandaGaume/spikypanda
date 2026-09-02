@@ -89,7 +89,7 @@ export class SetpointNode extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @editable("number", { unit: "units/s" })
+    @editable("number", { unit: { quantity: "Frequency", unit: "unitsps" } })
     public get maxRatePerSec(): number {
         return this._maxRatePerSec;
     }

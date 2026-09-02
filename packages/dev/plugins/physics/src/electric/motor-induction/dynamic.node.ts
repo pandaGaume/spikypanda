@@ -100,7 +100,7 @@ export class InductionMotorDynamicNode extends FaultableNode implements IDeclare
         return this.computeRequiredHz();
     }
 
-    @editable("number", { unit: "Hz" })
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } })
     public get requiredSampleRateHz(): number {
         return this.requiredHz;
     }
@@ -269,7 +269,7 @@ export class InductionMotorDynamicNode extends FaultableNode implements IDeclare
             this._viscousFriction = n;
         });
     }
-    @editable("number", { unit: "Hz" }) public get supplyFrequency(): number {
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } }) public get supplyFrequency(): number {
         return this._supplyFrequency;
     }
     public set supplyFrequency(v: number) {

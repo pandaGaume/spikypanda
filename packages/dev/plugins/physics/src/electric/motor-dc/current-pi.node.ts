@@ -69,7 +69,7 @@ export class DcMotorCurrentPiNode extends RuntimeNode implements IDeclaresPorts 
         });
     }
 
-    @editable("number", { unit: "armatureVoltage" })
+    @editable("number", { unit: { quantity: "Voltage", unit: "volt" } })
     public get maxVoltage(): number {
         return this._maxVoltage;
     }

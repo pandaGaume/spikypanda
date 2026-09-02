@@ -127,13 +127,13 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
     // tile follows.
     private _sampleRate: number = 0;
 
-    @editable("string", { unit: "line | area | bars" })
+    @editable("string", { enum: ["line", "area", "bars"] })
     public get fillStyle(): FillStyle { return this._fillStyle; }
     public set fillStyle(v: FillStyle) {
         this.setField("fillStyle", this._fillStyle, v, (n) => { this._fillStyle = n; this._rebuildOnNextFrame = true; });
     }
 
-    @editable("string", { unit: "linear | dB" })
+    @editable("string", { enum: ["linear", "dB"] })
     public get scaleType(): ScaleType { return this._scaleType; }
     public set scaleType(v: ScaleType) {
         const next: ScaleType = v === "dB" ? "dB" : "linear";
@@ -159,7 +159,7 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
         });
     }
 
-    @editable("string", { unit: "magnitude | power" })
+    @editable("string", { enum: ["magnitude", "power"] })
     public get inputType(): InputType { return this._inputType; }
     public set inputType(v: InputType) {
         const next: InputType = v === "power" ? "power" : "magnitude";
@@ -174,7 +174,7 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
         });
     }
 
-    @editable("number", { unit: "dB" })
+    @editable("number", { unit: { quantity: "Level", unit: "dB" } })
     public get dBRange(): number { return this._dBRange; }
     public set dBRange(v: number) {
         const next = Math.max(20, Math.min(200, Math.floor(v)));

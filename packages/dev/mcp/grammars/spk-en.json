@@ -12,6 +12,13 @@
             "locale": "Preferred documentation locale."
         }
     },
+    "registry_thing_model": {
+        "description": "W3C WoT Thing Model of one node type: its properties as JSON Schema affordances carrying their UCUM unit and QUDT annotations, and its ports as links. A Thing Model rather than a Thing Description because a catalogue type has no instance, and therefore no address for a form to point at.",
+        "properties": {
+            "type": "Node type id exactly as `registry_list_nodes` reports it.",
+            "locale": "Preferred documentation locale."
+        }
+    },
     "graph_describe": {
         "description": "The current graph: node ids, types, positions and connections. Every other tool addresses nodes by the ids found here, so this is normally the first call of a session."
     },
@@ -38,7 +45,15 @@
     },
     "node_describe": {
         "description": "A node's properties with their current values, types and editability. `propertySource` reports whether these were declared by the node or reflected from its public fields; reflected properties are still writable, but their type and editability are inferred rather than chosen, so treat them as a hint.",
-        "properties": { "nodeId": "Node id from `graph_describe`. Labels are never accepted: they are not unique." }
+        "properties": {
+            "nodeId": "Node id from `graph_describe`. Labels are never accepted: they are not unique."
+        }
+    },
+    "node_thing_description": {
+        "description": "W3C WoT Thing Description 1.1 of one live node: every declared property becomes an affordance carrying its JSON Schema type, its UCUM unit, its QUDT quantity kind, its bounds and whether it is read-only. Use it to hand a node's interface to a tool that speaks WoT rather than this protocol.",
+        "properties": {
+            "nodeId": "Node id as `graph_describe` reports it."
+        }
     },
     "node_set_property": {
         "description": "Write one property. This is how gravity, orientation and fault severity are set: they are node properties, not dedicated commands. A refusal carries the node's own explanation of why the property is read-only.",
@@ -70,7 +85,9 @@
     },
     "capture_read": {
         "description": "Return the recorded window: the simulation time of every sample and one value series per signal, index-aligned. A sample that was missing or non-numeric is NaN rather than absent, so series never misalign against their timestamps.",
-        "properties": { "captureId": "Capture name. Defaults to \"default\"." }
+        "properties": {
+            "captureId": "Capture name. Defaults to \"default\"."
+        }
     },
     "sweep_run": {
         "description": "Run a grid of configurations and return one recorded window per cell. Each cell is configured, settled without recording, then captured, so a window never straddles the transient and the steady state. Prefer this over a manual loop: a scene by orientation by fault grid is dozens of cells, and three round trips per cell turns a measurement into an afternoon.",

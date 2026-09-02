@@ -71,7 +71,7 @@ export class ScalarBufferNode extends RuntimeNode implements IDeclaresPorts {
         super(onsc, opsc, position);
     }
 
-    @editable("number", { unit: "samples" })
+    @editable("number", { unit: { quantity: "Count", unit: "samples" } })
     public get frameSize(): number {
         return this._frameSize;
     }
@@ -87,7 +87,7 @@ export class ScalarBufferNode extends RuntimeNode implements IDeclaresPorts {
         });
     }
 
-    @editable("number", { unit: "samples" })
+    @editable("number", { unit: { quantity: "Count", unit: "samples" } })
     public get hopLength(): number {
         return this._hopLength;
     }

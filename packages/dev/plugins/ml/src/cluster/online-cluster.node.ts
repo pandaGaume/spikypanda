@@ -224,7 +224,7 @@ export class OnlineClusterNode extends RuntimeNode implements IDeclaresPorts {
 
     /** Retained-history bound (oldest entries dropped first). A
      *  reduction takes effect on the next assignment. */
-    @editable("number", { unit: "samples" })
+    @editable("number", { unit: { quantity: "Count", unit: "samples" } })
     public get history_max(): number {
         return this._historyMax;
     }

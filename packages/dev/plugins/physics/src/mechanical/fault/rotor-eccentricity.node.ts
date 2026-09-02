@@ -48,7 +48,7 @@ export class RotorEccentricityFaultNode extends RuntimeNode implements IFault, I
         this.setField("severity", this._severity, v, (n) => (this._severity = n));
     }
 
-    @editable("number", { unit: "rad" }) public get eccentricityPhase(): number {
+    @editable("number", { unit: { quantity: "Angle", unit: "r" } }) public get eccentricityPhase(): number {
         return this._eccentricityPhase;
     }
     public set eccentricityPhase(v: number) {

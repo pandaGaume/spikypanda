@@ -19,6 +19,7 @@
  * the logic is what these assert, and it carries no transport.
  */
 import { GraphController, type ControllerResult } from "spikypanda-mcp/graph.controller";
+import { editable, viewable } from "spikypanda-core";
 import { UIItemBase } from "spikypanda-nodeeditor";
 import type { GraphRunner } from "spikypanda-nodeeditor";
 
@@ -31,7 +32,10 @@ class MotorStub {
     public tick = 0;
 }
 
-/** A node that declares its own properties, one of them read-only with a hint. */
+/**
+ * A node that declares nothing but implements `Inspectable`, one property being
+ * read-only with a hint. It exercises the reflective fallback's refusal path.
+ */
 class DeclaredStub {
     private _severity = 0;
     public getDisplayName(): string {
@@ -52,10 +56,30 @@ function makeNode(id: string, data: object) {
     return { id, label: id, typeId: `Test.${id}`, item: new UIItemBase(data), inputs: [], outputs: [] };
 }
 
+/**
+ * A node that declares its properties with the editor decorators, the way the
+ * 596 decorated properties across the plugins do. `noise` is public and
+ * undecorated on purpose: the declared path must leave it out.
+ */
+class DecoratedStub {
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } })
+    public frequency = 50;
+
+    @editable("number", { unit: { quantity: "Current", unit: "amp" } })
+    public current = 0;
+
+    @viewable("number", { unit: { quantity: "Torque", unit: "Nm" } })
+    public torque = 0;
+
+    /** Internal machinery. Reflection would surface it; declaration must not. */
+    public noise = 0;
+}
+
 function makeRunner() {
     const motor = new MotorStub();
     const declared = new DeclaredStub();
-    const nodes = [makeNode("motor", motor), makeNode("fault", declared)];
+    const decorated = new DecoratedStub();
+    const nodes = [makeNode("motor", motor), makeNode("fault", declared), makeNode("pmsm", decorated)];
     const session = {
         tickIndex: 0,
         simRate: 0,
@@ -74,7 +98,7 @@ function makeRunner() {
         serialize: () => ({ nodes: nodes.map((n) => ({ id: n.id })), connections: [] }),
     };
     const runner = { viewer, session, t: 0, state: "paused", stop() {}, pause() {} };
-    return { runner: runner as unknown as GraphRunner, motor, declared };
+    return { runner: runner as unknown as GraphRunner, motor, declared, decorated };
 }
 
 /** Unwrap a successful result's body, failing loudly on an unexpected error. */
@@ -89,8 +113,30 @@ describe("node configuration", () => {
         const controller = new GraphController(runner);
         const out = payload(await controller.executeToolAsync("", "node_describe", { nodeId: "motor" }));
         expect(out.propertySource).toBe("reflected");
-        expect(out.inspectable).toBe(false);
         expect((out.properties as Array<{ key: string }>).map((p) => p.key)).toEqual(expect.arrayContaining(["gravity", "yawDeg"]));
+    });
+
+    it("describes a decorated node from its declaration, so internals stay out", async () => {
+        const { runner } = makeRunner();
+        const controller = new GraphController(runner);
+        const out = payload(await controller.executeToolAsync("", "node_describe", { nodeId: "pmsm" }));
+        expect(out.propertySource).toBe("declared");
+        // Exactly the declared set: `noise` is public and must not appear, and
+        // neither must anything UIItemBase would have reflected.
+        expect((out.properties as Array<{ key: string }>).map((p) => p.key).sort()).toEqual(["current", "frequency", "torque"]);
+    });
+
+    it("carries the declared unit and editability, which reflection cannot infer", async () => {
+        const { runner } = makeRunner();
+        const controller = new GraphController(runner);
+        const out = payload(await controller.executeToolAsync("", "node_describe", { nodeId: "pmsm" }));
+        const byKey = new Map((out.properties as Array<{ key: string; unit: string | null; editable: boolean }>).map((p) => [p.key, p]));
+        expect(byKey.get("frequency")?.unit).toBe("Hz");
+        expect(byKey.get("current")?.unit).toBe("A");
+        // `@viewable` is a statement, not a guess from the value's JS type:
+        // torque is a number like the others and is still not writable.
+        expect(byKey.get("torque")?.editable).toBe(false);
+        expect(byKey.get("frequency")?.editable).toBe(true);
     });
 
     it("refuses a read-only property and hands back the node's own hint", async () => {
@@ -101,6 +147,23 @@ describe("node configuration", () => {
         expect(result.ok === false && result.error).toContain("fixed by the machine geometry");
         // The refusal must be real: UIItemBase alone would have written it.
         expect(declared.getProperties().find((p) => p.key === "airGap")?.value).toBeCloseTo(5e-4);
+    });
+
+    it("refuses a write to a @viewable property, which reflection would have allowed", async () => {
+        const { runner, decorated } = makeRunner();
+        const controller = new GraphController(runner);
+        const result = await controller.executeToolAsync("", "node_set_property", { nodeId: "pmsm", key: "torque", value: 3 });
+        expect(result.ok).toBe(false);
+        expect(result.ok === false && result.error).toContain("read-only");
+        expect(decorated.torque).toBe(0);
+    });
+
+    it("writes a declared property, so declaring is not the same as freezing", async () => {
+        const { runner, decorated } = makeRunner();
+        const controller = new GraphController(runner);
+        const result = await controller.executeToolAsync("", "node_set_property", { nodeId: "pmsm", key: "frequency", value: 60 });
+        expect(result.ok).toBe(true);
+        expect(decorated.frequency).toBe(60);
     });
 
     it("applies a batch only when every entry is valid", async () => {
@@ -264,5 +327,54 @@ describe("change notification", () => {
 
         await controller.executeToolAsync("", "node_set_property", { nodeId: "fault", key: "airGap", value: 1 });
         expect(seen).toEqual([]);
+    });
+});
+
+/**
+ * The WoT surface.
+ *
+ * What is worth asserting is conformance, not shape: a Thing Description that
+ * a validator rejects is worse than no Thing Description, because it is
+ * offered as a standard and is not one. The three mandatory points of TD 1.1
+ * are `title`, `security` and non-empty `forms`, and each has been omitted by
+ * an implementation at some point precisely because nothing local breaks.
+ */
+describe("Thing Description", () => {
+    it("carries what TD 1.1 makes mandatory", async () => {
+        const { runner } = makeRunner();
+        const controller = new GraphController(runner);
+        const td = payload(await controller.executeToolAsync("", "node_thing_description", { nodeId: "pmsm" }));
+        expect(td["@context"]).toContain("https://www.w3.org/2022/wot/td/v1.1");
+        expect(td.title).toBeTruthy();
+        // A local graph has no authentication, which is still a security
+        // configuration and is spelled out rather than omitted.
+        expect(td.security).toBe("nosec_sc");
+        expect((td.securityDefinitions as Record<string, { scheme: string }>).nosec_sc.scheme).toBe("nosec");
+        for (const affordance of Object.values(td.properties as Record<string, { forms?: unknown[] }>)) {
+            expect(Array.isArray(affordance.forms)).toBe(true);
+            expect(affordance.forms!.length).toBeGreaterThan(0);
+        }
+    });
+
+    it("puts the canonical unit in `unit` and the ontology alongside", async () => {
+        const { runner } = makeRunner();
+        const controller = new GraphController(runner);
+        const td = payload(await controller.executeToolAsync("", "node_thing_description", { nodeId: "pmsm" }));
+        const props = td.properties as Record<string, Record<string, unknown>>;
+        expect(props.frequency.unit).toBe("Hz");
+        expect(props.frequency["qudt:unit"]).toBe("unit:HZ");
+        expect(props.frequency.type).toBe("number");
+        expect(props.current["qudt:unit"]).toBe("unit:A");
+        // `readOnly` defaults to false in TD 1.1, so it is emitted only where
+        // it is true.
+        expect(props.torque.readOnly).toBe(true);
+        expect(props.frequency.readOnly).toBeUndefined();
+    });
+
+    it("describes only what the node declares", async () => {
+        const { runner } = makeRunner();
+        const controller = new GraphController(runner);
+        const td = payload(await controller.executeToolAsync("", "node_thing_description", { nodeId: "pmsm" }));
+        expect(Object.keys(td.properties as object).sort()).toEqual(["current", "frequency", "torque"]);
     });
 });

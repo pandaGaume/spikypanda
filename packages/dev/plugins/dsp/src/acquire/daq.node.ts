@@ -96,7 +96,7 @@ export class DaqNode extends RuntimeNode implements IDeclaresPorts, IHasSampleRa
         return this.computeRequiredHz();
     }
 
-    @editable("number", { unit: "Hz" })
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } })
     public get required_hz(): number {
         return this.requiredHz;
     }
@@ -157,7 +157,7 @@ export class DaqNode extends RuntimeNode implements IDeclaresPorts, IHasSampleRa
         super(onsc, opsc, position);
     }
 
-    @editable("number", { unit: "Hz" })
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } })
     public get sample_rate_hz(): number {
         return this._sampleRateHz;
     }
@@ -179,7 +179,7 @@ export class DaqNode extends RuntimeNode implements IDeclaresPorts, IHasSampleRa
         this._notifyRequiredHzMayHaveChanged();
     }
 
-    @editable("number", { unit: "samples" })
+    @editable("number", { unit: { quantity: "Count", unit: "samples" } })
     public get block_size(): number {
         return this._blockSize;
     }
@@ -205,7 +205,7 @@ export class DaqNode extends RuntimeNode implements IDeclaresPorts, IHasSampleRa
         });
     }
 
-    @editable("number", { unit: "Hz" })
+    @editable("number", { unit: { quantity: "Frequency", unit: "Hz" } })
     public get aa_cutoff_hz(): number {
         return this._aaCutoffHz;
     }

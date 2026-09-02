@@ -35,6 +35,8 @@
 // to the same key. With plain Symbol(), each module gets its own
 // distinct instance and metadata written by one is invisible to the
 // reader in the other.
+import type { IUnitTag } from "../math/math.units";
+
 export const EditorMetadataKey = Symbol.for("spikypanda.editor");
 export const EditableFieldsMetadataKey = Symbol.for("spikypanda.editableFields");
 
@@ -43,11 +45,11 @@ export interface IEditableField {
     readonly kind: string;
     readonly editable: boolean;
     /**
-     * Optional payload passed through to the editor factory at
-     * instantiation. Use it for per-field tuning (min/max, unit,
-     * step, label override, etc.).
+     * Per-field tuning, passed through to the editor factory at
+     * instantiation and read by the description layer. See
+     * {@link IFieldOptions}.
      */
-    readonly options?: unknown;
+    readonly options?: IFieldOptions;
 }
 
 export interface IEditorSchema {
@@ -88,35 +90,98 @@ export function editor(kind: string): ClassDecorator {
 }
 
 /**
- * Convention key recognized by the PropertyEditor: when an @editable's
- * `options` object contains `disabledWhen: "<propName>"`, the panel
- * reads `model[propName]` at every render pass; if truthy, the row is
- * displayed read-only (input.readOnly = true, leading "wired" bar via
- * CSS class `ne-property-editor-row-disabled`). Typical use: an
- * `is_X_wired` boolean @viewable that flips true when an upstream wire
- * is driving the X property, so the editable default becomes
- * temporarily inert. Example:
+ * Everything a property declares about itself beyond its name and its
+ * editor kind.
  *
- *   @viewable("boolean") get is_gravity_wired() { return ...; }
- *   @editable("vector3", { unit: "m/s²", disabledWhen: "is_gravity_wired" })
- *   get gravity() { return wiredOrDefault; }
+ * Two audiences, one declaration. The editor factories read `min`, `max`,
+ * `step`, `layout` and `disabledWhen` to render a row; the description layer
+ * reads `unit`, `enum`, `title` and `description` to emit a Thing Description
+ * or an OPC UA node. Nothing here is written twice, which is the point: a
+ * property that has said what it measures has said it to every consumer.
  *
- * The convention lives purely at the panel-rendering layer; core
- * just stores the options blob verbatim — no behavior here besides
- * the documentation contract.
+ * Typed rather than `unknown` for one concrete reason. `unit` used to be a
+ * free display string, and free strings drift: the same quantity appeared as
+ * "kg.m^2" in one node and "kg·m²" in another, seven enumerations were living
+ * in `unit` for want of a field to hold them, and one property declared its
+ * unit as "armatureVoltage", which is a property name. None of that is
+ * detectable at a free string. All of it is a compile error now.
  */
-export interface IEditableOptionsCommon {
+export interface IFieldOptions {
+    /**
+     * What the value measures, as a reference into the unit system rather
+     * than a symbol. `{ quantity: "Frequency", unit: "Hz" }` resolves through
+     * `resolveUnit` to the canonical UCUM code, from which every exposition
+     * is derived. The panel renders `unitSymbol()` of it.
+     */
+    readonly unit?: IUnitTag;
+    /**
+     * Admissible values, when the property is an enumeration.
+     *
+     * This is the field whose absence pushed enumerations into `unit`:
+     * `unit: "priority | blend | vote"` was a legend, not a unit, and the
+     * string editor was parsing the pipe to recover a dropdown from it.
+     */
+    readonly enum?: ReadonlyArray<string | number>;
+    /**
+     * Human labels for `enum`, positionally matched.
+     *
+     * Needed by the numerically coded enumerations, where the value carries
+     * no meaning on its own: `enum: [0, 1, 2]` with
+     * `enumTitles: ["hann", "hamming", "blackman"]`. Ignored unless `enum` is
+     * present and the two have the same length.
+     */
+    readonly enumTitles?: ReadonlyArray<string>;
+    /** Label override, when the property name is not what a user should read. */
+    readonly title?: string;
+    /** One line of prose for the panel and the description layer. */
+    readonly description?: string;
+    /** Lower bound. Named for the editor factories, which have always read it. */
+    readonly min?: number;
+    /** Upper bound. */
+    readonly max?: number;
+    /** Increment for the number and slider editors. */
+    readonly step?: number;
+    /** Placeholder text for the string editor's empty input. */
+    readonly placeholder?: string;
+    /** Row layout hint, e.g. "block" for a vector that needs its own line. */
+    readonly layout?: string;
+    /**
+     * Sub-field arrangement for the vector editors, e.g. "horizontal".
+     * Spelling preserved: it is the key the vector editor reads today.
+     */
+    readonly alignement?: string;
+
+    /**
+     * Name of a boolean property that, when truthy, makes this row read-only
+     * for the current render pass.
+     *
+     * The panel reads `model[disabledWhen]` at every pass. Its use is the
+     * "driven by a wire" case: an upstream link takes over a property, an
+     * `is_X_wired` viewable flips true, and the editable default goes inert
+     * without being lost. Example:
+     *
+     *   @viewable("boolean") get is_gravity_wired() { return ...; }
+     *   @editable("vector3", { unit: { quantity: "Acceleration", unit: "mps2" },
+     *                          disabledWhen: "is_gravity_wired" })
+     *   get gravity() { return wiredOrDefault; }
+     *
+     * The behavior lives entirely in the panel; core only stores the name.
+     */
     readonly disabledWhen?: string;
 }
 
 /**
- * Property decorator. Marks the property as user-editable through the
- * editor of the given kind. Optional payload is preserved verbatim and
- * passed back to the factory at instantiation. See
- * `IEditableOptionsCommon.disabledWhen` for the panel-recognized
- * "wired → read-only" convention.
+ * @deprecated Use {@link IFieldOptions}, which subsumes it.
  */
-export function editable(kind: string, options?: unknown) {
+export type IEditableOptionsCommon = IFieldOptions;
+
+/**
+ * Property decorator. Marks the property as user-editable through the
+ * editor of the given kind. The options payload is preserved verbatim
+ * and passed back to the factory at instantiation. See
+ * {@link IFieldOptions}.
+ */
+export function editable(kind: string, options?: IFieldOptions) {
     return (target: object, propertyKey: string | symbol): void => {
         appendField(target, {
             propertyName: String(propertyKey),
@@ -131,7 +196,7 @@ export function editable(kind: string, options?: unknown) {
  * Property decorator. Marks the property as read-only viewable through
  * the editor of the given kind. Same payload semantics as @editable.
  */
-export function viewable(kind: string, options?: unknown) {
+export function viewable(kind: string, options?: IFieldOptions) {
     return (target: object, propertyKey: string | symbol): void => {
         appendField(target, {
             propertyName: String(propertyKey),
