@@ -211,6 +211,18 @@ function declaredUnit(options?: IFieldOptions): { unit: string | null; quantityK
     };
 }
 
+/**
+ * Loads a plugin bundle and returns what it added.
+ *
+ * Supplied by the host, because activating a plugin needs the node, link and
+ * editor registries the host owns, and injecting a script needs a document.
+ */
+export type PluginLoader = (spec: { url: string; globalName: string; id: string }) => Promise<{ activated: ReadonlyArray<string>; missing: ReadonlyArray<string> }>;
+
+export interface GraphControllerOptions {
+    readonly pluginLoader?: PluginLoader;
+}
+
 export class GraphController {
     private readonly _runner: GraphRunner;
 
@@ -239,8 +251,17 @@ export class GraphController {
     /** Notified with a URI whenever a resource's content changed. */
     public onChanged: (uri: string) => void = () => {};
 
-    public constructor(runner: GraphRunner) {
+    /**
+     * Loads a plugin bundle into the running editor, when the host supplies
+     * one. Optional because the controller must stay free of the DOM: only
+     * the host knows its editor registry and can inject a script, so the
+     * capability is handed in rather than reached for.
+     */
+    private readonly _pluginLoader?: PluginLoader;
+
+    public constructor(runner: GraphRunner, options: GraphControllerOptions = {}) {
         this._runner = runner;
+        this._pluginLoader = options.pluginLoader;
     }
 
     // ── Resources ──────────────────────────────────────────────────────
@@ -397,6 +418,9 @@ export class GraphController {
             case "capture_clear":
                 this._captures.delete(String(args.captureId ?? "default"));
                 return ok({ cleared: String(args.captureId ?? "default"), remaining: [...this._captures.keys()] });
+
+            case "plugin_load":
+                return this._pluginLoad(args);
 
             case "graph_load":
                 return this._graphLoad(args);
@@ -606,6 +630,30 @@ export class GraphController {
         });
     }
 
+    /**
+     * Node types referenced by a serialized graph that the registry cannot
+     * build. Malformed JSON returns none, leaving the real parse error to the
+     * loader, which reports it better than a guess here would.
+     */
+    private _missingTypes(json: string): ReadonlyArray<string> {
+        let parsed: { nodes?: Array<{ typeId?: string }> };
+        try {
+            parsed = JSON.parse(json) as { nodes?: Array<{ typeId?: string }> };
+        } catch {
+            return [];
+        }
+        const registry = this._runner.viewer.getNodeRegistry();
+        if (!registry) return [];
+        const known = new Set(registry.types());
+        const missing = new Set<string>();
+        for (const node of parsed.nodes ?? []) {
+            // A node saved without a typeId predates type tracking or was
+            // built programmatically; it never had a factory to lose.
+            if (node.typeId && !known.has(node.typeId)) missing.add(node.typeId);
+        }
+        return [...missing];
+    }
+
     /** Resolve `args.nodeId` once, so every node tool reports the same error. */
     private _withNode(args: Record<string, unknown>, use: (node: NodeUI) => ControllerResult): ControllerResult {
         const nodeId = String(args.nodeId ?? "");
@@ -613,10 +661,63 @@ export class GraphController {
         return node ? use(node) : fail(`unknown node: ${nodeId}`);
     }
 
+    /**
+     * Load a plugin bundle into the running editor.
+     *
+     * This is what lets a catalogue grow inside a session: a new domain is
+     * built, bundled and activated without restarting the studio or reloading
+     * the page. The registry emits its change, so the palette follows on its
+     * own and the nodes are discoverable by a human as well as addressable by
+     * id.
+     */
+    private async _pluginLoad(args: Record<string, unknown>): Promise<ControllerResult> {
+        if (!this._pluginLoader) {
+            return fail("this studio was published without a plugin loader, so plugins cannot be loaded through MCP");
+        }
+        const url = String(args.url ?? "");
+        const globalName = String(args.globalName ?? "");
+        if (!url) return fail("`url` is required: the bundle to load");
+        if (!globalName) return fail("`globalName` is required: the UMD global the bundle publishes, e.g. \"SpkPluginTensegrity\"");
+        const id = String(args.id ?? globalName);
+
+        const before = new Set(this._typesOf());
+        try {
+            const result = await this._pluginLoader({ url, globalName, id });
+            const added = this._typesOf().filter((t) => !before.has(t));
+            this._changed(URI_REGISTRY);
+            this._changed(URI_PLUGINS);
+            // A plugin that loads and registers nothing is a real outcome and
+            // almost always a mistake, so it is reported rather than hidden
+            // behind a success.
+            return ok({ id, globalName, url, activated: result.activated, missing: result.missing, added, addedCount: added.length });
+        } catch (error) {
+            return fail(`plugin_load failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    private _typesOf(): ReadonlyArray<string> {
+        return this._runner.viewer.getNodeRegistry()?.types() ?? [];
+    }
+
     private _graphLoad(args: Record<string, unknown>): ControllerResult {
         const json = typeof args.graph === "string" ? args.graph : JSON.stringify(args.graph ?? null);
         if (!json || json === "null") return fail("`graph` must be a serialized graph, as a string or an object");
         const viewer = this._runner.viewer;
+
+        // Refuse a graph whose node types are not in the catalogue.
+        //
+        // Loading it anyway is the dangerous outcome, not the safe one: the
+        // editor draws every node with its label and its ports, and each is
+        // an empty shell with no runtime instance behind it. The graph looks
+        // intact, runs, and does nothing. Naming the missing types instead
+        // turns a silent afternoon into one line.
+        const missing = this._missingTypes(json);
+        if (missing.length > 0) {
+            return fail(
+                `graph_load refused: ${missing.length} node type(s) are not in the catalogue: ${missing.join(", ")}. ` +
+                    `Load the plugin that provides them first (see \`plugin_load\`), or the nodes would be created empty.`
+            );
+        }
         try {
             viewer.load(json, viewer.getNodeRegistry() ?? undefined, viewer.getLinkRegistry() ?? undefined);
         } catch (error) {

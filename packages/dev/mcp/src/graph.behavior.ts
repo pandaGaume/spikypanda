@@ -54,6 +54,20 @@ export class GraphBehavior extends McpBehavior {
                 inputSchema: { type: "object", properties: {} },
             },
             {
+                name: "plugin_load",
+                description:
+                    "Load a plugin bundle into the running studio and activate it. The catalogue grows immediately and the palette follows, so a new domain becomes available without restarting or reloading. Reports which node types were added; a plugin that adds none is reported as such rather than as a plain success.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        url: { type: "string", description: "URL of the bundle, relative to the studio page or absolute. Must be same-origin unless the server sends CORS headers." },
+                        globalName: { type: "string", description: "The UMD global the bundle publishes, e.g. \"SpkPluginTensegrity\"." },
+                        id: { type: "string", description: "Plugin id passed to activate(). Defaults to `globalName`." },
+                    },
+                    required: ["url", "globalName"],
+                },
+            },
+            {
                 name: "registry_list_nodes",
                 description: "List every node type the activated plugins registered, with ports, declared interop standards and resolved documentation. This is the catalogue to consult before wiring anything.",
                 inputSchema: {

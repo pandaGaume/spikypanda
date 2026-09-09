@@ -44,6 +44,39 @@ export class GraphOLink<B = unknown> extends GraphItem<B> implements IOlink<B> {
 }
 
 /**
+ * Ontology ids of the structural relations, and the predicates that recognise
+ * them.
+ *
+ * These exist because `instanceof` is not safe here. A page can hold more than
+ * one copy of this module: the node editor bundles core inline, while the
+ * plugins externalise it to a global, so a link built on one side is an
+ * instance of a class the other side has never seen. The endpoints are right,
+ * the ontology id is right, and `instanceof` is false.
+ *
+ * That failure is silent, which is what makes it expensive. A fault link built
+ * by the editor was attached to the correct nodes, carried `type === "applyTo"`,
+ * and was skipped by the model's filter, so the montage ran with every fault
+ * inert and no error anywhere: a motor turning at its no-load speed looks
+ * perfectly healthy.
+ *
+ * The `type` field is already the ontology id and is set by every constructor,
+ * so testing it is both the cheaper check and the correct one. Copies of the
+ * class are irrelevant; agreement on the vocabulary is what matters.
+ */
+export const CHILD_LINK_TYPE = "child";
+export const APPLY_TO_LINK_TYPE = "applyTo";
+
+/** True for a parent/child structural relation, whichever copy of core built it. */
+export function isChildRelation(link: IOlink | null | undefined): boolean {
+    return !!link && link.type === CHILD_LINK_TYPE;
+}
+
+/** True for a fault-application relation, whichever copy of core built it. */
+export function isApplyToRelation(link: IOlink | null | undefined): boolean {
+    return !!link && link.type === APPLY_TO_LINK_TYPE;
+}
+
+/**
  * `Child` relation: a STRUCTURAL link (not a dataflow channel) expressing the
  * generic 1/N parent -> child hierarchy. Directed parent (`oini`) -> child
  * (`ofin`), so the SAME link surfaces both directions through the node
@@ -60,12 +93,19 @@ export class GraphOLink<B = unknown> extends GraphItem<B> implements IOlink<B> {
  */
 export class Child<B = unknown> extends GraphOLink<B> {
     public constructor(parent?: INode, child?: INode) {
-        // oini = parent, ofin = child. super() wires both ends, registering this
-        // link on each node's onsc/opsc; the child side invalidates its derived
-        // parent cache. `type` is set after (the routing cache + the parent-cache
-        // invalidation key off `instanceof Child`, robust during construction).
-        super(parent, child);
+        // The identity is set BEFORE the endpoints are wired, and the order is
+        // load-bearing. Attaching an endpoint calls `node.add(link)`, which
+        // invalidates the child's derived parent cache only for links it
+        // recognises as a `Child`. Recognition reads `type`, so wiring first
+        // and naming afterwards would attach a link nothing could identify
+        // during the one moment it matters, and the cache would keep a stale
+        // parent for the life of the node.
+        super();
         this.type = "child";
+        // oini = parent, ofin = child; each setter registers the link on the
+        // node's onsc / opsc.
+        this.oini = parent ?? null;
+        this.ofin = child ?? null;
     }
 }
 
@@ -86,8 +126,12 @@ export class Child<B = unknown> extends GraphOLink<B> {
  */
 export class ApplyTo<B = unknown> extends GraphOLink<B> {
     public constructor(fault?: INode, target?: INode) {
-        // oini = fault (source), ofin = target model. super() wires both ends.
-        super(fault, target);
+        // Identity before attachment, for the same reason as `Child`: anything
+        // that inspects a link while it is being wired can only go by `type`.
+        super();
         this.type = "applyTo";
+        // oini = fault (source), ofin = target model.
+        this.oini = fault ?? null;
+        this.ofin = target ?? null;
     }
 }

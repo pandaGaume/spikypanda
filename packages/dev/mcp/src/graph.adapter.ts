@@ -8,7 +8,7 @@
  * a different protocol reuse it unchanged.
  */
 import { McpAdapterBase, McpToolResults, type McpResourceContent, type McpToolResult } from "@cyanmycelium/mcp-core";
-import { GraphController, type ControllerResult } from "./graph.controller.js";
+import { GraphController, type ControllerResult, type GraphControllerOptions } from "./graph.controller.js";
 import type { GraphRunner } from "spikypanda-nodeeditor";
 
 /** Scheme this adapter answers for, without the slashes. */
@@ -21,9 +21,9 @@ function toToolResult(result: ControllerResult): McpToolResult {
 export class GraphAdapter extends McpAdapterBase {
     private readonly _controller: GraphController;
 
-    public constructor(runner: GraphRunner) {
+    public constructor(runner: GraphRunner, options: GraphControllerOptions = {}) {
         super(SCHEME);
-        this._controller = new GraphController(runner);
+        this._controller = new GraphController(runner, options);
         this._controller.onChanged = (uri) => this._forwardResourceContentChanged(uri);
     }
 

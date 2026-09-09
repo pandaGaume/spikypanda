@@ -30,6 +30,7 @@ import grammarEn from "../grammars/spk-en.json";
 import grammarFr from "../grammars/spk-fr.json";
 import type { GraphRunner } from "spikypanda-nodeeditor";
 import { GraphAdapter } from "./graph.adapter.js";
+import type { PluginLoader } from "./graph.controller.js";
 import { GraphBehavior } from "./graph.behavior.js";
 
 /** Where the studio publishes itself, and under what name. */
@@ -57,6 +58,12 @@ export interface PublishOptions {
      * client, so this only sets the fallback when the client says nothing.
      */
     readonly locale?: string;
+    /**
+     * Loads a plugin bundle into this studio, enabling the `plugin_load`
+     * tool. Supplied by the host because activating a plugin needs the
+     * registries the host owns and a document to inject a script into.
+     */
+    readonly pluginLoader?: PluginLoader;
 }
 
 /** A running publication, and the handle to take it down. */
@@ -106,7 +113,7 @@ export async function publishToBroker(runner: GraphRunner, options: PublishOptio
     const slot = options.slot ?? DEFAULT_SLOT;
     const tunnelUrl = options.tunnelUrl ?? DEFAULT_TUNNEL;
 
-    const adapter = new GraphAdapter(runner);
+    const adapter = new GraphAdapter(runner, { pluginLoader: options.pluginLoader });
     const behavior = new GraphBehavior(adapter);
 
     // Grammars override the behavior's own descriptions; a tool without an

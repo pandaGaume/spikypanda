@@ -94,6 +94,9 @@ export class Palette {
      */
     onPreview: ((type: string, meta: INodeMeta) => void) | null = null;
 
+    private _registrySub: { dispose(): void } | null = null;
+    private _refreshQueued = false;
+
     public constructor(host: HTMLElement, registry: INodeRegistry, options: PaletteOptions = {}) {
         this.host = host;
         this.registry = registry;
@@ -121,6 +124,33 @@ export class Palette {
         }
 
         this.refresh();
+
+        // The catalogue can grow after boot, when a plugin is loaded into a
+        // running editor. Without this the new nodes exist and cannot be
+        // found, which defeats the point of loading them.
+        this._registrySub = registry.onChanged.add(() => this._scheduleRefresh());
+    }
+
+    /**
+     * Coalesce a burst of registrations into one rebuild.
+     *
+     * A plugin registers its nodes one call at a time, so activating one
+     * would otherwise rebuild the tree a dozen times in a single tick. The
+     * microtask lands after the whole synchronous activation.
+     */
+    private _scheduleRefresh(): void {
+        if (this._refreshQueued) return;
+        this._refreshQueued = true;
+        queueMicrotask(() => {
+            this._refreshQueued = false;
+            this.refresh();
+        });
+    }
+
+    /** Detach from the registry. Call when the palette's host goes away. */
+    public dispose(): void {
+        this._registrySub?.dispose();
+        this._registrySub = null;
     }
 
     /** Read-only snapshot of paths the user has manually collapsed. */

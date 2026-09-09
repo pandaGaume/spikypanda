@@ -2,7 +2,7 @@ import type { ICartesian, ICartesian3, IHasTransform, IMatrix4, IQuaternion } fr
 import { Cartesian3, Matrix4, Quaternion } from "../geometry";
 import { Nullable } from "../types";
 import { GraphItem } from "./graph.graphItem";
-import { Child } from "./graph.olink";
+import { Child, isChildRelation } from "./graph.olink";
 import { cloneable, INode, IOlink } from "./graph.interfaces";
 
 /** Reused pose defaults + transient scratch for the node transform compose.
@@ -44,8 +44,12 @@ function composeLocalMatrix(position: ICartesian | undefined, orientation: IQuat
 
 /** Predicate for the `onsc` / `opsc` filter: a structural `Child` relation link
  *  (the generic parent/child hierarchy). Module-level so the closure is shared,
- *  not re-allocated per call. */
-const isChildLink = (link: IOlink): boolean => link instanceof Child;
+ *  not re-allocated per call.
+ *
+ *  Tests the ontology id rather than the class, because a page can hold two
+ *  copies of this module and `instanceof` then fails on a link that is correct
+ *  in every other respect. See `isChildRelation`. */
+const isChildLink = (link: IOlink): boolean => isChildRelation(link);
 
 export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
     protected _onsc: IOlink[];
@@ -245,7 +249,7 @@ export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
                 if (i >= 0) {
                     continue;
                 }
-                if (link instanceof Child) {
+                if (isChildRelation(link)) {
                     // Single-parent invariant: a node has at most ONE incoming
                     // Child link. Drop any existing parent relation before wiring
                     // the new one (dispose unwires it from both ends). The new
@@ -283,7 +287,7 @@ export class GraphNode<B = unknown> extends GraphItem<B> implements INode<B> {
                 if (i >= 0) {
                     a.splice(i, 1);
                     this.pscRemoved(link);
-                    if (link instanceof Child) {
+                    if (isChildRelation(link)) {
                         this._invalidateParentRelation();
                     }
                 }

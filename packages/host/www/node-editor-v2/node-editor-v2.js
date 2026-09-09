@@ -364,11 +364,35 @@
          *
          * Returns the publication, whose `stop()` releases the slot.
          */
+        /**
+         * Load a plugin bundle into this running studio.
+         *
+         * The host owns this rather than the MCP layer because activating a
+         * plugin needs the three registries wired above, and only this file
+         * knows them. The palette is not refreshed here: the NodeRegistry
+         * emits a change per type and the Palette listens, so the view
+         * follows whoever adds to the catalogue, not just this path.
+         *
+         * @param spec {url, globalName, id?}
+         */
+        loadPlugin: (spec) =>
+            NODEEDITOR.loadPluginFromUrl(spec.globalName, spec.id || spec.globalName, {
+                url: spec.url,
+                nodes,
+                links,
+                editors,
+                assetUrl: (p) => "../bundle/" + p,
+            }),
+
         publishMcp: (options) => {
             if (!window.SpkMcp || typeof window.SpkMcp.publishToBroker !== "function") {
                 return Promise.reject(new Error("SpkMcp bundle not loaded"));
             }
-            return window.SpkMcp.publishToBroker(runner, options || {});
+            // Hand the loader across, which is what enables `plugin_load`.
+            return window.SpkMcp.publishToBroker(runner, {
+                pluginLoader: (spec) => window.Studio.loadPlugin(spec),
+                ...(options || {}),
+            });
         },
     };
 

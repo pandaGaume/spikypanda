@@ -1,3 +1,4 @@
+import { Observable } from "../events/events.observable";
 import type { IRuntimeNode, IPortDescriptor } from "../execution/execution.interfaces";
 import type { IOlink } from "./graph.interfaces";
 
@@ -127,26 +128,49 @@ export function listDocLocales(docPath: string | Readonly<Record<string, string>
 
 export type NodeFactory = (config?: Record<string, unknown>) => IRuntimeNode;
 
+/** What changed in the catalogue, and how. */
+export interface INodeRegistryChange {
+    readonly type: string;
+    readonly action: "registered" | "unregistered";
+}
+
 export interface INodeRegistry {
     register(type: string, factory: NodeFactory, meta: Omit<INodeMeta, "type">): void;
     unregister(type: string): boolean;
     create(type: string, config?: Record<string, unknown>): IRuntimeNode | undefined;
     meta(type: string): INodeMeta | undefined;
     types(): ReadonlyArray<string>;
+    /**
+     * Fired once per type added or removed.
+     *
+     * The catalogue is not fixed at boot. A plugin loaded while the editor is
+     * running adds to it, and without a signal every view built from the
+     * registry silently keeps showing the catalogue as it was: the node is
+     * addressable by id and invisible in the palette, which is the wrong way
+     * round for someone discovering a new domain.
+     */
+    readonly onChanged: Observable<INodeRegistryChange>;
 }
 
 export class NodeRegistry implements INodeRegistry {
     private readonly _factories = new Map<string, NodeFactory>();
     private readonly _meta = new Map<string, INodeMeta>();
 
+    public readonly onChanged = new Observable<INodeRegistryChange>();
+
     public register(type: string, factory: NodeFactory, meta: Omit<INodeMeta, "type">): void {
         this._factories.set(type, factory);
         this._meta.set(type, { ...meta, type });
+        this.onChanged.notifyObservers({ type, action: "registered" });
     }
 
     public unregister(type: string): boolean {
         this._meta.delete(type);
-        return this._factories.delete(type);
+        const removed = this._factories.delete(type);
+        // Silent when nothing was there: a listener should hear about changes,
+        // not about attempts.
+        if (removed) this.onChanged.notifyObservers({ type, action: "unregistered" });
+        return removed;
     }
 
     public create(type: string, config?: Record<string, unknown>): IRuntimeNode | undefined {

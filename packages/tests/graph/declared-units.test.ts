@@ -16,7 +16,7 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import { resolveUnit } from "spikypanda-core";
+import { NodeRegistry, resolveUnit } from "spikypanda-core";
 
 const DEV = path.resolve(process.cwd(), "packages", "dev");
 
@@ -84,5 +84,33 @@ describe("declared units", () => {
     it("holds no enumeration in a unit, which is what the enum field is for", () => {
         const legends = all.filter((d) => /unit:\s*\{[^}]*unit:\s*"[^"]*[|=][^"]*"/.test(d.text)).map((d) => `${d.file}:${d.line}`);
         expect(legends).toEqual([]);
+    });
+});
+
+/**
+ * The catalogue is not fixed at boot.
+ *
+ * A view built from the registry has no way to know a plugin was loaded
+ * unless the registry says so, and the failure is quiet: the node exists,
+ * works, and cannot be found in the palette.
+ */
+describe("registry change signal", () => {
+    it("announces a registration", () => {
+        const registry = new NodeRegistry();
+        const seen: string[] = [];
+        registry.onChanged.add((e) => seen.push(`${e.action}:${e.type}`));
+        registry.register("Tensegrity.Element:bar", () => ({}) as never, { label: "Bar", inputPorts: [], outputPorts: [] });
+        expect(seen).toEqual(["registered:Tensegrity.Element:bar"]);
+    });
+
+    it("announces a removal, and stays silent when nothing was removed", () => {
+        const registry = new NodeRegistry();
+        registry.register("a", () => ({}) as never, { label: "A", inputPorts: [], outputPorts: [] });
+        const seen: string[] = [];
+        registry.onChanged.add((e) => seen.push(`${e.action}:${e.type}`));
+        expect(registry.unregister("a")).toBe(true);
+        expect(registry.unregister("never-there")).toBe(false);
+        // A listener should hear about changes, not about attempts.
+        expect(seen).toEqual(["unregistered:a"]);
     });
 });

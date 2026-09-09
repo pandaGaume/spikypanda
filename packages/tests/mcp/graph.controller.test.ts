@@ -19,7 +19,7 @@
  * the logic is what these assert, and it carries no transport.
  */
 import { GraphController, type ControllerResult } from "spikypanda-mcp/graph.controller";
-import { editable, viewable } from "spikypanda-core";
+import { editable, NodeRegistry, viewable } from "spikypanda-core";
 import { UIItemBase } from "spikypanda-nodeeditor";
 import type { GraphRunner } from "spikypanda-nodeeditor";
 
@@ -90,15 +90,17 @@ function makeRunner() {
             motor.current = motor.gravity * motor.tick;
         },
     };
+    const registry = new NodeRegistry();
     const viewer = {
         nodes,
         connections: [] as unknown[],
-        getNodeRegistry: () => null,
+        load: () => {},
+        getNodeRegistry: () => registry,
         getLinkRegistry: () => null,
         serialize: () => ({ nodes: nodes.map((n) => ({ id: n.id })), connections: [] }),
     };
     const runner = { viewer, session, t: 0, state: "paused", stop() {}, pause() {} };
-    return { runner: runner as unknown as GraphRunner, motor, declared, decorated };
+    return { runner: runner as unknown as GraphRunner, motor, declared, decorated, registry };
 }
 
 /** Unwrap a successful result's body, failing loudly on an unexpected error. */
@@ -376,5 +378,81 @@ describe("Thing Description", () => {
         const controller = new GraphController(runner);
         const td = payload(await controller.executeToolAsync("", "node_thing_description", { nodeId: "pmsm" }));
         expect(Object.keys(td.properties as object).sort()).toEqual(["current", "frequency", "torque"]);
+    });
+});
+
+/**
+ * Loading a plugin, and refusing a graph that needs one.
+ *
+ * These two belong together: the second is what makes the first necessary.
+ * A catalogue that can grow after boot means a saved graph can outlive the
+ * plugin that gave it meaning, and the dangerous outcome is not an error, it
+ * is a graph that loads cleanly and does nothing.
+ */
+describe("plugins", () => {
+    it("refuses to load a plugin when the host supplied no loader", async () => {
+        const { runner } = makeRunner();
+        const controller = new GraphController(runner);
+        const r = await controller.executeToolAsync("", "plugin_load", { url: "../bundle/X.js", globalName: "X" });
+        expect(r.ok).toBe(false);
+        expect(r.ok === false && r.error).toContain("without a plugin loader");
+    });
+
+    it("reports the types a plugin added, so a plugin that adds none is visible", async () => {
+        const { runner, registry } = makeRunner();
+        const loader = jest.fn(async () => {
+            registry.register("Tensegrity.Element:bar", () => ({}) as never, {
+                label: "Bar",
+                inputPorts: [],
+                outputPorts: [],
+            });
+            return { activated: ["tensegrity"], missing: [] };
+        });
+        const controller = new GraphController(runner, { pluginLoader: loader });
+        const r = payload(await controller.executeToolAsync("", "plugin_load", { url: "../bundle/T.js", globalName: "SpkPluginTensegrity" }));
+        expect(loader).toHaveBeenCalledWith({ url: "../bundle/T.js", globalName: "SpkPluginTensegrity", id: "SpkPluginTensegrity" });
+        expect(r.added).toEqual(["Tensegrity.Element:bar"]);
+        expect(r.addedCount).toBe(1);
+        expect(r.activated).toEqual(["tensegrity"]);
+    });
+
+    it("hands back the loader's failure rather than a bare false", async () => {
+        const { runner } = makeRunner();
+        const controller = new GraphController(runner, {
+            pluginLoader: async () => {
+                throw new Error('failed to load "../bundle/T.js" (missing, blocked by CSP, or cross-origin without CORS)');
+            },
+        });
+        const r = await controller.executeToolAsync("", "plugin_load", { url: "../bundle/T.js", globalName: "T" });
+        expect(r.ok).toBe(false);
+        expect(r.ok === false && r.error).toContain("blocked by CSP");
+    });
+
+    it("refuses a graph whose node types are missing, and names them", async () => {
+        const { runner } = makeRunner();
+        const controller = new GraphController(runner);
+        const graph = { nodes: [{ id: "n1", typeId: "Tensegrity.Element:cable" }, { id: "n2", typeId: "Tensegrity.Element:bar" }], connections: [] };
+        const r = await controller.executeToolAsync("", "graph_load", { graph });
+        expect(r.ok).toBe(false);
+        // Both names, because fixing one at a time is the slow way to find out
+        // the whole plugin is absent.
+        expect(r.ok === false && r.error).toContain("Tensegrity.Element:cable");
+        expect(r.ok === false && r.error).toContain("Tensegrity.Element:bar");
+        expect(r.ok === false && r.error).toContain("plugin_load");
+    });
+
+    it("loads a graph whose types are all present", async () => {
+        const { runner, registry } = makeRunner();
+        registry.register("Tensegrity.Element:bar", () => ({}) as never, { label: "Bar", inputPorts: [], outputPorts: [] });
+        const controller = new GraphController(runner);
+        const r = await controller.executeToolAsync("", "graph_load", { graph: { nodes: [{ id: "n1", typeId: "Tensegrity.Element:bar" }], connections: [] } });
+        expect(r.ok).toBe(true);
+    });
+
+    it("loads a graph whose nodes carry no type, which predates type tracking", async () => {
+        const { runner } = makeRunner();
+        const controller = new GraphController(runner);
+        const r = await controller.executeToolAsync("", "graph_load", { graph: { nodes: [{ id: "n1", label: "Legacy" }], connections: [] } });
+        expect(r.ok).toBe(true);
     });
 });

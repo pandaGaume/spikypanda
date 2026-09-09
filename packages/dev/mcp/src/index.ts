@@ -38,7 +38,7 @@ export {
     isSpkUri,
 } from "./resource.uri.js";
 
-export { GraphController, ok, fail, type ControllerResult, type ResourceContent } from "./graph.controller.js";
+export { GraphController, ok, fail, type ControllerResult, type ResourceContent, type GraphControllerOptions, type PluginLoader } from "./graph.controller.js";
 export { GraphAdapter } from "./graph.adapter.js";
 export { GraphBehavior } from "./graph.behavior.js";
 export type { PortState, NodeTypeState, RegistryState, PluginsState, GraphState, SimulationState, NodeState, NodePropertyState } from "./state.js";

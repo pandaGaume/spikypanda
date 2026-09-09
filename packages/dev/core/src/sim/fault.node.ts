@@ -1,5 +1,5 @@
 import { IOlink } from "../graph/graph.interfaces";
-import { ApplyTo } from "../graph/graph.olink";
+import { ApplyTo, isApplyToRelation } from "../graph/graph.olink";
 import { IChannel, IDeclaresPorts, IPortDescriptor, ISession, inSlotOf } from "../execution/execution.interfaces";
 import type { ICartesian, ICartesian3 } from "../geometry/geometry.interfaces";
 import type { Nullable } from "../types";
@@ -203,7 +203,13 @@ export class FaultableNode extends TransformNode implements IDeclaresPorts {
         //    physics to THIS model, reading the model's PROPERTIES + its own
         //    tuning + the runtime ctx, accumulating its effect into the same
         //    per-tick sum the legacy descriptor path fills.
-        const applyLinks = this.opsc<ApplyTo>((l) => l instanceof ApplyTo);
+        // Recognised by ontology id, not by class. The editor bundles core
+        // inline while the plugins externalise it, so a link the editor built
+        // is not an instance of the class this module sees. Its endpoints and
+        // its `type` are right; only `instanceof` disagrees, and it does so
+        // silently: every fault would be skipped and the machine would look
+        // healthy. See `isApplyToRelation`.
+        const applyLinks = this.opsc<ApplyTo>(isApplyToRelation);
         if (applyLinks.length > 0) {
             this._updateGravityCoupling(session);
             const sum = this._faultSum;

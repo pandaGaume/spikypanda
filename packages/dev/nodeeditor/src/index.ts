@@ -70,8 +70,8 @@ export { editor, editable, viewable, getEditorSchema } from "spikypanda-core";
 export type { IEditableField, IEditorSchema } from "spikypanda-core";
 export { PORT_COLORS, arePortTypesCompatible, isConfigLinkType, CONFIG_LINK_TYPES } from "./types";
 export type { IPlugin, IPluginContext, IPluginManifest, IPluginNodeEntry, IPluginEditorEntry, ISubPluginManifest } from "./plugin.interfaces";
-export { loadPlugin } from "./plugin.loader";
-export type { LoadPluginOptions, LoadPluginResult } from "./plugin.loader";
+export { loadPlugin, loadPluginFromUrl } from "./plugin.loader";
+export type { LoadPluginOptions, LoadPluginFromUrlOptions, LoadPluginResult } from "./plugin.loader";
 export type { PortDirection, PortType, PortDef, NodeDef, Vec2, SerializedGraph, SerializedNode, SerializedConnection } from "./types";
 
 export { Dashboard, isRenderable } from "./dashboard";
