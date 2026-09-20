@@ -1,0 +1,36 @@
+{
+    "version": 1,
+    "job": "fit",
+    "name": "scrubber-health-twin",
+    "model": "affine-residual",
+    "dataset": {
+        "file": "outputs/rs385-drive/summary.json",
+        "duty": {
+            "column": "drive.value",
+            "scale": 6.25
+        },
+        "current": {
+            "column": "current_dc"
+        }
+    },
+    "fullScale": {
+        "duty": 100,
+        "current": 4,
+        "senseSpan": 100
+    },
+    "domain": {
+        "dutyMin": 0.1875,
+        "dutyMax": 0.8
+    },
+    "monitor": {
+        "residual": {
+            "threshold": 0.04,
+            "debounceCycles": 30,
+            "severity": 350,
+            "alarm": "drift.current"
+        }
+    },
+    "outputs": {
+        "file": "scrubber_health.onnx"
+    }
+}

@@ -20,7 +20,7 @@
     "scripts": {
         "build": "npm run clean && npm run compile",
         "clean": "rimraf dist bundle && rimraf tsconfig.build.tsbuildinfo",
-        "compile": "npm run compile:source",
+        "compile": "npm run compile:source && node ../../../scripts/fix-esm-dist.mjs .",
         "compile:source": "tsc -b tsconfig.build.json",
         "watch:source": "tsc -b tsconfig.build.json -w",
         "bundle": "webpack --config webpack.config.cjs --mode production",
@@ -35,7 +35,7 @@
         "neural-network",
         "spiking-neural-network"
     ],
-    "license": "MIT",
+    "license": "BUSL-1.1",
     "repository": {
         "type": "git",
         "url": "https://github.com/GuillaumePelletier/spikypanda.git",

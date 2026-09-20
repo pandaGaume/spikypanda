@@ -1,0 +1,16 @@
+{
+    "version": 1,
+    "job": "sweep",
+    "name": "rs385-drive",
+    "graph": "../../../../report/rs385/graphs/rs385-complete.spikypanda",
+    "run": { "dt": 0.0002, "duration": 1.0, "settle": 0.5 },
+    "grid": [{ "node": "drive", "property": "value", "range": { "from": 1, "to": 14, "step": 1 } }],
+    "record": [
+        { "node": "motor", "property": "angularVelocity", "as": "omega" },
+        { "node": "motor", "property": "armatureCurrent", "as": "current" }
+    ],
+    "summary": [
+        { "field": "omega", "stat": "mean" },
+        { "field": "current", "stat": "mean", "as": "current_dc" }
+    ]
+}

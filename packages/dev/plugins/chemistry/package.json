@@ -1,5 +1,5 @@
 {
-    "name": "@spikypanda/plugin-chemistry",
+    "name": "@spiky-panda/plugin-chemistry",
     "version": "0.1.0",
     "description": "Chemistry plugin for SpikyPanda: gas / pollutant / composition descriptors consumed by the physics atmosphere and gate nodes. V1 ships a catalog of 12 common gases with their physico-chemical constants (molar mass, density, Cp, thermal conductivity, viscosity).",
     "private": true,
@@ -19,7 +19,7 @@
     "sideEffects": false,
     "dependencies": {
         "@spiky-panda/core":     "*",
-        "@spikypanda/nodeeditor": "*"
+        "@spiky-panda/nodeeditor": "*"
     },
     "devDependencies": {
         "rimraf":    "~6.0.1",

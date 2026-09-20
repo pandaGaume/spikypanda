@@ -40,7 +40,7 @@ module.exports = (h) => {
             [
                 ["Fichiers créés / modifiés", "47 créés (8 877 lignes TypeScript) / 22 modifiés (+1 605 / -859 lignes)"],
                 ["Nouveaux nœuds d'éditeur", "6 (couple de charge, moteur à induction, détecteur de régime établi, multiplexeur, transposition, clusterer open-set) + extension multicanal du tampon de fenêtres"],
-                ["Nouveau plugin", "@spikypanda/plugin-ml (clustering open-set, bibliothèque + nœud)"],
+                ["Nouveau plugin", "@spiky-panda/plugin-ml (clustering open-set, bibliothèque + nœud)"],
                 ["Tests automatiques du périmètre", "15 suites, 139 tests, tous verts"],
                 ["Tests du dépôt complet", "1 193 verts / 1 198 (les 5 échecs restants sont antérieurs au projet, preuve à l'appui)"],
                 ["Tests préexistants RÉPARÉS par le projet", "7 (perte de jetons sur les ports frontière du moteur d'exécution)"],

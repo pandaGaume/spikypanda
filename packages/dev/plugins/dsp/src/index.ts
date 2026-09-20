@@ -26,7 +26,7 @@ export { dspTensorSubPlugin, TransposeNode, createTransposeNode } from "./tensor
 export { dspAcquireSubPlugin, DaqNode, createDaqNode } from "./acquire/index.js";
 
 /**
- * @spikypanda/plugin-dsp
+ * @spiky-panda/plugin-dsp
  *
  * Time-series DSP fundamentals organized as thematic sub-plugins
  * under the `DSP.*` namespace:

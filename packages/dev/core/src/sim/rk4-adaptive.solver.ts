@@ -174,6 +174,16 @@ export class RK4AdaptiveSolver implements ISolver {
         this._suggestedStep = Math.min(this._maxStep, 1e-3);
     }
 
+    /** Re-seed `_y` from the leaves and rewind to `t0` (see ISolverHandle.reseed). */
+    public reseed(t0: number): void {
+        for (let i = 0; i < this._leaves.length; i++) {
+            this._leaves[i].gatherState(this._y, this._offsets[i]);
+        }
+        this._t = t0;
+        this._suggestedStep = Math.min(this._maxStep, 1e-3);
+        this._lastStep = null;
+    }
+
     public step(dt: number, session: ISession): ISolverStep {
         if (this._totalSize === 0 || this._leaves.length === 0) {
             this._lastStep = { t: this._t + dt, microSteps: 0, maxError: 0, rhsEvals: 0 };

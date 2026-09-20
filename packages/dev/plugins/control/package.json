@@ -1,6 +1,7 @@
 {
-    "name": "@spikypanda/plugin-control",
+    "name": "@spiky-panda/plugin-control",
     "version": "0.1.0",
+    "license": "BUSL-1.1",
     "description": "Control-systems plugin for SpikyPanda: feedback/delay primitives, signal hold/sample/quantize, future PID/MPC building blocks.",
     "private": true,
     "type": "module",
@@ -11,7 +12,7 @@
     "scripts": {
         "build":       "npm run clean && npm run compile",
         "clean":       "rimraf dist bundle tsconfig.build.tsbuildinfo",
-        "compile":     "tsc -b tsconfig.build.json",
+        "compile":     "tsc -b tsconfig.build.json && node ../../../../scripts/fix-esm-dist.mjs .",
         "watch":       "tsc -b tsconfig.build.json -w",
         "bundle":      "webpack --mode production --config webpack.config.cjs",
         "bundle:dev":  "webpack --mode development --config webpack.config.cjs"
@@ -19,7 +20,7 @@
     "sideEffects": false,
     "dependencies": {
         "@spiky-panda/core":     "*",
-        "@spikypanda/nodeeditor": "*"
+        "@spiky-panda/nodeeditor": "*"
     },
     "devDependencies": {
         "rimraf":    "~6.0.1",

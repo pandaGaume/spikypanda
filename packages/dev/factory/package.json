@@ -1,0 +1,38 @@
+{
+    "name": "@spiky-panda/factory",
+    "version": "0.1.0",
+    "license": "BUSL-1.1",
+    "description": "The factory: headless jobs over SpikyPanda graphs (sweeps, synthetic data, model export). One entry point, spikypanda-job <spec.json>, bundled as a single file so the same job runs locally, in a container and on a serverless job platform.",
+    "private": true,
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "bin": {
+        "spikypanda-job": "bundle/spikypanda-job.js"
+    },
+    "files": ["dist", "bundle", "specs", "docs"],
+    "scripts": {
+        "build":      "npm run clean && npm run compile",
+        "clean":      "rimraf dist bundle tsconfig.build.tsbuildinfo",
+        "compile":    "tsc -b tsconfig.build.json && node ../../../scripts/fix-esm-dist.mjs .",
+        "watch":      "tsc -b tsconfig.build.json -w",
+        "bundle":     "webpack --mode production --config webpack.config.cjs",
+        "bundle:dev": "webpack --mode development --config webpack.config.cjs",
+        "job":        "node bundle/spikypanda-job.js"
+    },
+    "dependencies": {
+        "@spiky-panda/core":           "*",
+        "@spiky-panda/onnx":           "*",
+        "@spiky-panda/plugin-control": "*",
+        "@spiky-panda/plugin-dsp":     "*",
+        "@spiky-panda/plugin-geometry": "*",
+        "@spiky-panda/plugin-logic":   "*",
+        "@spiky-panda/plugin-ml":      "*",
+        "@spiky-panda/plugin-onnx":    "*",
+        "@spiky-panda/plugin-physics": "*"
+    },
+    "devDependencies": {
+        "@spiky-panda/nodeeditor": "*",
+        "rimraf":    "~6.0.1",
+        "ts-loader": "^9.5.0"
+    }
+}

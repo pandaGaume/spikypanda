@@ -1,6 +1,7 @@
 {
     "name": "@spiky-panda/applications-motorwatch",
     "version": "0.1.0",
+    "license": "BUSL-1.1",
     "description": "Open-set regime monitoring for motor-current analysis: edge device facade (steady-state gating, ONNX embeddings, online clustering, NEW_REGIME alarms), validated runtime diagnostic-model push, central station with federated regime catalog",
     "private": true,
     "main": "dist/index",
@@ -14,7 +15,7 @@
     "scripts": {
         "build": "npm run clean && npm run compile",
         "clean": "rimraf dist bundle && rimraf tsconfig.build.tsbuildinfo",
-        "compile": "npm run compile:source",
+        "compile": "npm run compile:source && node ../../../../scripts/fix-esm-dist.mjs .",
         "compile:source": "tsc -viscousFriction tsconfig.build.json",
         "watch:source": "tsc -viscousFriction tsconfig.build.json -w"
     },

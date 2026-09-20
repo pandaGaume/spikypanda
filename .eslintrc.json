@@ -7,6 +7,7 @@
         "project": [
             "./packages/dev/core/tsconfig.build.json",
             "./packages/dev/onnx/tsconfig.build.json",
+            "./packages/dev/factory/tsconfig.build.json",
             "./packages/dev/applications/mpc/tsconfig.build.json",
             "./packages/dev/applications/stereo/tsconfig.build.json",
             "./packages/dev/applications/privates/cardriver/tsconfig.build.json",

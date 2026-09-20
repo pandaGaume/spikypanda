@@ -14,7 +14,7 @@ import type { IPlugin, IPluginContext } from "spikypanda-nodeeditor";
  * to populate.
  *
  * The Sim.Graph node could eventually live in its own dedicated
- * plugin package (`@spikypanda/plugin-sim`) once we have more sim-
+ * plugin package (`@spiky-panda/plugin-sim`) once we have more sim-
  * infrastructure nodes (rate-divider already in plugin-logic, a future
  * rate-group, hierarchical scheduler markers, etc.). For V1 we bundle
  * it with control so it ships alongside the Cash-Karp RK4 solver — the

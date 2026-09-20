@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="790" viewBox="0 0 1260 790" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <title>Cycle de vie d'un artefact de l'usine : T0, T1, T2 (diagramme d'états UML)</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#222"/>
+    </marker>
+    <style>
+      .state { fill: #ffffff; stroke: #222; stroke-width: 1.5; }
+      .name { font-size: 14px; font-weight: bold; fill: #111; text-anchor: middle; }
+      .sub { font-size: 11px; fill: #444; text-anchor: middle; }
+      .tr { fill: none; stroke: #222; stroke-width: 1.4; marker-end: url(#arrow); }
+      .trd { fill: none; stroke: #222; stroke-width: 1.4; stroke-dasharray: 6 4; marker-end: url(#arrow); }
+      .lbl { font-size: 12px; fill: #111; }
+      .lblc { font-size: 12px; fill: #111; text-anchor: middle; }
+      .band { font-size: 13px; font-weight: bold; fill: #333; }
+      .bandbox { fill: none; stroke: #999; stroke-width: 1; stroke-dasharray: 4 4; }
+      .refus { font-size: 12px; fill: #a00; }
+      .note { fill: #fffbe6; stroke: #b8a24a; stroke-width: 1; }
+      .notet { font-size: 12px; fill: #333; }
+    </style>
+  </defs>
+  <rect width="1260" height="790" fill="#ffffff"/>
+
+  <!-- ── Bande T0 ─────────────────────────────────────────────────────── -->
+  <rect class="bandbox" x="30" y="30" width="1200" height="480"/>
+  <text class="band" x="42" y="52">T0, avant le déploiement : l'ingénieur ou l'intégration continue, en minutes, sans le broker ou à travers le slot factory</text>
+
+  <!-- ligne 1 : les jobs -->
+  <circle cx="44" cy="128" r="7" fill="#222"/>
+  <path class="tr" d="M 51 128 L 68 128"/>
+
+  <rect class="state" x="70" y="100" width="190" height="56" rx="12"/>
+  <text class="name" x="165" y="124">Spécifié</text>
+  <text class="sub" x="165" y="142">une spécification JSON, un graphe</text>
+
+  <path class="tr" d="M 260 128 L 318 128"/>
+  <text class="lblc" x="289" y="116">run_sweep</text>
+  <text class="lblc" x="289" y="150">/ exit 0</text>
+
+  <rect class="state" x="320" y="100" width="190" height="56" rx="12"/>
+  <text class="name" x="415" y="124">Balayé</text>
+  <text class="sub" x="415" y="142">summary.json, samples/, manifeste</text>
+
+  <path class="tr" d="M 510 128 L 568 128"/>
+  <text class="lblc" x="539" y="90">run_fit</text>
+  <text class="lblc" x="539" y="104">[colonnes présentes,</text>
+  <text class="lblc" x="539" y="116">parité ok,</text>
+  <text class="lblc" x="539" y="150">seuil > erreur max]</text>
+  <text class="lblc" x="539" y="164">/ .onnx + contrat</text>
+
+  <rect class="state" x="570" y="100" width="190" height="56" rx="12"/>
+  <text class="name" x="665" y="124">Ajusté</text>
+  <text class="sub" x="665" y="142">.onnx + contract.json (seuils, plancher)</text>
+  <!-- point d'entrée A : les nouvelles instances de T1 et T2 arrivent ici -->
+  <circle cx="665" cy="182" r="11" fill="#fff" stroke="#222" stroke-width="1.4"/>
+  <text class="lblc" x="665" y="186" font-weight="bold">A</text>
+  <path class="tr" d="M 665 171 L 665 158"/>
+
+  <path class="tr" d="M 760 128 L 826 128"/>
+  <text class="lblc" x="793" y="116">run_evaluate</text>
+  <text class="lblc" x="793" y="150">/ report.json</text>
+
+  <!-- pseudo-état de choix -->
+  <path d="M 850 108 L 870 128 L 850 148 L 830 128 Z" fill="#fff" stroke="#222" stroke-width="1.4"/>
+
+  <path class="tr" d="M 870 128 L 918 128"/>
+  <text class="lblc" x="894" y="116">[verdict</text>
+  <text class="lblc" x="894" y="150">positif]</text>
+
+  <rect class="state" x="920" y="100" width="200" height="56" rx="12"/>
+  <text class="name" x="1020" y="124">Jugé positif</text>
+  <text class="sub" x="1020" y="142">rapport, id = sha256(report.json)</text>
+
+  <!-- refus de politique : tier3 tente l'enregistrement -->
+  <path class="tr" d="M 1120 118 C 1160 100, 1160 156, 1120 140"/>
+  <text class="refus" x="1128" y="90">register_artifact par tier3</text>
+  <text class="refus" x="1128" y="104">/ refus de politique</text>
+
+  <path class="tr" d="M 850 148 L 850 208"/>
+  <text class="lbl" x="858" y="182">[verdict négatif]</text>
+
+  <rect class="state" x="755" y="210" width="190" height="56" rx="12"/>
+  <text class="name" x="850" y="234">Jugé négatif</text>
+  <text class="sub" x="850" y="252">un résultat, code 0, pas une erreur</text>
+
+  <path class="tr" d="M 755 238 L 165 238 L 165 158"/>
+  <text class="lbl" x="420" y="230">révision de la spécification (modèle, domaine, scénarios)</text>
+
+  <!-- ligne 2 : Tier 2 et Tier 1 -->
+  <text class="band" x="42" y="318">Enregistrement (Tier 2) et push validé (Tier 1)</text>
+
+  <path class="tr" d="M 1020 156 L 1020 378"/>
+  <text class="lbl" x="1030" y="300">register_artifact</text>
+  <text class="lbl" x="1030" y="316">[rôle operator,</text>
+  <text class="lbl" x="1030" y="332">verdict positif,</text>
+  <text class="lbl" x="1030" y="348">id de rapport]</text>
+  <text class="refus" x="1030" y="366">sinon la station refuse</text>
+
+  <rect class="state" x="920" y="380" width="200" height="56" rx="12"/>
+  <text class="name" x="1020" y="404">Enregistré</text>
+  <text class="sub" x="1020" y="422">artefact + contrat + rapport</text>
+
+  <path class="tr" d="M 920 408 L 762 408"/>
+  <text class="lblc" x="841" y="396">diagnostic_load_model</text>
+  <text class="lblc" x="841" y="430">/ push, banque B</text>
+
+  <rect class="state" x="570" y="380" width="190" height="56" rx="12"/>
+  <text class="name" x="665" y="404">Poussé (banque B)</text>
+  <text class="sub" x="665" y="422">vérifié par l'appareil</text>
+
+  <!-- refus de l'appareil -->
+  <path class="tr" d="M 700 436 C 720 490, 900 490, 960 438"/>
+  <text class="refus" x="700" y="484">[sha256 ≠ contrat ∨ formes ≠] / refusé par l'appareil</text>
+
+  <path class="tr" d="M 570 408 L 412 408"/>
+  <text class="lblc" x="491" y="396">activation</text>
+  <text class="lblc" x="491" y="430">[sha256 = contrat, formes ok]</text>
+
+  <rect class="state" x="220" y="380" width="190" height="56" rx="12"/>
+  <text class="name" x="315" y="404">Actif (banque A)</text>
+  <text class="sub" x="315" y="422">le Tier 1 agit avec ce modèle</text>
+
+  <path class="tr" d="M 220 408 L 126 408"/>
+  <text class="lblc" x="173" y="396">activation d'une</text>
+  <text class="lblc" x="173" y="430">instance nouvelle</text>
+  <circle cx="110" cy="408" r="11" fill="#fff" stroke="#222" stroke-width="1.4"/>
+  <circle cx="110" cy="408" r="6" fill="#222"/>
+  <text class="lblc" x="110" y="440">Remplacé</text>
+
+  <!-- ── Bande T1 ─────────────────────────────────────────────────────── -->
+  <rect class="bandbox" x="30" y="530" width="740" height="150"/>
+  <text class="band" x="42" y="552">T1, sur alarme : secondes à minutes, hors boucle ; l'appareil a déjà agi</text>
+
+  <path class="tr" d="M 270 436 L 270 518 L 165 518 L 165 588"/>
+  <text class="lbl" x="178" y="470">alarme, routée par le broker</text>
+
+  <rect class="state" x="70" y="590" width="190" height="56" rx="12"/>
+  <text class="name" x="165" y="614">Alarme reçue (Tier 3)</text>
+  <text class="sub" x="165" y="632">MIN-FLOW déjà forcé par l'appareil</text>
+
+  <path class="tr" d="M 260 618 L 318 618"/>
+  <text class="lblc" x="289" y="606">twin.sweep</text>
+  <text class="lblc" x="289" y="640">[budget]</text>
+
+  <rect class="state" x="320" y="590" width="190" height="56" rx="12"/>
+  <text class="name" x="415" y="614">Question au jumeau</text>
+  <text class="sub" x="415" y="632">temps avant CRITICAL, causes</text>
+
+  <path class="tr" d="M 400 590 L 400 438"/>
+  <text class="lbl" x="406" y="560">[sinon] rien</text>
+
+  <path class="tr" d="M 510 618 L 568 618"/>
+  <text class="lblc" x="539" y="606">[recalage</text>
+  <text class="lblc" x="539" y="640">nécessaire]</text>
+
+  <rect class="state" x="570" y="590" width="190" height="56" rx="12"/>
+  <text class="name" x="665" y="614">run_fit demandé par tier3</text>
+  <text class="sub" x="665" y="632">sur les mesures réelles de la station</text>
+
+  <path class="trd" d="M 665 590 L 665 560"/>
+  <circle cx="665" cy="548" r="11" fill="#fff" stroke="#222" stroke-width="1.4"/>
+  <text class="lblc" x="665" y="552" font-weight="bold">A</text>
+  <text class="lbl" x="682" y="552">nouvelle instance : Ajusté, puis evaluate, puis push en approval-required</text>
+
+  <!-- ── Bande T2 ─────────────────────────────────────────────────────── -->
+  <rect class="bandbox" x="790" y="530" width="440" height="150"/>
+  <text class="band" x="802" y="552">T2, périodique : jours à semaines, dérive lente</text>
+
+  <path class="tr" d="M 360 436 L 360 500 L 895 500 L 895 588"/>
+  <text class="lbl" x="560" y="494">échéance ∨ REGIME_DRIFT ∨ tendance du résidu</text>
+
+  <rect class="state" x="800" y="590" width="190" height="56" rx="12"/>
+  <text class="name" x="895" y="614">Échéance</text>
+  <text class="sub" x="895" y="632">hebdomadaire par défaut (décision 4)</text>
+
+  <path class="tr" d="M 990 618 L 1028 618"/>
+  <text class="lblc" x="1009" y="606">run_fit</text>
+
+  <rect class="state" x="1030" y="590" width="190" height="56" rx="12"/>
+  <text class="name" x="1125" y="614">Fit sur le journal</text>
+  <text class="sub" x="1125" y="632">points stables (Tier 2), evaluate nouveau vs en place</text>
+
+  <path class="trd" d="M 1125 590 L 1125 560"/>
+  <circle cx="1125" cy="548" r="11" fill="#fff" stroke="#222" stroke-width="1.4"/>
+  <text class="lblc" x="1125" y="552" font-weight="bold">A</text>
+  <text class="lbl" x="1142" y="552">[meilleur]</text>
+
+  <!-- ── Note : les trois verrous ─────────────────────────────────────── -->
+  <rect class="note" x="30" y="700" width="1200" height="70"/>
+  <text class="notet" x="42" y="720" font-weight="bold">Les trois verrous d'un fit demandé par le Tier 3 (décision 1) : le résultat est inerte sans evaluate.</text>
+  <text class="notet" x="42" y="738">1. la politique du broker : le rôle tier3 n'a pas la capacité d'enregistrement (refus de politique) ;  2. la station : aucun enregistrement sans rapport evaluate au verdict positif ;</text>
+  <text class="notet" x="42" y="756">3. l'appareil : refus de tout push dont le sha256 ou le contrat ne correspondent pas. Aucun des trois ne vit dans un prompt. Le point d'entrée A est le seul chemin d'une instance nouvelle.</text>
+</svg>

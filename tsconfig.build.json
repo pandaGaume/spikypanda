@@ -66,7 +66,13 @@
             "spikypanda-plugin-physics": ["dev/plugins/physics/src/index.ts"],
             "spikypanda-plugin-physics/*": ["dev/plugins/physics/src/*"],
             "spikypanda-plugin-iso": ["dev/plugins/iso/src/index.ts"],
-            "spikypanda-plugin-iso/*": ["dev/plugins/iso/src/*"]
+            "spikypanda-plugin-iso/*": ["dev/plugins/iso/src/*"],
+            "spikypanda-plugin-logic":     ["dev/plugins/logic/src/index.ts"],
+            "spikypanda-plugin-logic/*":   ["dev/plugins/logic/src/*"],
+            "spikypanda-plugin-control":   ["dev/plugins/control/src/index.ts"],
+            "spikypanda-plugin-control/*": ["dev/plugins/control/src/*"],
+            "spikypanda-factory":          ["dev/factory/src/index.ts"],
+            "spikypanda-factory/*":        ["dev/factory/src/*"]
         },
 
         "types": ["reflect-metadata", "jest", "node"]

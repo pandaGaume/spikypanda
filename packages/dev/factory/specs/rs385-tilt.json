@@ -1,0 +1,22 @@
+{
+    "version": 1,
+    "job": "sweep",
+    "name": "rs385-tilt",
+    "graph": "../../../../report/rs385/graphs/rs385-complete.spikypanda",
+    "run": { "dt": 0.0002, "duration": 1.0, "settle": 0.5 },
+    "grid": [
+        { "node": "attitude", "property": "pitch", "values": [0, 45, 90] }
+    ],
+    "record": [
+        { "node": "motor",   "property": "angularVelocity", "as": "omega" },
+        { "node": "motor",   "property": "armatureCurrent", "as": "current" },
+        { "node": "housing", "property": "accelerationY",   "as": "accel_y" }
+    ],
+    "summary": [
+        { "field": "omega",   "stat": "mean" },
+        { "field": "current", "stat": "mean",   "as": "current_dc" },
+        { "field": "current", "stat": "lockin", "as": "current_1x", "frequency": { "fromField": "omega", "kind": "angular" } },
+        { "field": "accel_y", "stat": "lockin", "as": "vib_1x",     "frequency": { "fromField": "omega", "kind": "angular" } }
+    ],
+    "outputs": { "samples": false }
+}

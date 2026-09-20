@@ -516,6 +516,10 @@ export class Session implements ISession {
 
         // Cascade reset to nodes (sub-graphs reset their internal sessions).
         for (const node of this.graph.nodes) node.reset(this);
+        // The nodes hold their initial conditions again; the solvers must
+        // read them, or their first macro-step writes the stale vector
+        // back over the fresh state.
+        for (const solver of this._solvers) solver.reseed?.(0);
     }
 
     // ── Internals ───────────────────────────────────────────────────────

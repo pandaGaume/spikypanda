@@ -98,7 +98,7 @@ export const ATMOSPHERE_LAYER_IN_COMPOSITION = "composition_in";
 
 /** Minimal structural shape the layer consumes from a bound
  *  CompositionNode. Duck-typed so the physics plugin doesn't need to
- *  import @spikypanda/plugin-chemistry directly.
+ *  import @spiky-panda/plugin-chemistry directly.
  *
  *  Particulates now ride along with the gas mix as part of the same
  *  Composition (the user-facing hierarchy is Atmosphere ─ Layer ─

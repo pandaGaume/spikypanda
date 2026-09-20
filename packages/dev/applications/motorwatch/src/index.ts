@@ -23,6 +23,8 @@ export type { IMergeCatalogsOptions } from "./central/federation";
 
 export { CentralStation, DEFAULT_DIAGNOSTIC_KEY } from "./central/station";
 export type { ICentralStationOptions, IDiagnosticBank, IHandledAlarm } from "./central/station";
+export { InMemorySteadyStateJournal } from "./central/steady-state.journal";
+export type { ISteadyStateJournal, ISteadyStateEntry, ISteadyStateFilter, ISteadyStateRow, IOperatingPointSample, IInMemoryJournalOptions } from "./central/steady-state.journal";
 
 export { MotorwatchDevice } from "./edge/device";
 export type {

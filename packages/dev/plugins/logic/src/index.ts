@@ -10,7 +10,7 @@ import { logicSimSubPlugin } from "./sim/index.js";
 import { logicEventSubPlugin } from "./event/index.js";
 
 // Re-export node classes so external consumers can still import them
-// from "@spikypanda/plugin-logic" the same way they did pre-refactor.
+// from "@spiky-panda/plugin-logic" the same way they did pre-refactor.
 export * from "./nodes/comparison.js";
 export * from "./nodes/flow.js";
 export * from "./nodes/array.js";
@@ -20,6 +20,7 @@ export * from "./nodes/math.js";
 export * from "./nodes/select.js";
 export * from "./nodes/time.js";
 export * from "./nodes/timer.js";
+export * from "./nodes/timeline.js";
 
 export { logicComparisonSubPlugin } from "./comparison/index.js";
 export { logicFlowSubPlugin } from "./flow/index.js";
@@ -45,7 +46,7 @@ export {
 export { logicEventSubPlugin, AlertBusNode, createAlertBusNode, ArbitratorNode, createArbitratorNode } from "./event/index.js";
 
 /**
- * @spikypanda/plugin-logic
+ * @spiky-panda/plugin-logic
  *
  * UE5-Blueprint-style control flow + simulation runtime primitives,
  * organized as thematic sub-plugins under the `Logic.*` namespace:

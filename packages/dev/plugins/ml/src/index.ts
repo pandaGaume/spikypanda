@@ -7,7 +7,7 @@ export { mlDetectSubPlugin, MotionWatchNode, createMotionWatchNode, MotionWatch 
 export type { IMotionAlarm, MotionWatchOptions, MotionResult, IMotionEvent } from "./detect/index.js";
 
 /**
- * @spikypanda/plugin-ml
+ * @spiky-panda/plugin-ml
  *
  * Open-set machine learning primitives organized as thematic
  * sub-plugins under the `ML.*` namespace:

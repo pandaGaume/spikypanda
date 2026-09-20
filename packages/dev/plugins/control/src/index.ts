@@ -16,7 +16,7 @@ export { controlSimSubPlugin } from "./sim/index.js";
 export { simGraphSubPlugin } from "./sim-graph/index.js";
 
 /**
- * @spikypanda/plugin-control
+ * @spiky-panda/plugin-control
  *
  * Control-systems primitives + sim-infrastructure nodes, organized as
  * thematic sub-plugins:
@@ -27,7 +27,7 @@ export { simGraphSubPlugin } from "./sim-graph/index.js";
  *   Control.Sim         RK4 Cash-Karp adaptive solver marker.
  *   Sim.Graph           Sub-graph fractal container with Scene binding
  *                       and multi-rate sub-stepping. Lives here for
- *                       V1; may migrate to a dedicated `@spikypanda/plugin-sim`
+ *                       V1; may migrate to a dedicated `@spiky-panda/plugin-sim`
  *                       once additional sim-infrastructure nodes (rate-
  *                       group, hierarchical scheduler markers) join it.
  */

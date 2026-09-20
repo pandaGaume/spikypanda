@@ -62,6 +62,7 @@ coverage/
 #Ignore internal doc and data
 internals/
 .claude/
+.codex-artifacts/
 
 
 #private applications
@@ -79,3 +80,6 @@ internals/
 # mcp-broker: la configuration est versionnee, le materiel TLS et les mounts locaux non
 /.mcp-broker/certs/
 /.mcp-broker/www/
+
+# Default output directory of spikypanda-job (packages/dev/factory).
+outputs/

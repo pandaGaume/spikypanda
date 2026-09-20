@@ -3,7 +3,7 @@ import { isoSeveritySubPlugin } from "./severity/index.js";
 export * from "./severity/index.js";
 
 /**
- * @spikypanda/plugin-iso
+ * @spiky-panda/plugin-iso
  *
  * ISO condition-monitoring standards as graph nodes, under the `ISO.*`
  * namespace. These give a learned/edge pipeline a standards-anchored,

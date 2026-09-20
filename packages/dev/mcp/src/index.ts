@@ -1,5 +1,5 @@
 /**
- * @spikypanda/mcp
+ * @spiky-panda/mcp
  *
  * MCP controller for the SpikyPanda graph.
  *

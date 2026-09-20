@@ -135,6 +135,19 @@ a {
     z-index: 10;
 }
 
+/* A row an extension adds under the top bar (Studio.addBar): same look, one line. */
+.nev2-extbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px var(--gutter);
+    min-height: 40px;
+    flex-shrink: 0;
+    background: var(--ne-color-bg);
+    border-bottom: 1px solid var(--ne-color-border);
+    z-index: 9;
+}
+
 .nev2-brand {
     display: inline-flex;
     align-items: baseline;

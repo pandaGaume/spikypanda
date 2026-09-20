@@ -25,8 +25,18 @@
 
 import { sha256Hex } from "spikypanda-plugin-onnx";
 import { isMcpError } from "../protocol/mcp";
-import type { IAlarmNotification, IDeviceServer, IDiagnosticLoadModelResult, IDiagnosticResultNotification, IDiagnosticRunResult, McpNotification } from "../protocol/mcp";
+import type {
+    IAlarmNotification,
+    IDeviceServer,
+    IDiagnosticLoadModelResult,
+    IDiagnosticResultNotification,
+    IDiagnosticRunResult,
+    IOperatingPointNotification,
+    McpNotification,
+} from "../protocol/mcp";
 import { RegimeCatalog } from "./regime.catalog";
+import { InMemorySteadyStateJournal } from "./steady-state.journal";
+import type { ISteadyStateJournal } from "./steady-state.journal";
 
 export interface IDiagnosticBank {
     bytes: Uint8Array;
@@ -51,6 +61,9 @@ export interface ICentralStationOptions {
     matchThr?: number;
     /** Alarm-history ring capacity (oldest evicted first). Default 256. */
     historyMax?: number;
+    /** The journal of stable operating points fed by `operating_point`
+     *  notifications; any implementation of the interface. Default: in memory. */
+    journal?: ISteadyStateJournal;
 }
 
 export const DEFAULT_DIAGNOSTIC_KEY = "default";
@@ -58,6 +71,8 @@ export const DEFAULT_DIAGNOSTIC_KEY = "default";
 export class CentralStation {
     public readonly site: string;
     public readonly catalog: RegimeCatalog;
+    /** Stable (command, current) pairs per device, the real-data source of a `fit`. */
+    public readonly journal: ISteadyStateJournal;
 
     /** Below this margin the diagnosis is ambiguous: the regime gets a
      *  placeholder label until an operator (or a better model) decides. */
@@ -70,11 +85,14 @@ export class CentralStation {
     /** Last sha256 SUCCESSFULLY pushed to each connected device (the
      *  byte-push dedup key; repeated alarms re-RUN, they never re-SEND). */
     private readonly _lastPushedSha = new Map<IDeviceServer, string>();
+    /** Device id per server, asked once through `regime_current`'s sibling `status`; the journal keys its entries on it. */
+    private readonly _deviceIds = new Map<IDeviceServer, string>();
     private _pushedCount = 0;
 
     public constructor(site: string, options: ICentralStationOptions = {}) {
         this.site = site;
         this.catalog = new RegimeCatalog(site, { matchThr: options.matchThr });
+        this.journal = options.journal ?? new InMemorySteadyStateJournal();
         this.labelMargin = options.labelMargin ?? 0.25;
         this._historyMax = Math.max(1, Math.floor(options.historyMax ?? 256));
     }
@@ -119,6 +137,11 @@ export class CentralStation {
         return server.subscribe((notification) => this._onNotification(server, notification));
     }
 
+    /** Feed the journal directly (a transport that carries operating points outside the notification path). */
+    public observe(deviceId: string, point: IOperatingPointNotification["params"]): void {
+        this.journal.observe({ deviceId, t: point.t, command: point.command, current: point.current, steady: point.steady });
+    }
+
     // ── Notification routing ──────────────────────────────────────────
 
     private _onNotification(server: IDeviceServer, notification: McpNotification): void {
@@ -126,9 +149,23 @@ export class CentralStation {
             this._onAlarm(server, notification.params);
         } else if (notification.method === "diagnostic_result") {
             this._onDiagnosticResult(server, notification.params);
+        } else if (notification.method === "operating_point") {
+            this.observe(this._deviceIdOf(server), notification.params);
+        } else if (notification.method === "status") {
+            this._deviceIds.set(server, notification.params.deviceId);
         }
         // catalog_updated / status are device-side echoes: recorded
         // nowhere, the catalog is the source of truth on this side.
+    }
+
+    /** The device behind a server: learnt from its `status` echoes, else a stable placeholder per server. */
+    private _deviceIdOf(server: IDeviceServer): string {
+        let id = this._deviceIds.get(server);
+        if (id === undefined) {
+            id = `device-${this._deviceIds.size + 1}`;
+            this._deviceIds.set(server, id);
+        }
+        return id;
     }
 
     private _onAlarm(server: IDeviceServer, alarm: IAlarmNotification["params"]): void {

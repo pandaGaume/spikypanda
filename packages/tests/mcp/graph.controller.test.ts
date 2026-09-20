@@ -99,7 +99,32 @@ function makeRunner() {
         getLinkRegistry: () => null,
         serialize: () => ({ nodes: nodes.map((n) => ({ id: n.id })), connections: [] }),
     };
-    const runner = { viewer, session, t: 0, state: "paused", stop() {}, pause() {} };
+    // The runner's contract as the controller uses it: `step` bootstraps a
+    // session when idle (as the real GraphRunner does), advances the clock
+    // and runs the session at the new time; a session's `run` bumps its
+    // `tickIndex` (the controller counts ticks to detect a stalled run).
+    const liveSession = session as unknown as { tickIndex: number; run(t: number): void };
+    const baseRun = liveSession.run.bind(liveSession);
+    liveSession.run = (t: number) => {
+        baseRun(t);
+        liveSession.tickIndex += 1;
+    };
+    const runner = {
+        viewer,
+        session: session as unknown,
+        t: 0,
+        state: "paused",
+        stop() {},
+        pause() {},
+        step(dt: number) {
+            if (!this.session) {
+                this.session = session;
+                this.state = "paused";
+            }
+            this.t += dt;
+            (this.session as typeof liveSession).run(this.t);
+        },
+    };
     return { runner: runner as unknown as GraphRunner, motor, declared, decorated, registry };
 }
 
@@ -248,6 +273,23 @@ describe("capture", () => {
         expect(values[4]).toBeGreaterThan(values[0]);
     });
 
+    it("starts a session when the runner is idle, so a freshly loaded graph can be stepped", async () => {
+        const { runner } = makeRunner();
+        (runner as unknown as { session: unknown; state: string }).session = null;
+        (runner as unknown as { session: unknown; state: string }).state = "idle";
+        const controller = new GraphController(runner);
+        await controller.executeToolAsync("", "capture_arm", { signals: [{ nodeId: "motor", property: "current" }] });
+        const out = payload(await controller.executeToolAsync("", "sim_run", { steps: 4, dt: 0.5 }));
+        expect(runner.session).not.toBeNull();
+        expect(out.from).toBe(0);
+        expect(out.to).toBeCloseTo(2, 9);
+        expect(payload(await controller.executeToolAsync("", "capture_read", {})).samples).toBe(4);
+        // the runner's clock moved with the run, so the next run continues from here
+        const again = payload(await controller.executeToolAsync("", "sim_run", { steps: 2, dt: 0.5 }));
+        expect(again.from).toBeCloseTo(2, 9);
+        expect(again.to).toBeCloseTo(3, 9);
+    });
+
     it("re-arming resets rather than appending two spans of time", async () => {
         const { runner } = makeRunner();
         const controller = new GraphController(runner);
@@ -280,7 +322,7 @@ describe("sweep", () => {
                 dt: 0.1,
                 settleSteps: 4,
                 captureSteps: 3,
-            }),
+            })
         );
 
         const results = out.results as Array<{ label: string; t: number[]; signals: Array<{ values: number[] }> }>;
@@ -431,7 +473,13 @@ describe("plugins", () => {
     it("refuses a graph whose node types are missing, and names them", async () => {
         const { runner } = makeRunner();
         const controller = new GraphController(runner);
-        const graph = { nodes: [{ id: "n1", typeId: "Tensegrity.Element:cable" }, { id: "n2", typeId: "Tensegrity.Element:bar" }], connections: [] };
+        const graph = {
+            nodes: [
+                { id: "n1", typeId: "Tensegrity.Element:cable" },
+                { id: "n2", typeId: "Tensegrity.Element:bar" },
+            ],
+            connections: [],
+        };
         const r = await controller.executeToolAsync("", "graph_load", { graph });
         expect(r.ok).toBe(false);
         // Both names, because fixing one at a time is the slow way to find out

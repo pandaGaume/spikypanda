@@ -18,12 +18,12 @@ Two sub-projects share the same application layer:
 
 | Piece | Location |
 |---|---|
-| Load torque profiles (constant / step / ramp / quadratic / periodic) | `@spikypanda/plugin-physics` `Physics.Mechanical.Load:torque` |
-| Squirrel-cage induction motor (broken-bar asymmetry) | `@spikypanda/plugin-physics` `Physics.Electric.Motor.Induction:dynamic` |
-| Steady-state regime gate (hysteresis, captures ESTABLISHED states) | `@spikypanda/plugin-dsp` `DSP.Detect:steadystate` |
-| Channel mux, multi-channel frames, tensor relayout | `@spikypanda/plugin-dsp` `DSP.Stream:mux`, `DSP.Stream:buffer` ([T,C]), `DSP.Tensor:transpose` |
-| Open-set clustering (lib + node, NEW_REGIME alarm) | `@spikypanda/plugin-ml` `ML.Cluster:online` |
-| Validated runtime model push (sha256 + I/O contract + double bank) | `@spikypanda/plugin-onnx` `OnnxModelGraph.loadModelValidated` |
+| Load torque profiles (constant / step / ramp / quadratic / periodic) | `@spiky-panda/plugin-physics` `Physics.Mechanical.Load:torque` |
+| Squirrel-cage induction motor (broken-bar asymmetry) | `@spiky-panda/plugin-physics` `Physics.Electric.Motor.Induction:dynamic` |
+| Steady-state regime gate (hysteresis, captures ESTABLISHED states) | `@spiky-panda/plugin-dsp` `DSP.Detect:steadystate` |
+| Channel mux, multi-channel frames, tensor relayout | `@spiky-panda/plugin-dsp` `DSP.Stream:mux`, `DSP.Stream:buffer` ([T,C]), `DSP.Tensor:transpose` |
+| Open-set clustering (lib + node, NEW_REGIME alarm) | `@spiky-panda/plugin-ml` `ML.Cluster:online` |
+| Validated runtime model push (sha256 + I/O contract + double bank) | `@spiky-panda/plugin-onnx` `OnnxModelGraph.loadModelValidated` |
 | Fractal model streaming by port name (parent graph wiring) | core `RuntimeGraph` boundary ports |
 | Business logic (this package) | catalog, federation, station, MCP-style protocol, device facade |
 

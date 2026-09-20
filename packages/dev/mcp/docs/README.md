@@ -1,4 +1,4 @@
-# Documentation of `@spikypanda/mcp`
+# Documentation of `@spiky-panda/mcp`
 
 ## `broker-field-report.html`
 

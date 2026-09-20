@@ -9,7 +9,7 @@ export { chemistryGasSubPlugin } from "./gas/index.js";
 export { chemistryCompositionSubPlugin } from "./composition/index.js";
 
 /**
- * @spikypanda/plugin-chemistry
+ * @spiky-panda/plugin-chemistry
  *
  * Chemical-species and -mixture descriptors consumed by the physics
  * atmosphere / gate nodes. None of the entries here are RuntimeNodes;

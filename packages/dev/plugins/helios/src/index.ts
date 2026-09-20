@@ -1,5 +1,5 @@
 /**
- * @spikypanda/plugin-helios — V0.1 (deliberately empty)
+ * @spiky-panda/plugin-helios — V0.1 (deliberately empty)
  *
  * The previous V0.1 sub-plugins shipped generic primitives (RNG, snapshot,
  * rate-divider, conservation-monitor, alert-bus, arbitrator, transducer,

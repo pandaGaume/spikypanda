@@ -1,6 +1,7 @@
 {
-    "name": "@spikypanda/plugin-dsp",
+    "name": "@spiky-panda/plugin-dsp",
     "version": "0.1.0",
+    "license": "BUSL-1.1",
     "description": "DSP fundamentals plugin for SpikyPanda: FFT/IFFT, magnitude/phase, windows, framing, biquad and Kalman filters, MFCC, and signal analysis (RMS, ZCR, moving average, detrend).",
     "private": true,
     "type": "module",
@@ -11,19 +12,19 @@
     "scripts": {
         "build":      "npm run clean && npm run compile",
         "clean":      "rimraf dist bundle tsconfig.build.tsbuildinfo",
-        "compile":    "tsc -b tsconfig.build.json",
+        "compile":    "tsc -b tsconfig.build.json && node ../../../../scripts/fix-esm-dist.mjs .",
         "watch":      "tsc -b tsconfig.build.json -w",
         "bundle":     "webpack --mode production --config webpack.config.cjs",
         "bundle:dev": "webpack --mode development --config webpack.config.cjs"
     },
     "sideEffects": false,
     "dependencies": {
-        "@spiky-panda/core":       "*",
-        "@spikypanda/nodeeditor":  "*",
-        "@spiky-panda/onnx":       "*"
+        "@spiky-panda/core": "*",
+        "@spiky-panda/onnx": "*"
     },
     "devDependencies": {
-        "rimraf":    "~6.0.1",
+        "@spiky-panda/nodeeditor": "*",
+        "rimraf": "~6.0.1",
         "ts-loader": "^9.5.0"
     }
 }

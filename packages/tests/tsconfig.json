@@ -34,7 +34,13 @@
             "spikypanda-plugin-onnx":      ["dev/plugins/onnx/src/index.ts"],
             "spikypanda-plugin-onnx/*":    ["dev/plugins/onnx/src/*"],
             "spikypanda-plugin-physics":   ["dev/plugins/physics/src/index.ts"],
-            "spikypanda-plugin-physics/*": ["dev/plugins/physics/src/*"]
+            "spikypanda-plugin-physics/*": ["dev/plugins/physics/src/*"],
+            "spikypanda-plugin-logic":     ["dev/plugins/logic/src/index.ts"],
+            "spikypanda-plugin-logic/*":   ["dev/plugins/logic/src/*"],
+            "spikypanda-plugin-control":   ["dev/plugins/control/src/index.ts"],
+            "spikypanda-plugin-control/*": ["dev/plugins/control/src/*"],
+            "spikypanda-factory":          ["dev/factory/src/index.ts"],
+            "spikypanda-factory/*":        ["dev/factory/src/*"]
         }
     },
     "include": ["**/*.ts"]

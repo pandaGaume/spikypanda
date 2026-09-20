@@ -1,0 +1,31 @@
+{
+    "version": 1,
+    "job": "fit",
+    "name": "scrubber-health-bench",
+    "model": "affine-residual",
+    "dataset": {
+        "file": "bench/scrubber-bench.csv",
+        "duty": "duty_percent",
+        "current": "current_amps"
+    },
+    "fullScale": {
+        "duty": 100,
+        "current": 1,
+        "senseSpan": 100
+    },
+    "domain": {
+        "dutyMin": 0.15,
+        "dutyMax": 0.8
+    },
+    "monitor": {
+        "residual": {
+            "threshold": 0.04,
+            "debounceCycles": 30,
+            "severity": 350,
+            "alarm": "drift.current"
+        }
+    },
+    "outputs": {
+        "file": "scrubber_health.onnx"
+    }
+}

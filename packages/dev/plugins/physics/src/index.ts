@@ -14,6 +14,8 @@ import { vibrationSubPlugin } from "./mechanical/vibration/index.js";
 import { faultSubPlugin } from "./mechanical/fault/index.js";
 import { housingSubPlugin } from "./mechanical/housing/index.js";
 import { physicsParticulateSubPlugin } from "./particulate/index.js";
+import { batterySubPlugin } from "./electric/battery/index.js";
+import { lifeSupportSubPlugin } from "./lifesupport/index.js";
 
 export * from "./transform/index.js";
 export * from "./scene/index.js";
@@ -40,9 +42,11 @@ export {
 export { housingSubPlugin, createHousingMechanicsNode, HousingMechanicsNode } from "./mechanical/housing/index.js";
 export { electricSensorSubPlugin, CurrentSensorNode, createCurrentSensorNode, PowerMeterNode, createPowerMeterNode } from "./electric/sensor/index.js";
 export { physicsParticulateSubPlugin } from "./particulate/index.js";
+export { batterySubPlugin, BatteryNode, createBatteryNode } from "./electric/battery/index.js";
+export * from "./lifesupport/index.js";
 
 /**
- * @spikypanda/plugin-physics
+ * @spiky-panda/plugin-physics
  *
  * Thematic physics nodes organized as a tree of sub-plugins under
  * `Physics.*`. V1 ships:
@@ -71,6 +75,14 @@ export { physicsParticulateSubPlugin } from "./particulate/index.js";
  *                 quadratic, periodic) for any motor's loadTorque input
  *     Vibration — accelerometer transducer (LPF + noise + quantization)
  *     Fault     — generic sinusoidal modulator (composable building block)
+ *
+ *   Electric/Battery — an energy reserve as a bucket: capacity, state of
+ *                 charge, constant other loads, drained by wired powers.
+ *
+ *   LifeSupport  — the CO2 balance of a crewed cabin in ppm per minute:
+ *                 crew (source by activity), scrubber (sink with lag and
+ *                 power draw), cabin-air (the integrated concentration
+ *                 and its NOMINAL / ELEVATED / CRITICAL state).
  *
  *   Particulate  — solid-phase matter descriptors (PM2.5, PM10, dust,
  *                  lunar regolith). Wired to the atmosphere through
@@ -105,5 +117,7 @@ export default {
         "Physics.Mechanical.Fault": faultSubPlugin,
         "Physics.Mechanical.Housing": housingSubPlugin,
         "Physics.Particulate": physicsParticulateSubPlugin,
+        "Physics.Electric.Battery": batterySubPlugin,
+        "Physics.LifeSupport": lifeSupportSubPlugin,
     },
 };

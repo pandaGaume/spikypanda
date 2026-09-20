@@ -7,7 +7,7 @@ export * from "./markdown/index.js";
 export * from "./control/index.js";
 
 /**
- * @spikypanda/plugin-viz
+ * @spiky-panda/plugin-viz
  *
  * Visualization tile nodes for the Dashboard panel. Currently ships:
  *

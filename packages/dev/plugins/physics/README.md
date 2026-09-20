@@ -1,4 +1,4 @@
-# @spikypanda/plugin-physics
+# @spiky-panda/plugin-physics
 
 Thematic physics nodes organized as a tree of sub-plugins under the
 `Physics.*` namespace. The first sub-plugin shipped is

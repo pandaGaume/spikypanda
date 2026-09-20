@@ -1,6 +1,7 @@
 {
     "name": "@spiky-panda/onnx",
     "version": "0.1.0",
+    "license": "BUSL-1.1",
     "description": "ONNX inference engine and MPC nodes for SpikyPanda (tensor flow primitives live in @spiky-panda/core)",
     "private": true,
     "main": "dist/index",
@@ -11,7 +12,7 @@
     "scripts": {
         "build": "npm run clean && npm run compile",
         "clean": "rimraf dist && rimraf tsconfig.build.tsbuildinfo",
-        "compile": "npm run compile:source",
+        "compile": "npm run compile:source && node ../../../scripts/fix-esm-dist.mjs .",
         "compile:source": "tsc -b tsconfig.build.json",
         "watch:source": "tsc -b tsconfig.build.json -w",
         "bundle": "webpack --mode production --config webpack.config.js",

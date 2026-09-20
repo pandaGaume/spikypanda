@@ -394,7 +394,120 @@
                 ...(options || {}),
             });
         },
+
+        /**
+         * Open a document (the JSON text of a .spikypanda file) in the
+         * viewer, through the same path as the Load button and `graph_load`:
+         * saved typeIds resolve to fresh runtime instances, tiles restore.
+         */
+        openDocument: (json) => {
+            viewer.load(json, nodes, links);
+        },
+
+        /** Append a group of controls to the top bar (an extension's buttons). */
+        addToolbarGroup: (el) => {
+            addSep();
+            toolbarHost.appendChild(el);
+            return el;
+        },
+
+        /**
+         * Add a full-width bar of its own under the top bar. The top bar is
+         * one line and already full; an extension with more than a button
+         * or two gets a row, styled like the top bar.
+         */
+        addBar: (el) => {
+            el.classList.add("nev2-extbar");
+            toolbarHost.insertAdjacentElement("afterend", el);
+            return el;
+        },
+
+        /** Write to the studio's console (the DebugBus every Print/Watch node writes to). */
+        log: (level, source, message) => {
+            NODEEDITOR.DebugBus.instance.log(level, source, typeof message === "string" ? message : JSON.stringify(message));
+        },
+
+        /** The registries an extension may need to instantiate nodes on its own. */
+        getLinkRegistry: () => links,
+
+        /**
+         * Frame the whole graph in the viewer: scale down until every node
+         * fits (never up past 1), centred, `padding` px from the edges.
+         */
+        fitToContent: (padding = 40) => {
+            // Hidden nodes (a tile's node an extension keeps off the canvas) do not count.
+            const shown = viewer.nodes.filter((n) => n.el.offsetParent !== null);
+            if (!shown.length) return;
+            const boxes = shown.map((n) => ({ x: n.x, y: n.y, w: n.el.offsetWidth || 160, h: n.el.offsetHeight || 80 }));
+            const minX = Math.min(...boxes.map((b) => b.x));
+            const minY = Math.min(...boxes.map((b) => b.y));
+            const width = Math.max(...boxes.map((b) => b.x + b.w)) - minX;
+            const height = Math.max(...boxes.map((b) => b.y + b.h)) - minY;
+            const hostW = viewer.host.clientWidth, hostH = viewer.host.clientHeight;
+            const scale = Math.min(1, (hostW - 2 * padding) / width, (hostH - 2 * padding) / height);
+            viewer.camera.scale = scale;
+            viewer.camera.x = (hostW - width * scale) / 2 - minX * scale;
+            viewer.camera.y = (hostH - height * scale) / 2 - minY * scale;
+            viewer.camera.apply(viewer.viewport);
+            viewer.updateConnections();
+        },
+
+        /**
+         * Bring a node to the centre of the viewer, when it is farther than
+         * `threshold` px from it (a dead zone, so a node already near the
+         * centre does not make the view twitch). `scale` sets the zoom for the
+         * move (omitted: the current one); `animateMs` eases the pan on a
+         * timer, which keeps working in a hidden tab, unlike animation frames.
+         */
+        centerOnNode: (node, { threshold = 0, scale, animateMs = 250 } = {}) => {
+            if (!node || !node.el) return false;
+            const cam = viewer.camera;
+            const targetScale = typeof scale === "number" ? scale : cam.scale;
+            const w = node.el.offsetWidth || 160, h = node.el.offsetHeight || 80;
+            const cx = node.x + w / 2, cy = node.y + h / 2;
+            const hostW = viewer.host.clientWidth, hostH = viewer.host.clientHeight;
+            const sx = cx * cam.scale + cam.x, sy = cy * cam.scale + cam.y;
+            const distance = Math.hypot(sx - hostW / 2, sy - hostH / 2);
+            if (targetScale === cam.scale && distance <= threshold) return false;
+            const from = { x: cam.x, y: cam.y, s: cam.scale };
+            const to = { x: hostW / 2 - cx * targetScale, y: hostH / 2 - cy * targetScale, s: targetScale };
+            const apply = () => { cam.apply(viewer.viewport); viewer.updateConnections(); };
+            if (animateMs <= 0) {
+                cam.x = to.x; cam.y = to.y; cam.scale = to.s; apply();
+                return true;
+            }
+            const started = Date.now();
+            const tick = () => {
+                const t = Math.min(1, (Date.now() - started) / animateMs);
+                const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // ease in-out
+                cam.x = from.x + (to.x - from.x) * e;
+                cam.y = from.y + (to.y - from.y) * e;
+                cam.scale = from.s + (to.s - from.s) * e;
+                apply();
+                if (t < 1) setTimeout(tick, 16);
+            };
+            tick();
+            return true;
+        },
+
+        /**
+         * Show or hide the studio's panels, for a page that wants the graph
+         * and the dashboard alone (a demo, a kiosk). Everything stays wired;
+         * `display: none` only. `dashboardHeight` in px.
+         */
+        setLayout: ({ palette, properties, console: consoleVisible, dashboardHeight } = {}) => {
+            const show = (id, visible) => {
+                const el = document.getElementById(id);
+                if (el && visible !== undefined) el.style.display = visible ? "" : "none";
+            };
+            show("palette", palette);
+            show("property", properties);
+            show("nev2-console", consoleVisible);
+            if (typeof dashboardHeight === "number") document.documentElement.style.setProperty("--nev2-dash-h", `${dashboardHeight}px`);
+            viewer.updateConnections();
+        },
     };
+
 
     // Publish by default, opt out with `?mcp=0`. `?mcp=<name>` picks a slot.
     //
@@ -719,4 +832,42 @@
         instantiateNodeFromType(type, meta, x, y);
     });
 
+    // ── Documents and extensions from the URL ───────────────────────────
+    //
+    // `?doc=<url>` opens a document at boot (same origin, or CORS-enabled);
+    // `?ext=<url>[,<url>]` imports ES modules after boot and calls their
+    // default export with `window.Studio`. This is how a host page adds
+    // its own controls without forking this file: the studio stays
+    // generic, the extension brings the domain. The document is opened
+    // before the extensions run, with the plugins this page loads; an
+    // extension whose document needs node types from a plugin of its own
+    // loads that plugin first (`Studio.loadPlugin({url, globalName})`) and
+    // opens the document itself (`Studio.openDocument`), so nothing of
+    // that domain lives in this file.
+    {
+        const params = new URLSearchParams(window.location.search);
+        const docUrl = params.get("doc");
+        if (docUrl) {
+            try {
+                const res = await fetch(docUrl);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                window.Studio.openDocument(await res.text());
+                console.log(`[nev2] opened ${docUrl}`);
+            } catch (err) {
+                console.error(`[nev2] could not open ${docUrl}:`, err);
+            }
+        }
+        const ext = params.get("ext");
+        if (ext) {
+            for (const url of ext.split(",").map((s) => s.trim()).filter(Boolean)) {
+                try {
+                    const mod = await import(/* webpackIgnore: true */ url);
+                    if (typeof mod.default === "function") await mod.default(window.Studio);
+                    console.log(`[nev2] extension ${url} loaded`);
+                } catch (err) {
+                    console.error(`[nev2] extension ${url} failed:`, err);
+                }
+            }
+        }
+    }
 })();

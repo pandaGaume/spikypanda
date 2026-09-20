@@ -237,7 +237,28 @@ export interface IStatusNotification {
     params: IDeviceStatus;
 }
 
-export type McpNotification = IAlarmNotification | IDiagnosticResultNotification | ICatalogUpdatedNotification | IStatusNotification;
+/**
+ * `operating_point`: one observation of the machine's operating point,
+ * emitted by a device that knows its command (a drive) as well as its
+ * current, typically once per acquisition block. The station routes it to
+ * its steady-state journal (docs/architecture/usine-jobs.fr.md, 7.1). A
+ * current-only sensor never emits it.
+ */
+export interface IOperatingPointNotification {
+    method: "operating_point";
+    params: {
+        /** Device time, in seconds; monotonic per device. */
+        t: number;
+        /** Command, in percent of full speed. */
+        command: number;
+        /** Current, in amperes, over the block. */
+        current: number;
+        /** The device's own steady-state detector. */
+        steady: boolean;
+    };
+}
+
+export type McpNotification = IAlarmNotification | IDiagnosticResultNotification | ICatalogUpdatedNotification | IStatusNotification | IOperatingPointNotification;
 
 export type McpNotificationHandler = (notification: McpNotification) => void;
 

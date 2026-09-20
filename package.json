@@ -1,5 +1,5 @@
 {
-    "name": "@spikypanda/root",
+    "name": "@spiky-panda/root",
     "version": "0.1.0",
     "private": true,
     "type": "module",
@@ -11,7 +11,8 @@
         "npm": ">=8.0.0"
     },
     "scripts": {
-        "build:dev": "tsc -b",
+        "build:dev": "tsc -b && npm run fix:esm",
+        "fix:esm": "node scripts/fix-esm-dist.mjs packages/dev/core packages/dev/onnx packages/dev/nodeeditor packages/dev/mcp packages/dev/factory packages/dev/plugins/physics packages/dev/plugins/dsp packages/dev/plugins/ml packages/dev/plugins/onnx packages/dev/plugins/logic packages/dev/plugins/control packages/dev/plugins/geometry packages/dev/applications/motorwatch",
         "build:watch": "tsc -b --watch",
         "lint:check": "eslint packages/**/src/**/*.{ts,tsx,js,json}",
         "lint:fix": "eslint --fix packages/**/src/**/*.ts",
@@ -30,6 +31,9 @@
         "build:all": "npm run build:dev && npm run bundle && npm run deploy:bundles",
         "build:all:dev": "npm run build:dev && npm run bundle:dev && npm run deploy:bundles",
         "server": "node packages/host/server.mjs",
+        "broker": "mcp-broker",
+        "bundle:factory": "npm run bundle --workspace=@spiky-panda/factory",
+        "job": "node packages/dev/factory/bundle/spikypanda-job.js",
         "test": "jest --passWithNoTests",
         "test:watch": "jest --watch"
     },

@@ -1,6 +1,7 @@
 import type { IPlugin, IPluginContext } from "spikypanda-nodeeditor";
 import { ClockNode, DeltaTimeNode } from "../nodes/time.js";
 import { TimerNode } from "../nodes/timer.js";
+import { TimelineNode } from "../nodes/timeline.js";
 
 const UE5 = ["ue5"] as const;
 
@@ -36,6 +37,15 @@ export const logicTimeSubPlugin: IPlugin = {
                 { slot: "value", optional: false, type: "float" },
             ],
             standards: UE5,
+        });
+        // Timeline: a piecewise-constant source, the schedule of a scenario
+        // (segments { from, to, value } in session seconds, edited as JSON).
+        ctx.nodes.register("Logic.Time:timeline", () => new TimelineNode() as never, {
+            label: "Timeline",
+            docPath: ctx.assetUrl("docs/logic/time/timeline.md"),
+            category: "Logic.Time",
+            inputPorts: [],
+            outputPorts: [{ slot: "value", optional: false, type: "any" }],
         });
     },
 };

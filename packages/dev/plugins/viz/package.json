@@ -1,5 +1,5 @@
 {
-    "name": "@spikypanda/plugin-viz",
+    "name": "@spiky-panda/plugin-viz",
     "version": "0.1.0",
     "description": "Visualization plugin for SpikyPanda: dashboard tile node types (uPlot time-series, PixiJS spectrogram, ECharts charts). Each tile is a graph node implementing IRenderable; tiles bind data via the standard token-publishing graph flow and render into the Dashboard panel.",
     "private": true,
@@ -19,7 +19,7 @@
     "sideEffects": false,
     "dependencies": {
         "@spiky-panda/core":       "*",
-        "@spikypanda/nodeeditor":  "*",
+        "@spiky-panda/nodeeditor":  "*",
         "uplot":                   "^1.6.30",
         "pixi.js":                 "^7.4.0",
         "marked":                  "^12.0.2",

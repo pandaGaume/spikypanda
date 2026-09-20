@@ -1,5 +1,5 @@
 /**
- * Tests for the ML plugin (@spikypanda/plugin-ml): the ported open-set
+ * Tests for the ML plugin (@spiky-panda/plugin-ml): the ported open-set
  * clustering library and the ML.Cluster:online editor node.
  *
  *   - emergence: three well-separated embedding families produce exactly

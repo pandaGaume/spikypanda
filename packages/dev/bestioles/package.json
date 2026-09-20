@@ -1,5 +1,5 @@
 {
-    "name": "@spikypanda/bestioles",
+    "name": "@spiky-panda/bestioles",
     "version": "0.1.0",
     "private": true,
     "main": "dist/index",

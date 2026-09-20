@@ -1,11 +1,8 @@
 {
     "mcpServers": {
         "broker": {
-            "command": "npx",
-            "args": ["-y", "@cyanmycelium/mcp-broker"],
-            "env": {
-                "MCP_BROKER_STDIO_PROVIDER": "_broker"
-            }
+            "type": "http",
+            "url": "http://localhost:3000/_broker/mcp"
         },
         "spikypanda": {
             "type": "http",

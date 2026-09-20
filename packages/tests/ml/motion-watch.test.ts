@@ -1,6 +1,6 @@
 /**
  * Tests for the ML.Detect:motion node and its MotionWatch library
- * (@spikypanda/plugin-ml): per-element movement watching, the second
+ * (@spiky-panda/plugin-ml): per-element movement watching, the second
  * detection channel next to the open-set clusterer.
  *
  *   - silence: warmup then benign jitter never fires over 2000 steps;

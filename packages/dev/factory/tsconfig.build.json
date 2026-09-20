@@ -1,0 +1,24 @@
+{
+    "extends": "../../../tsconfig.build.json",
+    "compilerOptions": {
+        "composite": true,
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "skipLibCheck": true,
+        "resolveJsonModule": true
+    },
+    "references": [
+        { "path": "../core/tsconfig.build.json" },
+        { "path": "../onnx/tsconfig.build.json" },
+        { "path": "../nodeeditor/tsconfig.build.json" },
+        { "path": "../plugins/control/tsconfig.build.json" },
+        { "path": "../plugins/dsp/tsconfig.build.json" },
+        { "path": "../plugins/geometry/tsconfig.build.json" },
+        { "path": "../plugins/logic/tsconfig.build.json" },
+        { "path": "../plugins/ml/tsconfig.build.json" },
+        { "path": "../plugins/onnx/tsconfig.build.json" },
+        { "path": "../plugins/physics/tsconfig.build.json" }
+    ],
+    "include": ["./src/**/*.ts"],
+    "exclude": ["**/node_modules", "**/dist"]
+}

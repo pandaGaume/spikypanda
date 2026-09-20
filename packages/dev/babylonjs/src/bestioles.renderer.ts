@@ -9,7 +9,7 @@ import { SolidParticleSystem } from "@babylonjs/core/Particles/solidParticleSyst
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 
 import { IBestiolesRendererOptions } from "./bestioles.renderer.interfaces";
-import type { CreatureWorld } from "@spikypanda/bestioles";
+import type { CreatureWorld } from "@spiky-panda/bestioles";
 
 /**
  * BabylonJS renderer for the bestioles simulation.

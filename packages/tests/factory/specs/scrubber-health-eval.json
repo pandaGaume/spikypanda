@@ -1,0 +1,32 @@
+{
+    "version": 1,
+    "job": "evaluate",
+    "name": "scrubber-health-eval",
+    "kind": "monitor-vs-oracle",
+    "model": "affine-residual",
+    "artifact": {
+        "file": "outputs/scrubber-health-twin/scrubber_health.onnx",
+        "contract": "outputs/scrubber-health-twin/contract.json"
+    },
+    "graph": "../../../../report/rs385/graphs/rs385-complete.spikypanda",
+    "run": { "dt": 0.0002, "cycle": 1.0, "settle": 2.0 },
+    "features": {
+        "duty": { "node": "drive", "property": "value", "scale": 6.25 },
+        "current": { "node": "motor", "property": "armatureCurrent" }
+    },
+    "operatingPoint": [{ "node": "drive", "property": "value", "value": 7 }],
+    "scenarios": [
+        {
+            "name": "nominal",
+            "duration": 40,
+            "inject": [],
+            "expect": { "alarms": 0 }
+        },
+        {
+            "name": "fouling-x2",
+            "duration": 60,
+            "inject": [{ "at": 10, "node": "turbine", "property": "fanCoefficient", "value": 3.0e-8 }],
+            "expect": { "alarmWithin": 45 }
+        }
+    ]
+}

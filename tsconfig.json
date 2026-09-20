@@ -12,6 +12,7 @@
         { "path": "packages/dev/babylonjs/tsconfig.build.json" },
         { "path": "packages/dev/nodeeditor/tsconfig.build.json" },
         { "path": "packages/dev/mcp/tsconfig.build.json" },
+        { "path": "packages/dev/factory/tsconfig.build.json" },
         { "path": "packages/dev/plugins/geometry/tsconfig.build.json" },
         { "path": "packages/dev/plugins/onnx/tsconfig.build.json" },
         { "path": "packages/dev/plugins/logic/tsconfig.build.json" },

@@ -56,6 +56,12 @@ const config: Config = {
         "^spikypanda-plugin-onnx/(.*)$":    "<rootDir>/packages/dev/plugins/onnx/src/$1",
         "^spikypanda-plugin-physics$":      "<rootDir>/packages/dev/plugins/physics/src/index.ts",
         "^spikypanda-plugin-physics/(.*)$": "<rootDir>/packages/dev/plugins/physics/src/$1",
+        "^spikypanda-plugin-logic$":        "<rootDir>/packages/dev/plugins/logic/src/index.ts",
+        "^spikypanda-plugin-logic/(.*)$":   "<rootDir>/packages/dev/plugins/logic/src/$1",
+        "^spikypanda-plugin-control$":      "<rootDir>/packages/dev/plugins/control/src/index.ts",
+        "^spikypanda-plugin-control/(.*)$": "<rootDir>/packages/dev/plugins/control/src/$1",
+        "^spikypanda-factory$":             "<rootDir>/packages/dev/factory/src/index.ts",
+        "^spikypanda-factory/(.*)$":        "<rootDir>/packages/dev/factory/src/$1",
         // Some source files import the published package name
         // "@spiky-panda/core" instead of the path alias spikypanda-core. The
         // node-resolved dist/index.js ships ESM syntax and lives under

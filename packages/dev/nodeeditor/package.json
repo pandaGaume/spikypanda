@@ -1,6 +1,7 @@
 {
-    "name": "@spikypanda/nodeeditor",
+    "name": "@spiky-panda/nodeeditor",
     "version": "0.1.0",
+    "license": "BUSL-1.1",
     "private": true,
     "main": "dist/index",
     "module": "dist/index",
@@ -10,7 +11,7 @@
     "scripts": {
         "build": "npm run clean && npm run compile",
         "clean": "rimraf dist && rimraf tsconfig.build.tsbuildinfo",
-        "compile": "npm run compile:source",
+        "compile": "npm run compile:source && node ../../../scripts/fix-esm-dist.mjs .",
         "compile:source": "tsc -b tsconfig.build.json",
         "watch:source": "tsc -b tsconfig.build.json -w",
         "bundle": "webpack --mode production --config webpack.config.js",

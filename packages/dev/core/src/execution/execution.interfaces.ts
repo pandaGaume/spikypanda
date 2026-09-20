@@ -698,6 +698,17 @@ export interface ISolverHandle {
         readonly rhsEvals: number;
     };
 
+    /**
+     * Re-read the owned leaves' state into the solver's own vector and
+     * rewind its clock to `t0`. A solver seeds its state once, at
+     * initialize; a session reset that restores the leaves' initial
+     * conditions (or a run that changed an initial state after the
+     * solver was attached) must call this, or the next macro-step writes
+     * the stale vector back over the fresh state. Optional: a handle
+     * without state has nothing to re-read.
+     */
+    reseed?(t0: number): void;
+
     /** Release private buffers / workspaces. Optional. */
     dispose?(): void;
 }
@@ -731,7 +742,7 @@ export interface IPortDescriptor {
      * runtime ignores this field — it never affects scheduling, only
      * the per-port DOM placement when the host's NodeUI honours
      * `anchorCount` on the NodeMeta. See `NodeUI` and `PortDef` in
-     * @spikypanda/nodeeditor for the rendering side.
+     * @spiky-panda/nodeeditor for the rendering side.
      */
     readonly anchor?: number;
 

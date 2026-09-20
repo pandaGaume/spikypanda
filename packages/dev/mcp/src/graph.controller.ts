@@ -454,32 +454,51 @@ export class GraphController {
      * Stepping is explicit rather than wall-clock driven: an agent needs a
      * reproducible number of ticks, and the runner's own animation-frame loop
      * does not exist outside a rendering context anyway.
+     *
+     * The runner is driven through its own `step`, never through the session
+     * directly: `step` bootstraps a session when the runner is idle (as Play
+     * does, from t = 0), advances the runner's clock, and notifies the
+     * editor, so `sim_status`, the toolbar clock and the next `sim_run` all
+     * agree on where time is. An agent that has just loaded a graph can
+     * therefore step it without a hand on the editor.
      */
     private _simRun(args: Record<string, unknown>): ControllerResult {
-        const session = this._runner.session;
-        if (!session) return fail("no live session: start the runner before stepping");
+        const steps = Math.trunc(Number(args.steps ?? 0));
+        const dt = Number(args.dt ?? 0);
+        if (!Number.isFinite(steps) || steps <= 0) return fail("`steps` must be a positive integer");
+        if (!Number.isFinite(dt) || dt <= 0) return fail("`dt` must be a positive number of seconds");
+
         // Only one driver may advance time. If the runner's own loop is live
         // it would interleave its ticks with these, and the series would be
         // sampled at instants nobody chose. Pausing keeps the session alive,
         // unlike stop(), which tears it down.
         if (this._runner.state === "playing") this._runner.pause();
 
-        const steps = Math.trunc(Number(args.steps ?? 0));
-        const dt = Number(args.dt ?? 0);
-        if (!Number.isFinite(steps) || steps <= 0) return fail("`steps` must be a positive integer");
-        if (!Number.isFinite(dt) || dt <= 0) return fail("`dt` must be a positive number of seconds");
+        // No live session: bootstrap one. A zero-length step builds the
+        // session and runs its first tick at t = 0, which is what Play's
+        // first frame does; a failure leaves the runner idle (the editor
+        // shows the error) and is reported here rather than guessed at.
+        if (!this._runner.session) {
+            this._runner.step(0);
+            if (!this._runner.session) return fail("no live session: the graph could not be started (the editor reports the error)");
+        }
+        const session = this._runner.session;
 
         const t0 = this._runner.t;
+        const ticksBefore = session.tickIndex;
         for (let i = 0; i < steps; i++) {
-            const t = t0 + i * dt;
-            session.run(t);
+            this._runner.step(dt);
             // Sampled inside the loop: the intermediate ticks exist nowhere else.
-            this._sampleCaptures(t);
+            this._sampleCaptures(this._runner.t);
         }
+        // `step` reports a failing tick to the editor's error channel and
+        // stops advancing; the caller must not read a window that stopped short.
+        const advanced = session.tickIndex - ticksBefore;
+        if (advanced < steps) return fail(`the session stopped advancing after ${advanced} of ${steps} ticks (the editor reports the error)`);
 
         this._changed(URI_GRAPH_STATE);
         for (const id of this._captures.keys()) this._changed(uriForCapture(id));
-        return ok({ steps, dt, from: t0, to: t0 + steps * dt, tickIndex: session.tickIndex });
+        return ok({ steps, dt, from: t0, to: this._runner.t, tickIndex: session.tickIndex });
     }
 
     private _nodeDescribe(args: Record<string, unknown>): ControllerResult {
@@ -677,7 +696,7 @@ export class GraphController {
         const url = String(args.url ?? "");
         const globalName = String(args.globalName ?? "");
         if (!url) return fail("`url` is required: the bundle to load");
-        if (!globalName) return fail("`globalName` is required: the UMD global the bundle publishes, e.g. \"SpkPluginTensegrity\"");
+        if (!globalName) return fail('`globalName` is required: the UMD global the bundle publishes, e.g. "SpkPluginTensegrity"');
         const id = String(args.id ?? globalName);
 
         const before = new Set(this._typesOf());

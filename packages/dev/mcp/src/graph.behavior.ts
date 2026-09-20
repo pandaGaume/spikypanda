@@ -264,7 +264,7 @@ export class GraphBehavior extends McpBehavior {
             },
             {
                 name: "sim_run",
-                description: "Advance the live session by an explicit number of ticks. Stepping is explicit rather than wall-clock driven so a run is reproducible. Armed captures are sampled at every tick, which is the only moment intermediate values exist. Allow enough steps for transients to settle before reading: a controller loop needs its settling time, and a low-pass filter several of its time constants.",
+                description: "Advance the session by an explicit number of ticks. Starts a session from t = 0 when the runner is idle (as Play does), and pauses the runner if it was playing, so only one driver advances time. Stepping is explicit rather than wall-clock driven so a run is reproducible. Armed captures are sampled at every tick, which is the only moment intermediate values exist. Allow enough steps for transients to settle before reading: a controller loop needs its settling time, and a low-pass filter several of its time constants.",
                 inputSchema: {
                     type: "object",
                     properties: {

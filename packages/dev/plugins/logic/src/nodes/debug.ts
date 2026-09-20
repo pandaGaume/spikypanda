@@ -1,6 +1,8 @@
 import { editable, cloneable, IOlink, IDeclaresPorts, IPortDescriptor, ISession, IChannel, RuntimeNode, inSlotOf } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
-import { DebugBus } from "spikypanda-nodeeditor";
+// Deep import on purpose: the editor index pulls the UI (and its CSS) into
+// every consumer, and a headless host of this plugin has no editor.
+import { DebugBus } from "spikypanda-nodeeditor/debug-bus";
 
 /**
  * Print + Watch nodes: emit messages on the editor's `DebugBus`, which

@@ -34,7 +34,7 @@ module.exports = (h) => {
             "npx jest packages/tests/execution/boundary-ports.test.ts",
             "npx jest                               # depot complet (5 echecs preexistants attendus)",
             "python scripts/generate-motorwatch-graphs.py    # regenere les 4 .spikypanda",
-            "npm run bundle -w @spikypanda/plugin-ml         # idem physics/dsp/onnx si touches",
+            "npm run bundle -w @spiky-panda/plugin-ml         # idem physics/dsp/onnx si touches",
             "node scripts/deploy-bundles.mjs                 # copie vers packages/host/www/bundle",
             "npm run server                                  # puis /node-editor-v2/index.html",
         ]),
