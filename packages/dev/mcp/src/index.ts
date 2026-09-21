@@ -44,3 +44,8 @@ export { GraphBehavior } from "./graph.behavior.js";
 export type { PortState, NodeTypeState, RegistryState, PluginsState, GraphState, SimulationState, NodeState, NodePropertyState } from "./state.js";
 
 export { publishToBroker, type PublishOptions, type Publication } from "./provider.js";
+// The runtime's surface, with no editor: the catalogue, documents and sessions (2026-09-21).
+export { RuntimeBehavior, RuntimeAdapter } from "./runtime.behavior.js";
+export { RuntimeController, MemoryDocumentStore, URI_DOCUMENTS, type IDocumentStore, type RuntimeControllerOptions } from "./runtime.controller.js";
+export { describeRegistry, searchRegistry, catalogueTools, registryMetas } from "./catalogue.js";
+export { runtimeTools, type RuntimeToolDefinition } from "./runtime.tools.js";

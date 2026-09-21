@@ -1,6 +1,6 @@
 {
     "name": "@spiky-panda/mcp",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "license": "BUSL-1.1",
     "description": "MCP controller for the SpikyPanda graph: behaviors, adapters and state that expose the studio's live session to an agent. Browser-targeted, published to a broker slot over the provider tunnel. The graph is the model, this package is the controller, the node editor is the view.",
     "private": true,
@@ -24,13 +24,25 @@
     },
     "sideEffects": false,
     "dependencies": {
-        "@cyanmycelium/mcp-broker-provider": "^0.1.1",
-        "@cyanmycelium/mcp-core": "^0.7.0",
+        "@cyanmycelium/mcp-broker-provider": "^0.2.0",
+        "@cyanmycelium/mcp-core": ">=0.7.0 <2",
         "@spiky-panda/core": "*",
         "@spiky-panda/nodeeditor": "*"
     },
     "devDependencies": {
         "rimraf": "~6.0.1",
         "ts-loader": "^9.5.0"
+    },
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "default": "./dist/index.js"
+        },
+        "./runtime": {
+            "types": "./dist/runtime.d.ts",
+            "import": "./dist/runtime.js",
+            "default": "./dist/runtime.js"
+        }
     }
 }

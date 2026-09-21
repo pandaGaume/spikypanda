@@ -1,6 +1,6 @@
 {
     "name": "@spiky-panda/plugin-logic",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "license": "BUSL-1.1",
     "description": "Logic plugin for SpikyPanda: UE5-blueprint-inspired flow-control and comparison nodes.",
     "private": true,

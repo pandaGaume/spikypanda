@@ -1,6 +1,6 @@
 {
     "name": "@spiky-panda/plugin-geometry",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "license": "BUSL-1.1",
     "description": "Geometry plugin for SpikyPanda: 3D transforms, attitude (Euler angles to quaternion).",
     "private": true,

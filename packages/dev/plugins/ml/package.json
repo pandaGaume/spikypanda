@@ -1,6 +1,6 @@
 {
     "name": "@spiky-panda/plugin-ml",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "license": "BUSL-1.1",
     "description": "Machine Learning plugin for SpikyPanda: open-set clustering (online cosine assignment with confidence-gated EMA centroids, plus batch agglomerative re-clustering) packaged as a pure library and an editor node.",
     "private": true,

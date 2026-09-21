@@ -19,6 +19,7 @@
  */
 import { McpBehavior, type McpBehaviorOptions, type McpResource, type McpTool } from "@cyanmycelium/mcp-core";
 import type { GraphAdapter } from "./graph.adapter.js";
+import { catalogueTools } from "./catalogue.js";
 import { URI_GRAPH, URI_GRAPH_STATE, URI_PLUGINS, URI_REGISTRY } from "./resource.uri.js";
 
 /** Reused by every tool that addresses a single node. */
@@ -67,39 +68,8 @@ export class GraphBehavior extends McpBehavior {
                     required: ["url", "globalName"],
                 },
             },
-            {
-                name: "registry_list_nodes",
-                description: "List every node type the activated plugins registered, with ports, declared interop standards and resolved documentation. This is the catalogue to consult before wiring anything.",
-                inputSchema: {
-                    type: "object",
-                    properties: { locale: { type: "string", description: "Preferred documentation locale, e.g. \"fr\". Falls back to English." } },
-                },
-            },
-            {
-                name: "registry_search",
-                description: "Search the catalogue by what a plan must produce: node types whose signature outputs the required quantities (and units), carries the capabilities, or whose purpose mentions the words; best first, with the signature of each. The question a planner asks before choosing nodes.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        requiredOutputs: { type: "array", description: "[{ quantity, unit? }] the outputs the plan needs, e.g. { quantity: \"Concentration\", unit: \"ppm\" }", items: { type: "object", properties: { quantity: { type: "string" }, unit: { type: "string" } }, required: ["quantity"] } },
-                        capabilities: { type: "array", description: "tags the type should carry, e.g. exchange, prediction", items: { type: "string" } },
-                        text: { type: "string", description: "free words looked for in the purpose" },
-                        limit: { type: "number", description: "at most this many, default 10" },
-                    },
-                },
-            },
-            {
-                name: "registry_describe_node",
-                description: "Describe one node type: its ports with their declared units and stream/signal kind, and its documentation. Use before `graph_add_node` to check what a node expects.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        type: { type: "string", description: "Node type id as listed by `registry_list_nodes`." },
-                        locale: { type: "string", description: "Preferred documentation locale." },
-                    },
-                    required: ["type"],
-                },
-            },
+            // The three catalogue tools, shared with the runtime surface (catalogue.ts).
+            ...catalogueTools(),
         ];
     }
 

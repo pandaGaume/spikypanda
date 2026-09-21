@@ -13,13 +13,8 @@
  */
 
 /** A setting applied to one node before a run. */
-export interface NodeSetting {
-    /** Saved node id in the `.spikypanda` document (`model.nodes[].id`). */
-    readonly node: string;
-    /** Public property of the runtime instance (`pitch`), or the saved data key (`_pitch`). */
-    readonly property: string;
-    readonly value: unknown;
-}
+export type { IDocumentSetting as NodeSetting } from "spikypanda-core";
+import type { IDocumentSetting as NodeSetting } from "spikypanda-core";
 
 /** One axis of the sweep grid. Either an explicit list or an inclusive range. */
 export interface GridAxis {

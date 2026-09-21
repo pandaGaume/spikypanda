@@ -1,6 +1,6 @@
 {
     "name": "@spiky-panda/plugin-physics",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "license": "BUSL-1.1",
     "description": "Physics plugin for SpikyPanda: thematic sub-plugins covering electric, mechanical, thermal and fluid phenomena. V1 ships Physics.Electric.Motor.DC (sim + control + sensor) wired for MCSA pipelines.",
     "private": true,

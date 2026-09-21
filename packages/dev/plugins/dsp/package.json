@@ -1,6 +1,6 @@
 {
     "name": "@spiky-panda/plugin-dsp",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "license": "BUSL-1.1",
     "description": "DSP fundamentals plugin for SpikyPanda: FFT/IFFT, magnitude/phase, windows, framing, biquad and Kalman filters, MFCC, and signal analysis (RMS, ZCR, moving average, detrend).",
     "private": true,

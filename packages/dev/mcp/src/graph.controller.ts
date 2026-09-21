@@ -18,12 +18,13 @@
  * so it will happily write to a property the node declared read-only. This
  * checks `editable` first and refuses, returning the node's own `hint`.
  */
-import { getEditorSchema, resolveQuantityKind, resolveUnit, searchSignatures, type IFieldOptions, type INodeMeta, type IPortDescriptor } from "spikypanda-core";
-import { enrichNodeDefFromMeta, listDocLocales, resolveDocPath, type GraphRunner, type NodeUI, type Port } from "spikypanda-nodeeditor";
+import { getEditorSchema, resolveQuantityKind, resolveUnit, type IFieldOptions, type IPortDescriptor, type NodeRegistry } from "spikypanda-core";
+import { describeRegistry, searchRegistry } from "./catalogue.js";
+import { enrichNodeDefFromMeta, type GraphRunner, type NodeUI, type Port } from "spikypanda-nodeeditor";
 import type { PropertyEntry } from "spikypanda-nodeeditor/inspectable.js";
 import { URI_GRAPH, URI_GRAPH_STATE, URI_PLUGINS, URI_REGISTRY, uriForCapture, uriForNode } from "./resource.uri.js";
 import { thingDescription, thingModel } from "./wot.js";
-import type { GraphState, NodePropertyState, NodeState, NodeTypeState, PluginsState, PortState, RegistryState, SimulationState } from "./state.js";
+import type { GraphState, NodePropertyState, NodeState, NodeTypeState, PluginsState, RegistryState, SimulationState } from "./state.js";
 
 /** A resource body, in the shape MCP expects but without depending on it. */
 export interface ResourceContent {
@@ -32,16 +33,8 @@ export interface ResourceContent {
     readonly text: string;
 }
 
-/** Outcome of an operation. Neutral so the controller stays transport-free. */
-export type ControllerResult = { readonly ok: true; readonly data: unknown } | { readonly ok: false; readonly error: string };
-
-export function ok(data: unknown): ControllerResult {
-    return { ok: true, data };
-}
-
-export function fail(error: string): ControllerResult {
-    return { ok: false, error };
-}
+export { ok, fail, type ControllerResult } from "./result.js";
+import { ok, fail, type ControllerResult } from "./result.js";
 
 /** JSON body helper: every resource in this namespace is JSON. */
 function jsonResource(uri: string, body: unknown): ResourceContent {
@@ -56,17 +49,6 @@ function jsonResource(uri: string, body: unknown): ResourceContent {
  * carried through deliberately, since it is a wiring-time contract the node
  * already declares and the only machine-readable physical typing available.
  */
-function describePort(port: IPortDescriptor): PortState {
-    return {
-        slot: port.slot,
-        optional: port.optional,
-        type: port.type ?? null,
-        unit: port.unit ?? null,
-        kind: port.kind ?? "stream",
-        multiplicity: port.multiplicity ?? "single",
-    };
-}
-
 /** One signal being recorded: a property of a node, sampled every step. */
 interface CaptureSpec {
     readonly nodeId: string;
@@ -293,41 +275,14 @@ export class GraphController {
     private _readRegistry(locales: ReadonlyArray<string> = ["en"]): RegistryState {
         const registry = this._runner.viewer.getNodeRegistry();
         if (!registry) return { count: 0, types: [], note: "no node registry bound to the viewer" };
-
-        const types: NodeTypeState[] = [];
-        for (const type of registry.types()) {
-            const meta = registry.meta(type);
-            // A type without meta is a registry inconsistency, not a node to
-            // describe: skipping it keeps the catalogue uniformly typed.
-            if (!meta) continue;
-            types.push({
-                type: meta.type,
-                label: meta.label,
-                category: meta.category ?? null,
-                inputPorts: meta.inputPorts.map(describePort),
-                outputPorts: meta.outputPorts.map(describePort),
-                standards: meta.standards ?? null,
-                signature: meta.signature ?? null,
-                doc: resolveDocPath(meta.docPath, locales),
-                docLocales: listDocLocales(meta.docPath),
-            });
-        }
-        return { count: types.length, types };
+        return describeRegistry(registry as NodeRegistry, locales);
     }
 
-    /** The planner's question, answered from the same catalogue (`searchSignatures` in the core). */
+    /** The planner's question, answered from the same catalogue as any runtime host (`catalogue.ts`). */
     private _registrySearch(args: Record<string, unknown>): ControllerResult {
         const registry = this._runner.viewer.getNodeRegistry();
         if (!registry) return fail("no node registry bound to the viewer");
-        const metas: INodeMeta[] = [];
-        for (const type of registry.types()) {
-            const meta = registry.meta(type);
-            if (meta) metas.push(meta);
-        }
-        const outputs = Array.isArray(args.requiredOutputs) ? (args.requiredOutputs as Array<{ quantity?: unknown; unit?: unknown }>).filter((o) => typeof o?.quantity === "string").map((o) => ({ quantity: String(o.quantity), ...(typeof o.unit === "string" ? { unit: o.unit } : {}) })) : [];
-        const capabilities = Array.isArray(args.capabilities) ? (args.capabilities as unknown[]).map(String) : [];
-        const matches = searchSignatures(metas, { requiredOutputs: outputs, capabilities, text: typeof args.text === "string" ? args.text : undefined, limit: typeof args.limit === "number" ? args.limit : undefined });
-        return ok({ signed: metas.filter((m) => m.signature).length, total: metas.length, matches });
+        return ok(searchRegistry(registry as NodeRegistry, args));
     }
 
     /**

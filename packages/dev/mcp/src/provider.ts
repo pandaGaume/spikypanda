@@ -26,8 +26,8 @@
 import { DirectTransport } from "@cyanmycelium/mcp-broker-provider";
 import { McpGrammar } from "@cyanmycelium/mcp-core";
 import { McpServerBuilder } from "@cyanmycelium/mcp-core/server";
-import grammarEn from "../grammars/spk-en.json";
-import grammarFr from "../grammars/spk-fr.json";
+import grammarEn from "./grammars/spk-en.js";
+import grammarFr from "./grammars/spk-fr.js";
 import type { GraphRunner } from "spikypanda-nodeeditor";
 import { GraphAdapter } from "./graph.adapter.js";
 import type { PluginLoader } from "./graph.controller.js";

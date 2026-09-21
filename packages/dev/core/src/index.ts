@@ -5,6 +5,7 @@ export * from "./math";
 export * from "./geometry";
 export * from "./graph";
 export * from "./execution";
+export * from "./document";
 export * from "./sim";
 export * from "./compute";
 export * from "./dsp";

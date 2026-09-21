@@ -1,6 +1,6 @@
 {
     "name": "@spiky-panda/onnx",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "license": "BUSL-1.1",
     "description": "ONNX inference engine and MPC nodes for SpikyPanda (tensor flow primitives live in @spiky-panda/core)",
     "private": true,

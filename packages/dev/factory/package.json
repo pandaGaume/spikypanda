@@ -1,6 +1,6 @@
 {
     "name": "@spiky-panda/factory",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "license": "BUSL-1.1",
     "description": "The factory: headless jobs over SpikyPanda graphs (sweeps, synthetic data, model export). One entry point, spikypanda-job <spec.json>, bundled as a single file so the same job runs locally, in a container and on a serverless job platform.",
     "private": true,

@@ -1,6 +1,6 @@
 {
     "name": "@spiky-panda/plugin-control",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "license": "BUSL-1.1",
     "description": "Control-systems plugin for SpikyPanda: feedback/delay primitives, signal hold/sample/quantize, future PID/MPC building blocks.",
     "private": true,
