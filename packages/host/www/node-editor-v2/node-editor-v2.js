@@ -388,9 +388,15 @@
             if (!window.SpkMcp || typeof window.SpkMcp.publishToBroker !== "function") {
                 return Promise.reject(new Error("SpkMcp bundle not loaded"));
             }
+            // The broker is the one that serves this page unless the caller says
+            // otherwise: a studio mounted by another broker (the CO2 demo on 3001)
+            // publishes there, not on the substrate's default port.
+            const served = /^https?:$/.test(window.location.protocol);
+            const tunnelUrl = served ? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/provider` : undefined;
             // Hand the loader across, which is what enables `plugin_load`.
             return window.SpkMcp.publishToBroker(runner, {
                 pluginLoader: (spec) => window.Studio.loadPlugin(spec),
+                ...(tunnelUrl ? { tunnelUrl } : {}),
                 ...(options || {}),
             });
         },

@@ -46,6 +46,13 @@ export const logicTimeSubPlugin: IPlugin = {
             category: "Logic.Time",
             inputPorts: [],
             outputPorts: [{ slot: "value", optional: false, type: "any" }],
+            // For a planner: the schedule of a scenario, whatever the value means; its unit is the consumer's.
+            signature: {
+                purpose: "a piecewise-constant source in session time: the schedule of a scenario (segments from, to, value), for any quantity",
+                inputs: {},
+                outputs: { value: { quantity: "Any", description: "the segment's value at the current session time" } },
+                capabilities: ["source", "schedule", "scenario", "time"],
+            },
         });
     },
 };

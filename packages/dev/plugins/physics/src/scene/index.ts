@@ -172,6 +172,17 @@ export const sceneSubPlugin: IPlugin = {
             inputPorts: atmosphereInputs,
             outputPorts: atmosphereOutputs,
             variadicInput: [{ prefix: ATMOSPHERE_IN_LAYER_PREFIX, type: "layer" as const }],
+            // For a planner: what this type produces, in the units its documentation states (docs/physics/scene/atmosphere.md).
+            signature: {
+                purpose: "hold one well-mixed volume of gas (one or more layers): its pressure, temperature, density and composition, which gates and scrubbers act on",
+                inputs: {},
+                outputs: {
+                    pressure: { quantity: "Pressure", unit: "Pa", description: "volume-weighted total pressure" },
+                    temperature: { quantity: "Temperature", unit: "k", description: "volume-weighted temperature" },
+                    density: { quantity: "Density", unit: "kgpm3", description: "total mass over total volume" },
+                },
+                capabilities: ["atmosphere", "volume", "air_quality", "mass_balance"],
+            },
         });
 
         // ── F10d + #3 refactor (2026-06-09): AtmosphereGateNode ────
@@ -193,6 +204,13 @@ export const sceneSubPlugin: IPlugin = {
             docPath: ctx.assetUrl("docs/physics/scene/atmosphere-gate.md"),
             inputPorts: gateInputs,
             outputPorts: gateOutputs,
+            // For a planner: the coupling between two volumes; MassFlow is not in the unit system yet, the symbol is the documentation's (kg/s).
+            signature: {
+                purpose: "couple two atmospheres through an opening (closed, open passive, or forced ventilation): a per-species mass flow that equalizes them, mass conserved",
+                inputs: {},
+                outputs: { [GATE_OUT_FLOW_RATE]: { quantity: "MassFlow", unit: "kg/s", description: "the exchange flow, per species, from the upwind side" } },
+                capabilities: ["exchange", "door", "ventilation", "atmosphere", "mass_balance"],
+            },
         });
     },
 };

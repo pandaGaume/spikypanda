@@ -29,6 +29,22 @@ export const batterySubPlugin: IPlugin = {
                 { slot: "energyUsedWh", ...SIGNAL_OUT },
                 { slot: "remainingWh", ...SIGNAL_OUT },
             ],
+            // For a planner (docs/physics/battery/battery.md): the energy budget, integrating up to four power loads.
+            signature: {
+                purpose: "an energy store drained by up to four power loads: state of charge, energy used, energy remaining",
+                inputs: {
+                    powerA: { quantity: "Power", unit: "watt", description: "a load" },
+                    powerB: { quantity: "Power", unit: "watt" },
+                    powerC: { quantity: "Power", unit: "watt" },
+                    powerD: { quantity: "Power", unit: "watt" },
+                },
+                outputs: {
+                    stateOfChargePercent: { quantity: "Dimensionless", unit: "percent", description: "state of charge" },
+                    energyUsedWh: { quantity: "Energy", unit: "Wh" },
+                    remainingWh: { quantity: "Energy", unit: "Wh" },
+                },
+                capabilities: ["energy", "battery", "budget", "integration"],
+            },
         });
     },
 };

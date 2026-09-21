@@ -18,7 +18,7 @@
  * so it will happily write to a property the node declared read-only. This
  * checks `editable` first and refuses, returning the node's own `hint`.
  */
-import { getEditorSchema, resolveQuantityKind, resolveUnit, type IFieldOptions, type IPortDescriptor } from "spikypanda-core";
+import { getEditorSchema, resolveQuantityKind, resolveUnit, searchSignatures, type IFieldOptions, type INodeMeta, type IPortDescriptor } from "spikypanda-core";
 import { enrichNodeDefFromMeta, listDocLocales, resolveDocPath, type GraphRunner, type NodeUI, type Port } from "spikypanda-nodeeditor";
 import type { PropertyEntry } from "spikypanda-nodeeditor/inspectable.js";
 import { URI_GRAPH, URI_GRAPH_STATE, URI_PLUGINS, URI_REGISTRY, uriForCapture, uriForNode } from "./resource.uri.js";
@@ -307,11 +307,27 @@ export class GraphController {
                 inputPorts: meta.inputPorts.map(describePort),
                 outputPorts: meta.outputPorts.map(describePort),
                 standards: meta.standards ?? null,
+                signature: meta.signature ?? null,
                 doc: resolveDocPath(meta.docPath, locales),
                 docLocales: listDocLocales(meta.docPath),
             });
         }
         return { count: types.length, types };
+    }
+
+    /** The planner's question, answered from the same catalogue (`searchSignatures` in the core). */
+    private _registrySearch(args: Record<string, unknown>): ControllerResult {
+        const registry = this._runner.viewer.getNodeRegistry();
+        if (!registry) return fail("no node registry bound to the viewer");
+        const metas: INodeMeta[] = [];
+        for (const type of registry.types()) {
+            const meta = registry.meta(type);
+            if (meta) metas.push(meta);
+        }
+        const outputs = Array.isArray(args.requiredOutputs) ? (args.requiredOutputs as Array<{ quantity?: unknown; unit?: unknown }>).filter((o) => typeof o?.quantity === "string").map((o) => ({ quantity: String(o.quantity), ...(typeof o.unit === "string" ? { unit: o.unit } : {}) })) : [];
+        const capabilities = Array.isArray(args.capabilities) ? (args.capabilities as unknown[]).map(String) : [];
+        const matches = searchSignatures(metas, { requiredOutputs: outputs, capabilities, text: typeof args.text === "string" ? args.text : undefined, limit: typeof args.limit === "number" ? args.limit : undefined });
+        return ok({ signed: metas.filter((m) => m.signature).length, total: metas.length, matches });
     }
 
     /**
@@ -401,6 +417,8 @@ export class GraphController {
 
             case "registry_describe_node":
                 return this._registryDescribeNode(args);
+            case "registry_search":
+                return this._registrySearch(args);
             case "registry_thing_model":
                 return this._registryThingModel(args);
             case "node_thing_description":

@@ -20,6 +20,13 @@ const plugin: IPlugin = {
             inputPorts: [],
             outputPorts: [],
             standards: ["onnx"],
+            // For a planner: a learned function; its ports are the model's tensors, known only once a file is loaded, so the type signs no port.
+            signature: {
+                purpose: "run a learned model (an ONNX file, loaded with its contract: sha256, shapes, thresholds) as a node whose ports are the model's tensors",
+                inputs: {},
+                outputs: {},
+                capabilities: ["inference", "learned", "onnx", "contract"],
+            },
         });
 
         // Conv op (functional category "conv"). Drops the legacy

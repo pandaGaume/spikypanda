@@ -1,3 +1,4 @@
+import type { INodeSignature } from "spikypanda-core";
 /**
  * State: read-only snapshots of what the resources contain.
  *
@@ -35,6 +36,8 @@ export interface PortState {
 
 /** One entry of the node catalogue. */
 export interface NodeTypeState {
+    /** What the type can do, for a planner (purpose, ports with quantity and unit, capabilities, measured cost); null when the plugin signed nothing. */
+    readonly signature?: INodeSignature | null;
     readonly type: string;
     readonly label: string;
     readonly category: string | null;

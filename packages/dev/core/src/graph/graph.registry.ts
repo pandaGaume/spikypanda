@@ -1,6 +1,7 @@
 import { Observable } from "../events/events.observable";
 import type { IRuntimeNode, IPortDescriptor } from "../execution/execution.interfaces";
 import type { IOlink } from "./graph.interfaces";
+import type { INodeSignature } from "./graph.signatures";
 
 export interface INodeMeta {
     readonly type: string;
@@ -8,6 +9,13 @@ export interface INodeMeta {
     readonly category?: string;
     readonly inputPorts: ReadonlyArray<IPortDescriptor>;
     readonly outputPorts: ReadonlyArray<IPortDescriptor>;
+    /**
+     * What this node type can do, said for a planner: purpose, ports with
+     * their quantity and unit, capability tags, measured cost. Declared by
+     * the plugin next to the ports; `validateSignature` checks it agrees
+     * with them. See graph.signatures.ts.
+     */
+    readonly signature?: INodeSignature;
     /** Optional control-plane ports the node exposes (default: _enable
      *  in / _enabled out via RuntimeNode; RunnableNode adds _start /
      *  _stop / _started / _stopped). The palette and editor read these

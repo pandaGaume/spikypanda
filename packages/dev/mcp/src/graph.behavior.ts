@@ -76,6 +76,19 @@ export class GraphBehavior extends McpBehavior {
                 },
             },
             {
+                name: "registry_search",
+                description: "Search the catalogue by what a plan must produce: node types whose signature outputs the required quantities (and units), carries the capabilities, or whose purpose mentions the words; best first, with the signature of each. The question a planner asks before choosing nodes.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        requiredOutputs: { type: "array", description: "[{ quantity, unit? }] the outputs the plan needs, e.g. { quantity: \"Concentration\", unit: \"ppm\" }", items: { type: "object", properties: { quantity: { type: "string" }, unit: { type: "string" } }, required: ["quantity"] } },
+                        capabilities: { type: "array", description: "tags the type should carry, e.g. exchange, prediction", items: { type: "string" } },
+                        text: { type: "string", description: "free words looked for in the purpose" },
+                        limit: { type: "number", description: "at most this many, default 10" },
+                    },
+                },
+            },
+            {
                 name: "registry_describe_node",
                 description: "Describe one node type: its ports with their declared units and stream/signal kind, and its documentation. Use before `graph_add_node` to check what a node expects.",
                 inputSchema: {

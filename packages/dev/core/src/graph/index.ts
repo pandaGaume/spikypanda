@@ -11,3 +11,4 @@ export * from "./graph.builder.olink";
 export * from "./graph.builder.graph";
 export * from "./graph.dataflow";
 export * from "./graph.registry";
+export * from "./graph.signatures";
