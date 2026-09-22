@@ -14,7 +14,8 @@
  */
 import { buildDocumentJson, instantiateDocument, parseDocument, runDocument, validateDocumentSpec, DocumentBuildError, DocumentError, type DocumentConnectionSpec, type DocumentNodeSpec, type IDocumentSetting, type NodeRegistry } from "spikypanda-core";
 import { describeRegistry, localesOf, searchRegistry } from "./catalogue.js";
-import { URI_REGISTRY } from "./resource.uri.js";
+import { EventLog } from "./events.js";
+import { URI_REGISTRY, parseEventsUri } from "./resource.uri.js";
 import { fail, ok, type ControllerResult } from "./result.js";
 
 export const URI_DOCUMENTS = "spk://documents";
@@ -44,6 +45,15 @@ export interface RuntimeControllerOptions {
     maxSamples?: number;
     /** Ticks one `session_run` may take. Default 2 000 000. */
     maxTicks?: number;
+    /**
+     * The log the host appends to, when it wants one shared.
+     *
+     * A host that runs several behaviors in one process (a broker publishing
+     * several slots, say) passes the same log to each, so a reader sees one
+     * ordered stream instead of one sequence per mount point. Left out, the
+     * controller keeps its own.
+     */
+    events?: EventLog;
 }
 
 const DEFAULT_MAX_SAMPLES = 4096;
@@ -94,12 +104,14 @@ export class RuntimeController {
     private readonly _documents: IDocumentStore;
     private readonly _maxSamples: number;
     private readonly _maxTicks: number;
+    private readonly _events: EventLog;
 
     public constructor(
         private readonly _registry: NodeRegistry,
         options: RuntimeControllerOptions = {},
     ) {
         this._documents = options.documents ?? new MemoryDocumentStore();
+        this._events = options.events ?? new EventLog();
         this._maxSamples = options.maxSamples ?? DEFAULT_MAX_SAMPLES;
         this._maxTicks = options.maxTicks ?? DEFAULT_MAX_TICKS;
     }
@@ -112,9 +124,16 @@ export class RuntimeController {
         return this._documents;
     }
 
+    /** The event log this controller publishes. A host appends to it. */
+    public get events(): EventLog {
+        return this._events;
+    }
+
     public readResource(uri: string): unknown | undefined {
         if (uri === URI_REGISTRY) return describeRegistry(this._registry);
         if (uri === URI_DOCUMENTS) return { documents: this._documents.list() };
+        const events = parseEventsUri(uri);
+        if (events.events) return this._events.read(events.since);
         return undefined;
     }
 

@@ -1,6 +1,6 @@
 {
     "name": "@spiky-panda/mcp",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "license": "BUSL-1.1",
     "description": "MCP controller for the SpikyPanda graph: behaviors, adapters and state that expose the studio's live session to an agent. Browser-targeted, published to a broker slot over the provider tunnel. The graph is the model, this package is the controller, the node editor is the view.",
     "private": true,

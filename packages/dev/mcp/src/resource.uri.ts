@@ -38,6 +38,39 @@ export const URI_GRAPH = "spk://graph";
 /** Current port values and simulation time. Changes on every step. */
 export const URI_GRAPH_STATE = "spk://graph/state";
 
+/**
+ * What happened, rather than what is: the runtime's event log.
+ *
+ * Every other URI here is a snapshot, and a snapshot cannot say that a stage
+ * fired twice between two reads. This one is append-only and carries a
+ * sequence, so a reader asks for what it has not seen.
+ */
+export const URI_EVENTS = "spk://events";
+
+/**
+ * The same log from a cursor: `spk://events?since=1830`.
+ *
+ * A plain RFC 6570 template, declared through `resources/templates/list` and
+ * read through `resources/read` like any other URI. No method and no
+ * notification is added to the protocol to carry a cursor.
+ */
+export const URI_EVENTS_TEMPLATE = "spk://events{?since}";
+
+/**
+ * Reads an events URI: whether it is one, and the cursor it carries.
+ *
+ * `since` that is not a finite number is ignored rather than refused: a reader
+ * that sends nonsense gets the whole log, which is the same answer it would
+ * get from the untemplated URI, instead of an error it cannot act on.
+ */
+export function parseEventsUri(uri: string): { events: boolean; since?: number } {
+    if (uri === URI_EVENTS) return { events: true };
+    if (!uri.startsWith(`${URI_EVENTS}?`)) return { events: false };
+    const raw = new URLSearchParams(uri.slice(URI_EVENTS.length + 1)).get("since");
+    const since = raw === null ? Number.NaN : Number(raw);
+    return Number.isFinite(since) ? { events: true, since } : { events: true };
+}
+
 /** URI of one node instance, used as the identity of its Thing Description. */
 export function uriForNode(nodeId: string): string {
     return `spk://graph/node/${encodeURIComponent(nodeId)}`;

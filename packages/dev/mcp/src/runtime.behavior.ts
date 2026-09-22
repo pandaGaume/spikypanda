@@ -4,10 +4,10 @@
  * container, a twin), and what the studio's surface contains as a subset.
  * Schemas only; the adapter executes through `RuntimeController`.
  */
-import { McpAdapterBase, McpBehavior, McpToolResults, type McpBehaviorOptions, type McpResource, type McpResourceContent, type McpTool, type McpToolResult } from "@cyanmycelium/mcp-core";
+import { McpAdapterBase, McpBehavior, McpToolResults, type McpBehaviorOptions, type McpResource, type McpResourceContent, type McpResourceTemplate, type McpTool, type McpToolResult } from "@cyanmycelium/mcp-core";
 import type { NodeRegistry } from "spikypanda-core";
 import { runtimeTools } from "./runtime.tools.js";
-import { URI_REGISTRY } from "./resource.uri.js";
+import { URI_EVENTS, URI_EVENTS_TEMPLATE, URI_REGISTRY } from "./resource.uri.js";
 import { RuntimeController, URI_DOCUMENTS, type RuntimeControllerOptions } from "./runtime.controller.js";
 
 const SCHEME = "spk";
@@ -40,15 +40,25 @@ export class RuntimeBehavior extends McpBehavior {
 
     /** A behavior on a registry, with the default in-memory document store. */
     public static on(registry: NodeRegistry, options: RuntimeControllerOptions & McpBehaviorOptions = {}): RuntimeBehavior {
-        const { documents, maxSamples, maxTicks, ...behavior } = options;
-        return new RuntimeBehavior(new RuntimeAdapter(registry, { documents, maxSamples, maxTicks }), behavior);
+        const { documents, maxSamples, maxTicks, events, ...behavior } = options;
+        return new RuntimeBehavior(new RuntimeAdapter(registry, { documents, maxSamples, maxTicks, events }), behavior);
     }
 
     protected override _buildResources(): McpResource[] {
         return [
             { uri: URI_REGISTRY, name: "Node catalogue", description: "Every node type the registry holds, with ports, signature and documentation", mimeType: "application/json" },
             { uri: URI_DOCUMENTS, name: "Documents", description: "The names of the documents the store holds, built or given, that document_instantiate and session_run read by name", mimeType: "application/json" },
+            { uri: URI_EVENTS, name: "Events", description: "What happened, rather than what is: the runtime's event log, oldest first, with the sequence of the last event produced and how many were evicted before they could be read", mimeType: "application/json" },
         ];
+    }
+
+    /**
+     * The log from a cursor. An RFC 6570 template, which is how MCP already
+     * says "these URIs, parameterised": nothing is added to the protocol to
+     * let a reader ask for what it has not seen.
+     */
+    protected override _buildTemplate(): McpResourceTemplate[] {
+        return [{ uriTemplate: URI_EVENTS_TEMPLATE, name: "Events since", description: "The event log limited to the events after `since`, a sequence number. `since` beyond the last sequence returns none, which is how a reader catches up after the runtime restarted.", mimeType: "application/json" }];
     }
 
     protected override _buildTools(): McpTool[] {
