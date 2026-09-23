@@ -501,6 +501,17 @@
          * and the dashboard alone (a demo, a kiosk). Everything stays wired;
          * `display: none` only. `dashboardHeight` in px.
          */
+        /**
+         * Show the studio. A page opened with `?ext=` starts hidden (the
+         * background only, see index.html), so an extension that re-skins
+         * it or lays it out is never seen in the default look first; the
+         * extension calls this once it has. The studio reveals itself anyway
+         * when every extension has run, or after `?extReveal=` ms (3000 by
+         * default), whichever comes first: an extension that never calls it
+         * cannot leave the page blank.
+         */
+        reveal: () => document.documentElement.classList.remove("nev2-extending"),
+
         setLayout: ({ palette, properties, console: consoleVisible, dashboardHeight } = {}) => {
             const show = (id, visible) => {
                 const el = document.getElementById(id);
@@ -865,6 +876,7 @@
         }
         const ext = params.get("ext");
         if (ext) {
+            const cap = setTimeout(() => window.Studio.reveal(), Number(params.get("extReveal") ?? 3000));
             for (const url of ext.split(",").map((s) => s.trim()).filter(Boolean)) {
                 try {
                     const mod = await import(/* webpackIgnore: true */ url);
@@ -874,6 +886,8 @@
                     console.error(`[nev2] extension ${url} failed:`, err);
                 }
             }
+            clearTimeout(cap);
         }
+        window.Studio.reveal();
     }
 })();

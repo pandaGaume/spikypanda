@@ -15,6 +15,14 @@
 
     <!-- v2 sample: self-contained tokens + reset + shell -->
     <link rel="stylesheet" href="node-editor-v2.css" />
+
+    <!-- A page opened with `?ext=` belongs to an extension, which may re-skin
+         it or lay it out: the shell stays hidden (the background only) until
+         the extension calls Studio.reveal(), so the default look never
+         flashes first. Here, before the first paint, because nothing later
+         can come before it. node-editor-v2.js reveals the page anyway once
+         the extensions have run, or after `?extReveal=` ms. -->
+    <script>if (new URLSearchParams(location.search).has("ext")) document.documentElement.classList.add("nev2-extending");</script>
 </head>
 <body>
     <div class="nev2-app">
@@ -80,23 +88,23 @@
          want Live Server / dev cache to fetch fresh. The browser keys
          on the full URL, so any change to the query string forces a
          re-fetch even when the path / file is unchanged. -->
-    <script src="../bundle/spikypanda-core.js?v=p46"></script>
-    <script src="../bundle/spikypanda-onnx.js?v=p46"></script>
-    <script src="../bundle/nodeeditor.js?v=p46"></script>
-    <script src="../bundle/SpkPluginGeometry.js?v=p46"></script>
-    <script src="../bundle/SpkPluginLogic.js?v=p46"></script>
-    <script src="../bundle/SpkPluginDsp.js?v=p46"></script>
-    <script src="../bundle/SpkPluginMl.js?v=p46"></script>
-    <script src="../bundle/SpkPluginOnnx.js?v=p46"></script>
-    <script src="../bundle/SpkPluginPhysics.js?v=p46"></script>
-    <script src="../bundle/SpkPluginControl.js?v=p46"></script>
-    <script src="../bundle/SpkPluginChemistry.js?v=p46"></script>
-    <script src="../bundle/SpkPluginViz.js?v=p46"></script>
-    <script src="../bundle/SpkPluginHelios.js?v=p46"></script>
-    <script src="../bundle/SpkPluginIso.js?v=p46"></script>
+    <script src="../bundle/spikypanda-core.js?v=p47"></script>
+    <script src="../bundle/spikypanda-onnx.js?v=p47"></script>
+    <script src="../bundle/nodeeditor.js?v=p47"></script>
+    <script src="../bundle/SpkPluginGeometry.js?v=p47"></script>
+    <script src="../bundle/SpkPluginLogic.js?v=p47"></script>
+    <script src="../bundle/SpkPluginDsp.js?v=p47"></script>
+    <script src="../bundle/SpkPluginMl.js?v=p47"></script>
+    <script src="../bundle/SpkPluginOnnx.js?v=p47"></script>
+    <script src="../bundle/SpkPluginPhysics.js?v=p47"></script>
+    <script src="../bundle/SpkPluginControl.js?v=p47"></script>
+    <script src="../bundle/SpkPluginChemistry.js?v=p47"></script>
+    <script src="../bundle/SpkPluginViz.js?v=p47"></script>
+    <script src="../bundle/SpkPluginHelios.js?v=p47"></script>
+    <script src="../bundle/SpkPluginIso.js?v=p47"></script>
     <!-- MCP controller. Loaded after the plugins so the registry it reads is
          already populated, and before the page script, which publishes it. -->
-    <script src="../bundle/SpkMcp.js?v=p46"></script>
-    <script type="module" src="node-editor-v2.js?v=p46"></script>
+    <script src="../bundle/SpkMcp.js?v=p47"></script>
+    <script type="module" src="node-editor-v2.js?v=p47"></script>
 </body>
 </html>

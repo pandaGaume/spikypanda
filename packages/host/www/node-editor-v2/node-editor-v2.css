@@ -77,6 +77,11 @@ a {
     text-decoration: none;
 }
 
+/* An extension's page, until the extension shows it (Studio.reveal, see index.html). */
+html.nev2-extending .nev2-app {
+    visibility: hidden;
+}
+
 ::selection {
     background: var(--ne-color-primary);
     color: var(--ne-color-bg);
