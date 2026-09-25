@@ -827,6 +827,33 @@ export class Density extends Quantity {
  * Dimensionally identical to `Density` but kept separate so the
  * Quantity type carries the semantic context.
  */
+/**
+ * Mass flow rate: base = kilogram per second.
+ *
+ * Added 2026-09-25 for the habitat's filters and scrubbers, whose loading
+ * and transport are declared in kg/s by the register's descriptors, so a
+ * request written in g/min or kg/h converts through the same table.
+ */
+export class MassFlow extends Quantity {
+    public static ForParameter(value: MassFlow | number, defaultValue: number, defaultUnit: Unit): MassFlow {
+        return value ? new MassFlow(value, defaultUnit) : new MassFlow(defaultValue, defaultUnit);
+    }
+
+    public static QuantityKind = "MassFlowRate";
+
+    public static Units: { [key: string]: Unit } = {
+        kgps: new Unit("kilogram per second", "kg/s", 1, "kg/s"),
+        gps: new Unit("gram per second", "g/s", 1e-3, "g/s"),
+        gpmin: new Unit("gram per minute", "g/min", 1e-3 / 60, "g/min"),
+        kgpmin: new Unit("kilogram per minute", "kg/min", 1 / 60, "kg/min"),
+        kgph: new Unit("kilogram per hour", "kg/h", 1 / 3600, "kg/h"),
+    };
+
+    public unitForSymbol(str: string): Unit | undefined {
+        return MassFlow.Units[str] || undefined;
+    }
+}
+
 export class MassConcentration extends Quantity {
     public static ForParameter(value: MassConcentration | number, defaultValue: number, defaultUnit: Unit): MassConcentration {
         return value ? new MassConcentration(value, defaultUnit) : new MassConcentration(defaultValue, defaultUnit);
@@ -1280,7 +1307,7 @@ interface IQuantityClass {
 const QUANTITY_REGISTRY: { [quantity: string]: IQuantityClass } = {
     Timespan, Temperature, Mass, Power, Voltage, Current, Luminosity, Volume, Area,
     VolumetricFlow, Angle, Length, Speed, Frequency, Acceleration, Pressure, Dimensionless,
-    MolarMass, Density, MassConcentration, MassSpecificHeat, ThermalConductivity, DynamicViscosity,
+    MolarMass, Density, MassFlow, MassConcentration, MassSpecificHeat, ThermalConductivity, DynamicViscosity,
     Force, Stiffness, Torque, Inductance, MagneticFlux, Resistance, ApparentPower, ReactivePower,
     Energy, MomentOfInertia, MassMoment, AngularVelocity, Level, Count,
 };
