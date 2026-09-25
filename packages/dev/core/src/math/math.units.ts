@@ -556,6 +556,7 @@ export class VolumetricFlow extends Quantity {
 
     public static Units: { [key: string]: Unit } = {
         m3ps: new Unit("cubic meter per second", "m³/s", 1, "m3/s"),
+        m3pmin: new Unit("cubic meter per minute", "m³/min", 1 / 60, "m3/min"),
         Lps: new Unit("litre per second", "L/s", 1e-3, "L/s"),
         Lpmin: new Unit("litre per minute", "L/min", 1e-3 / 60, "L/min"),
         mLpmin: new Unit("millilitre per minute", "mL/min", 1e-6 / 60, "mL/min"),
@@ -1276,6 +1277,7 @@ export class Count extends Quantity {
     public static QuantityKind = "Dimensionless";
 
     public static Units: { [key: string]: Unit } = {
+        persons: new Unit("persons", "persons", 1, "{person}"),
         samples: new Unit("samples", "samples", 1, "{samples}"),
         bins: new Unit("bins", "bins", 1, "{bins}"),
         bands: new Unit("bands", "bands", 1, "{bands}"),
