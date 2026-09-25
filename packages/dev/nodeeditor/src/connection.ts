@@ -54,9 +54,44 @@ export function deriveLinkKind(from: PortType, to: PortType): LinkKind {
     return isConfigLinkType(from) || isConfigLinkType(to) ? "config" : "data";
 }
 
+/**
+ * The path of a cable from an output (on a node's right) to an input (on a
+ * node's left). Forward, when the input sits to the right of the output: a
+ * bezier leaving to the right and arriving from the left. Backward or
+ * vertical (2026-09-25), when the input is not clearly to the right: the
+ * bezier's control points would cross and the curve run through the nodes,
+ * so the cable leaves to the right, drops to a lane under (or above) both
+ * ends, runs back along it and rises into the input from the left, with
+ * rounded corners: a loop that reads as a return, and a vertical link that
+ * reads as one.
+ */
 function bezierPath(x1: number, y1: number, x2: number, y2: number): string {
-    const dx = Math.abs(x2 - x1) * 0.5;
-    return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+    const forward = x2 - x1;
+    if (forward >= 40) {
+        const dx = forward * 0.5;
+        return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+    }
+    // The stubs leaving and arriving horizontally, the lane between them, the corners rounded by a radius.
+    const stub = 28;
+    const r = 14;
+    const below = y2 >= y1;
+    const lane = (below ? Math.max(y1, y2) : Math.min(y1, y2)) + (below ? 1 : -1) * 70;
+    const sx = x1 + stub; // where the cable turns after leaving the output
+    const tx = x2 - stub; // where it turns before entering the input
+    const dir = below ? 1 : -1;
+    const v = (y: number) => y; // vertical coordinate as is; the lane is beyond both ends
+    return [
+        `M ${x1} ${y1}`,
+        `L ${sx - r} ${y1}`,
+        `Q ${sx} ${y1} ${sx} ${y1 + dir * r}`,
+        `L ${sx} ${v(lane) - dir * r}`,
+        `Q ${sx} ${lane} ${sx - r} ${lane}`,
+        `L ${tx + r} ${lane}`,
+        `Q ${tx} ${lane} ${tx} ${lane - dir * r}`,
+        `L ${tx} ${y2 + dir * r}`,
+        `Q ${tx} ${y2} ${tx + r} ${y2}`,
+        `L ${x2} ${y2}`,
+    ].join(" ");
 }
 
 function screenToLocal(el: SVGSVGElement, sx: number, sy: number): { x: number; y: number } {
