@@ -13,7 +13,7 @@
  *      before each step, so the mass of the two volumes together changes
  *      only by the producer, and the exchange is not erased.
  */
-import { buildDocumentJson, instantiateDocument, parseDocument, runDocument } from "spikypanda-core";
+import { buildDocumentJson, instantiateDocument, parseDocument, runDocument, validateDocumentSpec } from "spikypanda-core";
 import { buildJobRegistry } from "spikypanda-factory";
 
 const R = 8.314462618;
@@ -55,6 +55,15 @@ function document(extra: { producerKgps?: number; gateMode?: string; flow?: numb
 type Atmosphere = { getMassKg(s: string): number; getMoleFraction(s: string): number; total_mass: number };
 
 describe("an atmosphere in a document, headless", () => {
+    it("validates a connection into a second index of the delta pool as the builder builds it", () => {
+        const nodes = [
+            { id: "a", typeId: "Physics.Scene:atmosphere", x: 0, y: 0, params: { volume: 30 } },
+            { id: "source", typeId: "Logic.Input:constant", x: 0, y: 0, params: { value: 1e-5 } },
+        ];
+        expect(validateDocumentSpec(registry, nodes, [{ from: ["source", "value"], to: ["a", "delta_CO2_1"] }])).toEqual([]);
+        expect(validateDocumentSpec(registry, nodes, [{ from: ["source", "value"], to: ["a", "delta_CO2_x"] }]).map((p) => p.what)).toEqual(['node "a" has no input port "delta_CO2_x"']);
+    });
+
     it("takes a producer on a second index of its delta pool, and the solver integrates it", () => {
         const loaded = instantiateDocument(parseDocument(document({ producerKgps: 1e-5 })), registry);
         expect(loaded.missingTypeIds).toEqual([]);

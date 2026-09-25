@@ -217,6 +217,12 @@ export function validateDocumentSpec(registry: NodeRegistry, nodes: ReadonlyArra
             const p = (meta[side] ?? []).find((x) => x.slot === slot);
             if (p) return p;
         }
+        // A slot of a variadic group (`delta_CO2_1`, `person_2`): declared by its prefix, accepted as the builder accepts it (2026-09-25).
+        for (const side of sides) {
+            if (side !== "inputPorts" && side !== "outputPorts") continue;
+            const group = variadicGroupOf(meta, slot, side);
+            if (group) return { slot, type: group.type };
+        }
         return undefined;
     };
     const fanIn = new Map<string, number>();
