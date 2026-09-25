@@ -191,6 +191,18 @@ export class RK4AdaptiveSolver implements ISolver {
             return this._lastStep;
         }
 
+        // Re-read the leaves' state before integrating. Between two macro-
+        // steps the dispatch phase runs, and a producer may have written a
+        // leaf's state directly (an AtmosphereGate applies its per-species
+        // mass transfer with `applyMassDelta`, a restore node rewrites a
+        // state): integrating the vector kept from the previous step and
+        // writing it back would silently erase those writes. Reading the
+        // leaves is idempotent when nothing touched them (writeState was
+        // the last writer), so this costs one copy per leaf per step.
+        for (let i = 0; i < this._leaves.length; i++) {
+            this._leaves[i].gatherState(this._y, this._offsets[i]);
+        }
+
         // Snapshot upstream inputs once per macro-step. The snapshot is
         // held constant across all micro-steps below (per Q1.2). This
         // is structurally important: re-reading the session linkStates

@@ -1,11 +1,17 @@
-import { V1_SPECIES_ORDER } from "spikypanda-core";
+import { ONTOLOGY, V1_SPECIES_ORDER } from "spikypanda-core";
 import type { IPlugin, IPluginContext } from "spikypanda-nodeeditor";
 // V1_SPECIES_ORDER is still imported because the AtmosphereGateNode
 // registration below uses it to enumerate its A_/B_ mole-fraction
 // I/O slots. The atmosphere itself no longer leaks the V1 species
 // schema to the editor: its species list is purely composition-driven.
 void V1_SPECIES_ORDER;
-import { AtmosphereGateNode, createAtmosphereGateNode, GATE_IN_ATMOSPHERE_A, GATE_IN_ATMOSPHERE_B, GATE_OUT_FLOW_RATE } from "./atmosphere-gate.node.js";
+import { AtmosphereGateNode, createAtmosphereGateNode, GATE_IN_ATMOSPHERE_A, GATE_IN_ATMOSPHERE_B, GATE_IN_FLOW, GATE_OUT_FLOW_RATE } from "./atmosphere-gate.node.js";
+
+// The relation types this sub-plugin's dashed cables carry, so that a
+// document instantiated without the editor binds them rather than
+// allocating a data channel for them (core's instantiateDocument asks the
+// ontology). `atmosphere` is the core's; `layer` is ours.
+if (!ONTOLOGY.has("layer")) ONTOLOGY.register({ id: "layer", isBindingRelation: true });
 import { ATMOSPHERE_LAYER_IN_COMPOSITION, AtmosphereLayerNode, createAtmosphereLayerNode } from "./atmosphere-layer.node.js";
 import { ATMOSPHERE_IN_LAYER_PREFIX, AtmosphereNode, createAtmosphereNode } from "./atmosphere.node.js";
 import {
@@ -134,12 +140,33 @@ export const sceneSubPlugin: IPlugin = {
         // particulates ride along inside the bound Composition (their
         // own `particulate_in_<k>` slots live on the Composition node).
         // Species schema is composition-driven (no V1-hardcoded ports).
-        const layerInputs: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [{ slot: ATMOSPHERE_LAYER_IN_COMPOSITION, optional: true, type: "composition" }];
+        // The per-species ports (2026-09-25): a producer input pool `delta_<sp>_<k>` (kg/s) and the observables
+        // `mass_<sp>`, `mole_fraction_<sp>`, `partial_pressure_<sp>`, `ppm_<sp>` for the V1 species, so a crew, a
+        // scrubber or a duct can be wired into an atmosphere in a document and in the editor.
+        const speciesInputs = V1_SPECIES_ORDER.map((sp) => ({ slot: `delta_${sp}_0`, optional: true, type: "float", kind: "signal" as const }));
+        const speciesOutputs = V1_SPECIES_ORDER.flatMap((sp) => [
+            { slot: `mass_${sp}`, optional: true, type: "float", kind: "signal" as const },
+            { slot: `mole_fraction_${sp}`, optional: true, type: "float", kind: "signal" as const },
+            { slot: `partial_pressure_${sp}`, optional: true, type: "float", kind: "signal" as const },
+            { slot: `ppm_${sp}`, optional: true, type: "float", kind: "signal" as const },
+        ]);
+        const speciesVariadic = V1_SPECIES_ORDER.map((sp) => ({ prefix: `delta_${sp}_`, type: "float" as const }));
+        const speciesSignatureInputs = Object.fromEntries(V1_SPECIES_ORDER.map((sp) => [`delta_${sp}_0`, { quantity: "MassFlow", unit: "kg/s", description: `a source (positive) or a sink (negative) of ${sp}; the pool grows by index` }]));
+        const speciesSignatureOutputs = Object.fromEntries(
+            V1_SPECIES_ORDER.flatMap((sp) => [
+                [`mass_${sp}`, { quantity: "Mass", unit: "kg", description: `the ${sp} in the volume` }],
+                [`ppm_${sp}`, { quantity: "Concentration", unit: "ppm", description: `the ${sp} mole fraction, in parts per million` }],
+                [`partial_pressure_${sp}`, { quantity: "Pressure", unit: "Pa", description: `the ${sp} partial pressure` }],
+            ])
+        );
+
+        const layerInputs: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [{ slot: ATMOSPHERE_LAYER_IN_COMPOSITION, optional: true, type: "composition" }, ...speciesInputs];
         const layerOutputs: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [
             { slot: "pressure", optional: true, type: "float" },
             { slot: "temperature", optional: true, type: "float" },
             { slot: "density", optional: true, type: "float" },
             { slot: "layer_out", optional: true, type: "layer" },
+            ...speciesOutputs,
         ];
         ctx.nodes.register("Physics.Scene:atmosphere-layer", () => createAtmosphereLayerNode() as never, {
             label: "Atmosphere Layer",
@@ -147,6 +174,7 @@ export const sceneSubPlugin: IPlugin = {
             docPath: ctx.assetUrl("docs/physics/scene/atmosphere-layer.md"),
             inputPorts: layerInputs,
             outputPorts: layerOutputs,
+            variadicInput: speciesVariadic,
         });
 
         // ── Atmosphere Container ─────────────────────────────────────
@@ -158,12 +186,13 @@ export const sceneSubPlugin: IPlugin = {
         // stratification; the hidden default is then suppressed.
         // Aggregates pressure/temperature/density are volume-weighted
         // across the active layer set.
-        const atmosphereInputs: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [{ slot: `${ATMOSPHERE_IN_LAYER_PREFIX}0`, optional: true, type: "layer" }];
+        const atmosphereInputs: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [{ slot: `${ATMOSPHERE_IN_LAYER_PREFIX}0`, optional: true, type: "layer" }, ...speciesInputs];
         const atmosphereOutputs: ReadonlyArray<{ slot: string; optional: boolean; type: string }> = [
             { slot: "pressure", optional: true, type: "float" },
             { slot: "temperature", optional: true, type: "float" },
             { slot: "density", optional: true, type: "float" },
             { slot: "atmosphere_out", optional: true, type: "atmosphere" },
+            ...speciesOutputs,
         ];
         ctx.nodes.register("Physics.Scene:atmosphere", () => createAtmosphereNode() as never, {
             label: "Atmosphere",
@@ -171,17 +200,18 @@ export const sceneSubPlugin: IPlugin = {
             docPath: ctx.assetUrl("docs/physics/scene/atmosphere.md"),
             inputPorts: atmosphereInputs,
             outputPorts: atmosphereOutputs,
-            variadicInput: [{ prefix: ATMOSPHERE_IN_LAYER_PREFIX, type: "layer" as const }],
+            variadicInput: [{ prefix: ATMOSPHERE_IN_LAYER_PREFIX, type: "layer" as const }, ...speciesVariadic],
             // For a planner: what this type produces, in the units its documentation states (docs/physics/scene/atmosphere.md).
             signature: {
-                purpose: "hold one well-mixed volume of gas (one or more layers): its pressure, temperature, density and composition, which gates and scrubbers act on",
-                inputs: {},
+                purpose: "hold one well-mixed volume of gas (one or more layers): its pressure, temperature, density and composition, which gates and scrubbers act on; per species, the sources and sinks summed into its mass, and the mass, mole fraction, partial pressure and ppm it publishes",
+                inputs: speciesSignatureInputs,
                 outputs: {
                     pressure: { quantity: "Pressure", unit: "Pa", description: "volume-weighted total pressure" },
                     temperature: { quantity: "Temperature", unit: "k", description: "volume-weighted temperature" },
                     density: { quantity: "Density", unit: "kgpm3", description: "total mass over total volume" },
+                    ...speciesSignatureOutputs,
                 },
-                capabilities: ["atmosphere", "volume", "air_quality", "mass_balance"],
+                capabilities: ["atmosphere", "volume", "air_quality", "mass_balance", "prediction", "co2"],
             },
         });
 
@@ -196,6 +226,7 @@ export const sceneSubPlugin: IPlugin = {
         const gateInputs = [
             { slot: GATE_IN_ATMOSPHERE_A, optional: true, type: "atmosphere" },
             { slot: GATE_IN_ATMOSPHERE_B, optional: true, type: "atmosphere" },
+            { slot: GATE_IN_FLOW, optional: true, type: "float", kind: "signal" as const },
         ];
         const gateOutputs = [{ slot: GATE_OUT_FLOW_RATE, optional: true, type: "float" }];
         ctx.nodes.register("Physics.Scene:atmosphere-gate", () => createAtmosphereGateNode() as never, {
@@ -206,9 +237,9 @@ export const sceneSubPlugin: IPlugin = {
             outputPorts: gateOutputs,
             // For a planner: the coupling between two volumes; MassFlow is not in the unit system yet, the symbol is the documentation's (kg/s).
             signature: {
-                purpose: "couple two atmospheres through an opening (closed, open passive, or forced ventilation): a per-species mass flow that equalizes them, mass conserved",
-                inputs: {},
-                outputs: { [GATE_OUT_FLOW_RATE]: { quantity: "MassFlow", unit: "kg/s", description: "the exchange flow, per species, from the upwind side" } },
+                purpose: "couple two atmospheres through an opening (closed, open passive, forced ventilation one way, or an exchange both ways at a flow a fan may drive): a per-species mass flow between them, mass conserved",
+                inputs: { [GATE_IN_FLOW]: { quantity: "VolumetricFlow", unit: "m3ps", description: "the flow of the forced or exchange modes when wired (a fan's delivered flow); the forcedFlow editable otherwise" } },
+                outputs: { [GATE_OUT_FLOW_RATE]: { quantity: "VolumetricFlow", unit: "m3ps", description: "the volumetric flow through the gate, positive from A to B" } },
                 capabilities: ["exchange", "door", "ventilation", "atmosphere", "mass_balance"],
             },
         });

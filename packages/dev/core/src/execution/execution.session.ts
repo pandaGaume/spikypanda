@@ -6,6 +6,26 @@ import { Scheduler } from "./execution.scheduler";
 import { StartNode } from "./start.node";
 import { StopNode } from "./stop.node";
 
+type DeclaredPort = { slot: string | number; gating?: boolean; kind?: "stream" | "signal" };
+
+/** A slot's family: `delta_CO2_3` and `delta_CO2_0` are one family, the variadic pool an editor grows by index. */
+const slotFamily = (slot: string | number): string => String(slot).replace(/_?\d+$/, "");
+
+/**
+ * The declared input port a channel lands on: the one with the slot's
+ * name, or, for a slot of a variadic pool the node declares by its first
+ * index only (`delta_CO2_1` next to a declared `delta_CO2_0`), the one of
+ * the same family. A channel into a pool keeps the pool's kind: a signal
+ * pool does not gate, and does not turn into a stream nobody drains.
+ */
+function declaredPortFor(declared: ReadonlyArray<DeclaredPort> | undefined, slot: string | number): DeclaredPort | undefined {
+    if (!declared) return undefined;
+    const exact = declared.find((p) => p.slot === slot);
+    if (exact) return exact;
+    const family = slotFamily(slot);
+    return declared.find((p) => typeof p.slot === "string" && slotFamily(p.slot) === family);
+}
+
 /**
  * Concrete ISession built on **per-node input buffers**.
  *
@@ -557,20 +577,15 @@ export class Session implements ISession {
             // so the scheduler's "buffer non-empty?" gate doesn't apply
             // to them. The node fires every tick and reads the latest
             // signal value via `readSignal`.
-            const declared = (n as unknown as { inputPorts?: ReadonlyArray<{ slot: string | number; gating?: boolean; kind?: "stream" | "signal" }> }).inputPorts;
-            const skipSlots = new Set<string | number>();
-            if (declared) {
-                for (const p of declared) {
-                    if (p.kind === "signal" || p.gating === false) skipSlots.add(p.slot);
-                }
-            }
+            const declared = (n as unknown as { inputPorts?: ReadonlyArray<DeclaredPort> }).inputPorts;
             const slots = new Set<string | number>();
             for (const link of n.opsc<IChannel>()) {
                 if (!link.enabled) continue;
                 if (links.indexOf(link) < 0) continue;
                 const slot = inSlotOf(link);
                 if (isControlSlot(slot)) continue;
-                if (skipSlots.has(slot)) continue;
+                const port = declaredPortFor(declared, slot);
+                if (port !== undefined && (port.kind === "signal" || port.gating === false)) continue;
                 slots.add(slot);
             }
             return slots.size;
@@ -617,15 +632,9 @@ export class Session implements ISession {
             const link = links[i];
             const dst = link.ofin as IRuntimeNode | null;
             if (!dst) continue;
-            const declared = (dst as unknown as { inputPorts?: ReadonlyArray<{ slot: string | number; kind?: "stream" | "signal" }> }).inputPorts;
+            const declared = (dst as unknown as { inputPorts?: ReadonlyArray<DeclaredPort> }).inputPorts;
             if (!declared) continue;
-            const slot = inSlotOf(link);
-            for (const p of declared) {
-                if (p.slot === slot && p.kind === "signal") {
-                    this._isSignalChannel[i] = true;
-                    break;
-                }
-            }
+            if (declaredPortFor(declared, inSlotOf(link))?.kind === "signal") this._isSignalChannel[i] = true;
         }
     }
 

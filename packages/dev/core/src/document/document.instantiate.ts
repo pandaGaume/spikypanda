@@ -23,6 +23,7 @@
  * or without the leading underscore, through a full `deserialize`.
  */
 import { ApplyTo } from "../graph/graph.olink";
+import { ONTOLOGY } from "../graph/graph.ontology";
 import { buildSolverAttachmentsForGraph, collectDescriptors } from "../sim/solver.attachment";
 import { RuntimeGraphBuilder } from "../execution/execution.builder";
 import { Session } from "../execution/execution.session";
@@ -81,6 +82,46 @@ function staticSceneResolver(session: Session): unknown {
 
 const isRuntime = (x: unknown): x is IRuntimeNode => !!x && typeof (x as IRuntimeNode).fire === "function";
 
+type Bindable = Record<string, unknown> & {
+    clearBindings?: () => void;
+    bindAtmosphereA?: (id: string, handle: unknown) => void;
+    bindAtmosphereB?: (id: string, handle: unknown) => void;
+    bindAtmosphere?: (id: string, aggregator: unknown) => void;
+    bindComposition?: (id: string, composition: unknown) => void;
+    bindLayer?: (id: string, layer: unknown) => void;
+    bindGas?: (id: string, gas: unknown) => void;
+    bindParticulate?: (id: string, particulate: unknown) => void;
+};
+
+/**
+ * A configuration link, bound the way the editor's session builder binds
+ * it: by the source port's relation type and the destination slot, on the
+ * instances by their shape (an atmosphere into a gate's side, a composition
+ * into a layer, a layer into an atmosphere, a gas or a particulate into a
+ * composition, an atmosphere into a scene). Returns false for a pairing
+ * nobody handles, which the caller reports as skipped.
+ */
+function bindConfigLink(fromId: string, from: unknown, fromType: string, to: unknown, toSlot: string, cleared: Set<unknown>): boolean {
+    const target = to as Bindable;
+    const bind = (fn: ((id: string, x: unknown) => void) | undefined): boolean => {
+        if (typeof fn !== "function") return false;
+        if (typeof target.clearBindings === "function" && !cleared.has(target)) {
+            target.clearBindings();
+            cleared.add(target);
+        }
+        fn.call(target, fromId, from);
+        return true;
+    };
+    if (fromType === "atmosphere" && toSlot === "atmosphere_A_in") return bind(target.bindAtmosphereA);
+    if (fromType === "atmosphere" && toSlot === "atmosphere_B_in") return bind(target.bindAtmosphereB);
+    if (fromType === "atmosphere" && toSlot === "atmosphere_in") return bind(target.bindAtmosphere);
+    if (fromType === "composition" && toSlot === "composition_in") return bind(target.bindComposition);
+    if (fromType === "layer" && toSlot.startsWith("layer_in_")) return bind(target.bindLayer);
+    if (fromType === "gas" && toSlot.startsWith("gas_in_")) return bind(target.bindGas);
+    if (fromType === "particulate" && toSlot.startsWith("particulate_in_")) return bind(target.bindParticulate);
+    return false;
+}
+
 /** Instantiate a document into a fresh session. Call once per run: sessions are not reset between points. */
 export function instantiateDocument(doc: SavedGraph, registry: NodeRegistry): LoadedDocument {
     const instances = new Map<string, unknown>();
@@ -105,15 +146,34 @@ export function instantiateDocument(doc: SavedGraph, registry: NodeRegistry): Lo
     const builder = new RuntimeGraphBuilder<IRuntimeNode, Channel>().withMode("dynamic").withNodes(...runtimeNodes);
     const skippedConnections: string[] = [];
     const applyToLinks: ApplyTo[] = [];
-    const outputPortType = (node: IRuntimeNode, slot: string): string | undefined => (node as Partial<IDeclaresPorts>).outputPorts?.find((p) => p.slot === slot)?.type;
+    // A port's type comes from the registry's declaration first (a descriptor item such as a composition or a scene
+    // declares its ports there, not on the instance), then from the instance's own declaration.
+    const outputPortType = (nodeId: string, node: unknown, slot: string): string | undefined => {
+        const typeId = saved.get(nodeId)?.typeId;
+        const declared = typeId ? registry.meta(typeId)?.outputPorts?.find((p) => p.slot === slot)?.type : undefined;
+        return declared ?? (node as Partial<IDeclaresPorts>).outputPorts?.find((p) => p.slot === slot)?.type;
+    };
+    const cleared = new Set<unknown>();
     for (const conn of doc.model.connections) {
         const from = instances.get(conn.from.node);
         const to = instances.get(conn.to.node);
+        if (from === undefined || to === undefined) {
+            skippedConnections.push(conn.id);
+            continue;
+        }
+        const fromType = outputPortType(conn.from.node, from, conn.from.port);
+        // A configuration link (the editor's dashed cable) is a binding, not a data channel: the destination is
+        // handed the source instance, as the editor's session builder does. A channel in its place would carry
+        // nothing and, as a gating input, keep the destination from ever firing.
+        if (fromType !== undefined && ONTOLOGY.isBindingRelation(fromType)) {
+            if (!bindConfigLink(conn.from.node, from, fromType, to, conn.to.port, cleared)) skippedConnections.push(conn.id);
+            continue;
+        }
         if (!isRuntime(from) || !isRuntime(to)) {
             skippedConnections.push(conn.id);
             continue;
         }
-        if (outputPortType(from, conn.from.port) === "fault") {
+        if (fromType === "fault") {
             applyToLinks.push(new ApplyTo(from, to));
             continue;
         }

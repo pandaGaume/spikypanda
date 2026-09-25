@@ -38,6 +38,8 @@ When no Layer is wired, the container materialises a hidden default Layer with V
 | out       | `temperature`     | float       | signal      | Volume-weighted temperature [K].                                                                                                                                                                  |
 | out       | `density`         | float       | signal      | `Σ mass / Σ volume` [kg/m³].                                                                                                                                                                      |
 | out       | `atmosphere_out`  | atmosphere  | config-link | Anchor consumed by `SceneItem.atmosphere_in` and by `AtmosphereGateNode.atmosphere_{A,B}_in`. Dashed cable.                                                                                       |
+| in        | `delta_<sp>_<k>`  | float       | signal      | A producer of species `sp` (N2, O2, CO2, H2O, Ar), in kg/s, positive for a source and negative for a sink; a variadic pool per species, summed into `dm_sp/dt` by the layer's `rhs`. Declared since 2026-09-25 (they were runtime-only before, so no crew, scrubber or duct could be wired into an atmosphere). |
+| out       | `mass_<sp>`, `mole_fraction_<sp>`, `partial_pressure_<sp>`, `ppm_<sp>` | float | signal | The per-species observables the layer publishes each tick: kg, a fraction, Pa, ppm. |
 
 ## Parameters
 

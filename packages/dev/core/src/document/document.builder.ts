@@ -47,12 +47,25 @@ interface MetaPort {
     type?: string;
     unit?: IUnitExpectation;
 }
+interface VariadicGroup {
+    prefix: string;
+    type: string;
+}
 interface NodeMeta {
     label?: string;
     inputPorts?: ReadonlyArray<MetaPort>;
     outputPorts?: ReadonlyArray<MetaPort>;
     controlInputPorts?: ReadonlyArray<MetaPort>;
     controlOutputPorts?: ReadonlyArray<MetaPort>;
+    variadicInput?: VariadicGroup | ReadonlyArray<VariadicGroup>;
+    variadicOutput?: VariadicGroup | ReadonlyArray<VariadicGroup>;
+}
+
+/** The variadic group a slot belongs to (`delta_CO2_3` in the pool `delta_CO2_`), if the meta declares one. */
+function variadicGroupOf(meta: NodeMeta, slot: string, side: "inputPorts" | "outputPorts"): VariadicGroup | undefined {
+    const declared = side === "inputPorts" ? meta.variadicInput : meta.variadicOutput;
+    const groups = Array.isArray(declared) ? declared : declared ? [declared as VariadicGroup] : [];
+    return groups.find((g) => slot.startsWith(g.prefix) && /^\d+$/.test(slot.slice(g.prefix.length)));
 }
 
 export class DocumentBuildError extends Error {
@@ -103,9 +116,13 @@ export function buildDocument(
         };
     });
 
+    const layoutById = new Map(built.map((b) => [b.layout.id, b.layout]));
+
     // A slot resolves to its index in the data array first, then in the
     // control array; a control endpoint is flagged so the editor indexes
-    // the right array.
+    // the right array. A slot of a declared variadic pool that the meta
+    // does not list yet (`delta_CO2_1` next to `delta_CO2_0`) is appended
+    // to the node's layout ports, as the editor grows them on demand.
     const resolvePort = (
         id: string,
         slot: string,
@@ -114,10 +131,17 @@ export function buildDocument(
     ): { index: number; control: boolean } => {
         const meta = metaById.get(id);
         if (!meta) throw new DocumentBuildError(`document: connection names an unknown node "${id}"`);
-        const dataIdx = (meta[dataSide] ?? []).findIndex((p) => p.slot === slot);
+        const layout = layoutById.get(id)!;
+        const ports = dataSide === "inputPorts" ? layout.inputs : layout.outputs;
+        const dataIdx = ports.findIndex((p) => p.name === slot);
         if (dataIdx >= 0) return { index: dataIdx, control: false };
         const ctrlIdx = (meta[ctrlSide] ?? []).findIndex((p) => p.slot === slot);
         if (ctrlIdx >= 0) return { index: ctrlIdx, control: true };
+        const group = variadicGroupOf(meta, slot, dataSide);
+        if (group) {
+            ports.push({ name: slot, type: group.type, direction: dataSide === "inputPorts" ? "input" : "output" });
+            return { index: ports.length - 1, control: false };
+        }
         throw new DocumentBuildError(`document: node "${id}" has no ${dataSide === "inputPorts" ? "input" : "output"} port "${slot}"`);
     };
 

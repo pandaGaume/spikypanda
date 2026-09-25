@@ -16,6 +16,11 @@
  *
  * Modes:
  *   `closed`       no flux. Pure algebraic.
+ *   `exchange`     a ventilation loop: the flow goes A → B with A's air
+ *                  and B → A with B's air (no net air moves, each species
+ *                  goes from the richer side to the poorer). The flow is
+ *                  the `flow` signal when wired (a fan's), else
+ *                  `forcedFlow`. Added 2026-09-25 with the `flow` input.
  *   `open_passive` linearised orifice: flux ∝ leakCoeff × area × |ΔP|.
  *                  The `bidirectional` flag turns it into a check-valve
  *                  when off (only A → B flux on positive ΔP).
@@ -49,16 +54,21 @@ import {
     IOlink,
     IPortDescriptor,
     ISession,
+    inSlotOf,
     viewable,
     VolumetricFlow,
 } from "spikypanda-core";
 import type { IChannel, ICartesian, Nullable } from "spikypanda-core";
 
-export type AtmosphereGateMode = "closed" | "open_passive" | "hvac_forced";
+export type AtmosphereGateMode = "closed" | "open_passive" | "hvac_forced" | "exchange";
 
 /** Config-link slot constants on the gate. */
 export const GATE_IN_ATMOSPHERE_A = "atmosphere_A_in";
 export const GATE_IN_ATMOSPHERE_B = "atmosphere_B_in";
+/** Input: the volumetric flow [m³/s] of the `hvac_forced` and `exchange`
+ *  modes when a signal is wired (a fan's delivered flow); the
+ *  `forcedFlow` editable otherwise. */
+export const GATE_IN_FLOW = "flow";
 /** Output: signed volumetric flow in m³/s (positive when A → B). For
  *  visualisation / plotting; the gate publishes this each fire(). */
 export const GATE_OUT_FLOW_RATE = "flow_rate";
@@ -124,6 +134,7 @@ export class AtmosphereGateNode extends IntegrableRuntimeNode implements IDeclar
     public readonly inputPorts: ReadonlyArray<IPortDescriptor> = [
         { slot: GATE_IN_ATMOSPHERE_A, optional: true, type: "atmosphere" },
         { slot: GATE_IN_ATMOSPHERE_B, optional: true, type: "atmosphere" },
+        { slot: GATE_IN_FLOW, optional: true, type: "float", kind: "signal" },
     ];
     public readonly outputPorts: ReadonlyArray<IPortDescriptor> = [{ slot: GATE_OUT_FLOW_RATE, optional: true, type: "float" }];
 
@@ -138,7 +149,7 @@ export class AtmosphereGateNode extends IntegrableRuntimeNode implements IDeclar
         return this._mode;
     }
     public set mode(v: AtmosphereGateMode) {
-        const next: AtmosphereGateMode = v === "closed" || v === "open_passive" || v === "hvac_forced" ? v : "open_passive";
+        const next: AtmosphereGateMode = v === "closed" || v === "open_passive" || v === "hvac_forced" || v === "exchange" ? v : "open_passive";
         this.setField("mode", this._mode, next, (n) => {
             this._mode = n;
         });
@@ -264,13 +275,16 @@ export class AtmosphereGateNode extends IntegrableRuntimeNode implements IDeclar
         // ── 1. Compute the signed volumetric flow ────────────────
         let volFlow = 0; // ≥ 0; the sign is decided by `upwindIsA`
         let upwindIsA = true;
-        let upwind = A;
 
         if (this._mode === "closed") {
             this._lastVolFlow = 0;
             this._publishFlowRate(session, 0);
             return;
         }
+        // The forced and exchange modes take their flow from the `flow`
+        // signal when one is wired (a fan's delivered flow, so a fouled
+        // filter or a slower fan shows here), from the editable otherwise.
+        const drivenFlow = Math.max(0, this._readFlowInput(session) ?? this._forcedFlowM3ps);
         if (this._mode === "open_passive") {
             const dP = A.pressurePa - B.pressurePa;
             if (!this._bidirectional && dP <= 0) {
@@ -280,11 +294,9 @@ export class AtmosphereGateNode extends IntegrableRuntimeNode implements IDeclar
             }
             volFlow = this._leakCoeff * this._areaM2 * Math.abs(dP);
             upwindIsA = dP >= 0;
-            upwind = upwindIsA ? A : B;
-        } else if (this._mode === "hvac_forced") {
-            volFlow = this._forcedFlowM3ps;
+        } else if (this._mode === "hvac_forced" || this._mode === "exchange") {
+            volFlow = drivenFlow;
             upwindIsA = true; // by convention hvac is always A → B
-            upwind = A;
         }
 
         const signedVolFlow = upwindIsA ? volFlow : -volFlow;
@@ -298,59 +310,84 @@ export class AtmosphereGateNode extends IntegrableRuntimeNode implements IDeclar
         if (!Number.isFinite(dt) || dt <= 0) return;
 
         // ── 3. Per-species mass transfer ──────────────────────────
-        // V̇ × ρ_total_upwind × y_upwind_i, with
-        //   ρ_total = P × M_avg / RT and y_i = x_i × M_i / M_avg
-        // so M_avg cancels: flux_i = V̇ × P × x_i × M_i / RT.
-        //
-        // Species enumeration: take the UNION of A.activeSpecies and
-        // B.activeSpecies so a species present only on one side still
-        // crosses (the other side will silently no-op on apply if its
-        // schema doesn't list the species).
-        const speciesUnion = AtmosphereGateNode._unionSpecies(A.activeSpecies, B.activeSpecies);
+        // A loop (`exchange`) carries `volFlow` each way: the air of A
+        // into B with A's composition, the air of B into A with B's. No
+        // net air moves; each species goes from the richer side to the
+        // poorer in proportion to the difference of its densities. The
+        // other modes carry the flow one way, from the upwind side.
+        // Both directions of a loop are computed from the state at the start of the tick, then applied: computing
+        // the return from a side the outward parcel has already changed carries back more than the balance says.
+        if (this._mode === "exchange") {
+            const outward = this._parcel(A, B, volFlow, dt);
+            const back = this._parcel(B, A, volFlow, dt);
+            AtmosphereGateNode._apply(A, B, outward);
+            AtmosphereGateNode._apply(B, A, back);
+        } else if (upwindIsA) {
+            AtmosphereGateNode._apply(A, B, this._parcel(A, B, volFlow, dt));
+        } else {
+            AtmosphereGateNode._apply(B, A, this._parcel(B, A, volFlow, dt));
+        }
+
+        // ── 4. Throughput accumulator (forced and exchange) ───────
+        if ((this._mode === "hvac_forced" || this._mode === "exchange") && this._trackThroughput) {
+            this._throughputM3 += volFlow * dt;
+        }
+    }
+
+    /**
+     * The parcel `volFlow` m³/s of the upwind side's air carries into the
+     * downwind side over `dt` seconds, species by species, in kg:
+     * V̇ × ρ_total_upwind × y_i, with ρ_total = P × M_avg / RT and
+     * y_i = x_i × M_i / M_avg, so M_avg cancels and
+     * flux_i = V̇ × P × x_i × M_i / RT. The species are the union of both
+     * sides' (a species present on one side only still crosses; the other
+     * side no-ops on a species it does not carry). Nothing is applied
+     * here: the caller applies the parcel once every direction is known.
+     */
+    private _parcel(upwind: IAtmosphereGateHandle, downwind: IAtmosphereGateHandle, volFlow: number, dt: number): Array<[string, number]> {
+        const parcel: Array<[string, number]> = [];
+        const speciesUnion = AtmosphereGateNode._unionSpecies(upwind.activeSpecies, downwind.activeSpecies);
         const RT = GAS_CONSTANT_R * Math.max(1e-9, upwind.temperatureK);
         const inverseRT = 1 / RT;
         const upwindP = upwind.pressurePa;
-
+        const upwindVol = upwind.volume;
+        if (upwindVol <= 0) return parcel;
         for (const sp of speciesUnion) {
             const x = upwind.getMoleFraction(sp);
             if (x <= 0) continue;
-            // Compute the molar mass from the upstream side. The
-            // atmosphere doesn't expose per-species molar mass
-            // directly, so we infer it as (mass / moles):
-            //   mass_sp = M_sp × n_sp
-            //   moles_sp = x_sp × total_moles_upwind
-            // We avoid a full re-derivation by using the upstream's
-            // current density of this species per its own state:
-            //   M_sp = mass_sp / moles_sp = mass_sp × RT / (x_sp × P × V)
-            // (this is the ideal-gas per-species molar mass; identical
-            // to the catalog value when the atmosphere's solver hasn't
-            // drifted things). Slightly conservative when the schema
-            // misalignment carries a species the downstream doesn't
-            // know about — we'd just no-op below.
+            // The per-species molar mass, inferred from the upwind side's own
+            // state (mass over moles) rather than from a catalogue: identical
+            // to the catalogue's for an ideal gas.
             const upwindMass = upwind.getMassKg(sp);
-            const upwindVol = upwind.volume;
-            if (upwindVol <= 0 || upwindMass <= 0) continue;
+            if (upwindMass <= 0) continue;
             const moles = x * (upwindP * upwindVol) * inverseRT;
             if (moles <= 0) continue;
             const M = upwindMass / moles;
             if (!Number.isFinite(M) || M <= 0) continue;
-
-            const fluxKgPerSec = volFlow * upwindP * x * M * inverseRT;
-            const deltaKg = fluxKgPerSec * dt;
-            // Conservation: apply opposite signs on each side.
-            if (upwindIsA) {
-                A.applyMassDelta(sp, -deltaKg);
-                B.applyMassDelta(sp, +deltaKg);
-            } else {
-                A.applyMassDelta(sp, +deltaKg);
-                B.applyMassDelta(sp, -deltaKg);
-            }
+            parcel.push([sp, volFlow * upwindP * x * M * inverseRT * dt]);
         }
+        return parcel;
+    }
 
-        // ── 4. Throughput accumulator (hvac_forced only) ──────────
-        if (this._mode === "hvac_forced" && this._trackThroughput) {
-            this._throughputM3 += this._forcedFlowM3ps * dt;
+    /** Conservation is native: the same mass leaves one side and enters the other in the same call. */
+    private static _apply(from: IAtmosphereGateHandle, to: IAtmosphereGateHandle, parcel: ReadonlyArray<[string, number]>): void {
+        for (const [sp, deltaKg] of parcel) {
+            from.applyMassDelta(sp, -deltaKg);
+            to.applyMassDelta(sp, +deltaKg);
         }
+    }
+
+    /** The `flow` signal, when a channel is wired into it and carries a finite number; null otherwise. */
+    private _readFlowInput(session: ISession): number | null {
+        const links = session.graph.links as ReadonlyArray<IChannel>;
+        for (const link of this.opsc<IChannel>()) {
+            if (!link.enabled || inSlotOf(link) !== GATE_IN_FLOW) continue;
+            const idx = links.indexOf(link);
+            if (idx < 0) continue;
+            const value = session.readSignal(idx);
+            if (typeof value === "number" && Number.isFinite(value)) return value;
+        }
+        return null;
     }
 
     // ── Internals ────────────────────────────────────────────────────

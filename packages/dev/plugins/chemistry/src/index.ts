@@ -1,5 +1,14 @@
+import { ONTOLOGY } from "spikypanda-core";
 import { chemistryCompositionSubPlugin } from "./composition/index.js";
 import { chemistryGasSubPlugin } from "./gas/index.js";
+
+// The relation types of this plugin's dashed cables (a gas into a
+// composition, a composition into an atmosphere layer), registered so a
+// document instantiated without the editor binds them (the editor kept a
+// fallback list for them until now).
+for (const id of ["gas", "composition"]) {
+    if (!ONTOLOGY.has(id)) ONTOLOGY.register({ id, isBindingRelation: true });
+}
 
 export * from "./gas/gas.node.js";
 export * from "./gas/presets.js";

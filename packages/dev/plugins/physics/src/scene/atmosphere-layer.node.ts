@@ -292,18 +292,24 @@ export class AtmosphereLayerNode extends IntegrableRuntimeNode implements IDecla
     }
 
     /**
-     * The layer's editor surface is species-agnostic. Per-species
-     * `delta_<sp>_<k>` inputs and `mass_<sp>` / `mole_fraction_<sp>`
-     * etc. outputs are deliberately omitted: the species schema is
-     * composition-driven, so hardcoding V1_SPECIES_ORDER would create
-     * phantom ports for absent species. The runtime rhs() / fire()
-     * still address per-species channels dynamically — any
-     * externally-allocated channel (test stubs, codegen) with the
-     * right slot name keeps working; only the editor's port bag is
-     * trimmed.
+     * The layer's ports: the composition anchor, and for each species of
+     * the V1 order a producer input `delta_<sp>_0` (kg/s, the first slot
+     * of a variadic pool the editor grows) and the observables the
+     * runtime publishes (`mass_<sp>`, `mole_fraction_<sp>`,
+     * `partial_pressure_<sp>`, `ppm_<sp>`). Until 2026-09-25 these were
+     * runtime-only, to keep the surface species-agnostic; but a port the
+     * node does not declare cannot be wired in a document nor in the
+     * editor, so no crew, scrubber or duct could feed an atmosphere in a
+     * graph, and a channel wired anyway defaulted to stream semantics
+     * and hung the scheduler. A composition that carries other species
+     * still reaches them through the runtime slots (rhs and fire address
+     * species by name); declaring them dynamically is the V2 port story.
      */
     protected _buildInputPorts(): IPortDescriptor[] {
-        return [{ slot: ATMOSPHERE_LAYER_IN_COMPOSITION, optional: true, type: "composition" }];
+        return [
+            { slot: ATMOSPHERE_LAYER_IN_COMPOSITION, optional: true, type: "composition" },
+            ...V1_SPECIES_ORDER.map((sp) => ({ slot: `${ATMOSPHERE_LAYER_IN_DELTA_PREFIX(sp)}0`, optional: true, type: "float", kind: "signal" as const })),
+        ];
     }
 
     protected _buildOutputPorts(): IPortDescriptor[] {
@@ -314,6 +320,12 @@ export class AtmosphereLayerNode extends IntegrableRuntimeNode implements IDecla
             // Layer anchor consumed by the Atmosphere container's
             // variadic layer_in_<k>. Dashed cable, type "layer".
             { slot: ATMOSPHERE_LAYER_OUT_ANCHOR, optional: true, type: "layer" },
+            ...V1_SPECIES_ORDER.flatMap((sp) => [
+                { slot: ATMOSPHERE_LAYER_OUT_MASS(sp), optional: true, type: "float", kind: "signal" as const },
+                { slot: ATMOSPHERE_LAYER_OUT_MOLE_FRACTION(sp), optional: true, type: "float", kind: "signal" as const },
+                { slot: ATMOSPHERE_LAYER_OUT_PARTIAL_PRESSURE(sp), optional: true, type: "float", kind: "signal" as const },
+                { slot: ATMOSPHERE_LAYER_OUT_PPM(sp), optional: true, type: "float", kind: "signal" as const },
+            ]),
         ];
     }
 

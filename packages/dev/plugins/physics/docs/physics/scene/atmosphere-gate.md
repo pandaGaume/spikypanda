@@ -18,6 +18,10 @@ Side benefits:
 - **Composition-driven schema.** The gate iterates the union of `atmosphere.activeSpecies` on the two sides. Adding O3 to a Composition wired to one atmosphere now flows through the gate without any rewiring.
 - **No IIntegrable on the gate.** Throughput is now a `@viewable` accumulator updated each `fire()` from `forcedFlow * session.dt` (forward Euler, sufficient at 100 Hz). The gate no longer claims a state slot from the solver.
 
+## Headless (2026-09-25)
+
+A document that wires a gate to two atmospheres runs the same without the editor: `instantiateDocument` binds every configuration link the way the session builder does (the source port's type is a binding relation of the `ONTOLOGY`), instead of allocating a data channel that nothing publishes on. The solver re-reads its leaves before each step, so the mass the gate moves during the dispatch phase is kept; before, it was written over at the next step. `packages/tests/physics/atmosphere-headless-document.test.ts` holds the case.
+
 ## Equations
 
 Per species `i` in the species union:
@@ -33,7 +37,8 @@ where `M_i` is the species molar mass read from the bound atmosphere (gas regist
 |------------------|----------------------------------------------------|----------------------------------|
 | `closed`         | 0                                                  | (no flux)                        |
 | `open_passive`   | `leakCoeff × area × (P_A − P_B)` (linearised)      | A when `ΔP > 0`, else B          |
-| `hvac_forced`    | `forcedFlow` (editable)                            | A (unidirectional A → B)         |
+| `hvac_forced`    | the `flow` signal when wired, else `forcedFlow`    | A (unidirectional A → B)         |
+| `exchange`       | the `flow` signal when wired, else `forcedFlow`    | both: A's air goes to B and B's air comes back, the same `V̇` each way (a ventilation loop: no net air, each species from the richer side to the poorer) |
 
 The `bidirectional` flag turns `open_passive` into a check-valve: when `false`, flux is zero whenever `P_A < P_B`.
 
@@ -52,6 +57,7 @@ so positive `V̇` always moves mass A → B regardless of which side is upwind. 
 |-----------|---------------------|-------------|-------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | in        | `atmosphere_A_in`   | atmosphere  | config-link | Dashed cable from any `Physics.Scene:atmosphere` or `:atmosphere-layer`'s `atmosphere_out` / `layer_out`. Resolved at session bind to `bindAtmosphereA`.     |
 | in        | `atmosphere_B_in`   | atmosphere  | config-link | Same for side B.                                                                                                                                            |
+| in        | `flow`              | float       | signal      | The volumetric flow [m³/s] of the `hvac_forced` and `exchange` modes when a signal is wired (a fan's delivered flow); `forcedFlow` is used when nothing is wired. Added 2026-09-25. |
 | out       | `flow_rate`         | float       | signal      | Signed volumetric flow `V̇` [m³/s], positive = A → B, negative = B → A (reverse flow when `bidirectional`). Useful for plotting and downstream rate triggers. |
 
 The gate has only ONE runtime output channel now (`flow_rate`). All the species-level data (deltas applied to atmospheres) goes through the binding, not the link bag.
@@ -60,12 +66,12 @@ The gate has only ONE runtime output channel now (`flow_rate`). All the species-
 
 | Name              | Quantity / Unit       | Default      | Meaning                                                                                                                                                                                        |
 |-------------------|-----------------------|--------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `mode`            | enum                  | `open_passive` | One of `closed`, `open_passive`, `hvac_forced`. Switchable live (no IIntegrable means no `stateSize` flip; the change takes effect on the next `fire()`).                                       |
+| `mode`            | enum                  | `open_passive` | One of `closed`, `open_passive`, `hvac_forced`, `exchange`. Switchable live (no IIntegrable means no `stateSize` flip; the change takes effect on the next `fire()`).                                       |
 | `area` / `areaQ`  | Area (m²)             | 1 m²         | Throat / passage area. Used by `open_passive`. The Quantity accessor accepts `m²`, `cm²`, `mm²`, `in²`, `ft²`, `ha`, `km²`.                                                                     |
 | `leakCoeff`       | dimensionless         | 1e-5         | Linearised leak coefficient. Hairline crack ~1e-6, mm-scale leak ~1e-3, wide-open door ~1.                                                                                                      |
 | `forcedFlow`      | VolumetricFlow (m³/s) | 0            | Forced volumetric flow rate. Used by `hvac_forced`. Quantity accessor accepts `m³/s`, `L/s`, `L/min`, `m³/h`, `cfm`, `gpm`.                                                                     |
 | `bidirectional`   | bool                  | true         | When false, `open_passive` becomes a check-valve (no back-flow when `P_A < P_B`).                                                                                                               |
-| `trackThroughput` | bool                  | false        | When true, `throughput` accumulates `|V̇| × dt` across fires (any mode). Used for filter aging / fan run-time. Off by default to keep the accumulator at 0.                                     |
+| `trackThroughput` | bool                  | false        | When true, `throughput` accumulates `|V̇| × dt` across fires (forced and exchange modes). Used for filter aging / fan run-time. Off by default to keep the accumulator at 0.                                     |
 | `required_hz`     | Frequency (Hz)        | 100 (computed) | Inherited from `IntegrableRuntimeNode`. Parameter-independent baseline at 100 Hz; user can pin a higher value. See [Sample rate](#sample-rate) below.                                            |
 
 Viewables:

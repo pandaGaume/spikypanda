@@ -1,3 +1,4 @@
+import { ONTOLOGY } from "spikypanda-core";
 import type { IPlugin, IPluginContext } from "spikypanda-nodeeditor";
 import {
     createLunarDustParticulateNode,
@@ -9,6 +10,11 @@ import {
 } from "./particulate.node.js";
 
 export { ParticulateNode, createParticulateNode, createPM2_5ParticulateNode, createPM10ParticulateNode, createLunarDustParticulateNode, PARTICULATE_OUT_ANCHOR };
+
+// The relation type of a particulate's dashed cable, registered here so a
+// document instantiated without the editor binds it (the editor kept a
+// fallback list for it until now).
+if (!ONTOLOGY.has("particulate")) ONTOLOGY.register({ id: "particulate", isBindingRelation: true });
 
 /**
  * `Physics.Particulate` sub-plugin (V1 stub).
