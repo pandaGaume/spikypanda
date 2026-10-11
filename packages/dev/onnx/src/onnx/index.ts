@@ -10,3 +10,5 @@ export * from "./ops/index";
 export * from "./export/index";
 
 export * from "./optimization/constant-transpose.optimizer";
+
+export * from "./backends/index";

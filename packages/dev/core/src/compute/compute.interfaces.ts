@@ -23,6 +23,8 @@ import type { IUnitTag } from "../math/math.units";
  * [256, 192] for a 2D depth buffer, [9, 9, 2] for a stereo patch pair).
  */
 export interface ITensor {
+    /** Optional opaque storage; data access on device tensors requires an explicit transfer. */
+    readonly storage?: import("./tensor.storage").ITensorStorage;
     /** Raw data. Float32 covers all our numeric use cases. */
     data: Float32Array;
 
@@ -114,6 +116,11 @@ export interface IKernelBag {
  *   Inputs are gathered from opsc() in slot-sorted order.
  * - **Sink**: terminal node whose lastOutputs are collected by run().
  */
+/** Inputs and results for an explicitly supplied native session. */
+export interface IKernelNodeState extends INodeState, IKernelBag {
+    sessionOwnedIO?: boolean;
+}
+
 /** Optional native execution state. Direct kernel calls can omit it and remain stateless. */
 export interface IKernelExecutionContext {
     readonly nodeState: INodeState | undefined;

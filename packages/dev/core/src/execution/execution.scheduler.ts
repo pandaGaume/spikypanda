@@ -1,4 +1,4 @@
-import { IChannel, IRuntimeGraph, IRuntimeNode, ISession, IStaticEligibility, isLinkRef, inSlotOf } from "./execution.interfaces";
+import { IChannel, IRuntimeGraph, IRuntimeNode, ISession, IStaticEligibility, IStaticRunOptions, isLinkRef, inSlotOf } from "./execution.interfaces";
 import { isControlSlot } from "./control-ports";
 import type { Session } from "./execution.session";
 
@@ -225,23 +225,41 @@ export class Scheduler {
         void t;
     }
 
-    public static async RunStaticAsync(session: ISession, t: number): Promise<void> {
-        const order = Scheduler.GetStaticOrder(session.graph);
-        const sess = session as Session;
-        const deliverPending = (): void => {
-            const pending = sess.queue.splice(0, sess.queue.length);
-            for (const item of pending) {
-                if (isLinkRef(item)) sess.deliverLinkRef(item);
-            }
-        };
-        deliverPending();
-        for (const node of order) {
-            deliverPending();
-            node.processControlInputs?.(session);
-            if (!node.enabled || !node.isReady(session)) continue;
-            await node.fireAsync(session, t);
+    private static readonly activeAsyncSessions = new WeakSet<ISession>();
+
+    public static async RunStaticAsync(session: ISession, t: number, options: IStaticRunOptions = {}): Promise<void> {
+        if (Scheduler.activeAsyncSessions.has(session)) {
+            throw new Error("This session already has an active static async traversal");
         }
-        deliverPending();
+        const all = Scheduler.GetStaticOrder(session.graph);
+        if (options.nodes) {
+            const known = new Set(all);
+            for (const node of options.nodes) {
+                if (!known.has(node)) throw new Error("Static traversal scope contains a node outside the session graph");
+            }
+        }
+        const order = options.nodes ? all.filter(node => options.nodes!.has(node)) : all;
+        const sess = session as Session;
+        const deliverPending = async (): Promise<void> => {
+            const pending = sess.queue.splice(0, sess.queue.length);
+            const refs = pending.filter(isLinkRef);
+            if (refs.length === 0) return;
+            if (session.deliverLinkRefsAsync) await session.deliverLinkRefsAsync(refs, t);
+            else for (const ref of refs) sess.deliverLinkRef(ref);
+        };
+        Scheduler.activeAsyncSessions.add(session);
+        try {
+            await deliverPending();
+            for (const node of order) {
+                await deliverPending();
+                node.processControlInputs?.(session);
+                if (!node.enabled || !node.isReady(session)) continue;
+                await node.fireAsync(session, t);
+            }
+            await deliverPending();
+        } finally {
+            Scheduler.activeAsyncSessions.delete(session);
+        }
     }
 
     public static CheckStaticEligible(graph: IRuntimeGraph): IStaticEligibility {

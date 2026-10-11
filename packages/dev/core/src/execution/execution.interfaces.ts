@@ -401,6 +401,11 @@ export interface IGraphNodeState extends INodeState {
     internalSession: ISession;
 }
 
+/** Optional scope for a static traversal on the existing session graph. */
+export interface IStaticRunOptions {
+    readonly nodes?: ReadonlySet<IRuntimeNode>;
+}
+
 /**
  * Per-execution state container. Owns the link/node state arrays for
  * one inference/tick lineage, exposes the input/output entry points and
@@ -409,6 +414,8 @@ export interface IGraphNodeState extends INodeState {
  * touching this base.
  */
 export interface ISession {
+    /** Awaitable delivery boundary; implementations retain session-owned buffers. */
+    deliverLinkRefsAsync?(refs: readonly ILinkRef[], t: number): Promise<void>;
     readonly graph: IRuntimeGraph;
     readonly linkStates: ReadonlyArray<ILinkState>;
     readonly nodeStates: ReadonlyArray<INodeState>;

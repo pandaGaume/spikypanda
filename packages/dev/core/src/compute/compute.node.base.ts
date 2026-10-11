@@ -11,7 +11,7 @@
 
 import { IChannel, ISession } from "../execution/execution.interfaces";
 import { RuntimeNode } from "../execution/execution.node";
-import { IKernel, IKernelBag, IDataLink, ITensor, IKernelExecutionContext } from "./compute.interfaces";
+import { IKernel, IKernelBag, IDataLink, ITensor, IKernelExecutionContext, IKernelNodeState } from "./compute.interfaces";
 
 export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel {
     public abstract readonly nodeType: string;
@@ -56,15 +56,22 @@ export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel 
         if (super.isReady(session)) {
             return true;
         }
-        const bag = this.bag as IKernelBag | undefined;
+        const state = session.nodeStateOf(this) as IKernelNodeState | undefined;
+        const bag = state?.sessionOwnedIO ? state : (this.bag as IKernelBag | undefined);
         return this.enabled && !!bag?.pendingInput;
+    }
+
+    public override reset(session: ISession): void {
+        const state = session.nodeStateOf(this) as IKernelNodeState | undefined;
+        if (state?.sessionOwnedIO) { state.pendingInput = undefined; state.lastOutputs = undefined; }
     }
 
     // ── internal ───────────────────────────────────────────────────────
 
     private _gatherInputs(session: ISession): ITensor[] {
         const incoming = this.opsc<IDataLink>();
-        const bag = this.bag as IKernelBag | undefined;
+        const state = session.nodeStateOf(this) as IKernelNodeState | undefined;
+        const bag = state?.sessionOwnedIO ? state : (this.bag as IKernelBag | undefined);
 
         if (incoming.length === 0) {
             // Source node: pull the pre-injected external tensor from
@@ -82,8 +89,10 @@ export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel 
         // (the ONNX graph builder tags links with their positional
         // input index; arbitrary numeric ordering when not set).
         const links = session.graph.links as ReadonlyArray<IDataLink>;
-        const hasSlot = incoming.some((l) => l.slot >= 0);
-        const ordered = hasSlot ? [...incoming].sort((a, b) => a.slot - b.slot) : incoming;
+        // Source ports select outputs; numeric destination ports position inputs.
+        const inputSlot = (link: IDataLink): number => typeof link.toSlot === "number" ? link.toSlot : link.slot;
+        const hasSlot = incoming.some((l) => inputSlot(l) >= 0);
+        const ordered = hasSlot ? [...incoming].sort((a, b) => inputSlot(a) - inputSlot(b)) : incoming;
         const inputs: ITensor[] = [];
         const positional = incoming.some((link) => link.outputIndex !== undefined);
         for (const link of ordered) {
@@ -96,7 +105,7 @@ export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel 
             }
             const tensor = session.consume(idx) as ITensor | undefined;
             if (tensor) {
-                if (positional && link.slot >= 0) inputs[link.slot] = tensor;
+                if (positional && inputSlot(link) >= 0) inputs[inputSlot(link)] = tensor;
                 else inputs.push(tensor);
             }
         }
@@ -126,10 +135,15 @@ export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel 
                 Object.defineProperty(named, "name", { value: this.outputNames![i], enumerable: true, configurable: true, writable: true });
                 return named;
             });
+        // Store results in native session state; retain the legacy bag view.
+        const state = session.nodeStateOf(this) as IKernelNodeState | undefined;
+        if (state) state.lastOutputs = outputs;
         // Stash for sink collection by ComputeGraph._collectResults.
-        const bag = (this.bag ?? {}) as IKernelBag;
-        bag.lastOutputs = outputs;
-        this.bag = bag;
+        if (!state?.sessionOwnedIO) {
+            const bag = (this.bag ?? {}) as IKernelBag;
+            bag.lastOutputs = outputs;
+            this.bag = bag;
+        }
 
         // Distribute to outgoing channels. With multiple outputs, the
         // i-th output goes to the i-th outgoing link, falling back to

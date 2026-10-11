@@ -14,10 +14,10 @@
 
 import { Channel } from "../execution/execution.channel";
 import { RuntimeGraph } from "../execution/execution.graph";
-import { SchedulingMode } from "../execution/execution.interfaces";
+import { ISession, SchedulingMode } from "../execution/execution.interfaces";
 import { INode } from "../graph/graph.interfaces";
 import { cloneable } from "../graph/graph.interfaces";
-import { IComputeGraph, IKernel, IDataLink, ITensor } from "./compute.interfaces";
+import { IComputeGraph, IKernel, IDataLink, ITensor, IKernelNodeState } from "./compute.interfaces";
 
 // ─── DataLink implementation ─────────────────────────────────────────────────
 
@@ -73,42 +73,52 @@ export class ComputeGraph extends RuntimeGraph<IKernel, IDataLink> implements IC
 
     /**
      * Named-tensor inference convenience: inject inputs by source-node
-     * id/tag, drive one tick on the default session, collect outputs
+     * id/tag, drive one tick on the default or explicitly supplied session, collect outputs
      * keyed by tensor.name (or sink id/tag/nodeType fallback).
      */
-    public infer(externalInputs?: Map<string, ITensor>): Map<string, ITensor> {
-        this._injectExternalInputs(externalInputs);
-        this.run(0);
-        return this._collectResults();
+    public infer(externalInputs?: Map<string, ITensor>, session?: ISession): Map<string, ITensor> {
+        this._injectExternalInputs(externalInputs, session);
+        this.run(0, session);
+        return this._collectResults(session);
     }
 
     /**
      * Async variant of infer(). Walks the topological order awaiting
      * each node's fireAsync (falling back to fire when not provided).
      */
-    public async inferAsync(externalInputs?: Map<string, ITensor>): Promise<Map<string, ITensor>> {
-        this._injectExternalInputs(externalInputs);
-        await this.runAsync(0);
-        return this._collectResults();
+    public async inferAsync(externalInputs?: Map<string, ITensor>, session?: ISession): Promise<Map<string, ITensor>> {
+        this._injectExternalInputs(externalInputs, session);
+        await this.runAsync(0, session);
+        return this._collectResults(session);
     }
 
     // ── Internal helpers ───────────────────────────────────────────────────
 
     /**
-     * Pre-inject external tensors onto source nodes' bag.pendingInput.
+     * Inject external tensors into native session state when supplied, or the legacy source bag.
      * Kernel.fire pulls from bag.pendingInput when the node
      * has no incoming channels.
      */
-    private _injectExternalInputs(externalInputs?: Map<string, ITensor>): void {
+    private _injectExternalInputs(externalInputs?: Map<string, ITensor>, session?: ISession): void {
+        if (session && session.graph !== this) throw new Error("Inference session belongs to another graph");
+        if (session) for (const node of this.nodes) {
+            const state = session.nodeStateOf(node) as IKernelNodeState | undefined;
+            if (state) state.sessionOwnedIO = true;
+        }
         if (!externalInputs) {
             return;
         }
         for (const node of this.inputs) {
             const key = (node.id as string) ?? node.tag;
             if (key && externalInputs.has(key)) {
-                const bag = node.bag ?? {};
-                bag.pendingInput = externalInputs.get(key);
-                node.bag = bag;
+                if (session) {
+                    const state = session.nodeStateOf(node) as IKernelNodeState | undefined;
+                    if (state) state.pendingInput = externalInputs.get(key);
+                } else {
+                    const bag = node.bag ?? {};
+                    bag.pendingInput = externalInputs.get(key);
+                    node.bag = bag;
+                }
             }
         }
     }
@@ -118,10 +128,10 @@ export class ComputeGraph extends RuntimeGraph<IKernel, IDataLink> implements IC
      * named-output Map. Keyed by tensor.name when set, else by sink
      * node id / tag / nodeType.
      */
-    private _collectResults(): Map<string, ITensor> {
+    private _collectResults(session?: ISession): Map<string, ITensor> {
         const result = new Map<string, ITensor>();
         for (const node of this.outputs) {
-            const bag = node.bag;
+            const bag = session ? session.nodeStateOf(node) as IKernelNodeState | undefined : node.bag;
             if (!bag?.lastOutputs) {
                 continue;
             }
