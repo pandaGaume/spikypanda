@@ -127,17 +127,21 @@ export abstract class OnnxOpNode extends Kernel implements IDeclaresPorts {
     readonly opType: string;
     protected readonly attributes: Map<string, number>;
     protected readonly tensorAttributes: Map<string, OnnxTensorInfo>;
+    protected readonly listAttributes: Map<string, number[]>;
 
     public readonly inputPorts: ReadonlyArray<IPortDescriptor>;
     public readonly outputPorts: ReadonlyArray<IPortDescriptor>;
+    public override readonly outputNames: ReadonlyArray<string>;
 
     constructor(nodeInfo: OnnxNodeInfo) {
         super();
         this.opType = nodeInfo.opType;
         this.attributes = nodeInfo.attributes;
         this.tensorAttributes = nodeInfo.tensorAttributes ?? new Map();
+        this.listAttributes = nodeInfo.listAttributes ?? new Map();
         this.inputPorts = this._buildInputPorts(nodeInfo);
         this.outputPorts = this._buildOutputPorts(nodeInfo);
+        this.outputNames = nodeInfo.outputs;
     }
 
     get nodeType(): string {
@@ -151,9 +155,9 @@ export abstract class OnnxOpNode extends Kernel implements IDeclaresPorts {
      * refine the type label.
      */
     protected _buildInputPorts(nodeInfo: OnnxNodeInfo): ReadonlyArray<IPortDescriptor> {
-        return nodeInfo.inputs.map((_, i) => ({
+        return nodeInfo.inputs.map((name, i) => ({
             slot: i,
-            optional: false,
+            optional: name.length === 0,
             type: "tensor",
         }));
     }
@@ -176,6 +180,13 @@ export abstract class OnnxOpNode extends Kernel implements IDeclaresPorts {
 
     protected attrTensor(name: string): OnnxTensorInfo | undefined {
         return this.tensorAttributes.get(name);
+    }
+
+    protected attrInts(name: string): number[] | undefined {
+        const list = this.listAttributes.get(name);
+        if (list) return list;
+        const value = this.attributes.get(name);
+        return value === undefined ? undefined : [value];
     }
 }
 
@@ -218,8 +229,9 @@ export function getInitializerData(init: OnnxTensorInfo): Float32Array {
                 return out;
             }
             case OnnxDataType.FLOAT:
+                return Float32Array.from({ length: raw.byteLength / 4 }, (_, i) => view.getFloat32(i * 4, true));
             default:
-                return new Float32Array(raw.buffer, raw.byteOffset, raw.byteLength / 4);
+                throw new Error(`Unsupported ONNX initializer dtype: ${init.dataType} (${init.name})`);
         }
     }
     return new Float32Array(0);

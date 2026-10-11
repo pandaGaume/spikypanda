@@ -1,3 +1,5 @@
+import { OnnxDataType } from "../onnx-types";
+import { binaryTensor, normalizeAxis, broadcastShape, broadcastIndex } from "./tensor-utils";
 import type { ITensor } from "spikypanda-core";
 import type { OnnxNodeInfo } from "../onnx-types";
 import { OnnxOpNode, makeTensor, getInitializerData, OnnxOpRegistry } from "../registry";
@@ -5,77 +7,45 @@ import { OnnxOpNode, makeTensor, getInitializerData, OnnxOpRegistry } from "../r
 class DivNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     execute(inputs: ITensor[]): ITensor[] {
-        const a = inputs[0],
-            b = inputs[1];
-        const size = Math.max(a.data.length, b.data.length);
-        const out = new Float32Array(size);
-        for (let i = 0; i < size; i++) {
-            out[i] = a.data[i % a.data.length] / b.data[i % b.data.length];
-        }
-        return [makeTensor(out, a.data.length >= b.data.length ? [...a.shape] : [...b.shape])];
+        return [binaryTensor(inputs[0], inputs[1], (a, b) => a / b)];
     }
 }
 
 class PowNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     execute(inputs: ITensor[]): ITensor[] {
-        const a = inputs[0],
-            b = inputs[1];
-        const size = Math.max(a.data.length, b.data.length);
-        const out = new Float32Array(size);
-        for (let i = 0; i < size; i++) {
-            out[i] = Math.pow(a.data[i % a.data.length], b.data[i % b.data.length]);
-        }
-        return [makeTensor(out, a.data.length >= b.data.length ? [...a.shape] : [...b.shape])];
+        return [binaryTensor(inputs[0], inputs[1], Math.pow)];
     }
 }
 
 class ReduceMeanNode extends OnnxOpNode {
-    private readonly axis: number;
-    private readonly keepdims: boolean;
     readonly outputShapes: number[][] = [];
-
-    constructor(info: OnnxNodeInfo) {
-        super(info);
-        this.axis = this.attrInt("axes", -1);
-        this.keepdims = this.attrInt("keepdims", 1) !== 0;
-    }
-
     execute(inputs: ITensor[]): ITensor[] {
-        const X = inputs[0];
-        const shape = X.shape;
-        const rank = shape.length;
-        const axis = this.axis < 0 ? rank + this.axis : this.axis;
-
-        if (rank === 2) {
-            if (axis === 1) {
-                const rows = shape[0];
-                const cols = shape[1];
-                const out = new Float32Array(rows);
-                for (let r = 0; r < rows; r++) {
-                    let sum = 0;
-                    for (let c = 0; c < cols; c++) sum += X.data[r * cols + c];
-                    out[r] = sum / cols;
+        const x = inputs[0];
+        const raw = inputs[1] ? Array.from(inputs[1].data) : this.attrInts("axes");
+        if (raw?.length === 0 && this.attrInt("noop_with_empty_axes", 0)) return [makeTensor(new Float32Array(x.data), [...x.shape])];
+        const axes = raw?.length ? raw.map((a) => normalizeAxis(a, x.shape.length)) : x.shape.map((_, i) => i);
+        if (new Set(axes).size !== axes.length) throw new Error("Duplicate reduction axes");
+        const keep = this.attrInt("keepdims", 1) !== 0;
+        const shape = x.shape.flatMap((d, i) => (axes.includes(i) ? (keep ? [1] : []) : [d]));
+        const out = new Float32Array(shape.reduce((a, b) => a * b, 1));
+        for (let i = 0; i < x.data.length; i++) {
+            let rem = i,
+                index = 0,
+                stride = 1;
+            for (let d = x.shape.length - 1; d >= 0; d--) {
+                const coordinate = rem % x.shape[d];
+                rem = Math.floor(rem / x.shape[d]);
+                if (!axes.includes(d)) {
+                    index += coordinate * stride;
+                    stride *= x.shape[d];
                 }
-                return [makeTensor(out, this.keepdims ? [rows, 1] : [rows])];
             }
-            if (axis === 0) {
-                const rows = shape[0];
-                const cols = shape[1];
-                const out = new Float32Array(cols);
-                for (let c = 0; c < cols; c++) {
-                    let sum = 0;
-                    for (let r = 0; r < rows; r++) sum += X.data[r * cols + c];
-                    out[c] = sum / rows;
-                }
-                return [makeTensor(out, this.keepdims ? [1, cols] : [cols])];
-            }
+            out[index] += x.data[i];
         }
-
-        // Fallback: reduce all
-        let sum = 0;
-        for (let i = 0; i < X.data.length; i++) sum += X.data[i];
-        return [makeTensor(new Float32Array([sum / X.data.length]), [1])];
+        const count = axes.reduce((n, a) => n * x.shape[a], 1);
+        for (let i = 0; i < out.length; i++) out[i] /= count;
+        return [makeTensor(out, shape)];
     }
 }
 
@@ -141,37 +111,32 @@ class ReduceL2Node extends OnnxOpNode {
 }
 
 class ReduceSumNode extends OnnxOpNode {
-    private readonly axis: number;
-    private readonly keepdims: boolean;
     readonly outputShapes: number[][] = [];
-
-    constructor(info: OnnxNodeInfo) {
-        super(info);
-        this.axis = this.attrInt("axes", -1);
-        this.keepdims = this.attrInt("keepdims", 1) !== 0;
-    }
-
     execute(inputs: ITensor[]): ITensor[] {
-        const X = inputs[0];
-        const shape = X.shape;
-        const rank = shape.length;
-        const axis = this.axis < 0 ? rank + this.axis : this.axis;
-
-        if (rank === 2 && axis === 1) {
-            const rows = shape[0],
-                cols = shape[1];
-            const out = new Float32Array(rows);
-            for (let r = 0; r < rows; r++) {
-                let sum = 0;
-                for (let c = 0; c < cols; c++) sum += X.data[r * cols + c];
-                out[r] = sum;
+        const x = inputs[0];
+        const raw = inputs[1] ? Array.from(inputs[1].data) : this.attrInts("axes");
+        if (raw?.length === 0 && this.attrInt("noop_with_empty_axes", 0)) return [makeTensor(new Float32Array(x.data), [...x.shape])];
+        const axes = raw?.length ? raw.map((a) => normalizeAxis(a, x.shape.length)) : x.shape.map((_, i) => i);
+        if (new Set(axes).size !== axes.length) throw new Error("Duplicate reduction axes");
+        const keep = this.attrInt("keepdims", 1) !== 0;
+        const shape = x.shape.flatMap((d, i) => (axes.includes(i) ? (keep ? [1] : []) : [d]));
+        const out = new Float32Array(shape.reduce((a, b) => a * b, 1));
+        for (let i = 0; i < x.data.length; i++) {
+            let rem = i,
+                index = 0,
+                stride = 1;
+            for (let d = x.shape.length - 1; d >= 0; d--) {
+                const coordinate = rem % x.shape[d];
+                rem = Math.floor(rem / x.shape[d]);
+                if (!axes.includes(d)) {
+                    index += coordinate * stride;
+                    stride *= x.shape[d];
+                }
             }
-            return [makeTensor(out, this.keepdims ? [rows, 1] : [rows])];
+            out[index] += x.data[i];
         }
 
-        let sum = 0;
-        for (let i = 0; i < X.data.length; i++) sum += X.data[i];
-        return [makeTensor(new Float32Array([sum]), [1])];
+        return [makeTensor(out, shape)];
     }
 }
 
@@ -185,8 +150,19 @@ class IdentityNode extends OnnxOpNode {
 class CastNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     execute(inputs: ITensor[]): ITensor[] {
-        // All data is Float32 in our runtime — cast is a no-op
-        return [makeTensor(new Float32Array(inputs[0].data), [...inputs[0].shape])];
+        const x = inputs[0],
+            to = this.attrInt("to", OnnxDataType.FLOAT);
+        let convert: (value: number) => number;
+        if (to === OnnxDataType.FLOAT) convert = (v) => v;
+        else if (to === OnnxDataType.BOOL) convert = (v) => Number(v !== 0);
+        else if (to === OnnxDataType.INT32 || to === OnnxDataType.INT64)
+            convert = (v) => {
+                const integer = Math.trunc(v);
+                if (!Number.isFinite(integer) || Math.abs(integer) > 16777216) throw new Error("Cast integer is outside exact FP32 range");
+                return integer;
+            };
+        else throw new Error(`Unsupported Cast dtype: ${to}`);
+        return [makeTensor(Float32Array.from(x.data, convert), [...x.shape])];
     }
 }
 
@@ -302,52 +278,13 @@ class ConstantNode extends OnnxOpNode {
 class ExpandNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     execute(inputs: ITensor[]): ITensor[] {
-        const data = inputs[0];
-        const shapeT = inputs[1];
-        const targetShape = Array.from(shapeT.data).map(Math.round);
-
-        // Compute output size
-        let outSize = 1;
-        for (const d of targetShape) outSize *= d;
-
-        // If shapes are identical, return copy
-        if (data.data.length === outSize) {
-            return [makeTensor(new Float32Array(data.data), targetShape)];
-        }
-
-        // Broadcast: align shapes right, expand dims of size 1
-        const srcShape = data.shape;
-        const rank = targetShape.length;
-        const srcPadded: number[] = [];
-        for (let i = 0; i < rank; i++) {
-            const si = i - (rank - srcShape.length);
-            srcPadded.push(si >= 0 ? srcShape[si] : 1);
-        }
-
-        const out = new Float32Array(outSize);
-        // Compute strides for source and output
-        const outStrides: number[] = new Array(rank);
-        const srcStrides: number[] = new Array(rank);
-        outStrides[rank - 1] = 1;
-        srcStrides[rank - 1] = 1;
-        for (let i = rank - 2; i >= 0; i--) {
-            outStrides[i] = outStrides[i + 1] * targetShape[i + 1];
-            srcStrides[i] = srcStrides[i + 1] * srcPadded[i + 1];
-        }
-
-        for (let idx = 0; idx < outSize; idx++) {
-            let srcIdx = 0;
-            let rem = idx;
-            for (let d = 0; d < rank; d++) {
-                const coord = Math.floor(rem / outStrides[d]);
-                rem %= outStrides[d];
-                // If source dim is 1, broadcast (use coord 0)
-                srcIdx += (srcPadded[d] === 1 ? 0 : coord) * srcStrides[d];
-            }
-            out[idx] = data.data[srcIdx];
-        }
-
-        return [makeTensor(out, targetShape)];
+        const [data, target] = inputs;
+        const requested = Array.from(target.data);
+        if (requested.some((d) => !Number.isInteger(d) || d < 0)) throw new Error("Invalid Expand shape");
+        const shape = broadcastShape(data.shape, requested);
+        const out = new Float32Array(shape.reduce((a, b) => a * b, 1));
+        for (let i = 0; i < out.length; i++) out[i] = data.data[broadcastIndex(i, shape, data.shape)];
+        return [makeTensor(out, shape)];
     }
 }
 

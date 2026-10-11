@@ -25,3 +25,7 @@ if (typeof window !== "undefined") {
         (<any>window).S = (<any>window).SPIKYPANDA;
     }
 }
+
+// The root optimizer contract transforms graphs. Numerical training retains its scoped legacy name.
+export type { IOptimizer } from "./graph/graph.optimizer";
+export type { IOptimizer as ITrainingOptimizer } from "./neuralnetwork/nn.training";

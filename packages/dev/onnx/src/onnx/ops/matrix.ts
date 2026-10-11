@@ -1,89 +1,141 @@
-import type { ITensor } from "spikypanda-core";
+import { normalizeAxis, strides, broadcastShape, broadcastIndex } from "./tensor-utils";
+import type { ITensor, IKernelExecutionContext, INodeState, ISession } from "spikypanda-core";
 import type { OnnxNodeInfo } from "../onnx-types";
-import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "../registry";
+import { OnnxOpNode, makeTensor, shapeSize, OnnxOpRegistry } from "../registry";
 
 /**
  * MatMul: matrix multiplication A @ B.
- * Supports 2D [M,K] x [K,N] → [M,N].
+ * Supports vector promotion and broadcast batch dimensions of arbitrary rank.
  * For 1D inputs: [K] treated as [1,K] or [K,1] as needed.
  */
 class MatMulNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     execute(inputs: ITensor[]): ITensor[] {
-        const A = inputs[0];
-        const B = inputs[1];
-
-        let M: number, K: number, N: number;
-        if (A.shape.length === 1) {
-            M = 1;
-            K = A.shape[0];
-        } else {
-            M = A.shape[0];
-            K = A.shape[1];
-        }
-        if (B.shape.length === 1) {
-            N = 1;
-        } else {
-            N = B.shape[1];
-        }
-
-        const out = new Float32Array(M * N);
-        for (let m = 0; m < M; m++) {
-            for (let n = 0; n < N; n++) {
-                let sum = 0;
-                for (let k = 0; k < K; k++) {
-                    const ai = A.shape.length === 1 ? k : m * K + k;
-                    const bi = B.shape.length === 1 ? k : k * N + n;
-                    sum += A.data[ai] * B.data[bi];
+        const [a, b] = inputs;
+        if (!a.shape.length || !b.shape.length) throw new Error("MatMul requires rank >= 1");
+        const av = a.shape.length === 1,
+            bv = b.shape.length === 1;
+        const as = av ? [1, ...a.shape] : a.shape;
+        const bs = bv ? [...b.shape, 1] : b.shape;
+        const [m, k] = as.slice(-2),
+            [bk, n] = bs.slice(-2);
+        if (k !== bk) throw new Error(`MatMul inner dimensions differ: ${k} != ${bk}`);
+        const ab = as.slice(0, -2),
+            bb = bs.slice(0, -2);
+        const batch = broadcastShape(ab, bb);
+        const out = new Float32Array(shapeSize(batch) * m * n);
+        // Contiguous dot products avoid a cache miss for every weight in
+        // large Transformer projections. Keep double accumulation before
+        // the final FP32 store, as in the generic implementation.
+        const bt = new Float32Array(b.data.length);
+        for (let t = 0; t < shapeSize(bb); t++) for (let h = 0; h < k; h++) for (let j = 0; j < n; j++) bt[t * n * k + j * k + h] = b.data[t * k * n + h * n + j];
+        for (let t = 0; t < shapeSize(batch); t++) {
+            const ai = broadcastIndex(t, batch, ab) * m * k;
+            const bi = broadcastIndex(t, batch, bb) * n * k;
+            for (let i = 0; i < m; i++)
+                for (let j = 0; j < n; j++) {
+                    let sum = 0;
+                    const aRow = ai + i * k,
+                        bRow = bi + j * k;
+                    for (let h = 0; h < k; h++) sum += a.data[aRow + h] * bt[bRow + h];
+                    out[t * m * n + i * n + j] = sum;
                 }
-                out[m * N + n] = sum;
-            }
         }
-
-        if (A.shape.length === 1 && B.shape.length === 1) return [makeTensor(out, [1])];
-        if (A.shape.length === 1) return [makeTensor(out, [N])];
-        if (B.shape.length === 1) return [makeTensor(out, [M])];
-        return [makeTensor(out, [M, N])];
+        const shape = [...batch, ...(av ? [] : [m]), ...(bv ? [] : [n])];
+        return [makeTensor(out, shape)];
     }
 }
 
 /**
  * Transpose: permute dimensions.
- * Supports 2D (swap rows/cols) and 3D.
+ * Supports arbitrary rank and the declared permutation.
  */
+interface ITransposeCache {
+    shape: number[];
+    perm: number[];
+    inputBits: Uint32Array;
+    output: Float32Array;
+}
+interface ITransposeState extends INodeState {
+    transposeCache?: ITransposeCache;
+}
+
 class TransposeNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
-    execute(inputs: ITensor[]): ITensor[] {
-        const inp = inputs[0];
-        const rank = inp.shape.length;
-
-        if (rank === 2) {
-            const [rows, cols] = inp.shape;
-            const out = new Float32Array(inp.data.length);
-            for (let r = 0; r < rows; r++) {
-                for (let c = 0; c < cols; c++) {
-                    out[c * rows + r] = inp.data[r * cols + c];
+    createNodeState(): ITransposeState {
+        return { linksReady: 0 };
+    }
+    override reset(session: ISession): void {
+        const state = session.nodeStateOf(this) as ITransposeState | undefined;
+        if (state) state.transposeCache = undefined;
+    }
+    execute(inputs: ITensor[], context?: IKernelExecutionContext): ITensor[] {
+        const inp = inputs[0],
+            rank = inp.shape.length;
+        const perm = this.attrInts("perm") ?? Array.from({ length: rank }, (_, i) => rank - 1 - i);
+        if (perm.length !== rank || new Set(perm).size !== rank || perm.some((i) => !Number.isInteger(i) || i < 0 || i >= rank)) throw new Error("Invalid Transpose permutation");
+        const shape = perm.map((i) => inp.shape[i]);
+        const state = context?.nodeState as ITransposeState | undefined;
+        const bits = inp.cacheable && state ? new Uint32Array(inp.data.buffer, inp.data.byteOffset, inp.data.length) : undefined;
+        const cached = state?.transposeCache;
+        if (
+            bits &&
+            cached &&
+            cached.inputBits.length === bits.length &&
+            cached.shape.length === rank &&
+            cached.shape.every((d, i) => d === inp.shape[i]) &&
+            cached.perm.every((d, i) => d === perm[i])
+        ) {
+            let equal = true;
+            for (let i = 0; i < bits.length; i++)
+                if (bits[i] !== cached.inputBits[i]) {
+                    equal = false;
+                    break;
+                }
+            if (equal) return [{ ...makeTensor(new Float32Array(cached.output), shape), cacheable: true }];
+        }
+        if (state) state.transposeCache = undefined;
+        const sourceStrides = strides(inp.shape),
+            out = new Float32Array(inp.data.length),
+            sourceData = inp.data;
+        if (rank === 2 && perm[0] === 1 && perm[1] === 0) {
+            // Blocked 2D transpose keeps source and destination tiles in cache.
+            const rows = inp.shape[0],
+                columns = inp.shape[1],
+                tile = 32;
+            for (let row = 0; row < rows; row += tile)
+                for (let col = 0; col < columns; col += tile)
+                    for (let i = row; i < Math.min(row + tile, rows); i++) for (let j = col; j < Math.min(col + tile, columns); j++) out[j * rows + i] = sourceData[i * columns + j];
+        } else if (out.length) {
+            const mappedStrides = perm.map((i) => sourceStrides[i]);
+            let block = 1,
+                outerRank = rank;
+            // A contiguous trailing block can be copied as a single span.
+            for (let d = rank - 1; d >= 0; d--) {
+                if (shape[d] !== 1 && mappedStrides[d] !== block) break;
+                block *= shape[d];
+                outerRank = d;
+            }
+            const coordinates = new Array<number>(outerRank).fill(0);
+            let source = 0;
+            for (let offset = 0; offset < out.length; offset += block) {
+                if (block === 1) out[offset] = sourceData[source];
+                else out.set(sourceData.subarray(source, source + block), offset);
+                for (let d = outerRank - 1; d >= 0; d--) {
+                    coordinates[d]++;
+                    source += mappedStrides[d];
+                    if (coordinates[d] < shape[d]) break;
+                    coordinates[d] = 0;
+                    source -= mappedStrides[d] * shape[d];
                 }
             }
-            return [makeTensor(out, [cols, rows])];
         }
-
-        if (rank === 3) {
-            const [d0, d1, d2] = inp.shape;
-            // Default perm: reverse → [d2, d1, d0]
-            const out = new Float32Array(inp.data.length);
-            for (let i = 0; i < d0; i++) {
-                for (let j = 0; j < d1; j++) {
-                    for (let k = 0; k < d2; k++) {
-                        out[k * d1 * d0 + j * d0 + i] = inp.data[i * d1 * d2 + j * d2 + k];
-                    }
-                }
-            }
-            return [makeTensor(out, [d2, d1, d0])];
+        if (bits && state) {
+            state.transposeCache = { shape: [...inp.shape], perm: [...perm], inputBits: new Uint32Array(bits), output: out };
+            // Consumers receive an independent buffer, so mutating a result cannot poison the cache.
+            return [{ ...makeTensor(new Float32Array(out), shape), cacheable: true }];
         }
-
-        // 1D: noop
-        return [makeTensor(new Float32Array(inp.data), [...inp.shape])];
+        return [makeTensor(out, shape)];
     }
 }
 
@@ -94,33 +146,30 @@ class TransposeNode extends OnnxOpNode {
 class ReshapeNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     execute(inputs: ITensor[]): ITensor[] {
-        const data = inputs[0];
-        const shapeT = inputs[1];
-        if (!shapeT) return [makeTensor(new Float32Array(data.data), [...data.shape])];
-
-        const newShape: number[] = [];
-        let inferIdx = -1;
-        let known = 1;
-        for (let i = 0; i < shapeT.data.length; i++) {
-            const d = Math.round(shapeT.data[i]);
+        const [data, target] = inputs;
+        if (!target) throw new Error("Reshape requires a shape tensor");
+        const allowzero = this.attrInt("allowzero", 0) !== 0;
+        let inferred = -1;
+        const shape = Array.from(target.data, (d, i) => {
+            if (!Number.isInteger(d) || d < -1) throw new Error("Invalid Reshape dimension");
             if (d === -1) {
-                inferIdx = i;
-                newShape.push(-1);
-            } else if (d === 0) {
-                // 0 means copy from input
-                const dim = data.shape[i] ?? 1;
-                newShape.push(dim);
-                known *= dim;
-            } else {
-                newShape.push(d);
-                known *= d;
+                if (inferred >= 0) throw new Error("Reshape permits only one inferred dimension");
+                inferred = i;
+                return -1;
             }
+            if (d === 0 && !allowzero) {
+                if (i >= data.shape.length) throw new Error("Reshape copied dimension is absent");
+                return data.shape[i];
+            }
+            return d;
+        });
+        const known = shape.filter((d) => d !== -1).reduce((a, b) => a * b, 1);
+        if (inferred >= 0) {
+            if (!known || data.data.length % known !== 0) throw new Error("Cannot infer Reshape dimension");
+            shape[inferred] = data.data.length / known;
         }
-        if (inferIdx >= 0) {
-            newShape[inferIdx] = data.data.length / known;
-        }
-
-        return [makeTensor(new Float32Array(data.data), newShape)];
+        if (shapeSize(shape) !== data.data.length) throw new Error("Reshape element count differs");
+        return [makeTensor(new Float32Array(data.data), shape)];
     }
 }
 
@@ -152,10 +201,11 @@ class SqueezeNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     execute(inputs: ITensor[]): ITensor[] {
         const inp = inputs[0];
-        const axes = inputs.length >= 2 && inputs[1] ? Array.from(inputs[1].data).map(Math.round) : null;
-        const newShape = axes ? inp.shape.filter((_, i) => !axes.includes(i)) : inp.shape.filter((d) => d !== 1);
-        if (newShape.length === 0) newShape.push(1);
-        return [makeTensor(new Float32Array(inp.data), newShape)];
+        const raw = inputs[1] ? Array.from(inputs[1].data) : this.attrInts("axes");
+        const axes = raw?.map((a) => normalizeAxis(a, inp.shape.length));
+        if (axes && (new Set(axes).size !== axes.length || axes.some((a) => inp.shape[a] !== 1))) throw new Error("Invalid Squeeze axes");
+        const shape = inp.shape.filter((d, i) => (axes ? !axes.includes(i) : d !== 1));
+        return [makeTensor(new Float32Array(inp.data), shape)];
     }
 }
 
@@ -166,54 +216,40 @@ class UnsqueezeNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     execute(inputs: ITensor[]): ITensor[] {
         const inp = inputs[0];
-        const axesT = inputs[1];
-        if (!axesT) return [makeTensor(new Float32Array(inp.data), [...inp.shape])];
-        const axes = Array.from(axesT.data)
-            .map(Math.round)
-            .sort((a, b) => a - b);
-        const newShape = [...inp.shape];
-        for (const a of axes) {
-            newShape.splice(a, 0, 1);
-        }
-        return [makeTensor(new Float32Array(inp.data), newShape)];
+        const raw = inputs[1] ? Array.from(inputs[1].data) : this.attrInts("axes");
+        if (!raw) throw new Error("Unsqueeze requires axes");
+        const axes = raw.map((a) => normalizeAxis(a, inp.shape.length + raw.length)).sort((a, b) => a - b);
+        if (new Set(axes).size !== axes.length) throw new Error("Duplicate Unsqueeze axes");
+        const shape = [...inp.shape];
+        for (const a of axes) shape.splice(a, 0, 1);
+        return [makeTensor(new Float32Array(inp.data), shape)];
     }
 }
 
 /**
  * Gather: select elements along axis using indices.
- * Simplified: supports axis=0, 1D/2D.
+ * Preserves the complete indices shape and supports any axis.
  */
 class GatherNode extends OnnxOpNode {
-    private readonly axis: number;
     readonly outputShapes: number[][] = [];
-    constructor(info: OnnxNodeInfo) {
-        super(info);
-        this.axis = this.attrInt("axis", 0);
-    }
     execute(inputs: ITensor[]): ITensor[] {
-        const data = inputs[0];
-        const indices = inputs[1];
-        if (!indices) return [makeTensor(new Float32Array(data.data), [...data.shape])];
-
-        if (this.axis === 0 && data.shape.length === 2) {
-            const cols = data.shape[1];
-            const numIdx = indices.data.length;
-            const out = new Float32Array(numIdx * cols);
-            for (let i = 0; i < numIdx; i++) {
-                const idx = Math.round(indices.data[i]);
-                for (let c = 0; c < cols; c++) {
-                    out[i * cols + c] = data.data[idx * cols + c];
-                }
+        const [data, indices] = inputs;
+        if (!indices) throw new Error("Gather requires indices");
+        const axis = normalizeAxis(this.attrInt("axis", 0), data.shape.length);
+        const dim = data.shape[axis];
+        const outer = shapeSize(data.shape.slice(0, axis)),
+            inner = shapeSize(data.shape.slice(axis + 1));
+        const shape = [...data.shape.slice(0, axis), ...indices.shape, ...data.shape.slice(axis + 1)];
+        const out = new Float32Array(shapeSize(shape));
+        for (let o = 0; o < outer; o++)
+            for (let i = 0; i < indices.data.length; i++) {
+                let index = indices.data[i];
+                if (!Number.isInteger(index) || index < -dim || index >= dim) throw new Error(`Gather index out of range: ${index}`);
+                if (index < 0) index += dim;
+                const start = (o * dim + index) * inner;
+                out.set(data.data.subarray(start, start + inner), (o * indices.data.length + i) * inner);
             }
-            return [makeTensor(out, [numIdx, cols])];
-        }
-
-        // Fallback: 1D gather
-        const out = new Float32Array(indices.data.length);
-        for (let i = 0; i < indices.data.length; i++) {
-            out[i] = data.data[Math.round(indices.data[i])] ?? 0;
-        }
-        return [makeTensor(out, [indices.data.length])];
+        return [makeTensor(out, shape)];
     }
 }
 

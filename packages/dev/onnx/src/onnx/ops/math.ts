@@ -1,88 +1,28 @@
+import { normalizeAxis, binaryTensor } from "./tensor-utils";
 import type { ITensor } from "spikypanda-core";
 import type { OnnxNodeInfo } from "../onnx-types";
 import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "../registry";
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-/** Compute total element count from shape. */
-function size(shape: number[]): number {
-    let s = 1;
-    for (const d of shape) s *= Math.max(d, 1);
-    return s;
-}
-
-/**
- * Broadcast two shapes (up to 3D). Returns the broadcast result shape.
- * Follows numpy broadcasting rules: align right, expand dims of size 1.
- */
-function broadcastShape(a: number[], b: number[]): number[] {
-    const rank = Math.max(a.length, b.length);
-    const out: number[] = new Array(rank);
-    for (let i = 0; i < rank; i++) {
-        const da = a[a.length - rank + i] ?? 1;
-        const db = b[b.length - rank + i] ?? 1;
-        if (da !== db && da !== 1 && db !== 1) {
-            throw new Error(`Cannot broadcast shapes [${a}] and [${b}]`);
-        }
-        out[i] = Math.max(da, db);
-    }
-    return out;
-}
-
-/** Map a flat index in the broadcast output back to a flat index in a source tensor. */
-function broadcastIndex(flatIdx: number, outShape: number[], srcShape: number[]): number {
-    const rank = outShape.length;
-    let idx = 0;
-    let stride = 1;
-    for (let i = rank - 1; i >= 0; i--) {
-        const coord = Math.floor(flatIdx / strideof(outShape, i)) % outShape[i];
-        const srcDim = srcShape[srcShape.length - rank + i] ?? 1;
-        const srcCoord = srcDim === 1 ? 0 : coord;
-        idx += srcCoord * stride;
-        stride *= srcDim;
-    }
-    return idx;
-}
-
-function strideof(shape: number[], dim: number): number {
-    let s = 1;
-    for (let i = dim + 1; i < shape.length; i++) s *= shape[i];
-    return s;
-}
-
-/** Element-wise binary op with broadcasting. */
-function binaryOp(a: ITensor, b: ITensor, fn: (x: number, y: number) => number): ITensor {
-    const outShape = broadcastShape(a.shape, b.shape);
-    const outSize = size(outShape);
-    const out = new Float32Array(outSize);
-    for (let i = 0; i < outSize; i++) {
-        const ai = broadcastIndex(i, outShape, a.shape);
-        const bi = broadcastIndex(i, outShape, b.shape);
-        out[i] = fn(a.data[ai], b.data[bi]);
-    }
-    return makeTensor(out, outShape);
-}
 
 // ─── Ops ────────────────────────────────────────────────────────────────────
 
 class MulNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     execute(inputs: ITensor[]): ITensor[] {
-        return [binaryOp(inputs[0], inputs[1], (a, b) => a * b)];
+        return [binaryTensor(inputs[0], inputs[1], (a, b) => a * b)];
     }
 }
 
 class SubNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     execute(inputs: ITensor[]): ITensor[] {
-        return [binaryOp(inputs[0], inputs[1], (a, b) => a - b)];
+        return [binaryTensor(inputs[0], inputs[1], (a, b) => a - b)];
     }
 }
 
 class AddNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
     execute(inputs: ITensor[]): ITensor[] {
-        return [binaryOp(inputs[0], inputs[1], (a, b) => a + b)];
+        return [binaryTensor(inputs[0], inputs[1], (a, b) => a + b)];
     }
 }
 
@@ -185,123 +125,80 @@ class GemmNode extends OnnxOpNode {
  * Concat along axis (supports axis 0 and 1 for 2D tensors).
  */
 class ConcatNode extends OnnxOpNode {
-    private readonly axis: number;
     readonly outputShapes: number[][] = [];
-
-    constructor(nodeInfo: OnnxNodeInfo) {
-        super(nodeInfo);
-        this.axis = this.attrInt("axis", 0);
-    }
-
     execute(inputs: ITensor[]): ITensor[] {
-        if (inputs.length === 0) return [makeTensor(new Float32Array(0), [0])];
-        if (inputs.length === 1) return [makeTensor(new Float32Array(inputs[0].data), [...inputs[0].shape])];
-
-        // Normalize negative axis (ONNX convention: -1 = last axis).
-        const rank = inputs[0].shape.length;
-        const axis = this.axis < 0 ? rank + this.axis : this.axis;
-
-        if (axis === 0) {
-            // Stack along rows: all must have same cols
-            const cols = inputs[0].shape.length >= 2 ? inputs[0].shape[1] : inputs[0].data.length;
-            let totalRows = 0;
-            for (const inp of inputs) {
-                totalRows += inp.shape.length >= 2 ? inp.shape[0] : 1;
-            }
-            const out = new Float32Array(totalRows * cols);
-            let offset = 0;
-            for (const inp of inputs) {
-                out.set(inp.data, offset);
-                offset += inp.data.length;
-            }
-            return [makeTensor(out, [totalRows, cols])];
+        const axis = normalizeAxis(this.attrInt("axis", 0), inputs[0].shape.length);
+        const shape = [...inputs[0].shape];
+        shape[axis] = 0;
+        for (const inp of inputs) {
+            if (inp.shape.length !== shape.length || inp.shape.some((d, i) => i !== axis && d !== shape[i])) throw new Error("Concat dimensions differ");
+            shape[axis] += inp.shape[axis];
         }
-
-        if (axis === 1) {
-            // Concat along columns: all must have same rows
-            const rows = inputs[0].shape.length >= 2 ? inputs[0].shape[0] : 1;
-            let totalCols = 0;
-            const colsList: number[] = [];
+        const inner = shape.slice(axis + 1).reduce((a, b) => a * b, 1),
+            outer = shape.slice(0, axis).reduce((a, b) => a * b, 1);
+        const out = new Float32Array(shape.reduce((a, b) => a * b, 1));
+        let offset = 0;
+        for (let o = 0; o < outer; o++)
             for (const inp of inputs) {
-                const c = inp.shape.length >= 2 ? inp.shape[1] : inp.data.length;
-                colsList.push(c);
-                totalCols += c;
+                const width = inp.shape[axis] * inner;
+                out.set(inp.data.subarray(o * width, (o + 1) * width), offset);
+                offset += width;
             }
-            const out = new Float32Array(rows * totalCols);
-            for (let r = 0; r < rows; r++) {
-                let outCol = 0;
-                for (let t = 0; t < inputs.length; t++) {
-                    const cols = colsList[t];
-                    const srcRow = inputs[t].shape.length >= 2 ? inputs[t].shape[1] : inputs[t].data.length;
-                    for (let c = 0; c < cols; c++) {
-                        out[r * totalCols + outCol + c] = inputs[t].data[r * srcRow + c];
-                    }
-                    outCol += cols;
-                }
-            }
-            return [makeTensor(out, [rows, totalCols])];
-        }
-
-        throw new Error(`Concat axis=${axis} not supported (only 0 and 1)`);
+        return [makeTensor(out, shape)];
     }
 }
 
 /**
- * Slice: column-based slicing for 2D tensors.
+ * Slice: multidimensional slicing with explicit steps.
  * ONNX opset ≥10 uses tensor inputs for starts/ends/axes/steps.
  * Opset <10 uses attributes.
  * We support both: try tensor inputs first, fall back to attributes.
  */
 class SliceNode extends OnnxOpNode {
     readonly outputShapes: number[][] = [];
-
     execute(inputs: ITensor[]): ITensor[] {
-        const data = inputs[0];
-        if (!data) return [makeTensor(new Float32Array(0), [0])];
-
-        // Opset ≥10: starts, ends, axes, steps are tensor inputs
-        const hasInputStarts = inputs.length >= 3 && inputs[1] && inputs[2];
-
-        let start: number;
-        let end: number;
-        let axis: number;
-
-        if (hasInputStarts) {
-            start = Math.round(inputs[1].data[0]);
-            end = Math.round(inputs[2].data[0]);
-            axis = inputs.length >= 4 && inputs[3] ? Math.round(inputs[3].data[0]) : 0;
-        } else {
-            // Fall back to attributes (opset <10)
-            start = this.attrInt("starts", 0);
-            end = this.attrInt("ends", 0);
-            axis = this.attrInt("axes", 1); // default axis=1 for column slicing
+        const x = inputs[0],
+            rank = x.shape.length;
+        const starts = inputs[1] ? Array.from(inputs[1].data) : this.attrInts("starts");
+        const ends = inputs[2] ? Array.from(inputs[2].data) : this.attrInts("ends");
+        if (!starts || !ends || starts.length !== ends.length) throw new Error("Slice requires matching starts and ends");
+        const axes = inputs[3] ? Array.from(inputs[3].data) : (this.attrInts("axes") ?? starts.map((_, i) => i));
+        const steps = inputs[4] ? Array.from(inputs[4].data) : starts.map(() => 1);
+        if (axes.length !== starts.length || steps.length !== starts.length) throw new Error("Slice parameter lengths differ");
+        const offsets = x.shape.map(() => 0),
+            increments = x.shape.map(() => 1),
+            shape = [...x.shape],
+            used = new Set<number>();
+        for (let i = 0; i < axes.length; i++) {
+            const a = normalizeAxis(axes[i], rank),
+                d = x.shape[a],
+                step = steps[i];
+            if (used.has(a) || !Number.isInteger(step) || step === 0) throw new Error("Invalid Slice axes or steps");
+            used.add(a);
+            let start = starts[i],
+                end = ends[i];
+            if (!Number.isInteger(start) || !Number.isInteger(end)) throw new Error("Invalid Slice bounds");
+            if (start < 0) start += d;
+            if (end < 0) end += d;
+            start = Math.min(Math.max(start, 0), step > 0 ? d : d - 1);
+            end = Math.min(Math.max(end, step > 0 ? 0 : -1), d);
+            offsets[a] = start;
+            increments[a] = step;
+            shape[a] = Math.max(0, Math.ceil((end - start) / step));
         }
-
-        // Handle negative indices
-        const dimSize = data.shape[axis] ?? data.data.length;
-        if (start < 0) start = dimSize + start;
-        if (end < 0) end = dimSize + end;
-        if (end > dimSize || end > 2147483000) end = dimSize;
-        start = Math.max(0, Math.min(start, dimSize));
-        end = Math.max(start, Math.min(end, dimSize));
-        const sliceLen = end - start;
-
-        if (data.shape.length < 2 || axis === 0) {
-            // 1D or axis=0: simple slice
-            const sliced = data.data.slice(start, end);
-            return [makeTensor(sliced, [sliceLen])];
-        }
-
-        // 2D, axis=1: slice columns
-        const rows = data.shape[0];
-        const cols = data.shape[1];
-        const out = new Float32Array(rows * sliceLen);
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < sliceLen; c++) {
-                out[r * sliceLen + c] = data.data[r * cols + start + c];
+        const out = new Float32Array(shape.reduce((a, b) => a * b, 1));
+        for (let i = 0; i < out.length; i++) {
+            let remainder = i,
+                source = 0,
+                stride = 1;
+            for (let a = rank - 1; a >= 0; a--) {
+                source += (offsets[a] + (remainder % shape[a]) * increments[a]) * stride;
+                remainder = Math.floor(remainder / shape[a]);
+                stride *= x.shape[a];
             }
+            out[i] = x.data[source];
         }
-        return [makeTensor(out, [rows, sliceLen])];
+        return [makeTensor(out, shape)];
     }
 }
 

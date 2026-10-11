@@ -1,3 +1,4 @@
+import { normalizeAxis } from "./tensor-utils";
 import type { ITensor } from "spikypanda-core";
 import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "../registry";
 import type { OnnxNodeInfo } from "../onnx-types";
@@ -52,37 +53,29 @@ class ClipNode extends OnnxOpNode {
 }
 
 class SoftmaxNode extends OnnxOpNode {
-    private readonly axis: number;
     readonly outputShapes: number[][] = [];
-    constructor(info: OnnxNodeInfo) {
-        super(info);
-        this.axis = this.attrInt("axis", -1);
-    }
     execute(inputs: ITensor[]): ITensor[] {
-        const inp = inputs[0];
-        const shape = inp.shape;
-        const rank = shape.length;
-        const axis = this.axis < 0 ? rank + this.axis : this.axis;
-
-        if (rank <= 1 || axis === rank - 1) {
-            // Softmax over last dim
-            const cols = shape[rank - 1] ?? inp.data.length;
-            const rows = inp.data.length / cols;
-            const out = new Float32Array(inp.data.length);
-            for (let r = 0; r < rows; r++) {
-                let maxVal = -Infinity;
-                for (let c = 0; c < cols; c++) maxVal = Math.max(maxVal, inp.data[r * cols + c]);
+        const inp = inputs[0],
+            shape = inp.shape;
+        const axis = normalizeAxis(this.attrInt("axis", -1), shape.length);
+        const width = shape[axis],
+            inner = shape.slice(axis + 1).reduce((a, b) => a * b, 1);
+        const outer = shape.slice(0, axis).reduce((a, b) => a * b, 1);
+        const out = new Float32Array(inp.data.length);
+        for (let o = 0; o < outer; o++)
+            for (let j = 0; j < inner; j++) {
+                const base = o * width * inner + j;
+                let max = -Infinity;
+                for (let c = 0; c < width; c++) max = Math.max(max, inp.data[base + c * inner]);
                 let sum = 0;
-                for (let c = 0; c < cols; c++) {
-                    out[r * cols + c] = Math.exp(inp.data[r * cols + c] - maxVal);
-                    sum += out[r * cols + c];
+                for (let c = 0; c < width; c++) {
+                    const value = Math.exp(inp.data[base + c * inner] - max);
+                    out[base + c * inner] = value;
+                    sum += value;
                 }
-                for (let c = 0; c < cols; c++) out[r * cols + c] /= sum;
+                for (let c = 0; c < width; c++) out[base + c * inner] /= sum;
             }
-            return [makeTensor(out, [...shape])];
-        }
-        // Fallback: flatten softmax
-        return [unaryMap(inp, (x) => x)];
+        return [makeTensor(out, [...shape])];
     }
 }
 
@@ -121,7 +114,22 @@ class NegNode extends OnnxOpNode {
     }
 }
 
+function erf(x: number): number {
+    const sign = x < 0 ? -1 : 1;
+    const a = Math.abs(x),
+        t = 1 / (1 + 0.3275911 * a);
+    return sign * (1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-a * a));
+}
+
+class ErfNode extends OnnxOpNode {
+    readonly outputShapes: number[][] = [];
+    execute(inputs: ITensor[]): ITensor[] {
+        return [unaryMap(inputs[0], erf)];
+    }
+}
+
 export function registerActivationOps(registry: OnnxOpRegistry): void {
+    registry.register("Erf", (info) => new ErfNode(info));
     registry.register("Relu", (info) => new ReluNode(info));
     registry.register("Sigmoid", (info) => new SigmoidNode(info));
     registry.register("Tanh", (info) => new TanhNode(info));

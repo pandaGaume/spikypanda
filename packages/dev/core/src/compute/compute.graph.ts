@@ -16,6 +16,7 @@ import { Channel } from "../execution/execution.channel";
 import { RuntimeGraph } from "../execution/execution.graph";
 import { SchedulingMode } from "../execution/execution.interfaces";
 import { INode } from "../graph/graph.interfaces";
+import { cloneable } from "../graph/graph.interfaces";
 import { IComputeGraph, IKernel, IDataLink, ITensor } from "./compute.interfaces";
 
 // ─── DataLink implementation ─────────────────────────────────────────────────
@@ -27,10 +28,12 @@ import { IComputeGraph, IKernel, IDataLink, ITensor } from "./compute.interfaces
  */
 export class DataLink extends Channel<ITensor> implements IDataLink {
     public override readonly slot: number;
+    @cloneable public readonly outputIndex?: number;
 
-    public constructor(from?: IKernel, to?: IKernel, inputIndex = -1) {
+    public constructor(from?: IKernel, to?: IKernel, inputIndex = -1, outputIndex?: number) {
         super(from as INode | undefined, to as INode | undefined, inputIndex);
         this.slot = inputIndex;
+        this.outputIndex = outputIndex;
     }
 }
 

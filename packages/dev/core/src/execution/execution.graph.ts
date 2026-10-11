@@ -600,18 +600,7 @@ export class RuntimeGraph<N extends IRuntimeNode = IRuntimeNode, L extends IChan
 
     public async runAsync(t: number, session?: ISession): Promise<void> {
         const target = session ?? this._ensureDefaultSession();
-        // Walk the static topological order so each node's promise can
-        // be awaited in turn. fireAsync is mandatory on IRuntimeNode,
-        // so no cast or capability check is needed; nodes with no
-        // async work inherit the default (sync) implementation.
-        const order = Scheduler.GetStaticOrder(this);
-        for (const node of order) {
-            node.processControlInputs?.(target);
-            if (!node.enabled || !node.isReady(target)) {
-                continue;
-            }
-            await node.fireAsync(target, t);
-        }
+        await Scheduler.RunStaticAsync(target, t);
     }
 
     /**

@@ -225,6 +225,25 @@ export class Scheduler {
         void t;
     }
 
+    public static async RunStaticAsync(session: ISession, t: number): Promise<void> {
+        const order = Scheduler.GetStaticOrder(session.graph);
+        const sess = session as Session;
+        const deliverPending = (): void => {
+            const pending = sess.queue.splice(0, sess.queue.length);
+            for (const item of pending) {
+                if (isLinkRef(item)) sess.deliverLinkRef(item);
+            }
+        };
+        deliverPending();
+        for (const node of order) {
+            deliverPending();
+            node.processControlInputs?.(session);
+            if (!node.enabled || !node.isReady(session)) continue;
+            await node.fireAsync(session, t);
+        }
+        deliverPending();
+    }
+
     public static CheckStaticEligible(graph: IRuntimeGraph): IStaticEligibility {
         const { reasons } = topoSort(graph);
         return {

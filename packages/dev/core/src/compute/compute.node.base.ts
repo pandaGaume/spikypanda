@@ -9,16 +9,17 @@
 // only implement execute() (and optionally executeAsync()).
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { ISession } from "../execution/execution.interfaces";
+import { IChannel, ISession } from "../execution/execution.interfaces";
 import { RuntimeNode } from "../execution/execution.node";
-import { IKernel, IKernelBag, IDataLink, ITensor } from "./compute.interfaces";
+import { IKernel, IKernelBag, IDataLink, ITensor, IKernelExecutionContext } from "./compute.interfaces";
 
 export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel {
     public abstract readonly nodeType: string;
     public abstract readonly outputShapes: number[][];
+    public readonly outputNames?: ReadonlyArray<string>;
 
-    public abstract execute(inputs: ITensor[]): ITensor[];
-    public executeAsync?(inputs: ITensor[]): Promise<ITensor[]>;
+    public abstract execute(inputs: ITensor[], context?: IKernelExecutionContext): ITensor[];
+    public executeAsync?(inputs: ITensor[], context?: IKernelExecutionContext): Promise<ITensor[]>;
 
     /**
      * Adapter: gather inputs (consume from session linkStates in slot
@@ -28,7 +29,7 @@ export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel 
      */
     public override fire(session: ISession, _t: number): void {
         const inputs = this._gatherInputs(session);
-        const outputs = this.execute(inputs);
+        const outputs = this.execute(inputs, { nodeState: session.nodeStateOf(this) });
         this._publishOutputs(session, outputs);
     }
 
@@ -38,7 +39,8 @@ export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel 
      */
     public override async fireAsync(session: ISession, _t: number): Promise<void> {
         const inputs = this._gatherInputs(session);
-        const outputs = this.executeAsync ? await this.executeAsync(inputs) : this.execute(inputs);
+        const context = { nodeState: session.nodeStateOf(this) };
+        const outputs = this.executeAsync ? await this.executeAsync(inputs, context) : this.execute(inputs, context);
         this._publishOutputs(session, outputs);
     }
 
@@ -83,6 +85,7 @@ export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel 
         const hasSlot = incoming.some((l) => l.slot >= 0);
         const ordered = hasSlot ? [...incoming].sort((a, b) => a.slot - b.slot) : incoming;
         const inputs: ITensor[] = [];
+        const positional = incoming.some((link) => link.outputIndex !== undefined);
         for (const link of ordered) {
             if (!link.enabled) {
                 continue;
@@ -93,7 +96,8 @@ export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel 
             }
             const tensor = session.consume(idx) as ITensor | undefined;
             if (tensor) {
-                inputs.push(tensor);
+                if (positional && link.slot >= 0) inputs[link.slot] = tensor;
+                else inputs.push(tensor);
             }
         }
         if (inputs.length === 0 && bag?.pendingInput) {
@@ -113,6 +117,15 @@ export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel 
     }
 
     private _publishOutputs(session: ISession, outputs: ITensor[]): void {
+        if (this.outputNames)
+            outputs = outputs.map((tensor, i) => {
+                if (!this.outputNames![i]) return tensor;
+                // Preserve tensor implementations with accessors or prototype
+                // methods. Naming an output must not materialize its data.
+                const named = Object.create(Object.getPrototypeOf(tensor), Object.getOwnPropertyDescriptors(tensor)) as ITensor;
+                Object.defineProperty(named, "name", { value: this.outputNames![i], enumerable: true, configurable: true, writable: true });
+                return named;
+            });
         // Stash for sink collection by ComputeGraph._collectResults.
         const bag = (this.bag ?? {}) as IKernelBag;
         bag.lastOutputs = outputs;
@@ -134,7 +147,9 @@ export abstract class Kernel extends RuntimeNode<IKernelBag> implements IKernel 
             if (idx < 0) {
                 continue;
             }
-            const tensor = outputs.length > 1 ? (outputs[i] ?? outputs[0]) : outputs[0];
+            const sourceSlot = (link as IChannel).slot;
+            const named = typeof sourceSlot === "string" ? outputs.find((tensor) => tensor.name === sourceSlot) : undefined;
+            const tensor = link.outputIndex !== undefined ? outputs[link.outputIndex] : (named ?? (outputs.length > 1 ? (outputs[i] ?? outputs[0]) : outputs[0]));
             if (tensor) {
                 session.publish(idx, tensor);
             }

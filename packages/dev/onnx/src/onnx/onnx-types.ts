@@ -148,6 +148,7 @@ export const TENSOR_NAME = 8;
 export const TENSOR_RAW_DATA = 9;
 export const TENSOR_DOUBLE_DATA = 10;
 export const TENSOR_UINT64_DATA = 11;
+export const TENSOR_EXTERNAL_DATA = 13;
 
 // ─── Max constants ───────────────────────────────────────────────────────
 
@@ -165,6 +166,8 @@ export interface OnnxTensorInfo {
     dims: number[];
     floatData?: Float32Array;
     rawData?: Uint8Array;
+    /** External TensorProto data references, resolved explicitly by the host. */
+    externalData?: Map<string, string>;
 }
 
 /**

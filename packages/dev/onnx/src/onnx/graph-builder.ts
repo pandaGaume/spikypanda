@@ -4,6 +4,11 @@ import type { OnnxValueInfo } from "./onnx-types";
 import type { OnnxTensorInfo } from "./onnx-types";
 import { OnnxOpRegistry, getInitializerData, makeTensor } from "./registry";
 
+export interface IOnnxBuildOptions {
+    /** Return the exact byte range for this initializer; transport and path policy belong to the host. */
+    readonly resolveExternalData?: (initializer: OnnxTensorInfo) => Uint8Array;
+}
+
 /**
  * Source node that provides a constant tensor (from an ONNX initializer).
  */
@@ -15,7 +20,9 @@ class InitializerNode extends Kernel {
     constructor(init: OnnxTensorInfo) {
         super();
         const data = getInitializerData(init);
+        if (data.length !== init.dims.reduce((a, b) => a * b, 1)) throw new Error(`ONNX initializer size differs: ${init.name}`);
         this.tensor = makeTensor(data, [...init.dims], init.name);
+        this.tensor.cacheable = true;
         this.outputShapes = [init.dims];
     }
 
@@ -57,7 +64,10 @@ export class OnnxGraphBuilder {
         this.registry = registry;
     }
 
-    build(model: OnnxParseResult): {
+    build(
+        model: OnnxParseResult,
+        options: IOnnxBuildOptions = {},
+    ): {
         graph: ComputeGraph;
         inputNames: string[];
         outputNames: string[];
@@ -76,12 +86,16 @@ export class OnnxGraphBuilder {
         // Build initializer map
         const initMap = new Map<string, OnnxTensorInfo>();
         for (const init of model.initializers) {
-            initMap.set(init.name, init);
+            if (init.externalData?.size && !init.rawData && !init.floatData) {
+                if (!options.resolveExternalData) throw new Error(`External ONNX data requires a host resolver: ${init.name}`);
+                initMap.set(init.name, { ...init, rawData: options.resolveExternalData(init) });
+            } else initMap.set(init.name, init);
         }
 
         // Create initializer nodes
         for (const init of model.initializers) {
-            const node = new InitializerNode(init);
+            const resolved = initMap.get(init.name)!;
+            const node = new InitializerNode(resolved);
             nodes.push(node);
             tensorProducer.set(init.name, { node, outputIndex: 0 });
         }
@@ -100,9 +114,9 @@ export class OnnxGraphBuilder {
 
         // Create operator nodes
         for (const nodeInfo of model.nodes) {
-            if (!this.registry.has(nodeInfo.opType)) {
-                console.warn(`Skipping unsupported ONNX op: ${nodeInfo.opType}`);
-                continue;
+            const opKey = OnnxOpRegistry.qualify(nodeInfo.opType, nodeInfo.domain);
+            if (!this.registry.has(opKey)) {
+                throw new Error(`Unsupported ONNX op: ${opKey} (${nodeInfo.name || nodeInfo.outputs[0]})`);
             }
 
             const node = this.registry.create(nodeInfo, initMap);
@@ -137,10 +151,9 @@ export class OnnxGraphBuilder {
         for (const consumer of tensorConsumers) {
             const producer = tensorProducer.get(consumer.tensorName);
             if (!producer) {
-                console.warn(`No producer for tensor: ${consumer.tensorName}`);
-                continue;
+                throw new Error(`No producer for tensor: ${consumer.tensorName}`);
             }
-            const link = new DataLink(producer.node as IKernel, consumer.node as IKernel, consumer.inputIndex);
+            const link = new DataLink(producer.node as IKernel, consumer.node as IKernel, consumer.inputIndex, producer.outputIndex);
             links.push(link);
         }
 
@@ -156,6 +169,8 @@ export class OnnxGraphBuilder {
             const producer = tensorProducer.get(name);
             if (producer) {
                 outputNodes.set(name, producer.node);
+            } else {
+                throw new Error(`No producer for ONNX output: ${name}`);
             }
         }
 

@@ -9,7 +9,7 @@
 // MPC rollout, and any other DAG of pure compute kernels.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { IChannel, IRuntimeGraph, IRuntimeNode } from "../execution/execution.interfaces";
+import { IChannel, IRuntimeGraph, IRuntimeNode, INodeState } from "../execution/execution.interfaces";
 import type { IQuantizationParams } from "../quantization/quantization.interfaces";
 import type { IUnitTag } from "../math/math.units";
 
@@ -25,6 +25,9 @@ import type { IUnitTag } from "../math/math.units";
 export interface ITensor {
     /** Raw data. Float32 covers all our numeric use cases. */
     data: Float32Array;
+
+    /** Eligibility hint for content-validated derived-data caches, not an immutability promise. */
+    cacheable?: boolean;
 
     /**
      * Dimensions of the tensor.
@@ -77,6 +80,8 @@ export interface ITensor {
 export interface IDataLink extends IChannel<ITensor> {
     /** Positional index of this link at the consumer node. -1 if unset. */
     readonly slot: number;
+    /** Explicit producer output index; omitted for legacy link-order routing. */
+    readonly outputIndex?: number;
 }
 
 // ─── Compute node ────────────────────────────────────────────────────────────
@@ -109,6 +114,11 @@ export interface IKernelBag {
  *   Inputs are gathered from opsc() in slot-sorted order.
  * - **Sink**: terminal node whose lastOutputs are collected by run().
  */
+/** Optional native execution state. Direct kernel calls can omit it and remain stateless. */
+export interface IKernelExecutionContext {
+    readonly nodeState: INodeState | undefined;
+}
+
 export interface IKernel extends IRuntimeNode<IKernelBag> {
     /**
      * Human-readable node type for debugging (e.g., "lidar_source", "convolution").
@@ -121,6 +131,8 @@ export interface IKernel extends IRuntimeNode<IKernelBag> {
      * One shape per output (most nodes have a single output).
      */
     readonly outputShapes: number[][];
+    /** Optional tensor names in producer-output order, used by importers. */
+    readonly outputNames?: ReadonlyArray<string>;
 
     /**
      * Execute this compute node synchronously.
@@ -133,14 +145,14 @@ export interface IKernel extends IRuntimeNode<IKernelBag> {
      * @param inputs  Input tensors from upstream nodes.
      * @returns       Output tensors to be written to outgoing IDataLinks.
      */
-    execute(inputs: ITensor[]): ITensor[];
+    execute(inputs: ITensor[], context?: IKernelExecutionContext): ITensor[];
 
     /**
      * Optional async execution for nodes that require it (GPU, ONNX
      * runtime, Web Workers). When present, Kernel.fireAsync
      * awaits this; CPU-only nodes do not need to implement it.
      */
-    executeAsync?(inputs: ITensor[]): Promise<ITensor[]>;
+    executeAsync?(inputs: ITensor[], context?: IKernelExecutionContext): Promise<ITensor[]>;
 
     // fireAsync is inherited from IRuntimeNode (mandatory there) and
     // overridden by Kernel to route through executeAsync.

@@ -60,8 +60,11 @@ import {
     TENSOR_DIMS,
     TENSOR_DATA_TYPE,
     TENSOR_FLOAT_DATA,
+    TENSOR_INT32_DATA,
+    TENSOR_INT64_DATA,
     TENSOR_NAME,
     TENSOR_RAW_DATA,
+    TENSOR_EXTERNAL_DATA,
 } from "./onnx-types";
 
 // ─── Error codes ─────────────────────────────────────────────────────────
@@ -265,13 +268,13 @@ export class OnnxParser {
                 case NODE_INPUT: {
                     const s = reader.readString(KEY_MAX_LENGTH);
                     if (s === null) return null;
-                    if (s.length > 0) node.inputs.push(s);
+                    node.inputs.push(s);
                     break;
                 }
                 case NODE_OUTPUT: {
                     const s = reader.readString(KEY_MAX_LENGTH);
                     if (s === null) return null;
-                    if (s.length > 0) node.outputs.push(s);
+                    node.outputs.push(s);
                     break;
                 }
                 case NODE_NAME: {
@@ -336,12 +339,30 @@ export class OnnxParser {
                                 break;
                             }
                             case ATT_INTS: {
+                                if (reader.wireType === WireType.LEN) {
+                                    const countMax = reader.readLength(false);
+                                    if (countMax === null) return null;
+                                    const values = new Int32Array(countMax);
+                                    const count = reader.readPackedInt32(values, countMax);
+                                    if (count === null) return null;
+                                    attInts.push(...Array.from(values.subarray(0, count)));
+                                    break;
+                                }
                                 const i = reader.readInt64();
                                 if (i === null) return null;
                                 attInts.push(i);
                                 break;
                             }
                             case ATT_FLOATS: {
+                                if (reader.wireType === WireType.LEN) {
+                                    const byteLength = reader.readLength(false);
+                                    if (byteLength === null) return null;
+                                    const values = new Float32Array(byteLength / 4);
+                                    const count = reader.readPackedFloat32(values, values.length);
+                                    if (count === null) return null;
+                                    attFloats.push(...Array.from(values.subarray(0, count)));
+                                    break;
+                                }
                                 const f = reader.readFloat();
                                 if (f === null) return null;
                                 attFloats.push(f);
@@ -503,6 +524,7 @@ export class OnnxParser {
         };
 
         let totalElements = 0;
+        const typedValues: number[] = [];
 
         while (reader.readTag()) {
             switch (reader.fieldNumber) {
@@ -520,13 +542,14 @@ export class OnnxParser {
                         tensor.dims.push(v);
                     }
                     // Recompute total elements
-                    totalElements = tensor.dims.length > 0 ? tensor.dims.reduce((a, b) => a * b, 1) : 0;
+                    totalElements = tensor.dims.reduce((a, b) => a * b, 1);
                     break;
                 }
                 case TENSOR_DATA_TYPE: {
                     const v = reader.readInt32();
                     if (v === null) return null;
                     tensor.dataType = v as OnnxDataType;
+                    if (totalElements === 0 && tensor.dims.length === 0) totalElements = 1;
                     break;
                 }
                 case TENSOR_NAME: {
@@ -550,13 +573,23 @@ export class OnnxParser {
                         // Individual float (rare)
                         const f = reader.readFloat();
                         if (f === null) return null;
-                        // Find next empty slot
-                        for (let i = 0; i < totalElements; i++) {
-                            if (tensor.floatData[i] === 0) {
-                                tensor.floatData[i] = f;
-                                break;
-                            }
-                        }
+                        typedValues.push(f);
+                    }
+                    break;
+                }
+                case TENSOR_INT32_DATA:
+                case TENSOR_INT64_DATA: {
+                    if (reader.wireType === WireType.LEN) {
+                        const byteLength = reader.readLength(false);
+                        if (byteLength === null) return null;
+                        const values = new Int32Array(byteLength);
+                        const count = reader.readPackedInt32(values, values.length);
+                        if (count === null) return null;
+                        typedValues.push(...Array.from(values.subarray(0, count)));
+                    } else {
+                        const value = reader.readInt64();
+                        if (value === null) return null;
+                        typedValues.push(value);
                     }
                     break;
                 }
@@ -566,9 +599,22 @@ export class OnnxParser {
                     tensor.rawData = bytes;
                     // If float type, also create the float view
                     if (tensor.dataType === OnnxDataType.FLOAT && totalElements > 0) {
-                        const aligned = new Float32Array(bytes.buffer, bytes.byteOffset, totalElements);
-                        tensor.floatData = new Float32Array(aligned); // copy to ensure alignment
+                        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+                        tensor.floatData = Float32Array.from({ length: totalElements }, (_, i) => view.getFloat32(i * 4, true));
                     }
+                    break;
+                }
+                case TENSOR_EXTERNAL_DATA: {
+                    const entry = reader.getSubMessageReader();
+                    if (!entry) return null;
+                    let key = "",
+                        value = "";
+                    while (entry.readTag()) {
+                        if (entry.fieldNumber === 1) key = entry.readString(1024) ?? "";
+                        else if (entry.fieldNumber === 2) value = entry.readString(4096) ?? "";
+                        else entry.skip();
+                    }
+                    (tensor.externalData ??= new Map()).set(key, value);
                     break;
                 }
                 default: {
@@ -578,6 +624,7 @@ export class OnnxParser {
             }
         }
 
+        if (typedValues.length) tensor.floatData = new Float32Array(typedValues);
         return tensor;
     }
 

@@ -4,6 +4,9 @@ export * from "./onnx-parser";
 export * from "./onnx-writer";
 export * from "./registry";
 export { OnnxGraphBuilder } from "./graph-builder";
+export type { IOnnxBuildOptions } from "./graph-builder";
 export * from "./onnx.graph";
 export * from "./ops/index";
 export * from "./export/index";
+
+export * from "./optimization/constant-transpose.optimizer";

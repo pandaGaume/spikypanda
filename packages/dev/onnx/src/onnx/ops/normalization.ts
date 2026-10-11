@@ -1,3 +1,4 @@
+import { normalizeAxis, broadcastShape, broadcastIndex } from "./tensor-utils";
 import type { ITensor } from "spikypanda-core";
 import type { OnnxNodeInfo } from "../onnx-types";
 import { OnnxOpNode, makeTensor, OnnxOpRegistry } from "../registry";
@@ -80,10 +81,18 @@ class LayerNormNode extends OnnxOpNode {
 
         const shape = X.shape;
         const rank = shape.length;
-        const axis = this.axis < 0 ? rank + this.axis : this.axis;
+        const axis = normalizeAxis(this.axis, rank);
         const outerSize = shape.slice(0, axis).reduce((a, b) => a * b, 1);
         const innerSize = shape.slice(axis).reduce((a, b) => a * b, 1);
 
+        if (this.attrInt("stash_type", 1) !== 1) throw new Error("LayerNormalization supports FLOAT stash_type only");
+        for (const parameter of [scale, bias]) {
+            if (parameter && JSON.stringify(broadcastShape(shape, parameter.shape)) !== JSON.stringify(shape))
+                throw new Error("LayerNormalization parameter cannot broadcast to input");
+        }
+        const statsShape = [...shape.slice(0, axis), ...shape.slice(axis).map(() => 1)];
+        const means = new Float32Array(outerSize),
+            inverse = new Float32Array(outerSize);
         const out = new Float32Array(X.data.length);
         for (let i = 0; i < outerSize; i++) {
             const base = i * innerSize;
@@ -97,15 +106,17 @@ class LayerNormNode extends OnnxOpNode {
             }
             variance /= innerSize;
             const invStd = 1 / Math.sqrt(variance + this.eps);
+            means[i] = mean;
+            inverse[i] = invStd;
             for (let j = 0; j < innerSize; j++) {
                 let val = (X.data[base + j] - mean) * invStd;
-                if (scale) val *= scale.data[j % scale.data.length];
-                if (bias) val += bias.data[j % bias.data.length];
+                if (scale) val *= scale.data[broadcastIndex(base + j, shape, scale.shape)];
+                if (bias) val += bias.data[broadcastIndex(base + j, shape, bias.shape)];
                 out[base + j] = val;
             }
         }
 
-        return [makeTensor(out, [...shape])];
+        return [makeTensor(out, [...shape]), makeTensor(means, statsShape), makeTensor(inverse, statsShape)].slice(0, this.outputPorts.length);
     }
 }
 
