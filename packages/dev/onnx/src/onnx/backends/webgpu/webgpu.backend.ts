@@ -31,6 +31,17 @@ class WebGpuStorage implements ITensorStorage {
     }
 }
 
+/** Options of a WebGPU backend. */
+export interface IWebGpuBackendOptions {
+    /**
+     * Wait for each operation's validation result before returning (debugging). By default the
+     * validation result is collected without blocking: an error fails the backend and surfaces at
+     * the next operation, read, inspection or disposal. Waiting costs one CPU/GPU round trip per
+     * operation, which browsers can make expensive.
+     */
+    readonly immediateValidation?: boolean;
+}
+
 /** One backend per native runtime session. The supplied GPUDevice is borrowed. */
 export class WebGpuBackend implements IComputeBackend {
     public readonly id = "webgpu";
@@ -43,19 +54,53 @@ export class WebGpuBackend implements IComputeBackend {
     private readonly pending = new Set<Promise<unknown>>();
     private constructor(
         private readonly device: IWebGpuDevice,
-        private readonly pipeline: IWebGpuPipeline
+        private readonly pipeline: IWebGpuPipeline,
+        private readonly options: IWebGpuBackendOptions = {}
     ) {
         void device.lost.then((info) => {
             this.failure = info.message || "WebGPU device lost";
         });
     }
-    public static async create(device: IWebGpuDevice): Promise<WebGpuBackend> {
+    public static async create(device: IWebGpuDevice, options: IWebGpuBackendOptions = {}): Promise<WebGpuBackend> {
         const module = device.createShaderModule({ code: MATMUL_WGSL });
         const info = await module.getCompilationInfo();
         const errors = info.messages.filter((m) => m.type === "error");
         if (errors.length) throw new Error(errors.map((m) => m.message).join("\n"));
         const pipeline = await device.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: "main" } });
-        return new WebGpuBackend(device, pipeline);
+        return new WebGpuBackend(device, pipeline, options);
+    }
+    /** Tracks background GPU work so inspection and disposal can wait for it. */
+    private track(work: Promise<unknown>): void {
+        this.pending.add(work);
+        void work.then(
+            () => this.pending.delete(work),
+            (error) => {
+                this.failure = String(error);
+                this.pending.delete(work);
+            }
+        );
+    }
+    /** Closes the operation's validation scope, waiting for it only in immediate mode. */
+    private async validate(): Promise<void> {
+        const scope = this.device.popErrorScope();
+        if (this.options.immediateValidation) {
+            const validation = await scope;
+            if (validation) throw new Error(validation.message);
+            return;
+        }
+        this.track(
+            scope.then((validation) => {
+                if (validation) this.failure ??= `WebGPU validation: ${validation.message}`;
+            })
+        );
+    }
+    /** Releases transient buffers once the submitted work that uses them is done. */
+    private releaseWhenDone(transient: readonly IWebGpuBuffer[]): void {
+        this.track(
+            this.device.queue.onSubmittedWorkDone().then(() => {
+                for (const buffer of transient) this.release(buffer);
+            })
+        );
     }
     private check(): void {
         if (this.closed) throw new Error("WebGPU backend is closed");
@@ -149,19 +194,8 @@ export class WebGpuBackend implements IComputeBackend {
                 this.stats.dispatches++;
             }
             scopeOpen = false;
-            const validation = await this.device.popErrorScope();
-            if (validation) throw new Error(validation.message);
-            const done = this.device.queue.onSubmittedWorkDone().then(() => {
-                for (const buffer of transient) this.release(buffer);
-            });
-            this.pending.add(done);
-            void done.then(
-                () => this.pending.delete(done),
-                (error) => {
-                    this.failure = String(error);
-                    this.pending.delete(done);
-                }
-            );
+            await this.validate();
+            this.releaseWhenDone(transient);
             return [new DeviceTensor(plan.shape, new WebGpuStorage(this, output, count * 4))];
         } catch (error) {
             if (scopeOpen) await this.device.popErrorScope();
@@ -210,19 +244,8 @@ export class WebGpuBackend implements IComputeBackend {
                 this.stats.dispatches++;
             }
             scopeOpen = false;
-            const validation = await this.device.popErrorScope();
-            if (validation) throw new Error(validation.message);
-            const done = this.device.queue.onSubmittedWorkDone().then(() => {
-                for (const buffer of transient) this.release(buffer);
-            });
-            this.pending.add(done);
-            void done.then(
-                () => this.pending.delete(done),
-                (error) => {
-                    this.failure = String(error);
-                    this.pending.delete(done);
-                }
-            );
+            await this.validate();
+            this.releaseWhenDone(transient);
             return plan.shapes.map((shape, i) => new DeviceTensor(shape, new WebGpuStorage(this, outputs[i], shape.reduce((a, b) => a * b, 1) * 4)));
         } catch (error) {
             if (scopeOpen) await this.device.popErrorScope();
@@ -243,6 +266,9 @@ export class WebGpuBackend implements IComputeBackend {
             await staging.mapAsync(MAP_READ);
             const result = new Float32Array(staging.getMappedRange().slice(0));
             staging.unmap();
+            // A deferred validation error from earlier work must not be returned as data.
+            await Promise.all(this.pending);
+            this.check();
             return result;
         } finally {
             this.release(staging);
