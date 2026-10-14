@@ -3,6 +3,7 @@ import type { OnnxNodeInfo } from "../../onnx-types";
 
 export const WEBGPU_OPERATORS = [
     "MatMul",
+    "Gemm",
     "Add",
     "Sub",
     "Mul",
@@ -82,7 +83,26 @@ export function planWebGpuOperator(op: string, inputs: readonly ITensor[], info?
         bound = inputs;
     const binary: Record<string, string> = { Add: "x+z", Sub: "x-z", Mul: "x*z", Div: "x/z", Pow: "powerValue(x,z)" };
     const unary: Record<string, string> = { Relu: "max(0.0,x)", Sigmoid: "1.0/(1.0+exp(-x))", Tanh: "tanh(x)", Erf: "erfValue(x)", Exp: "exp(x)", Sqrt: "sqrt(x)" };
-    if (binary[op]) {
+    if (op === "Gemm") {
+        if (inputs.length < 2 || inputs.length > 3) throw new Error("Gemm requires two matrices and an optional bias");
+        const a = inputs[0].shape, b = inputs[1].shape;
+        if (a.length !== 2 || b.length !== 2) throw new Error("Gemm requires rank-two matrices");
+        const transA = attr("transA", 0), transB = attr("transB", 0);
+        if (![0, 1].includes(transA) || ![0, 1].includes(transB)) throw new Error("Invalid Gemm transpose flag");
+        const m = a[transA ? 1 : 0], k = a[transA ? 0 : 1], n = b[transB ? 0 : 1];
+        if (k !== b[transB ? 1 : 0]) throw new Error("Gemm inner dimensions differ");
+        const alpha = Math.fround(attr("alpha", 1)), beta = Math.fround(attr("beta", 1));
+        if (!Number.isFinite(alpha) || !Number.isFinite(beta)) throw new Error("Gemm coefficients must be finite FP32 values");
+        shape = [m, n]; outputs = [shape]; work = size(shape);
+        const c = inputs[2]?.shape;
+        if (c && (c.length > 2 || c.some((d, i) => d !== 1 && d !== shape[2 - c.length + i])))
+            throw new Error("Gemm bias cannot broadcast to output");
+        const ai = transA ? `k*${uint(m)}+row` : `row*${uint(k)}+k`;
+        const bi = transB ? `col*${uint(k)}+k` : `k*${uint(n)}+col`;
+        body = `let row=i/${uint(Math.max(1, n))};let col=i%${uint(Math.max(1, n))};var sum=0.0;` +
+            `for(var k=0u;k<${uint(k)};k++){sum+=a0[${ai}]*a1[${bi}];}` +
+            `y0[i]=${alpha.toExponential(9)}*sum${c ? `+${beta.toExponential(9)}*a2[${index(shape, c)}]` : ""};`;
+    } else if (binary[op]) {
         if (inputs.length !== 2) throw new Error("Binary operator requires two inputs");
         shape = broadcast(shape, inputs[1].shape);
         outputs = [shape];

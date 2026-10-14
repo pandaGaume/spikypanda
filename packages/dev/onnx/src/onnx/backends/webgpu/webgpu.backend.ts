@@ -248,6 +248,13 @@ export class WebGpuBackend implements IComputeBackend {
             this.release(staging);
         }
     }
+    /** Allocation diagnostics after submitted work and transient release complete. */
+    public async inspect(): Promise<{ liveAllocations: number }> {
+        this.check();
+        await this.device.queue.onSubmittedWorkDone();
+        await Promise.all(this.pending);
+        return { liveAllocations: this.buffers.size };
+    }
     public async dispose(): Promise<void> {
         if (this.closed) return;
         if (this.busy) throw new Error("Stop runtime execution before disposing its WebGPU backend");
