@@ -1,8 +1,10 @@
 import type { IPlugin, IPluginContext } from "spikypanda-nodeeditor";
 import { createLibsPlasmaNode, isMaterialSpecView, LibsPlasmaNode, PLASMA_IN_MATERIAL, PLASMA_OUT_EMISSION } from "./plasma.node.js";
 
+export * from "./boltzmann.js";
 export * from "./engine.js";
 export * from "./physical.js";
+export * from "./window-fit.js";
 export { LibsPlasmaNode, createLibsPlasmaNode, isMaterialSpecView, PLASMA_IN_MATERIAL, PLASMA_OUT_EMISSION };
 export type { IMaterialSpecView } from "./plasma.node.js";
 
