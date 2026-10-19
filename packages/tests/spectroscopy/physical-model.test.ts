@@ -142,9 +142,11 @@ describe("sahaRatio and ionisationFractions", () => {
     };
 
     it("leaves calcium almost entirely ionised at 10 000 K", () => {
-        // E_ion(Ca I) = 6.11 eV, the lowest of the eight elements, so
-        // calcium is the textbook case: its LIBS spectrum is dominated
-        // by ION lines even at modest temperatures.
+        // E_ion(Ca I) = 6.11 eV, fourth lowest of the twelve elements
+        // after K at 4.34, Na at 5.14 and Al at 5.99, so calcium is the
+        // textbook case: its LIBS spectrum is dominated by ION lines even
+        // at modest temperatures. The three alkalis below it are more
+        // ionised still, 97 % of potassium being K II at 10 000 K.
         const f = chainOf("Ca", 10000);
         expect(f[0]).toBeLessThan(0.1);
         expect(f.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 12);
@@ -239,10 +241,13 @@ describe("computePhysicalEmissions", () => {
     });
 
     it("reports an element it has no data for instead of dropping it", () => {
-        // Aluminium is outside the eight the catalogue carries, so it is
-        // named rather than quietly left out of the spectrum.
-        const r = emissions({ Ca: 0.5, Al: 0.5 });
-        expect(r.missingElements).toEqual(["Al"]);
+        // Manganese is outside the twelve the catalogue carries, and
+        // deliberately so: MnO sits at 0.1 to 0.2 % in the V1-B
+        // compositions and its lines are weak at that level
+        // (`internals/libs/10-CATALOGUE-EXTENSION.md`). It is named
+        // rather than quietly left out of the spectrum.
+        const r = emissions({ Ca: 0.5, Mn: 0.5 });
+        expect(r.missingElements).toEqual(["Mn"]);
         expect(r.intensities.every((i) => i.line.element === "Ca")).toBe(true);
     });
 

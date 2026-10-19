@@ -195,17 +195,20 @@ describe("the chain, node by node", () => {
     });
 
     it("says, in physical mode, which elements it has no data for", () => {
-        // Albite, NaAlSi3O8, a feldspar: silicon and oxygen are in the
-        // catalogue, sodium and aluminium are not. They are reported,
-        // not silently dropped. The elements used here are deliberately
-        // outside the eight the catalogue carries; when the catalogue
-        // grows again this test has to be pointed at something still
-        // missing, which is the point of it.
+        // Rhodonite, MnSiO3: silicon and oxygen are in the catalogue,
+        // manganese is not, and that exclusion is deliberate rather than
+        // an oversight (MnO is 0.1 to 0.2 % of the V1-B compositions,
+        // weak at that level). It is reported, not silently dropped.
+        //
+        // The element here is deliberately outside the twelve the
+        // catalogue carries; when the catalogue grows again this test has
+        // to be pointed at something still missing, which is the point of
+        // it. Mn, P and Cr are the three left out on purpose.
         const material = createMaterialNode();
-        material.components = "NaAlSi3O8:1";
+        material.components = "MnSiO3:1";
         const plasma = createLibsPlasmaNode();
         plasma.setMaterial(material.spec);
-        expect(plasma.missing_elements.split(" ").sort()).toEqual(["Al", "Na"]);
+        expect(plasma.missing_elements.split(" ").sort()).toEqual(["Mn"]);
         expect(plasma.line_count).toBeGreaterThan(0);
         // And it reports the Saha balance it solved for the ones it has.
         expect(plasma.stage_fractions).toMatch(/Si:/);
@@ -216,7 +219,19 @@ describe("the chain, node by node", () => {
         // The reason the catalogue was extended: each of these minerals
         // used to leave an element unexplained, which made every
         // unexplained peak ambiguous. `08-V1B-PROTOCOL.md` section 3.
-        for (const formula of ["CaF2:1", "SiO2:1", "Fe2O3:1", "CaCO3:1", "FeS2:1", "CaMg(CO3)2:1"]) {
+        // Albite and orthoclase are the feldspars that drove the second
+        // pass, Al, Na, K and Ti, for the regolith simulants.
+        for (const formula of [
+            "CaF2:1",
+            "SiO2:1",
+            "Fe2O3:1",
+            "CaCO3:1",
+            "FeS2:1",
+            "CaMg(CO3)2:1",
+            "NaAlSi3O8:1",
+            "KAlSi3O8:1",
+            "FeTiO3:1",
+        ]) {
             const material = createMaterialNode();
             material.components = formula;
             const plasma = createLibsPlasmaNode();

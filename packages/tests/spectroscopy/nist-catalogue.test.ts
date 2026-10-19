@@ -166,30 +166,40 @@ describe("the shipped NIST catalogue", () => {
         expect(NIST_PROVENANCE.manifest).toBe("internals/libs/data/MANIFEST.md");
     });
 
-    it("carries twenty-four species over eight elements, with a checksum each", () => {
-        // The eight elements of the V1-B mineral set: every mineral in it
-        // contains at least one outside Ca, Fe and Si, and an unexplained
-        // peak stays ambiguous while that is true. See
-        // `internals/libs/10-CATALOGUE-EXTENSION.md`.
-        expect(NIST_CATALOGUE_ELEMENTS).toEqual(["C", "Ca", "F", "Fe", "Mg", "O", "S", "Si"]);
+    it("carries thirty-six species over twelve elements, with a checksum each", () => {
+        // Twelve elements: the eight the V1-B mineral set needs, plus
+        // Al, Na, K and Ti for the regolith simulants V1-B actually runs
+        // on, whose XRF compositions cover thirteen oxides. An
+        // unexplained peak stays ambiguous while the catalogue is
+        // incomplete. See `internals/libs/10-CATALOGUE-EXTENSION.md`.
+        expect(NIST_CATALOGUE_ELEMENTS).toEqual(["Al", "C", "Ca", "F", "Fe", "K", "Mg", "Na", "O", "S", "Si", "Ti"]);
         // Three stages per element: the neutral, the ion and the doubly
         // ionised atom, which the Saha balance needs because nine per
-        // cent of calcium is already in the third stage at 11 605 K.
-        expect(NIST_SPECIES).toHaveLength(24);
+        // cent of calcium is already in the third stage at 11 605 K, and
+        // thirty-eight per cent of titanium at 15 000 K.
+        expect(NIST_SPECIES).toHaveLength(36);
         expect(NIST_SPECIES.filter((s) => s.ionisation === 2).map((s) => s.asdName).sort()).toEqual([
+            "Al III",
             "C III",
             "Ca III",
             "F III",
             "Fe III",
+            "K III",
             "Mg III",
+            "Na III",
             "O III",
             "S III",
             "Si III",
+            "Ti III",
         ]);
         for (const s of NIST_SPECIES) {
             expect(s.sourceSha256.lines).toMatch(/^[0-9a-f]{64}$/);
             expect(s.sourceSha256.levels).toMatch(/^[0-9a-f]{64}$/);
-            expect(s.levels.length).toBeGreaterThan(50);
+            // A loose floor, there to catch a level list that failed to
+            // parse rather than to pin any species' length. The real
+            // minimum is K III with 39 published levels, then S III with
+            // 58; a parse failure gives 0 or a handful.
+            expect(s.levels.length).toBeGreaterThan(20);
         }
     });
 
@@ -210,8 +220,27 @@ describe("the shipped NIST catalogue", () => {
         expect(near("S", 869.471)).not.toHaveLength(0); // pyrite
     });
 
+    it("carries the lines the regolith simulants are identified by", () => {
+        // The four strongest identifications on a real simulant
+        // spectrum, from `internals/libs/11-V1B-FIRST-LOOK.md`. These
+        // four have the LOWEST upper levels in the whole catalogue, which
+        // is why they dominate a spectrum at concentrations of a per
+        // cent: K 766.5 needs 1.62 eV where F I needs 14.37.
+        const near = (element: string, nm: number, toleranceNm = 0.05) =>
+            NIST_LINE_CATALOGUE.filter((l) => l.element === element && Math.abs(l.wavelengthNm - nm) <= toleranceNm);
+
+        expect(near("Na", 588.995)).not.toHaveLength(0); // the Na D doublet
+        expect(near("Na", 589.592)).not.toHaveLength(0);
+        expect(near("K", 766.49)).not.toHaveLength(0); // the K doublet
+        expect(near("K", 769.896)).not.toHaveLength(0);
+        expect(near("Al", 396.152)).not.toHaveLength(0); // blends with Ca II H
+        expect(near("Al", 394.401)).not.toHaveLength(0);
+        expect(near("Al", 309.271)).not.toHaveLength(0);
+        expect(near("Ti", 334.941)).not.toHaveLength(0); // the Ti II forest
+    });
+
     it("gives every line what an emission calculation needs", () => {
-        expect(NIST_LINE_CATALOGUE.length).toBeGreaterThan(12000);
+        expect(NIST_LINE_CATALOGUE.length).toBeGreaterThan(15000);
         for (const l of NIST_LINE_CATALOGUE) {
             expect(l.verified).toBe(true);
             expect(l.wavelengthNm).toBeGreaterThanOrEqual(200);

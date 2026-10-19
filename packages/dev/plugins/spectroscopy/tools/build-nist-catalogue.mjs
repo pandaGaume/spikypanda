@@ -37,8 +37,8 @@ const outFile = resolve(process.argv[3] ?? join(pluginRoot, "src/lines/nist-cata
 const parser = await import(pathToFileURL(join(pluginRoot, "dist/lines/nist.parse.js")).href);
 
 /**
- * The twenty-four species downloaded, with the directory name each one
- * uses: eight elements, three ionisation stages each.
+ * The thirty-six species downloaded, with the directory name each one
+ * uses: twelve elements, three ionisation stages each.
  *
  * Three stages per element, not two: at 11 605 K, nine per cent of
  * calcium is already doubly ionised, and a balance that stops at the
@@ -46,11 +46,19 @@ const parser = await import(pathToFileURL(join(pluginRoot, "dist/lines/nist.pars
  * biases every ratio that calcium takes part in. Measured in
  * `internals/libs/07-V1B0-NIST-CROSSCHECK.md`.
  *
- * Eight elements, not three: every mineral of the data set chosen for
- * V1-B contains an element outside Ca, Fe and Si, and an unexplained
- * peak is ambiguous while that is true. Fluorine and oxygen emit
- * strongly inside the band. See `internals/libs/08-V1B-PROTOCOL.md`
- * section 3 and `internals/libs/10-CATALOGUE-EXTENSION.md`.
+ * Twelve elements, not three. The first eight are what the V1-B mineral
+ * set needs; Al, Na, K and Ti were added when V1-B moved to the
+ * regolith simulants, whose XRF compositions cover thirteen oxides.
+ * These four are not traces: Al2O3 reaches 26.6 % by mass in the lunar
+ * subset, and the Na D doublet at 589 nm and the K doublet at 766 and
+ * 770 nm are among the strongest lines of any LIBS spectrum. An
+ * unexplained peak means nothing while the catalogue is incomplete.
+ * See `internals/libs/08-V1B-PROTOCOL.md` section 3 and
+ * `internals/libs/10-CATALOGUE-EXTENSION.md`.
+ *
+ * Mn, P and Cr are left out on purpose, not by oversight: MnO and P2O5
+ * sit at 0.1 to 0.2 % and Cr2O3 at 0.1 % in those compositions, and
+ * their lines are weak at those levels.
  */
 const SPECIES = [
     { element: "C", ionisation: 0, dir: "c1", asdName: "C I" },
@@ -62,18 +70,30 @@ const SPECIES = [
     { element: "F", ionisation: 0, dir: "f1", asdName: "F I" },
     { element: "F", ionisation: 1, dir: "f2", asdName: "F II" },
     { element: "F", ionisation: 2, dir: "f3", asdName: "F III" },
+    { element: "Na", ionisation: 0, dir: "na1", asdName: "Na I" },
+    { element: "Na", ionisation: 1, dir: "na2", asdName: "Na II" },
+    { element: "Na", ionisation: 2, dir: "na3", asdName: "Na III" },
     { element: "Mg", ionisation: 0, dir: "mg1", asdName: "Mg I" },
     { element: "Mg", ionisation: 1, dir: "mg2", asdName: "Mg II" },
     { element: "Mg", ionisation: 2, dir: "mg3", asdName: "Mg III" },
+    { element: "Al", ionisation: 0, dir: "al1", asdName: "Al I" },
+    { element: "Al", ionisation: 1, dir: "al2", asdName: "Al II" },
+    { element: "Al", ionisation: 2, dir: "al3", asdName: "Al III" },
     { element: "Si", ionisation: 0, dir: "si1", asdName: "Si I" },
     { element: "Si", ionisation: 1, dir: "si2", asdName: "Si II" },
     { element: "Si", ionisation: 2, dir: "si3", asdName: "Si III" },
     { element: "S", ionisation: 0, dir: "s1", asdName: "S I" },
     { element: "S", ionisation: 1, dir: "s2", asdName: "S II" },
     { element: "S", ionisation: 2, dir: "s3", asdName: "S III" },
+    { element: "K", ionisation: 0, dir: "k1", asdName: "K I" },
+    { element: "K", ionisation: 1, dir: "k2", asdName: "K II" },
+    { element: "K", ionisation: 2, dir: "k3", asdName: "K III" },
     { element: "Ca", ionisation: 0, dir: "ca1", asdName: "Ca I" },
     { element: "Ca", ionisation: 1, dir: "ca2", asdName: "Ca II" },
     { element: "Ca", ionisation: 2, dir: "ca3", asdName: "Ca III" },
+    { element: "Ti", ionisation: 0, dir: "ti1", asdName: "Ti I" },
+    { element: "Ti", ionisation: 1, dir: "ti2", asdName: "Ti II" },
+    { element: "Ti", ionisation: 2, dir: "ti3", asdName: "Ti III" },
     { element: "Fe", ionisation: 0, dir: "fe1", asdName: "Fe I" },
     { element: "Fe", ionisation: 1, dir: "fe2", asdName: "Fe II" },
     { element: "Fe", ionisation: 2, dir: "fe3", asdName: "Fe III" },

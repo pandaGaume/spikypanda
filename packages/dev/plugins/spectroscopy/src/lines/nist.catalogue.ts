@@ -11,23 +11,27 @@
  *
  * What is in it, and what that allows:
  *
- *   - 13 051 transitions over twenty-four species, three stages of each
- *     of eight elements (C, O, F, Mg, Si, S, Ca, Fe), each with its
- *     wavelength in air, its transition probability, and the energy
- *     and statistical weight of both levels. That is exactly what the
- *     physical emission model needs, so `physicalModeBlocker` lets
- *     these species through. The third stage is not a luxury: at
+ *   - 15 401 transitions over thirty-six species, three stages of each
+ *     of twelve elements (C, O, F, Na, Mg, Al, Si, S, K, Ca, Ti, Fe),
+ *     each with its wavelength in air, its transition probability, and
+ *     the energy and statistical weight of both levels. That is exactly
+ *     what the physical emission model needs, so `physicalModeBlocker`
+ *     lets these species through. The third stage is not a luxury: at
  *     11 605 K nine per cent of calcium sits in it, and at 15 000 K
- *     sixty-three per cent;
+ *     sixty-three per cent of calcium and thirty-eight of titanium;
  *   - the complete level list of each species, which a partition
  *     function sums over. It is a separate export because the lines
  *     alone only cover the levels that happen to radiate in the window;
  *   - the first, second and third ionisation energies, which close the
  *     Saha balance over the three stages.
  *
- * The eight elements are the ones the V1-B mineral set needs: every
- * mineral in it contains at least one outside Ca, Fe and Si, so an
- * unexplained peak was ambiguous until they were here. Measured in
+ * The twelve elements are what V1-B needs. Eight came from its mineral
+ * set, where every mineral contains at least one outside Ca, Fe and Si.
+ * Al, Na, K and Ti came from the regolith simulants V1-B runs on, and
+ * are there because of excitation energy rather than concentration: the
+ * K doublet at 766 nm needs a 1.62 eV upper level and the Na D doublet
+ * 2.10 eV, the two lowest in the catalogue, so both dominate a spectrum
+ * at well under a per cent. Measured in
  * `internals/libs/10-CATALOGUE-EXTENSION.md`.
  *
  * What is still missing, and still blocks: Stark broadening
@@ -35,8 +39,12 @@
  * collisional width stays a single global coefficient; molecular bands
  * (CaF, CN, C2), which is how LIBS detects fluorine at all, since F I
  * needs a 14.4 eV upper level and is Boltzmann-suppressed at these
- * temperatures; and the 81 S I lines whose upper-level energy ASD flags
- * `u`, which the parser refuses by its own rule.
+ * temperatures; nitrogen, which is ambient rather than in the sample
+ * and accounts for seven of the twenty-two strongest peaks of a real
+ * spectrum taken in air; Mn, P and Cr, left out on purpose at 0.1 to
+ * 0.2 % of the V1-B compositions; and the 81 S I lines whose
+ * upper-level energy ASD flags `u`, which the parser refuses by its own
+ * rule.
  */
 
 import { NIST_CATALOGUE_RAW } from "./nist-catalogue.data.js";

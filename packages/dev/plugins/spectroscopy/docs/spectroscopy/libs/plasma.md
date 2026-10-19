@@ -47,7 +47,7 @@ Intensities are published in **eV per second per atom**: the emissivity per unit
 
 | `line_catalogue` | Lines | Elements | Physical model |
 |---|---:|---|---|
-| `nist` (default) | 13 051 verified transitions | C, O, F, Mg, Si, S, Ca, Fe, each as the neutral atom, the ion and the doubly ionised atom | runs |
+| `nist` (default) | 15 401 verified transitions | C, O, F, Na, Mg, Al, Si, S, K, Ca, Ti, Fe, each as the neutral atom, the ion and the doubly ionised atom | runs |
 | `builtin` | 48 strong lines written from memory, all flagged unverified | 20 elements | refuses |
 
 They are never combined: a spectrum built from verified and unverified numbers at once could not be interpreted. An element outside the chosen catalogue is reported in `missing_elements`, never silently dropped.
