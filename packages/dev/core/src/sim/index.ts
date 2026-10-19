@@ -12,5 +12,8 @@ export * from "./fault.node";
 export * from "./sim-graph.node";
 export * from "./sub-graph.materialize";
 export * from "./chemical.species";
+export * from "./chemical.elements";
+export * from "./physical.constants";
+export * from "./chemical.formula";
 export * from "./chemistry.interfaces";
 export * from "./particulate.interfaces";

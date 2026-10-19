@@ -71,6 +71,12 @@
             "spikypanda-plugin-logic/*":   ["dev/plugins/logic/src/*"],
             "spikypanda-plugin-control":   ["dev/plugins/control/src/index.ts"],
             "spikypanda-plugin-control/*": ["dev/plugins/control/src/*"],
+            "spikypanda-plugin-chemistry":   ["dev/plugins/chemistry/src/index.ts"],
+            "spikypanda-plugin-chemistry/*": ["dev/plugins/chemistry/src/*"],
+            "spikypanda-plugin-viz":         ["dev/plugins/viz/src/index.ts"],
+            "spikypanda-plugin-viz/*":       ["dev/plugins/viz/src/*"],
+            "spikypanda-plugin-spectroscopy":   ["dev/plugins/spectroscopy/src/index.ts"],
+            "spikypanda-plugin-spectroscopy/*": ["dev/plugins/spectroscopy/src/*"],
             "spikypanda-factory":          ["dev/factory/src/index.ts"],
             "spikypanda-factory/*":        ["dev/factory/src/*"]
         },

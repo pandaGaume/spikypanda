@@ -109,6 +109,7 @@
     await load("SpkPluginPhysics",  "physics");
     await load("SpkPluginControl",  "control");
     await load("SpkPluginChemistry","chemistry");
+    await load("SpkPluginSpectroscopy", "spectroscopy");
     await load("SpkPluginViz",      "viz");
     await load("SpkPluginHelios",   "helios");
     await load("SpkPluginIso",      "iso");

@@ -1,0 +1,35 @@
+{
+    "id":          "spk.spectroscopy",
+    "version":     "0.1.0",
+    "displayName": "Spectroscopy",
+    "description": "A LIBS forward model as graph nodes. A plasma node turns the elemental composition published by Chemistry.Material into a list of atomic line emissions with their Doppler and collisional widths; a spectrometer node samples that list onto a pixel grid with a slit function, a wavelength calibration, a gain and reproducible seeded noise, keeping the ideal, instrumented and measured curves separate. Emission intensities are RELATIVE at this version: the built-in line catalogue is unverified and the physical Boltzmann / Saha model refuses to run rather than return a number that looks physical.",
+    "category":    "Spectro",
+    "entry":       "bundle/SpkPluginSpectroscopy.js",
+    "nodes":       [],
+    "editors":     [],
+    "subPlugins": [
+        {
+            "id":          "Spectro.Libs",
+            "displayName": "LIBS emission",
+            "description": "Emission stage. Consumes a material specification on material_in and publishes a LINE LIST on emission_out: one amplitude and one Doppler width per atomic transition, not a sampled curve, because the observed window and the resolution belong to the instrument. Reads the material's MOLE fractions, since a line is emitted by atoms and not by mass. Temperature and electron density set the line widths; in relative mode the intensities are composition times catalogue strength and carry no temperature dependence.",
+            "category":    "Spectro.Libs",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Spectro.Libs:plasma", "factory": "createLibsPlasmaNode", "label": "LIBS Plasma" }
+            ]
+        },
+        {
+            "id":          "Spectro.Instrument",
+            "displayName": "Spectrometer",
+            "description": "Measurement stage. Samples a plasma emission onto a pixel grid: window, pixel count, slit function folded into each line's Gaussian width, wavelength calibration error, gain, offset and seeded noise. Publishes the full record on spectrum_out plus one port per curve (wavelength_out, ideal_out, instrumented_out, measured_out, noise_out) so that the stages can be overlaid and subtracted. Same seed, same noise vector.",
+            "category":    "Spectro.Instrument",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Spectro.Instrument:spectrometer", "factory": "createSpectrometerNode", "label": "LIBS Spectrometer" }
+            ]
+        }
+    ],
+    "manifestRefs": []
+}

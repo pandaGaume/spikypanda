@@ -16,6 +16,7 @@ export * from "./control/index.js";
  *     spectrum   static FFT magnitude           (uPlot)
  *     waterfall  scrolling 2D spectrogram       (PixiJS)
  *     stem       oracle discrete-spectrum bars  (uPlot)
+ *     xy         explicit X axis, up to 3 curves (uPlot)
  *
  *   Markdown/  documentation tiles
  *     cell       Jupyter-style notebook cell    (marked + textarea)

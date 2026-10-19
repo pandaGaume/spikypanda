@@ -1,6 +1,7 @@
 import { ONTOLOGY } from "spikypanda-core";
 import { chemistryCompositionSubPlugin } from "./composition/index.js";
 import { chemistryGasSubPlugin } from "./gas/index.js";
+import { chemistryMaterialSubPlugin } from "./material/index.js";
 
 // The relation types of this plugin's dashed cables (a gas into a
 // composition, a composition into an atmosphere layer), registered so a
@@ -14,8 +15,11 @@ export * from "./gas/gas.node.js";
 export * from "./gas/presets.js";
 export * from "./composition/composition.node.js";
 export * from "./composition/presets.js";
+export * from "./material/material.node.js";
+export * from "./material/presets.js";
 export { chemistryGasSubPlugin } from "./gas/index.js";
 export { chemistryCompositionSubPlugin } from "./composition/index.js";
+export { chemistryMaterialSubPlugin } from "./material/index.js";
 
 /**
  * @spiky-panda/plugin-chemistry
@@ -42,6 +46,13 @@ export { chemistryCompositionSubPlugin } from "./composition/index.js";
  *                         atmosphere by being wired into a
  *                         Composition's gas_in_<k> slot pool — the
  *                         same path bulk gases follow.
+ *   Chemistry.Material    Condensed-matter composition: constituents as
+ *                         chemical formulas (SiO2, Fe2O3, Fe) with an
+ *                         explicit mass or mole basis, resolved to an
+ *                         elemental vector by stoichiometry. Entry point
+ *                         of the LIBS chain. Publishes an immutable
+ *                         IMaterialSpec on a DATA cable (`material_out`),
+ *                         not a config-link; see the node header.
  *
  * NOT in chemistry (moved out 2026-06-08):
  *   Physics.Particulate   Solid-phase particulate matter (PM2.5,
@@ -53,5 +64,6 @@ export default {
     subPlugins: {
         "Chemistry.Gas": chemistryGasSubPlugin,
         "Chemistry.Composition": chemistryCompositionSubPlugin,
+        "Chemistry.Material": chemistryMaterialSubPlugin,
     },
 };

@@ -3,11 +3,13 @@ import { createUplotLineNode, UplotLineNode } from "./line.node.js";
 import { createPixiWaterfallNode, PixiWaterfallNode } from "./waterfall.node.js";
 import { createUplotSpectrumNode, UplotSpectrumNode } from "./spectrum.node.js";
 import { createUplotStemNode, UplotStemNode } from "./stem.node.js";
+import { createUplotXyNode, UplotXyNode } from "./xy.node.js";
 
 export { UplotLineNode, createUplotLineNode };
 export { PixiWaterfallNode, createPixiWaterfallNode };
 export { UplotSpectrumNode, createUplotSpectrumNode };
 export { UplotStemNode, createUplotStemNode };
+export { UplotXyNode, createUplotXyNode };
 
 /**
  * `Viz.Plot` sub-plugin. Registers tile-type nodes that render scalar
@@ -61,6 +63,22 @@ export const vizPlotSubPlugin: IPlugin = {
                 { prefix: "f_", type: "float" },
                 { prefix: "A_", type: "float" },
             ],
+        });
+        // Explicit X axis, up to three Y curves on it. For any curve
+        // whose abscissa is a physical quantity the pipeline computes
+        // (wavelength in nm, angle, position) rather than a frequency
+        // derived from the session's sample rate.
+        ctx.nodes.register("Viz.Plot:xy", () => createUplotXyNode() as never, {
+            label: "XY Plot",
+            docPath: ctx.assetUrl("docs/viz/plot/xy.md"),
+            category: "Viz.Plot",
+            inputPorts: [
+                { slot: "x", optional: true, type: "any" },
+                { slot: "y_1", optional: true, type: "any" },
+                { slot: "y_2", optional: true, type: "any" },
+                { slot: "y_3", optional: true, type: "any" },
+            ],
+            outputPorts: [],
         });
     },
 };

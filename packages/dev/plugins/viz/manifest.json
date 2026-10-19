@@ -19,7 +19,8 @@
                 { "type": "Viz.Plot:line",      "factory": "createUplotLineNode",      "label": "Time-series Plot" },
                 { "type": "Viz.Plot:waterfall", "factory": "createPixiWaterfallNode",  "label": "Waterfall Spectrogram" },
                 { "type": "Viz.Plot:spectrum",  "factory": "createUplotSpectrumNode",  "label": "Frequency Spectrum" },
-                { "type": "Viz.Plot:stem",      "factory": "createUplotStemNode",      "label": "Stem (Oracle Spectrum)" }
+                { "type": "Viz.Plot:stem",      "factory": "createUplotStemNode",      "label": "Stem (Oracle Spectrum)" },
+                { "type": "Viz.Plot:xy",        "factory": "createUplotXyNode",        "label": "XY Plot" }
             ]
         },
         {

@@ -1,0 +1,281 @@
+{
+  "version": 3,
+  "layout": {
+    "nodes": [
+      {
+        "id": "material",
+        "x": 40,
+        "y": 120,
+        "typeId": "Chemistry.Material:test-oxide-mix",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "material_out",
+            "type": "any",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "plasma",
+        "x": 340,
+        "y": 120,
+        "typeId": "Spectro.Libs:plasma",
+        "inputs": [
+          {
+            "name": "material_in",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "emission_out",
+            "type": "any",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "spectrometer",
+        "x": 640,
+        "y": 120,
+        "typeId": "Spectro.Instrument:spectrometer",
+        "inputs": [
+          {
+            "name": "emission_in",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "spectrum_out",
+            "type": "any",
+            "direction": "output"
+          },
+          {
+            "name": "wavelength_out",
+            "type": "any",
+            "direction": "output"
+          },
+          {
+            "name": "ideal_out",
+            "type": "any",
+            "direction": "output"
+          },
+          {
+            "name": "instrumented_out",
+            "type": "any",
+            "direction": "output"
+          },
+          {
+            "name": "measured_out",
+            "type": "any",
+            "direction": "output"
+          },
+          {
+            "name": "noise_out",
+            "type": "any",
+            "direction": "output"
+          }
+        ]
+      },
+      {
+        "id": "chart",
+        "x": 960,
+        "y": 120,
+        "typeId": "Viz.Plot:xy",
+        "inputs": [
+          {
+            "name": "x",
+            "type": "any",
+            "direction": "input"
+          },
+          {
+            "name": "y_1",
+            "type": "any",
+            "direction": "input"
+          },
+          {
+            "name": "y_2",
+            "type": "any",
+            "direction": "input"
+          },
+          {
+            "name": "y_3",
+            "type": "any",
+            "direction": "input"
+          }
+        ],
+        "outputs": []
+      }
+    ],
+    "connections": [
+      {
+        "id": "material:material_out->plasma:material_in",
+        "fromNodeId": "material",
+        "fromPortIndex": 0,
+        "toNodeId": "plasma",
+        "toPortIndex": 0
+      },
+      {
+        "id": "plasma:emission_out->spectrometer:emission_in",
+        "fromNodeId": "plasma",
+        "fromPortIndex": 0,
+        "toNodeId": "spectrometer",
+        "toPortIndex": 0
+      },
+      {
+        "id": "spectrometer:wavelength_out->chart:x",
+        "fromNodeId": "spectrometer",
+        "fromPortIndex": 1,
+        "toNodeId": "chart",
+        "toPortIndex": 0
+      },
+      {
+        "id": "spectrometer:measured_out->chart:y_1",
+        "fromNodeId": "spectrometer",
+        "fromPortIndex": 4,
+        "toNodeId": "chart",
+        "toPortIndex": 1
+      },
+      {
+        "id": "spectrometer:ideal_out->chart:y_2",
+        "fromNodeId": "spectrometer",
+        "fromPortIndex": 2,
+        "toNodeId": "chart",
+        "toPortIndex": 2
+      }
+    ]
+  },
+  "model": {
+    "nodes": [
+      {
+        "id": "material",
+        "label": "Oxide mix (synthetic test)",
+        "typeId": "Chemistry.Material:test-oxide-mix",
+        "data": {
+          "enabled": true,
+          "_presetId": "test-oxide-mix",
+          "_displayName": "Oxide mix (synthetic test)",
+          "_basis": "mass",
+          "_componentsText": "SiO2:0.6, Fe2O3:0.2, CaCO3:0.15, MgO:0.05",
+          "_provenance": "scenario of the LIBS brief, 2026-10-19. NOT a reference rock"
+        }
+      },
+      {
+        "id": "plasma",
+        "label": "LIBS Plasma",
+        "typeId": "Spectro.Libs:plasma",
+        "data": {
+          "enabled": true,
+          "_temperatureK": 10000,
+          "_electronDensityCm3": 100000000000000000,
+          "_referenceElectronDensityCm3": 100000000000000000,
+          "_collisionalWidthNm": 0.05,
+          "_intensityScale": 1,
+          "_continuumLevel": 0,
+          "_emissionModel": "physical",
+          "_catalogueChoice": "nist"
+        }
+      },
+      {
+        "id": "spectrometer",
+        "label": "LIBS Spectrometer",
+        "typeId": "Spectro.Instrument:spectrometer",
+        "data": {
+          "enabled": true,
+          "_rangeStartNm": 240,
+          "_rangeEndNm": 460,
+          "_pixelCount": 2200,
+          "_resolutionFwhmNm": 0.1,
+          "_calibrationShiftNm": 0,
+          "_gain": 1,
+          "_offset": 0,
+          "_noiseEnabled": true,
+          "_shotNoiseFactor": 0.01,
+          "_readNoise": 0.002,
+          "_seed": 1
+        }
+      },
+      {
+        "id": "chart",
+        "label": "LIBS spectrum",
+        "typeId": "Viz.Plot:xy",
+        "data": {
+          "enabled": true,
+          "_title": "LIBS spectrum, physical model (NIST ASD 5.12)",
+          "_xLabel": "wavelength (nm)",
+          "_yLabel": "intensity (relative)",
+          "_maxPoints": 2000,
+          "_seriesNames": "measured, ideal"
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "material:material_out->plasma:material_in",
+        "from": {
+          "node": "material",
+          "port": "material_out"
+        },
+        "to": {
+          "node": "plasma",
+          "port": "material_in"
+        }
+      },
+      {
+        "id": "plasma:emission_out->spectrometer:emission_in",
+        "from": {
+          "node": "plasma",
+          "port": "emission_out"
+        },
+        "to": {
+          "node": "spectrometer",
+          "port": "emission_in"
+        }
+      },
+      {
+        "id": "spectrometer:wavelength_out->chart:x",
+        "from": {
+          "node": "spectrometer",
+          "port": "wavelength_out"
+        },
+        "to": {
+          "node": "chart",
+          "port": "x"
+        }
+      },
+      {
+        "id": "spectrometer:measured_out->chart:y_1",
+        "from": {
+          "node": "spectrometer",
+          "port": "measured_out"
+        },
+        "to": {
+          "node": "chart",
+          "port": "y_1"
+        }
+      },
+      {
+        "id": "spectrometer:ideal_out->chart:y_2",
+        "from": {
+          "node": "spectrometer",
+          "port": "ideal_out"
+        },
+        "to": {
+          "node": "chart",
+          "port": "y_2"
+        }
+      }
+    ]
+  },
+  "dashboards": [
+    {
+      "id": "main",
+      "name": "Main",
+      "tiles": []
+    }
+  ]
+}

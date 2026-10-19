@@ -17,7 +17,9 @@
         { "path": "../plugins/logic/tsconfig.build.json" },
         { "path": "../plugins/ml/tsconfig.build.json" },
         { "path": "../plugins/onnx/tsconfig.build.json" },
-        { "path": "../plugins/physics/tsconfig.build.json" }
+        { "path": "../plugins/physics/tsconfig.build.json" },
+        { "path": "../plugins/chemistry/tsconfig.build.json" },
+        { "path": "../plugins/spectroscopy/tsconfig.build.json" }
     ],
     "include": ["./src/**/*.ts"],
     "exclude": ["**/node_modules", "**/dist"]

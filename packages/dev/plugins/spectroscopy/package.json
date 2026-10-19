@@ -1,0 +1,28 @@
+{
+    "name": "@spiky-panda/plugin-spectroscopy",
+    "version": "0.1.0",
+    "description": "Spectroscopy plugin for SpikyPanda: a LIBS forward model. A plasma node turns an elemental composition into a list of atomic line emissions, a spectrometer node samples that list onto a pixel grid with a slit function, a calibration, a gain and reproducible noise, and keeps the ideal, instrumented and measured curves separate. Emission intensities are RELATIVE at this version: the built-in line catalogue is unverified, and the physical Boltzmann / Saha model refuses to run rather than return a number.",
+    "private": true,
+    "type": "module",
+    "main": "dist/index.js",
+    "module": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "files": ["dist", "bundle", "src", "manifest.json"],
+    "scripts": {
+        "build":       "npm run clean && npm run compile",
+        "clean":       "rimraf dist bundle tsconfig.build.tsbuildinfo",
+        "compile":     "tsc -b tsconfig.build.json",
+        "watch":       "tsc -b tsconfig.build.json -w",
+        "bundle":      "webpack --mode production --config webpack.config.cjs",
+        "bundle:dev":  "webpack --mode development --config webpack.config.cjs"
+    },
+    "sideEffects": false,
+    "dependencies": {
+        "@spiky-panda/core":     "*",
+        "@spiky-panda/nodeeditor": "*"
+    },
+    "devDependencies": {
+        "rimraf":    "~6.0.1",
+        "ts-loader": "^9.5.0"
+    }
+}

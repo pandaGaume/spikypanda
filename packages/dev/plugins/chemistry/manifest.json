@@ -49,6 +49,20 @@
                 { "type": "Chemistry.Composition:iss-cabin",         "factory": "createIssCabinCompositionNode",         "label": "ISS cabin (ECLSS spec)" },
                 { "type": "Chemistry.Composition:vacuum",            "factory": "createVacuumCompositionNode",           "label": "Vacuum" }
             ]
+        },
+        {
+            "id":          "Chemistry.Material",
+            "displayName": "Materials",
+            "description": "Condensed-matter composition: the constituents of a solid sample as chemical formulas (SiO2, Fe2O3, Fe) with their proportions, an explicit mass or mole basis, and the elemental vector that stoichiometry resolves them to. A mass fraction of Fe2O3 is not a mass fraction of Fe, and this node is where that conversion happens once, with its provenance. Entry point of the LIBS chain: material_out carries an immutable, versioned IMaterialSpec on a normal data cable to a plasma node. The three presets are synthetic test scenarios, never reference materials.",
+            "category":    "Chemistry.Material",
+            "version":     "0.1.0",
+            "standards":   [],
+            "nodes": [
+                { "type": "Chemistry.Material:material",           "factory": "createMaterialNode",                  "label": "Material" },
+                { "type": "Chemistry.Material:calcium-pure",       "factory": "createPureCalciumMaterialNode",       "label": "Calcium (pure)" },
+                { "type": "Chemistry.Material:calcium-magnesium",  "factory": "createCalciumMagnesiumMaterialNode",  "label": "Calcium / magnesium mix" },
+                { "type": "Chemistry.Material:test-oxide-mix",     "factory": "createTestOxideMixMaterialNode",      "label": "Oxide mix (synthetic test)" }
+            ]
         }
     ],
     "manifestRefs": []

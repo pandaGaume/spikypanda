@@ -24,6 +24,7 @@ const bundleSources = [
     join(root, "packages/dev/plugins/control/bundle"),
     join(root, "packages/dev/plugins/chemistry/bundle"),
     join(root, "packages/dev/plugins/viz/bundle"),
+    join(root, "packages/dev/plugins/spectroscopy/bundle"),
     join(root, "packages/dev/plugins/helios/bundle"),
     join(root, "packages/dev/plugins/iso/bundle"),
 ];
@@ -48,6 +49,7 @@ const docSources = [
     join(root, "packages/dev/plugins/control/docs"),
     join(root, "packages/dev/plugins/chemistry/docs"),
     join(root, "packages/dev/plugins/viz/docs"),
+    join(root, "packages/dev/plugins/spectroscopy/docs"),
     join(root, "packages/dev/plugins/helios/docs"),
     join(root, "packages/dev/plugins/iso/docs"),
 ];

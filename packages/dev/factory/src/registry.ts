@@ -24,6 +24,8 @@ import mlPlugin from "spikypanda-plugin-ml";
 import logicPlugin from "spikypanda-plugin-logic";
 import controlPlugin from "spikypanda-plugin-control";
 import onnxPlugin from "spikypanda-plugin-onnx";
+import chemistryPlugin from "spikypanda-plugin-chemistry";
+import spectroscopyPlugin from "spikypanda-plugin-spectroscopy";
 import { registerLifecycleNodes } from "spikypanda-nodeeditor/lifecycle-nodes";
 import { Cartesian3Node } from "spikypanda-plugin-geometry/nodes/cartesian3";
 import { Cartesian3SplitNode } from "spikypanda-plugin-geometry/nodes/cartesian3-split";
@@ -66,7 +68,19 @@ export function buildJobRegistry(): NodeRegistry {
         editors: { register: () => undefined },
         assetUrl: (p: string) => p,
     };
-    const plugins: IPluginModule[] = [physicsPlugin, dspPlugin, mlPlugin, logicPlugin, controlPlugin, onnxPlugin as unknown as IPluginModule];
+    const plugins: IPluginModule[] = [
+        physicsPlugin,
+        dspPlugin,
+        mlPlugin,
+        logicPlugin,
+        controlPlugin,
+        onnxPlugin as unknown as IPluginModule,
+        // Chemistry and spectroscopy carry no renderer and no DOM:
+        // descriptors, a stoichiometry resolver and a LIBS forward
+        // model. A job that runs the LIBS chain needs them here.
+        chemistryPlugin as unknown as IPluginModule,
+        spectroscopyPlugin as unknown as IPluginModule,
+    ];
     for (const plugin of plugins) {
         if (plugin.subPlugins) {
             for (const sub of Object.values(plugin.subPlugins)) sub.activate(ctx);
@@ -118,12 +132,18 @@ export function buildJobRegistry(): NodeRegistry {
 
     // Port slot per plot type matches the viz plugin: line consumes `value`
     // (a scalar f(t)); spectrum / waterfall consume `magnitudes` (an FFT frame).
-    const vizPorts: Record<string, string> = { "Viz.Plot:line": "value", "Viz.Plot:spectrum": "magnitudes", "Viz.Plot:waterfall": "magnitudes" };
-    for (const [typeId, slot] of Object.entries(vizPorts)) {
+    const vizPorts: Record<string, ReadonlyArray<string>> = {
+        "Viz.Plot:line": ["value"],
+        "Viz.Plot:spectrum": ["magnitudes"],
+        "Viz.Plot:waterfall": ["magnitudes"],
+        // The XY tile takes an explicit axis plus up to three curves.
+        "Viz.Plot:xy": ["x", "y_1", "y_2", "y_3"],
+    };
+    for (const [typeId, slots] of Object.entries(vizPorts)) {
         nodes.register(typeId, () => new VizStubNode() as never, {
             label: `${typeId} (headless stub)`,
             category: "Viz.Plot",
-            inputPorts: [{ slot, optional: true, type: "any" }],
+            inputPorts: slots.map((slot) => ({ slot, optional: true, type: "any" })),
             outputPorts: [],
         });
     }

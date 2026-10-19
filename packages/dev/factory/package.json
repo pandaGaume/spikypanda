@@ -28,7 +28,9 @@
         "@spiky-panda/plugin-logic":   "*",
         "@spiky-panda/plugin-ml":      "*",
         "@spiky-panda/plugin-onnx":    "*",
-        "@spiky-panda/plugin-physics": "*"
+        "@spiky-panda/plugin-physics": "*",
+        "@spiky-panda/plugin-chemistry": "*",
+        "@spiky-panda/plugin-spectroscopy": "*"
     },
     "devDependencies": {
         "@spiky-panda/nodeeditor": "*",
