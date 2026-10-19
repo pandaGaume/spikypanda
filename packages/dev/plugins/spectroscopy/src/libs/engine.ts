@@ -23,7 +23,7 @@
  *               Saha balance either.
  *
  *   `physical`  the Boltzmann / Saha / transition-probability chain of
- *               `internals/libs/02-MODELE-DIRECT-LIBS.md`. It is NOT
+ *               `internals/libs/02-LIBS-FORWARD-MODEL.md`. It is NOT
  *               implemented, and asking for it returns a refusal naming
  *               what is missing rather than a number. The refusal is
  *               structural: see `physicalModeBlocker`.

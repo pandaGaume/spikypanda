@@ -4,7 +4,7 @@
  *
  * `nist-catalogue.data.ts` is generated, never hand-edited. It is produced
  * by `tools/build-nist-catalogue.mjs` from the exports listed in
- * `internals/libs/donnees/MANIFESTE.md`, and it records the sha256 of
+ * `internals/libs/data/MANIFEST.md`, and it records the sha256 of
  * every export it was parsed from. Regenerating it is how the catalogue
  * changes; editing it by hand would break the only link between a
  * spectrum and the data behind it.

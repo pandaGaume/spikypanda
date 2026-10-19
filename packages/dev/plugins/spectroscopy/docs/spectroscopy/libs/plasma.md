@@ -8,7 +8,7 @@ The emission stage of the LIBS chain. Reads a material specification and publish
 
 LIBS means laser-induced breakdown spectroscopy. A laser pulse vaporises a small mass of the sample into a plasma; the plasma's atoms and ions, excited by collisions, fall back to lower levels and emit photons at the wavelengths of their transitions. A spectrum is therefore a comb of lines whose positions name the elements present and whose intensities depend, in a complicated way, on how much of each element is there.
 
-The full chain is in the track document `internals/libs/02-MODELE-DIRECT-LIBS.md`. This node implements the two parts that can be stated honestly today, and refuses the rest:
+The full chain is in the track document `internals/libs/02-LIBS-FORWARD-MODEL.md`. This node implements the two parts that can be stated honestly today, and refuses the rest:
 
 | Stage | Here? |
 |---|---|
@@ -48,7 +48,7 @@ Intensities are published in **eV per second per atom**: the emissivity per unit
 
 They are never combined: a spectrum built from verified and unverified numbers at once could not be interpreted. An element outside the chosen catalogue is reported in `missing_elements`, never silently dropped.
 
-The NIST data is generated into `lines/nist-catalogue.data.ts` by `tools/build-nist-catalogue.mjs`, from the exports listed in `internals/libs/donnees/MANIFESTE.md`, and carries the sha256 of every file it was parsed from.
+The NIST data is generated into `lines/nist-catalogue.data.ts` by `tools/build-nist-catalogue.mjs`, from the exports listed in `internals/libs/data/MANIFEST.md`, and carries the sha256 of every file it was parsed from.
 
 ## Mole fractions, not mass fractions
 
@@ -78,7 +78,7 @@ The cable is a normal data cable rather than a dashed config-link, for the struc
 | `emission_model` | string | `"physical"` | `"physical"` or `"relative"`. Any other value is ignored. |
 | `line_catalogue` | string | `"nist"` | `"nist"` or `"builtin"`, see above. |
 
-Every default is a **working value**, not a measured one. Their status is tracked in `internals/libs/parametres/libs-parametres.json`.
+Every default is a **working value**, not a measured one. Their status is tracked in `internals/libs/parameters/libs-parameters.json`.
 
 ## Viewables
 

@@ -14,7 +14,7 @@
  *     node packages/dev/plugins/spectroscopy/tools/build-nist-catalogue.mjs \
  *          [source-directory] [output-file]
  *
- * Defaults: `internals/libs/donnees` and
+ * Defaults: `internals/libs/data` and
  * `packages/dev/plugins/spectroscopy/src/lines/nist-catalogue.data.ts`.
  *
  * It parses with the plugin's OWN reader (`dist/lines/nist.parse.js`),
@@ -31,7 +31,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const pluginRoot = resolve(here, "..");
 const repoRoot = resolve(pluginRoot, "../../../..");
 
-const sourceDir = resolve(process.argv[2] ?? join(repoRoot, "internals/libs/donnees"));
+const sourceDir = resolve(process.argv[2] ?? join(repoRoot, "internals/libs/data"));
 const outFile = resolve(process.argv[3] ?? join(pluginRoot, "src/lines/nist-catalogue.data.ts"));
 
 const parser = await import(pathToFileURL(join(pluginRoot, "dist/lines/nist.parse.js")).href);
@@ -54,8 +54,8 @@ const species = [];
 const report = [];
 
 for (const s of SPECIES) {
-    const linesPath = join(sourceDir, "nist-raies", s.dir, "lines.tsv");
-    const levelsPath = join(sourceDir, "nist-niveaux", s.dir, "levels.tsv");
+    const linesPath = join(sourceDir, "nist-lines", s.dir, "lines.tsv");
+    const levelsPath = join(sourceDir, "nist-levels", s.dir, "levels.tsv");
     const linesRaw = readFileSync(linesPath);
     const levelsRaw = readFileSync(levelsPath);
 
@@ -75,14 +75,14 @@ for (const s of SPECIES) {
         levels,
         ionisationLimitEv: parsedLevels.ionisationLimitEv,
         source: {
-            lines: { file: `nist-raies/${s.dir}/lines.tsv`, bytes: linesRaw.length, sha256: sha256(linesRaw) },
-            levels: { file: `nist-niveaux/${s.dir}/levels.tsv`, bytes: levelsRaw.length, sha256: sha256(levelsRaw) },
+            lines: { file: `nist-lines/${s.dir}/lines.tsv`, bytes: linesRaw.length, sha256: sha256(linesRaw) },
+            levels: { file: `nist-levels/${s.dir}/levels.tsv`, bytes: levelsRaw.length, sha256: sha256(levelsRaw) },
         },
         parseReport: parsedLines.report,
         levelsSkipped: parsedLevels.skipped,
     });
 
-    report.push(`${s.asdName}: ${parsedLines.report.kept} raies gardees, ${parsedLines.report.skippedNoTransitionProbability} sans A_ki, ${parsedLines.report.skippedNoUpperLevel} sans niveau haut, ${parsedLevels.levels.length} niveaux`);
+    report.push(`${s.asdName}: ${parsedLines.report.kept} lines kept, ${parsedLines.report.skippedNoTransitionProbability} without A_ki, ${parsedLines.report.skippedNoUpperLevel} without an upper level, ${parsedLevels.levels.length} levels`);
 }
 
 const ionisationRaw = readFileSync(join(sourceDir, "nist-ionisation", "ionization-energies.tsv"));
@@ -100,7 +100,7 @@ const catalogue = {
         wavelengthRangeNm: [200, 900],
         linesFilter: "only transitions with a published transition probability (line_out=1)",
         generatedBy: "packages/dev/plugins/spectroscopy/tools/build-nist-catalogue.mjs",
-        manifest: "internals/libs/donnees/MANIFESTE.md",
+        manifest: "internals/libs/data/MANIFEST.md",
     },
     columns: {
         lines: ["wavelengthNm", "transitionProbability", "upperLevelEnergyEv", "upperLevelWeight", "lowerLevelEnergyEv", "lowerLevelWeight"],
@@ -116,7 +116,7 @@ const banner = `/**
  * GENERATED FILE. Do not edit.
  *
  * Produced by tools/build-nist-catalogue.mjs from the NIST ASD exports
- * listed in internals/libs/donnees/MANIFESTE.md. Every number here comes
+ * listed in internals/libs/data/MANIFEST.md. Every number here comes
  * from that download, and the sha256 of each source file is recorded
  * below, so a spectrum can be traced back to it.
  *
@@ -127,3 +127,8 @@ import type { INistCatalogueRaw } from "./nist.raw.js";
 
 export const NIST_CATALOGUE_RAW: INistCatalogueRaw = `;
 writeFileSync(outFile, banner + JSON.stringify(catalogue) + ";" + "\n", "utf8");
+
+const totalLines = species.reduce((n, s) => n + s.lines.length, 0);
+console.log(report.join("\n"));
+console.log(`ionisation energies: ${Object.keys(ionisationEnergies).length} species`);
+console.log(`wrote ${outFile}: ${totalLines} lines, ${Math.round(readFileSync(outFile).length / 1024)} KB`);

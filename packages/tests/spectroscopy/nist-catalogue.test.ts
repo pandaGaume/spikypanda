@@ -158,7 +158,7 @@ describe("the shipped NIST catalogue", () => {
         expect(NIST_PROVENANCE.wavelengthRangeNm).toEqual([200, 900]);
         expect(NIST_PROVENANCE.linesFilter).toMatch(/transition probability/);
         expect(NIST_PROVENANCE.citation).toMatch(/Kramida/);
-        expect(NIST_PROVENANCE.manifest).toBe("internals/libs/donnees/MANIFESTE.md");
+        expect(NIST_PROVENANCE.manifest).toBe("internals/libs/data/MANIFEST.md");
     });
 
     it("carries six species over three elements, with a checksum each", () => {
