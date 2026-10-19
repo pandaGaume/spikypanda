@@ -209,6 +209,26 @@ function peaks(r, count, floor = 0.01) {
     return found.slice(0, count);
 }
 
+/**
+ * The spectrum around given wavelengths: the strongest point within a
+ * window and what it is worth relative to the whole spectrum. Asking
+ * about a named line is how a prediction about one gets tested, and it
+ * is not the same question as "what are the strongest peaks".
+ */
+function at(r, wavelengths, halfWidthNm = 0.15) {
+    let max = 0;
+    for (const v of r.mean) max = Math.max(max, v);
+    return wavelengths.map((nm) => {
+        let best = -1;
+        for (let i = 0; i < r.wavelength.length; i++) {
+            if (Math.abs(r.wavelength[i] - nm) > halfWidthNm) continue;
+            if (best < 0 || r.mean[i] > r.mean[best]) best = i;
+        }
+        if (best < 0) return { asked: nm, found: null };
+        return { asked: nm, found: r.wavelength[best], height: r.mean[best], relative: r.mean[best] / max, spread: r.mean[best] > 0 ? r.deviation[best] / r.mean[best] : NaN };
+    });
+}
+
 // ── the command ──────────────────────────────────────────────────────
 
 const argv = process.argv.slice(2);
@@ -259,10 +279,25 @@ if (sample) {
         console.log(`  ${e.name}\n    ${describe(r)}`);
         if (r.skipped > 0) console.log(`    ${r.skipped} non-numeric row(s) skipped`);
 
+        const asked = flag("at");
+        if (asked) {
+            for (const a of at(r, asked.split(",").map(Number))) {
+                if (a.found === null) {
+                    console.log(`      ${a.asked} nm  outside this spectrum's range`);
+                    continue;
+                }
+                console.log(
+                    `      asked ${a.asked} nm -> ${a.found.toFixed(3)} nm  ${a.height.toPrecision(5).padStart(11)}  ${(a.relative * 100).toFixed(2).padStart(6)} % of the strongest  spread ${(a.spread * 100).toFixed(0)} %`
+                );
+            }
+        }
+
         const wanted = Number(flag("peaks") ?? 0);
         if (wanted > 0) {
             for (const p of peaks(r, wanted)) {
-                console.log(`      ${p.nm.toFixed(3)} nm  ${p.height.toPrecision(5).padStart(11)}  ${(p.relative * 100).toFixed(1).padStart(5)} % of the strongest  spread ${(p.spread * 100).toFixed(0)} %`);
+                console.log(
+                    `      ${p.nm.toFixed(3)} nm  ${p.height.toPrecision(5).padStart(11)}  ${(p.relative * 100).toFixed(1).padStart(5)} % of the strongest  spread ${(p.spread * 100).toFixed(0)} %`
+                );
             }
         }
 
