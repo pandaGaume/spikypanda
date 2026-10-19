@@ -46,6 +46,28 @@ export interface IRenderable {
     onResize(width: number, height: number): void;
 }
 
+/**
+ * The nodes of a graph that can draw but have no tile yet.
+ *
+ * A UI node is not declared anywhere in a saved document: what marks it
+ * is its runtime instance implementing `IRenderable`. The interactive
+ * add path has always used that marker (the host mounts a tile as soon
+ * as a renderable node is dropped on the canvas), but the LOAD path
+ * only mounted what the saved `dashboards[]` listed. A document
+ * produced outside the editor (a job, the document builder, a
+ * hand-written file) therefore carried chart nodes that appeared
+ * nowhere: the graph showed them, the dashboard did not.
+ *
+ * This helper is the one rule, in one place: a node whose data can draw
+ * gets a tile. It is pure so it can be tested without a DOM, and
+ * `GraphViewer.load` calls it right after restoring the saved layout,
+ * so explicit tiles keep their saved position and size and only the
+ * missing ones are derived.
+ */
+export function unmountedRenderables<T extends { id: string; item: { data: unknown } }>(nodes: ReadonlyArray<T>, hasTile: (nodeId: string) => boolean): T[] {
+    return nodes.filter((node) => !hasTile(node.id) && isRenderable(node.item?.data));
+}
+
 /** Structural duck-type guard for IRenderable. */
 export function isRenderable(obj: unknown): obj is IRenderable {
     if (!obj || typeof obj !== "object") return false;

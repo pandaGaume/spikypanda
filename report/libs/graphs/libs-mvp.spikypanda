@@ -207,7 +207,7 @@
           "enabled": true,
           "_title": "LIBS spectrum, physical model (NIST ASD 5.12)",
           "_xLabel": "wavelength (nm)",
-          "_yLabel": "intensity (relative)",
+          "_yLabel": "intensity (eV/s per atom)",
           "_maxPoints": 2000,
           "_seriesNames": "measured, ideal"
         }
@@ -275,7 +275,16 @@
     {
       "id": "main",
       "name": "Main",
-      "tiles": []
+      "tiles": [
+        {
+          "nodeId": "chart",
+          "renderableType": "Viz.Plot:xy",
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 6
+        }
+      ]
     }
   ]
 }

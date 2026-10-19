@@ -74,5 +74,5 @@ export { loadPlugin, loadPluginFromUrl } from "./plugin.loader";
 export type { LoadPluginOptions, LoadPluginFromUrlOptions, LoadPluginResult } from "./plugin.loader";
 export type { PortDirection, PortType, PortDef, NodeDef, Vec2, SerializedGraph, SerializedNode, SerializedConnection } from "./types";
 
-export { Dashboard, isRenderable } from "./dashboard";
+export { Dashboard, isRenderable, unmountedRenderables } from "./dashboard";
 export type { IRenderable, ISerializedTile, ISerializedDashboard } from "./dashboard";

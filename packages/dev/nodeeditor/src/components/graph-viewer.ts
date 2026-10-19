@@ -16,6 +16,7 @@ import { transparentDarkSkin, transparentLightSkin } from "../styles/skins/trans
 import { arePortTypesCompatible, ExportProfile, EXPORT_PROFILES, NodeDef, PORT_COLORS, SerializedConnection, SerializedGraph } from "../types";
 import { DebugBus } from "../debug-bus";
 import type { ILinkRegistry, INodeRegistry, IRuntimeNode } from "spikypanda-core";
+import { unmountedRenderables } from "../dashboard";
 import type { Dashboard, ISerializedDashboard } from "../dashboard";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -673,6 +674,19 @@ export class GraphViewer {
         if (this.dashboard && Array.isArray(savedDashboards) && savedDashboards.length > 0) {
             const saved = savedDashboards[0] as ISerializedDashboard;
             this.dashboard.deserialize(saved, (savedNodeId) => nodeMap.get(savedNodeId) ?? undefined);
+        }
+
+        // Then mount what the save did not list. A document produced
+        // outside the editor carries no tiles, and a UI node is only
+        // recognisable by its runtime instance being IRenderable, which
+        // is exactly the marker the interactive add path uses. Without
+        // this, a chart loaded from such a document sat in the graph and
+        // drew nothing.
+        if (this.dashboard) {
+            const dashboard = this.dashboard;
+            for (const node of unmountedRenderables(this.nodes, (id) => dashboard.hasTile(id))) {
+                dashboard.addTile(node as NodeUI & { item: { data: unknown } });
+            }
         }
     }
 
