@@ -46,6 +46,33 @@ export interface IRenderable {
     onResize(width: number, height: number): void;
 }
 
+/** The tag a node type declares when it is a user-interface surface. */
+export const UI_TAG = "ui";
+
+/**
+ * Is this a UI node?
+ *
+ * Two sources answer, and they are not equal:
+ *
+ *   - the INSTANCE, which either implements `IRenderable` or does not.
+ *     It is the one that will have to mount, repaint and resize, so when
+ *     an instance is at hand it decides, full stop. A type tagged `"ui"`
+ *     whose instance cannot draw is not a UI node, and mounting it would
+ *     throw;
+ *   - the registration TAGS, which are a declaration made before
+ *     anything exists. They answer where there is no instance to ask: a
+ *     palette grouping its entries, a document builder emitting a
+ *     dashboard tile, a headless registry deciding what to stub.
+ *
+ * Hence the rule: instantiation has priority over tags. Pass `instance`
+ * whenever you have one, even a wrong one, because "this instance cannot
+ * draw" is the answer, not a reason to fall back on the tag.
+ */
+export function isUiNode(subject: { instance?: unknown; tags?: ReadonlyArray<string> }): boolean {
+    if ("instance" in subject && subject.instance !== undefined) return isRenderable(subject.instance);
+    return (subject.tags ?? []).includes(UI_TAG);
+}
+
 /**
  * The nodes of a graph that can draw but have no tile yet.
  *

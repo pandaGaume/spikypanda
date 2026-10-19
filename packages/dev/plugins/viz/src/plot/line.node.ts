@@ -3,6 +3,7 @@ import "uplot/dist/uPlot.min.css";
 import { cloneable, editable, viewable, IChannel, IDeclaresPorts, IOlink, IPortDescriptor, ISession, RuntimeNode, inSlotOf } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
 import type { IRenderable } from "spikypanda-nodeeditor";
+import { skinColors } from "./skin.js";
 
 /**
  * Real-time scrolling time-series plot, rendered with uPlot.
@@ -269,6 +270,11 @@ export class UplotLineNode extends RuntimeNode implements IDeclaresPorts, IRende
     }
 
     private _buildOptions(): UplotOptions {
+        // The skin colours, read where the tile is mounted: a canvas
+        // inherits nothing from CSS, and the title and legend are DOM,
+        // so the host carries the text colour for them.
+        const skin = skinColors(this._host);
+        if (this._host) this._host.style.color = skin.text;
         // Range closure: reads live yMin/yMax on every uPlot query, so
         // bound edits take effect on the next setData() with no rebuild.
         // Tuple form `range: [yMin, yMax]` is unreliable in uPlot 1.6
@@ -291,9 +297,13 @@ export class UplotLineNode extends RuntimeNode implements IDeclaresPorts, IRende
             ],
             // No legend cursor crosshair by default — the tile is small.
             cursor: { show: false },
+            // Axis values, labels, ticks and grid are painted on the
+            // canvas and inherit nothing from CSS, so the skin's colours
+            // are handed over explicitly. The hardcoded dark values this
+            // replaces were unreadable on a light host.
             axes: [
-                { stroke: "#8A8A9A", grid: { stroke: "#3A3A48", width: 0.5 } },
-                { stroke: "#8A8A9A", grid: { stroke: "#3A3A48", width: 0.5 } },
+                { stroke: skin.muted, grid: { stroke: skin.grid, width: 0.5 }, ticks: { stroke: skin.grid, width: 0.5 } },
+                { stroke: skin.muted, grid: { stroke: skin.grid, width: 0.5 }, ticks: { stroke: skin.grid, width: 0.5 } },
             ],
         };
         return opts;

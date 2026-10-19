@@ -12,7 +12,7 @@
  * The helper is pure on purpose: a tile needs GridStack and a DOM, the
  * rule that decides which nodes deserve one does not.
  */
-import { isRenderable, unmountedRenderables } from "../../dev/nodeeditor/src";
+import { isRenderable, isUiNode, UI_TAG, unmountedRenderables } from "../../dev/nodeeditor/src";
 
 /** A node that can draw: the five members `IRenderable` requires. */
 const renderable = (type: string) => ({
@@ -60,5 +60,29 @@ describe("unmountedRenderables", () => {
     it("ignores a node whose data is missing rather than throwing", () => {
         const nodes = [{ id: "ghost", item: { data: undefined } }, node("chart", renderable("Viz.Plot:xy"))];
         expect(unmountedRenderables(nodes, () => false).map((n) => n.id)).toEqual(["chart"]);
+    });
+});
+
+describe("isUiNode, instance over tags", () => {
+    it("asks the instance whenever there is one", () => {
+        // Tagged ui, but the instance cannot draw: it is not a UI node,
+        // and mounting it would throw inside GridStack.
+        expect(isUiNode({ instance: physics(), tags: [UI_TAG] })).toBe(false);
+        // Not tagged at all, but the instance draws: it IS a UI node.
+        // This is the case of every document produced outside the editor.
+        expect(isUiNode({ instance: renderable("Viz.Plot:xy"), tags: [] })).toBe(true);
+    });
+
+    it("falls back to the tags only when there is no instance", () => {
+        expect(isUiNode({ tags: [UI_TAG] })).toBe(true);
+        expect(isUiNode({ tags: ["compute"] })).toBe(false);
+        expect(isUiNode({})).toBe(false);
+        // An explicit undefined instance is the same as having none.
+        expect(isUiNode({ instance: undefined, tags: [UI_TAG] })).toBe(true);
+    });
+
+    it("treats tags as non-exclusive", () => {
+        // A tile that also computes carries both, and stays a UI node.
+        expect(isUiNode({ tags: ["compute", UI_TAG, "experimental"] })).toBe(true);
     });
 });

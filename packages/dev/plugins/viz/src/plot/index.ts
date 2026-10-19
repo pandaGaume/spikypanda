@@ -10,6 +10,8 @@ export { PixiWaterfallNode, createPixiWaterfallNode };
 export { UplotSpectrumNode, createUplotSpectrumNode };
 export { UplotStemNode, createUplotStemNode };
 export { UplotXyNode, createUplotXyNode };
+export { skinColors, skinnedAxis } from "./skin.js";
+export type { ISkinColors } from "./skin.js";
 
 /**
  * `Viz.Plot` sub-plugin. Registers tile-type nodes that render scalar
@@ -25,6 +27,7 @@ export const vizPlotSubPlugin: IPlugin = {
             label: "Time-series Plot",
             docPath: ctx.assetUrl("docs/viz/plot/line.md"),
             category: "Viz.Plot",
+            tags: ["ui"],
             inputPorts: [{ slot: "value", optional: true, type: "float" }],
             outputPorts: [],
         });
@@ -32,6 +35,7 @@ export const vizPlotSubPlugin: IPlugin = {
             label: "Waterfall Spectrogram",
             docPath: ctx.assetUrl("docs/viz/plot/waterfall.md"),
             category: "Viz.Plot",
+            tags: ["ui"],
             inputPorts: [{ slot: "magnitudes", optional: true, type: "any" }],
             outputPorts: [],
         });
@@ -39,6 +43,7 @@ export const vizPlotSubPlugin: IPlugin = {
             label: "Frequency Spectrum",
             docPath: ctx.assetUrl("docs/viz/plot/spectrum.md"),
             category: "Viz.Plot",
+            tags: ["ui"],
             inputPorts: [{ slot: "magnitudes", optional: true, type: "any" }],
             outputPorts: [],
         });
@@ -46,6 +51,7 @@ export const vizPlotSubPlugin: IPlugin = {
             label: "Stem (Oracle Spectrum)",
             docPath: ctx.assetUrl("docs/viz/plot/stem.md"),
             category: "Viz.Plot",
+            tags: ["ui"],
             // Seed with one pair (f_0, A_0). The variadic reconciler
             // grows BOTH groups independently as the user connects:
             // wire f_0 → f_1 appears; wire A_0 → A_1 appears. Each
@@ -72,6 +78,7 @@ export const vizPlotSubPlugin: IPlugin = {
             label: "XY Plot",
             docPath: ctx.assetUrl("docs/viz/plot/xy.md"),
             category: "Viz.Plot",
+            tags: ["ui"],
             inputPorts: [
                 { slot: "x", optional: true, type: "any" },
                 { slot: "y_1", optional: true, type: "any" },

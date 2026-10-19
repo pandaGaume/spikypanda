@@ -1,12 +1,13 @@
 import uPlot, { Options as UplotOptions } from "uplot";
 import "uplot/dist/uPlot.min.css";
 import {
-    cloneable, viewable,
+    viewable,
     IChannel, IDeclaresPorts, IOlink, IPortDescriptor,
     ISession, RuntimeNode, inSlotOf,
 } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
 import type { IRenderable } from "spikypanda-nodeeditor";
+import { skinColors } from "./skin.js";
 
 /**
  * Stem / discrete-spectrum tile: shows N (frequency, amplitude) pairs
@@ -257,6 +258,11 @@ export class UplotStemNode extends RuntimeNode implements IDeclaresPorts, IRende
     }
 
     private _buildOptions(): UplotOptions {
+        // The skin colours, read where the tile is mounted: a canvas
+        // inherits nothing from CSS, and the title and legend are DOM,
+        // so the host carries the text colour for them.
+        const skin = skinColors(this._host);
+        if (this._host) this._host.style.color = skin.text;
         // Per-bar coloring via a CUSTOM paths function. uPlot's built-
         // in `paths.bars` returns ONE fill per series — we'd need N
         // series for N colors, with all the bookkeeping (rebuild on
@@ -271,7 +277,7 @@ export class UplotStemNode extends RuntimeNode implements IDeclaresPorts, IRende
             // custom path painter, but uPlot still uses `stroke` for
             // the legend dot — set it to a neutral color rather than
             // any specific stem's color so the legend isn't misleading.
-            stroke: "#8A8A9A",
+            stroke: skin.muted,
             width: 0,
             paths: (u, _seriesIdx, idx0, idx1) => {
                 const ctx = u.ctx;
@@ -328,14 +334,15 @@ export class UplotStemNode extends RuntimeNode implements IDeclaresPorts, IRende
             cursor: { show: false },
             axes: [
                 {
-                    stroke: "#8A8A9A",
-                    grid: { stroke: "#3A3A48", width: 0.5 },
+                    stroke: skin.muted,
+                    grid: { stroke: skin.grid, width: 0.5 },
+                    ticks: { stroke: skin.grid, width: 0.5 },
                     values: (_self, ticks) => (ticks as (number | null)[]).map(xFormat),
                     label: isHz ? "Hz" : "Hz (free mode → no Nyquist)",
                     labelSize: 14,
                     labelFont: "10px sans-serif",
                 },
-                { stroke: "#8A8A9A", grid: { stroke: "#3A3A48", width: 0.5 } },
+                { stroke: skin.muted, grid: { stroke: skin.grid, width: 0.5 }, ticks: { stroke: skin.grid, width: 0.5 } },
             ],
         };
         return opts;

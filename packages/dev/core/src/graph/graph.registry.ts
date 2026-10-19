@@ -46,6 +46,23 @@ export interface INodeMeta {
      *  form for symmetry, although no current node uses it. */
     readonly variadicOutput?: { readonly prefix: string; readonly type: string } | ReadonlyArray<{ readonly prefix: string; readonly type: string }>;
     /**
+     * Non-exclusive capability tags: what this node type IS, for the
+     * paths that only have the registration and no instance (a palette
+     * grouping, a document builder, a headless job registry).
+     *
+     * A node can carry several, and they do not partition the catalogue:
+     * a tile that also computes is both `"ui"` and `"compute"`. Unknown
+     * tags are carried through untouched, so a plugin can declare its own
+     * without a change here.
+     *
+     * PRECEDENCE: a tag is a declaration, not a truth. Wherever a live
+     * instance exists, the instance decides, because it is the instance
+     * that will have to do the work: a node tagged `"ui"` whose instance
+     * does not implement `IRenderable` cannot be mounted, and no tag
+     * makes it mountable. Tags answer only where there is nothing to ask.
+     */
+    readonly tags?: ReadonlyArray<string>;
+    /**
      * Number of independent anchor widgets the editor should render
      * for this node. Default undefined / 1 → ordinary single-widget
      * node. Values >= 2 turn it into a split-view node: one logical

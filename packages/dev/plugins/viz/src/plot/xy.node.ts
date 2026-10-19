@@ -3,6 +3,7 @@ import "uplot/dist/uPlot.min.css";
 import { cloneable, editable, IChannel, IDeclaresPorts, inSlotOf, IOlink, IPortDescriptor, ISession, RuntimeNode, viewable } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
 import type { IRenderable } from "spikypanda-nodeeditor";
+import { skinColors, skinnedAxis } from "./skin.js";
 
 /**
  * Generic XY tile: an explicit X vector against up to three Y vectors,
@@ -278,12 +279,18 @@ export class UplotXyNode extends RuntimeNode implements IDeclaresPorts, IRendera
                 width: 1.5,
             });
         }
+        // Axis values, labels, ticks and grid are painted on the canvas,
+        // so they inherit nothing from CSS: the skin's colours have to be
+        // handed over explicitly. The title and the legend are DOM, so
+        // setting the host's colour is enough for them.
+        const colors = skinColors(this._host);
+        if (this._host) this._host.style.color = colors.text;
         return {
             title: this._title,
             width: this._host?.clientWidth || 480,
             height: this._host?.clientHeight || 240,
             series,
-            axes: [{ label: this._xLabel }, { label: this._yLabel }],
+            axes: [skinnedAxis(colors, this._xLabel), skinnedAxis(colors, this._yLabel)],
             scales: { x: { time: false } },
             legend: { show: true },
         };

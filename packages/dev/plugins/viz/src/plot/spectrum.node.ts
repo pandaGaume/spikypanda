@@ -7,6 +7,7 @@ import {
 } from "spikypanda-core";
 import type { ICartesian, Nullable } from "spikypanda-core";
 import type { IRenderable } from "spikypanda-nodeeditor";
+import { skinColors } from "./skin.js";
 
 /**
  * Static FFT magnitude spectrum, rendered with uPlot.
@@ -99,7 +100,6 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
     // Running peak/floor of the most recent frame in DISPLAY units
     // (linear or dB depending on scaleType). Drives the Y axis range.
     private _framePeak = 0;
-    private _frameFloor = 0;
 
     // ── Editables ──────────────────────────────────────────────────────
     @cloneable private _fillStyle:  FillStyle = "area";
@@ -249,7 +249,6 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
         this._displayYs = [];
         this._bins = 0;
         this._framePeak = 0;
-        this._frameFloor = 0;
         this._yTop = 1;
     }
 
@@ -337,7 +336,6 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
         // uPlot's scale and freeze the canvas).
         if (n > 0) {
             this._framePeak = peak;
-            this._frameFloor = floor;
         }
     }
 
@@ -440,6 +438,11 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
     }
 
     private _buildOptions(): UplotOptions {
+        // The skin colours, read where the tile is mounted: a canvas
+        // inherits nothing from CSS, and the title and legend are DOM,
+        // so the host carries the text colour for them.
+        const skin = skinColors(this._host);
+        if (this._host) this._host.style.color = skin.text;
         const style = this._fillStyle;
         // Series rendering style:
         //   line  — plain stroke, no fill (cheapest)
@@ -509,8 +512,9 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
             cursor: { show: false },
             axes: [
                 {
-                    stroke: "#8A8A9A",
-                    grid: { stroke: "#3A3A48", width: 0.5 },
+                    stroke: skin.muted,
+                    grid: { stroke: skin.grid, width: 0.5 },
+                    ticks: { stroke: skin.grid, width: 0.5 },
                     // ticks can contain null entries when uPlot's scale
                     // has not converged yet; xFormat handles that.
                     values: (_self, ticks) => (ticks as (number | null)[]).map(xFormat),
@@ -520,8 +524,9 @@ export class UplotSpectrumNode extends RuntimeNode implements IDeclaresPorts, IR
                     labelFont: "10px sans-serif",
                 },
                 {
-                    stroke: "#8A8A9A",
-                    grid: { stroke: "#3A3A48", width: 0.5 },
+                    stroke: skin.muted,
+                    grid: { stroke: skin.grid, width: 0.5 },
+                    ticks: { stroke: skin.grid, width: 0.5 },
                     label: yLabel,
                     labelSize: 14,
                     labelFont: "10px sans-serif",

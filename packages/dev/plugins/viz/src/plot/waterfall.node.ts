@@ -86,7 +86,6 @@ export class PixiWaterfallNode extends RuntimeNode implements IDeclaresPorts, IR
     private _app:         Application | null = null;
     private _sprite:      Sprite | null = null;
     private _baseTexture: BaseTexture | null = null;
-    private _host:        HTMLElement | null = null;
     private _canvasWrap:  HTMLDivElement | null = null;
     private _axisEl:      HTMLDivElement | null = null;
     private _lastReceivedBins = 0;
@@ -217,7 +216,6 @@ export class PixiWaterfallNode extends RuntimeNode implements IDeclaresPorts, IR
     // ── IRenderable ────────────────────────────────────────────────────
 
     public mountInto(host: HTMLElement): void {
-        this._host = host;
         // Layout: flex column with the canvas on top (stretches) and an
         // optional axis label strip below. Axis is empty / hidden when
         // sampleRate=0, populated with Hz tick labels when > 0.
@@ -271,7 +269,6 @@ export class PixiWaterfallNode extends RuntimeNode implements IDeclaresPorts, IR
         this._canvasWrap = null;
         host.style.display = "";
         host.style.flexDirection = "";
-        this._host = null;
     }
 
     public repaint(): void {

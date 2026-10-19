@@ -27,7 +27,6 @@ export class KnobNode extends RuntimeNode implements IDeclaresPorts, IRenderable
     @cloneable private _value: number = 0;
 
     private _host: HTMLElement | null = null;
-    private _dialHost: HTMLElement | null = null;
     private _dial: unknown | null = null;
     private _valueEl: HTMLElement | null = null;
     private _labelEl: HTMLElement | null = null;
@@ -143,7 +142,6 @@ export class KnobNode extends RuntimeNode implements IDeclaresPorts, IRenderable
             });
             if (this._valueEl) this._valueEl.textContent = _format(next);
         });
-        this._dialHost = dialHost;
         this._dial = dial;
     }
 
@@ -157,7 +155,6 @@ export class KnobNode extends RuntimeNode implements IDeclaresPorts, IRenderable
             }
         }
         this._dial = null;
-        this._dialHost = null;
         if (this._host) this._host.replaceChildren();
     }
 }
