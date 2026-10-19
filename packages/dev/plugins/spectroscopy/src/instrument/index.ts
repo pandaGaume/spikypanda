@@ -12,6 +12,8 @@ import {
     SpectrometerNode,
 } from "./spectrometer.node.js";
 
+export * from "./response.js";
+
 export {
     SpectrometerNode,
     createSpectrometerNode,
