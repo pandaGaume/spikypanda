@@ -16,7 +16,7 @@ The full chain is in the track document `internals/libs/02-LIBS-FORWARD-MODEL.md
 | level populations (Boltzmann) | **yes**, in `physical` mode |
 | ionisation balance (Saha) | **yes**, first ionisation only |
 | line amplitude from a transition probability | **yes**, from the NIST `A_ki`, `g_k`, `E_k` |
-| second ionisation | **no**: above roughly 15 000 K this understates the ionisation |
+| second ionisation | **no**, and it is the model's largest known error: at 11 605 K and 1e17 cm^-3, 9.1 % of calcium is already doubly ionised against 0.2 % of iron, which biases a Ca/Si intensity ratio by **10 %**. Measured against the NIST LIBS Database, see `internals/libs/07-V1B0-NIST-CROSSCHECK.md` |
 | Doppler broadening from temperature and atomic mass | **yes** |
 | collisional (Stark-like) broadening from electron density | **yes**, with one global coefficient instead of per-line Stark data |
 | self-absorption | **no** |
@@ -31,7 +31,10 @@ The full chain is in the track document `internals/libs/02-LIBS-FORWARD-MODEL.md
 | partition function | `U(T) = sum of g exp(-E/kT)` over the species' complete NIST level list |
 | level population | Boltzmann: the fraction on level k is `g_k exp(-E_k/kT) / U(T)` |
 | ionisation balance | Saha, solved at the node's electron density, neutral against singly ionised |
-| line emissivity | the optically thin form, `A_ki` times the upper level population, times the photon energy |
+| line emissivity | the optically thin form, `A_ki` times the upper level population, times the energy of the photon |
+| the photon's energy | the difference between the two levels, `E_k - E_i`, not `h c / lambda` |
+
+Why the photon energy comes from the levels and not from the wavelength: above 200 nm the wavelength NIST publishes is the wavelength **in air**, so `h c / lambda` is the photon's energy multiplied by the refractive index of the room, which is not constant across the band. Taking `E_k - E_i` instead removed a wavelength-dependent error of 3e-5 on every intensity. It was found by comparing against the NIST LIBS Database, which is an independent implementation of this same model: `packages/tests/spectroscopy/v1b0-nist-reference.test.ts`. A line whose lower level NIST does not publish falls back to the wavelength.
 
 Intensities are published in **eV per second per atom**: the emissivity per unit total atom density, without the 1/4 pi solid angle. Nothing in the chain fixes how many atoms the laser ablated, so the overall SCALE is unknown. Every **ratio** is physical: line to line, species to species, element to element, and their variation with temperature and electron density. That is what a Boltzmann plot or a line-ratio thermometer needs, and it is exactly what the node claims, no more.
 

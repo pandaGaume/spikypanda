@@ -38,7 +38,7 @@
  * electronvolts per second per atom:
  *
  *     I_line = x_element * f_species * (g_k / U) * exp(-E_k / kT)
- *              * A_ki * E_photon(lambda)
+ *              * A_ki * (E_k - E_i)
  *
  * Every RATIO in a spectrum built this way is physical: line to line,
  * species to species, element to element, and their variation with
@@ -83,10 +83,35 @@ export interface IPartitionFunction {
 /**
  * Photon energy [eV] of a wavelength in nanometres. The constant is
  * h c / e, which is why it is computed rather than written as 1239.84.
+ *
+ * The wavelength ASD publishes above 200 nm is the wavelength IN AIR,
+ * so this returns h c / (n lambda_vacuum e) and understates the photon
+ * energy by the refractive index of air, 2.7 to 3.3 parts in ten
+ * thousand across the band. Prefer `transitionEnergyEv` whenever the
+ * two level energies are known; this is the fallback for a line whose
+ * lower level ASD does not publish.
  */
 export function photonEnergyEv(wavelengthNm: number): number {
     if (!(wavelengthNm > 0)) return 0;
     return (PLANCK_CONSTANT * SPEED_OF_LIGHT) / (wavelengthNm * 1e-9 * ELEMENTARY_CHARGE);
+}
+
+/**
+ * Energy [eV] of the photon a line emits: the difference between its
+ * two levels, which is what the atom actually releases.
+ *
+ * Going through the wavelength instead would pass through the
+ * refractive index of air, which is a property of the room and not of
+ * the transition, and whose dispersion across 200 to 900 nm is a
+ * wavelength-dependent error of 3e-5 on every intensity. V1-B0 measured
+ * that error against the NIST LIBS reference before it was removed:
+ * `packages/tests/spectroscopy/v1b0-nist-reference.test.ts`.
+ */
+export function transitionEnergyEv(line: IAtomicLine): number {
+    const upper = line.upperLevelEnergyEv;
+    const lower = line.lowerLevelEnergyEv;
+    if (upper !== undefined && lower !== undefined && upper > lower) return upper - lower;
+    return photonEnergyEv(line.wavelengthNm);
 }
 
 /**
@@ -223,7 +248,7 @@ export function computePhysicalEmissions(
                 const aki = line.transitionProbability;
                 if (gk === undefined || ek === undefined || aki === undefined) continue;
                 const upperLevelFraction = (gk * Math.exp(-ek / ktEv)) / u.value;
-                const intensity = intensityScale * fraction * speciesFraction * upperLevelFraction * aki * photonEnergyEv(line.wavelengthNm);
+                const intensity = intensityScale * fraction * speciesFraction * upperLevelFraction * aki * transitionEnergyEv(line);
                 if (!(intensity > 0)) continue;
                 intensities.push({ line, intensity, speciesFraction, upperLevelFraction });
             }

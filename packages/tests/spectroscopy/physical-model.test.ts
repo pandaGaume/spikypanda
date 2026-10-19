@@ -27,6 +27,7 @@ import {
     NIST_SPECIES,
     partitionFunction,
     photonEnergyEv,
+    transitionEnergyEv,
     physicalDataBlocker,
     sahaRatio,
 } from "../../dev/plugins/spectroscopy/src";
@@ -183,10 +184,13 @@ describe("computePhysicalEmissions", () => {
         const h = find(396.847);
 
         const ktEv = thermalEnergyEv(10000);
+        // The energy each photon carries is the difference between the
+        // two levels, not h c / lambda: the wavelength ASD publishes is
+        // the one in AIR, and the refractive index of the room has no
+        // business in an emission model. See `transitionEnergyEv`.
         const predicted =
-            ((k.line.upperLevelWeight! * Math.exp(-k.line.upperLevelEnergyEv! / ktEv) * k.line.transitionProbability! * photonEnergyEv(k.line.wavelengthNm)) /
-                (h.line.upperLevelWeight! * Math.exp(-h.line.upperLevelEnergyEv! / ktEv) * h.line.transitionProbability! * photonEnergyEv(h.line.wavelengthNm))) *
-            1;
+            (k.line.upperLevelWeight! * Math.exp(-k.line.upperLevelEnergyEv! / ktEv) * k.line.transitionProbability! * transitionEnergyEv(k.line)) /
+            (h.line.upperLevelWeight! * Math.exp(-h.line.upperLevelEnergyEv! / ktEv) * h.line.transitionProbability! * transitionEnergyEv(h.line));
         expect(k.intensity / h.intensity).toBeCloseTo(predicted, 10);
         // And it is about 2, which is the textbook K/H ratio.
         expect(k.intensity / h.intensity).toBeGreaterThan(1.5);
@@ -237,7 +241,9 @@ describe("physicalDataBlocker", () => {
     it("names what is missing, rather than letting a model run half-blind", () => {
         expect(physicalDataBlocker(undefined)).toMatch(/no level data/);
         expect(physicalDataBlocker({ species: [], ionisationEnergiesEv: {} })).toMatch(/no species/);
-        expect(physicalDataBlocker({ species: [{ element: "Ca", ionisation: 0, asdName: "Ca I", lines: [], levels: [] }], ionisationEnergiesEv: { "Ca I": 6.11 } })).toMatch(/no level list for Ca I/);
+        expect(physicalDataBlocker({ species: [{ element: "Ca", ionisation: 0, asdName: "Ca I", lines: [], levels: [] }], ionisationEnergiesEv: { "Ca I": 6.11 } })).toMatch(
+            /no level list for Ca I/
+        );
         expect(physicalDataBlocker({ species: DATA.species, ionisationEnergiesEv: {} })).toMatch(/no ionisation energies/);
     });
 });
