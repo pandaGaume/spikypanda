@@ -1,7 +1,7 @@
 import uPlot, { Options as UplotOptions } from "uplot";
 import "uplot/dist/uPlot.min.css";
 import {
-    viewable,
+    cloneable, editable, viewable,
     IChannel, IDeclaresPorts, IOlink, IPortDescriptor,
     ISession, RuntimeNode, inSlotOf,
 } from "spikypanda-core";
@@ -153,6 +153,40 @@ export class UplotStemNode extends RuntimeNode implements IDeclaresPorts, IRende
                 if (Number.isFinite(i) && i >= 0) this._amps.set(i, v);
             }
         }
+    }
+
+    /** Tile size in grid columns and rows. Same width as the spectrum tile it is meant to be compared against, so the two axes line up.
+     *  A size saved in the document still wins: that one is the user's
+     *  own arrangement. */
+    @cloneable private _tileWidth: number = 12;
+    @cloneable private _tileHeight: number = 4;
+
+    /** Tile width in grid columns, 1 to 12. */
+    @editable("number") public get tile_width(): number {
+        return this._tileWidth;
+    }
+    public set tile_width(v: number) {
+        const next = Number.isFinite(v) ? Math.min(12, Math.max(1, Math.round(v))) : this._tileWidth;
+        this.setField("tile_width", this._tileWidth, next, (n) => {
+            this._tileWidth = n;
+        });
+    }
+
+    /** Tile height in grid rows. */
+    @editable("number") public get tile_height(): number {
+        return this._tileHeight;
+    }
+    public set tile_height(v: number) {
+        const next = Number.isFinite(v) ? Math.max(1, Math.round(v)) : this._tileHeight;
+        this.setField("tile_height", this._tileHeight, next, (n) => {
+            this._tileHeight = n;
+        });
+    }
+
+    /** IRenderable: the size this tile wants when the panel has nothing
+     *  else to go on. */
+    public get preferredTile(): { w: number; h: number } {
+        return { w: this._tileWidth, h: this._tileHeight };
     }
 
     // ── IRenderable ────────────────────────────────────────────────────
