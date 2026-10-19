@@ -37,24 +37,46 @@ const outFile = resolve(process.argv[3] ?? join(pluginRoot, "src/lines/nist-cata
 const parser = await import(pathToFileURL(join(pluginRoot, "dist/lines/nist.parse.js")).href);
 
 /**
- * The nine species downloaded, with the directory name each one uses.
+ * The twenty-four species downloaded, with the directory name each one
+ * uses: eight elements, three ionisation stages each.
  *
  * Three stages per element, not two: at 11 605 K, nine per cent of
  * calcium is already doubly ionised, and a balance that stops at the
  * first ion puts that nine per cent back into the stages below, which
  * biases every ratio that calcium takes part in. Measured in
  * `internals/libs/07-V1B0-NIST-CROSSCHECK.md`.
+ *
+ * Eight elements, not three: every mineral of the data set chosen for
+ * V1-B contains an element outside Ca, Fe and Si, and an unexplained
+ * peak is ambiguous while that is true. Fluorine and oxygen emit
+ * strongly inside the band. See `internals/libs/08-V1B-PROTOCOL.md`
+ * section 3 and `internals/libs/10-CATALOGUE-EXTENSION.md`.
  */
 const SPECIES = [
+    { element: "C", ionisation: 0, dir: "c1", asdName: "C I" },
+    { element: "C", ionisation: 1, dir: "c2", asdName: "C II" },
+    { element: "C", ionisation: 2, dir: "c3", asdName: "C III" },
+    { element: "O", ionisation: 0, dir: "o1", asdName: "O I" },
+    { element: "O", ionisation: 1, dir: "o2", asdName: "O II" },
+    { element: "O", ionisation: 2, dir: "o3", asdName: "O III" },
+    { element: "F", ionisation: 0, dir: "f1", asdName: "F I" },
+    { element: "F", ionisation: 1, dir: "f2", asdName: "F II" },
+    { element: "F", ionisation: 2, dir: "f3", asdName: "F III" },
+    { element: "Mg", ionisation: 0, dir: "mg1", asdName: "Mg I" },
+    { element: "Mg", ionisation: 1, dir: "mg2", asdName: "Mg II" },
+    { element: "Mg", ionisation: 2, dir: "mg3", asdName: "Mg III" },
+    { element: "Si", ionisation: 0, dir: "si1", asdName: "Si I" },
+    { element: "Si", ionisation: 1, dir: "si2", asdName: "Si II" },
+    { element: "Si", ionisation: 2, dir: "si3", asdName: "Si III" },
+    { element: "S", ionisation: 0, dir: "s1", asdName: "S I" },
+    { element: "S", ionisation: 1, dir: "s2", asdName: "S II" },
+    { element: "S", ionisation: 2, dir: "s3", asdName: "S III" },
     { element: "Ca", ionisation: 0, dir: "ca1", asdName: "Ca I" },
     { element: "Ca", ionisation: 1, dir: "ca2", asdName: "Ca II" },
     { element: "Ca", ionisation: 2, dir: "ca3", asdName: "Ca III" },
     { element: "Fe", ionisation: 0, dir: "fe1", asdName: "Fe I" },
     { element: "Fe", ionisation: 1, dir: "fe2", asdName: "Fe II" },
     { element: "Fe", ionisation: 2, dir: "fe3", asdName: "Fe III" },
-    { element: "Si", ionisation: 0, dir: "si1", asdName: "Si I" },
-    { element: "Si", ionisation: 1, dir: "si2", asdName: "Si II" },
-    { element: "Si", ionisation: 2, dir: "si3", asdName: "Si III" },
 ];
 
 const sha256 = (buffer) => createHash("sha256").update(buffer).digest("hex");

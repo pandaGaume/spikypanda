@@ -11,9 +11,9 @@
  *
  * What is in it, and what that allows:
  *
- *   - 9 394 transitions over nine species, three stages of each of
- *     three elements (Ca I/II/III, Fe I/II/III, Si I/II/III), each with
- *     its wavelength in air, its transition probability, and the energy
+ *   - 13 051 transitions over twenty-four species, three stages of each
+ *     of eight elements (C, O, F, Mg, Si, S, Ca, Fe), each with its
+ *     wavelength in air, its transition probability, and the energy
  *     and statistical weight of both levels. That is exactly what the
  *     physical emission model needs, so `physicalModeBlocker` lets
  *     these species through. The third stage is not a luxury: at
@@ -22,13 +22,21 @@
  *   - the complete level list of each species, which a partition
  *     function sums over. It is a separate export because the lines
  *     alone only cover the levels that happen to radiate in the window;
- *   - the first and second ionisation energies, which close the Saha
- *     balance.
+ *   - the first, second and third ionisation energies, which close the
+ *     Saha balance over the three stages.
+ *
+ * The eight elements are the ones the V1-B mineral set needs: every
+ * mineral in it contains at least one outside Ca, Fe and Si, so an
+ * unexplained peak was ambiguous until they were here. Measured in
+ * `internals/libs/10-CATALOGUE-EXTENSION.md`.
  *
  * What is still missing, and still blocks: Stark broadening
  * coefficients, which ASD does not publish in this form, so the
- * collisional width stays a single global coefficient; and every
- * element outside these three.
+ * collisional width stays a single global coefficient; molecular bands
+ * (CaF, CN, C2), which is how LIBS detects fluorine at all, since F I
+ * needs a 14.4 eV upper level and is Boltzmann-suppressed at these
+ * temperatures; and the 81 S I lines whose upper-level energy ASD flags
+ * `u`, which the parser refuses by its own rule.
  */
 
 import { NIST_CATALOGUE_RAW } from "./nist-catalogue.data.js";

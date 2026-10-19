@@ -166,13 +166,26 @@ describe("the shipped NIST catalogue", () => {
         expect(NIST_PROVENANCE.manifest).toBe("internals/libs/data/MANIFEST.md");
     });
 
-    it("carries nine species over three elements, with a checksum each", () => {
-        expect(NIST_CATALOGUE_ELEMENTS).toEqual(["Ca", "Fe", "Si"]);
+    it("carries twenty-four species over eight elements, with a checksum each", () => {
+        // The eight elements of the V1-B mineral set: every mineral in it
+        // contains at least one outside Ca, Fe and Si, and an unexplained
+        // peak stays ambiguous while that is true. See
+        // `internals/libs/10-CATALOGUE-EXTENSION.md`.
+        expect(NIST_CATALOGUE_ELEMENTS).toEqual(["C", "Ca", "F", "Fe", "Mg", "O", "S", "Si"]);
         // Three stages per element: the neutral, the ion and the doubly
         // ionised atom, which the Saha balance needs because nine per
         // cent of calcium is already in the third stage at 11 605 K.
-        expect(NIST_SPECIES).toHaveLength(9);
-        expect(NIST_SPECIES.filter((s) => s.ionisation === 2).map((s) => s.asdName)).toEqual(["Ca III", "Fe III", "Si III"]);
+        expect(NIST_SPECIES).toHaveLength(24);
+        expect(NIST_SPECIES.filter((s) => s.ionisation === 2).map((s) => s.asdName).sort()).toEqual([
+            "C III",
+            "Ca III",
+            "F III",
+            "Fe III",
+            "Mg III",
+            "O III",
+            "S III",
+            "Si III",
+        ]);
         for (const s of NIST_SPECIES) {
             expect(s.sourceSha256.lines).toMatch(/^[0-9a-f]{64}$/);
             expect(s.sourceSha256.levels).toMatch(/^[0-9a-f]{64}$/);
@@ -180,8 +193,25 @@ describe("the shipped NIST catalogue", () => {
         }
     });
 
+    it("carries the lines the V1-B minerals are identified by", () => {
+        // One line per mineral-bearing element that the protocol names,
+        // asserted by position so a regenerated catalogue that quietly
+        // loses an element fails here rather than in a fitted spectrum.
+        // `08-V1B-PROTOCOL.md` section 3 lists them.
+        const near = (element: string, nm: number, toleranceNm = 0.05) =>
+            NIST_LINE_CATALOGUE.filter((l) => l.element === element && Math.abs(l.wavelengthNm - nm) <= toleranceNm);
+
+        expect(near("O", 777.194)).not.toHaveLength(0); // the O I triplet, quartz and hematite
+        expect(near("O", 844.636)).not.toHaveLength(0);
+        expect(near("F", 685.603)).not.toHaveLength(0); // fluorite
+        expect(near("F", 690.247)).not.toHaveLength(0);
+        expect(near("C", 247.856)).not.toHaveLength(0); // calcite
+        expect(near("Mg", 285.213)).not.toHaveLength(0); // dolomite
+        expect(near("S", 869.471)).not.toHaveLength(0); // pyrite
+    });
+
     it("gives every line what an emission calculation needs", () => {
-        expect(NIST_LINE_CATALOGUE.length).toBeGreaterThan(7000);
+        expect(NIST_LINE_CATALOGUE.length).toBeGreaterThan(12000);
         for (const l of NIST_LINE_CATALOGUE) {
             expect(l.verified).toBe(true);
             expect(l.wavelengthNm).toBeGreaterThanOrEqual(200);

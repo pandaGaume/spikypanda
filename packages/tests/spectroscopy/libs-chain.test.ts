@@ -195,15 +195,35 @@ describe("the chain, node by node", () => {
     });
 
     it("says, in physical mode, which elements it has no data for", () => {
-        // The oxide mix carries O, C and Mg, which the NIST subset does
-        // not. They are reported, not silently dropped.
+        // Albite, NaAlSi3O8, a feldspar: silicon and oxygen are in the
+        // catalogue, sodium and aluminium are not. They are reported,
+        // not silently dropped. The elements used here are deliberately
+        // outside the eight the catalogue carries; when the catalogue
+        // grows again this test has to be pointed at something still
+        // missing, which is the point of it.
+        const material = createMaterialNode();
+        material.components = "NaAlSi3O8:1";
         const plasma = createLibsPlasmaNode();
-        plasma.setMaterial(createTestOxideMixMaterialNode().spec);
-        expect(plasma.missing_elements.split(" ").sort()).toEqual(["C", "Mg", "O"]);
+        plasma.setMaterial(material.spec);
+        expect(plasma.missing_elements.split(" ").sort()).toEqual(["Al", "Na"]);
         expect(plasma.line_count).toBeGreaterThan(0);
         // And it reports the Saha balance it solved for the ones it has.
         expect(plasma.stage_fractions).toMatch(/Si:/);
         expect(plasma.partition_top_decile_share).toBeLessThan(0.01);
+    });
+
+    it("has data for every element of the V1-B mineral set", () => {
+        // The reason the catalogue was extended: each of these minerals
+        // used to leave an element unexplained, which made every
+        // unexplained peak ambiguous. `08-V1B-PROTOCOL.md` section 3.
+        for (const formula of ["CaF2:1", "SiO2:1", "Fe2O3:1", "CaCO3:1", "FeS2:1", "CaMg(CO3)2:1"]) {
+            const material = createMaterialNode();
+            material.components = formula;
+            const plasma = createLibsPlasmaNode();
+            plasma.setMaterial(material.spec);
+            expect(plasma.missing_elements).toBe("");
+            expect(plasma.line_count).toBeGreaterThan(0);
+        }
     });
 });
 

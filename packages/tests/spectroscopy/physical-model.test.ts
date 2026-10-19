@@ -142,7 +142,7 @@ describe("sahaRatio and ionisationFractions", () => {
     };
 
     it("leaves calcium almost entirely ionised at 10 000 K", () => {
-        // E_ion(Ca I) = 6.11 eV, the lowest of the three elements, so
+        // E_ion(Ca I) = 6.11 eV, the lowest of the eight elements, so
         // calcium is the textbook case: its LIBS spectrum is dominated
         // by ION lines even at modest temperatures.
         const f = chainOf("Ca", 10000);
@@ -239,8 +239,10 @@ describe("computePhysicalEmissions", () => {
     });
 
     it("reports an element it has no data for instead of dropping it", () => {
-        const r = emissions({ Ca: 0.5, Mg: 0.5 });
-        expect(r.missingElements).toEqual(["Mg"]);
+        // Aluminium is outside the eight the catalogue carries, so it is
+        // named rather than quietly left out of the spectrum.
+        const r = emissions({ Ca: 0.5, Al: 0.5 });
+        expect(r.missingElements).toEqual(["Al"]);
         expect(r.intensities.every((i) => i.line.element === "Ca")).toBe(true);
     });
 

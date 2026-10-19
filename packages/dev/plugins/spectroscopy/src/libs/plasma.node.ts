@@ -212,12 +212,12 @@ export class LibsPlasmaNode extends RuntimeNode implements IDeclaresPorts {
     /**
      * `"nist"` or `"builtin"`. Two catalogues, two different claims:
      *
-     *   nist     9 394 verified transitions over Ca, Fe and Si, each
-     *            as the neutral atom, the ion and the doubly ionised
-     *            atom, with level lists and ionisation energies, so the
-     *            physical model runs. Three elements only: anything
-     *            else in the composition is reported as a missing
-     *            element.
+     *   nist     13 051 verified transitions over C, O, F, Mg, Si, S,
+     *            Ca and Fe, each as the neutral atom, the ion and the
+     *            doubly ionised atom, with level lists and ionisation
+     *            energies, so the physical model runs. Eight elements:
+     *            anything else in the composition is reported as a
+     *            missing element.
      *   builtin  48 strong lines written from memory over 20 elements,
      *            every one flagged unverified. Wider coverage, and the
      *            physical model refuses to run on it.
