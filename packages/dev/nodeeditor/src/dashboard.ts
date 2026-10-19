@@ -44,6 +44,50 @@ export interface IRenderable {
     /** Called when GridStack resizes the tile. Width/height are the
      *  new content area dimensions in CSS pixels. */
     onResize(width: number, height: number): void;
+
+    /**
+     * The tile size this node wants, in grid columns and rows, when the
+     * panel has nothing else to go on.
+     *
+     * Layout belongs to the node: a spectrum wants to be wide, a single
+     * scalar does not, and that is a property of what the node draws,
+     * not of the document that happens to contain it. Carrying it here
+     * means it travels with the node, through a save, a copy or a
+     * document produced outside the editor, with no list to maintain
+     * anywhere else.
+     *
+     * Optional: a node that does not care gets the panel's default
+     * (6 by 4) and is auto-placed. An explicit tile saved in the
+     * document still wins, because that one is a user's own choice.
+     */
+    readonly preferredTile?: { readonly w?: number; readonly h?: number };
+}
+
+/** The panel's own default, used when nobody states a size. */
+export const DEFAULT_TILE_SIZE = Object.freeze({ w: 6, h: 4 });
+
+/**
+ * The size a tile is mounted at, in grid columns and rows.
+ *
+ * Three sources, in order of authority:
+ *
+ *   1. `explicit`, a size saved in the document. That one is the user's
+ *      own arrangement: they dragged the corner, and reopening their
+ *      graph has to give them back what they left;
+ *   2. `preferred`, what the node says it wants. Layout belongs to the
+ *      node: a spectrum is wide because of what it draws, not because
+ *      of the document it sits in, and that travels with the node
+ *      through saves, copies and documents built elsewhere;
+ *   3. the panel's default, for a node that does not care.
+ *
+ * Each dimension is resolved on its own, so a node that states only a
+ * width keeps the default height.
+ */
+export function resolveTileSize(explicit?: { w?: number; h?: number }, preferred?: { w?: number; h?: number }): { w: number; h: number } {
+    return {
+        w: explicit?.w ?? preferred?.w ?? DEFAULT_TILE_SIZE.w,
+        h: explicit?.h ?? preferred?.h ?? DEFAULT_TILE_SIZE.h,
+    };
 }
 
 /** The tag a node type declares when it is a user-interface surface. */
@@ -242,12 +286,15 @@ export class Dashboard {
         // GridStack to also create the element from `opts.content`;
         // here we already own the chrome (header + body) so makeWidget
         // is the right entry point.
+        // Position is left to GridStack unless the caller supplies one,
+        // so a node that only states a size still gets placed sensibly.
+        const size = resolveTileSize(opts, renderable.preferredTile);
         const gridItem: GridItemHTMLElement = this._grid.makeWidget(item, {
             id: node.id,
             x: opts?.x,
             y: opts?.y,
-            w: opts?.w ?? 6,
-            h: opts?.h ?? 4,
+            w: size.w,
+            h: size.h,
             autoPosition: opts?.x === undefined || opts?.y === undefined,
         });
 

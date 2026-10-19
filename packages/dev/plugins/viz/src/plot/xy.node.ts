@@ -66,6 +66,11 @@ export class UplotXyNode extends RuntimeNode implements IDeclaresPorts, IRendera
     @cloneable private _maxPoints: number = 2000;
     /** Legend names, comma separated, in port order. */
     @cloneable private _seriesNames: string = "y1, y2, y3";
+    /** Tile size in grid columns and rows. A spectrum is wide by
+     *  nature, so this tile asks for the full twelve columns rather
+     *  than letting the panel guess. */
+    @cloneable private _tileWidth: number = 12;
+    @cloneable private _tileHeight: number = 6;
 
     private _x: Vector | null = null;
     private _ys: Array<Vector | null> = [null, null, null];
@@ -130,6 +135,37 @@ export class UplotXyNode extends RuntimeNode implements IDeclaresPorts, IRendera
             this._seriesNames = n;
             this._rebuildOnNextFrame = true;
         });
+    }
+
+    /** Tile width in grid columns, 1 to 12. */
+    @editable("number") public get tile_width(): number {
+        return this._tileWidth;
+    }
+    public set tile_width(v: number) {
+        const next = Number.isFinite(v) ? Math.min(12, Math.max(1, Math.round(v))) : this._tileWidth;
+        this.setField("tile_width", this._tileWidth, next, (n) => {
+            this._tileWidth = n;
+        });
+    }
+
+    /** Tile height in grid rows. */
+    @editable("number") public get tile_height(): number {
+        return this._tileHeight;
+    }
+    public set tile_height(v: number) {
+        const next = Number.isFinite(v) ? Math.max(1, Math.round(v)) : this._tileHeight;
+        this.setField("tile_height", this._tileHeight, next, (n) => {
+            this._tileHeight = n;
+        });
+    }
+
+    /**
+     * IRenderable: the size this tile wants when the panel has nothing
+     * else to go on. A tile the user has already placed and resized
+     * keeps its saved geometry; this is what a fresh mount uses.
+     */
+    public get preferredTile(): { w: number; h: number } {
+        return { w: this._tileWidth, h: this._tileHeight };
     }
 
     // ── Viewables ────────────────────────────────────────────────────

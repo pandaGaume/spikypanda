@@ -12,7 +12,7 @@
  * The helper is pure on purpose: a tile needs GridStack and a DOM, the
  * rule that decides which nodes deserve one does not.
  */
-import { isRenderable, isUiNode, UI_TAG, unmountedRenderables } from "../../dev/nodeeditor/src";
+import { DEFAULT_TILE_SIZE, isRenderable, isUiNode, resolveTileSize, UI_TAG, unmountedRenderables } from "../../dev/nodeeditor/src";
 
 /** A node that can draw: the five members `IRenderable` requires. */
 const renderable = (type: string) => ({
@@ -84,5 +84,28 @@ describe("isUiNode, instance over tags", () => {
     it("treats tags as non-exclusive", () => {
         // A tile that also computes carries both, and stays a UI node.
         expect(isUiNode({ tags: ["compute", UI_TAG, "experimental"] })).toBe(true);
+    });
+});
+
+describe("resolveTileSize, the node carries its layout", () => {
+    it("gives the panel default to a node that states nothing", () => {
+        expect(resolveTileSize(undefined, undefined)).toEqual(DEFAULT_TILE_SIZE);
+    });
+
+    it("takes the size the node asks for", () => {
+        // A spectrum is wide because of what it draws, so it says so
+        // itself rather than leaving the document to remember.
+        expect(resolveTileSize(undefined, { w: 12, h: 6 })).toEqual({ w: 12, h: 6 });
+    });
+
+    it("lets a saved size win over the node's wish", () => {
+        // The user dragged the corner; reopening their graph has to give
+        // back what they left, not what the node would prefer.
+        expect(resolveTileSize({ w: 4, h: 3 }, { w: 12, h: 6 })).toEqual({ w: 4, h: 3 });
+    });
+
+    it("resolves each dimension on its own", () => {
+        expect(resolveTileSize({ w: 8 }, { w: 12, h: 6 })).toEqual({ w: 8, h: 6 });
+        expect(resolveTileSize(undefined, { h: 9 })).toEqual({ w: DEFAULT_TILE_SIZE.w, h: 9 });
     });
 });
