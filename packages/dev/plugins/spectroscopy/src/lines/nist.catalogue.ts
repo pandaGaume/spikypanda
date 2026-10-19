@@ -11,11 +11,14 @@
  *
  * What is in it, and what that allows:
  *
- *   - 7 621 transitions over six species (Ca I, Ca II, Fe I, Fe II,
- *     Si I, Si II), each with its wavelength in air, its transition
- *     probability, and the energy and statistical weight of both
- *     levels. That is exactly what the physical emission model needs,
- *     so `physicalModeBlocker` lets these species through;
+ *   - 9 394 transitions over nine species, three stages of each of
+ *     three elements (Ca I/II/III, Fe I/II/III, Si I/II/III), each with
+ *     its wavelength in air, its transition probability, and the energy
+ *     and statistical weight of both levels. That is exactly what the
+ *     physical emission model needs, so `physicalModeBlocker` lets
+ *     these species through. The third stage is not a luxury: at
+ *     11 605 K nine per cent of calcium sits in it, and at 15 000 K
+ *     sixty-three per cent;
  *   - the complete level list of each species, which a partition
  *     function sums over. It is a separate export because the lines
  *     alone only cover the levels that happen to radiate in the window;
@@ -96,9 +99,7 @@ function buildSpecies(block: INistSpeciesBlock): INistSpecies {
     // generator does for the parsed form.
     let maxStrength = 0;
     for (const l of lines) maxStrength = Math.max(maxStrength, (l.transitionProbability ?? 0) * (l.upperLevelWeight ?? 0));
-    const scaled = lines.map((l) =>
-        Object.freeze({ ...l, relativeStrength: maxStrength > 0 ? ((l.transitionProbability ?? 0) * (l.upperLevelWeight ?? 0)) / maxStrength : 1 })
-    );
+    const scaled = lines.map((l) => Object.freeze({ ...l, relativeStrength: maxStrength > 0 ? ((l.transitionProbability ?? 0) * (l.upperLevelWeight ?? 0)) / maxStrength : 1 }));
 
     return Object.freeze({
         element: block.element,

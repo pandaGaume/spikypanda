@@ -16,7 +16,8 @@ The full chain is in the track document `internals/libs/02-LIBS-FORWARD-MODEL.md
 | level populations (Boltzmann) | **yes**, in `physical` mode |
 | ionisation balance (Saha) | **yes**, first ionisation only |
 | line amplitude from a transition probability | **yes**, from the NIST `A_ki`, `g_k`, `E_k` |
-| second ionisation | **no**, and it is the model's largest known error: at 11 605 K and 1e17 cm^-3, 9.1 % of calcium is already doubly ionised against 0.2 % of iron, which biases a Ca/Si intensity ratio by **10 %**. Measured against the NIST LIBS Database, see `internals/libs/07-V1B0-NIST-CROSSCHECK.md` |
+| second ionisation | **yes**, since it is not a detail: at 11 605 K and 1e17 cm^-3, 9.1 % of calcium is doubly ionised against 0.2 % of iron, and at 15 000 K calcium reaches 63 %. Leaving it out biased a Ca/Si intensity ratio by 10 %, now 0.02 % |
+| third ionisation | **no**: beyond Ca III, Fe III and Si III the balance stops, and `stages_solved` says so per element |
 | Doppler broadening from temperature and atomic mass | **yes** |
 | collisional (Stark-like) broadening from electron density | **yes**, with one global coefficient instead of per-line Stark data |
 | self-absorption | **no** |
@@ -30,7 +31,7 @@ The full chain is in the track document `internals/libs/02-LIBS-FORWARD-MODEL.md
 |---|---|
 | partition function | `U(T) = sum of g exp(-E/kT)` over the species' complete NIST level list |
 | level population | Boltzmann: the fraction on level k is `g_k exp(-E_k/kT) / U(T)` |
-| ionisation balance | Saha, solved at the node's electron density, neutral against singly ionised |
+| ionisation balance | Saha, solved at the node's electron density, over the **three** lowest stages: neutral, singly and doubly ionised |
 | line emissivity | the optically thin form, `A_ki` times the upper level population, times the energy of the photon |
 | the photon's energy | the difference between the two levels, `E_k - E_i`, not `h c / lambda` |
 
@@ -46,7 +47,7 @@ Intensities are published in **eV per second per atom**: the emissivity per unit
 
 | `line_catalogue` | Lines | Elements | Physical model |
 |---|---:|---|---|
-| `nist` (default) | 7 621 verified transitions | Ca, Fe, Si (neutral and singly ionised) | runs |
+| `nist` (default) | 9 394 verified transitions | Ca, Fe, Si, each as the neutral atom, the ion and the doubly ionised atom | runs |
 | `builtin` | 48 strong lines written from memory, all flagged unverified | 20 elements | refuses |
 
 They are never combined: a spectrum built from verified and unverified numbers at once could not be interpreted. An element outside the chosen catalogue is reported in `missing_elements`, never silently dropped.
@@ -95,7 +96,8 @@ Every default is a **working value**, not a measured one. Their status is tracke
 | `collisional_width_applied` | the collisional FWHM actually used at the current density |
 | `intensity_unit` | `eV/s per atom` or `relative`: the two models do not claim the same thing |
 | `catalogue_provenance` | the database and version behind the current catalogue |
-| `neutral_fraction` | per element, the share left neutral by the Saha balance |
+| `stage_fractions` | per element, how its atoms are shared between the neutral, singly and doubly ionised stages |
+| `stages_solved` | per element, how deep the balance was actually solved: 3 is up to the doubly ionised atom |
 | `partition_top_decile_share` | how much of a partition function comes from the top tenth of its level list. Large means the published list stops too early for this temperature |
 
 ## The catalogues, and what they are worth

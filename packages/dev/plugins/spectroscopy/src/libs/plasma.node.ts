@@ -212,10 +212,12 @@ export class LibsPlasmaNode extends RuntimeNode implements IDeclaresPorts {
     /**
      * `"nist"` or `"builtin"`. Two catalogues, two different claims:
      *
-     *   nist     7 621 verified transitions over Ca, Fe and Si, with
-     *            level lists and ionisation energies, so the physical
-     *            model runs. Three elements only: anything else in the
-     *            composition is reported as a missing element.
+     *   nist     9 394 verified transitions over Ca, Fe and Si, each
+     *            as the neutral atom, the ion and the doubly ionised
+     *            atom, with level lists and ionisation energies, so the
+     *            physical model runs. Three elements only: anything
+     *            else in the composition is reported as a missing
+     *            element.
      *   builtin  48 strong lines written from memory over 20 elements,
      *            every one flagged unverified. Wider coverage, and the
      *            physical model refuses to run on it.
@@ -277,10 +279,20 @@ export class LibsPlasmaNode extends RuntimeNode implements IDeclaresPorts {
         return this._catalogueChoice === "nist" ? `${NIST_PROVENANCE.database} ${NIST_PROVENANCE.version}, ${NIST_PROVENANCE.downloadedOn}` : "written from memory, unverified";
     }
 
-    /** Neutral fraction per element under the Saha balance, in physical
-     *  mode. Empty in relative mode, which solves no balance. */
-    @viewable("string") public get neutral_fraction(): string {
-        return this.emission.elementReports.map((r) => `${r.element}:${(r.neutralFraction * 100).toFixed(1)}%`).join(" ");
+    /** How each element's atoms are shared between its ionisation
+     *  stages under the Saha balance, in physical mode, written
+     *  neutral/singly/doubly. Empty in relative mode, which solves no
+     *  balance. */
+    @viewable("string") public get stage_fractions(): string {
+        return this.emission.elementReports.map((r) => `${r.element}:${r.stageFractions.map((f) => (f * 100).toFixed(1)).join("/")}%`).join(" ");
+    }
+
+    /** How deep the balance was solved per element: 3 is up to the
+     *  doubly ionised atom, less means the deeper stages' atoms were
+     *  attributed to the stages below and every ratio of this element
+     *  carries that error. */
+    @viewable("string") public get stages_solved(): string {
+        return this.emission.elementReports.map((r) => `${r.element}:${r.stagesSolved}`).join(" ");
     }
 
     /**

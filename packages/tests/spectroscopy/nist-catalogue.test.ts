@@ -53,7 +53,10 @@ describe("parseNistNumber", () => {
 // 2. The line reader is driven by the header
 // ─────────────────────────────────────────────────────────────────────
 
-const CA_STYLE = ["obs_wl_air(nm)\tritz_wl_air(nm)\tintens\tAki(s^-1)\tAcc\tEi(eV)\tEk(eV)\tg_i\tg_k", '"422.673"\t"422.67330"\t"500"\t"2.18e+08"\tAAA\t"0.0000000"\t"2.9325100"\t1\t3'].join("\n");
+const CA_STYLE = [
+    "obs_wl_air(nm)\tritz_wl_air(nm)\tintens\tAki(s^-1)\tAcc\tEi(eV)\tEk(eV)\tg_i\tg_k",
+    '"422.673"\t"422.67330"\t"500"\t"2.18e+08"\tAAA\t"0.0000000"\t"2.9325100"\t1\t3',
+].join("\n");
 
 // The same line, Fe-style: two uncertainty columns inserted, and the
 // weights moved to the end.
@@ -101,11 +104,7 @@ describe("parseNistLines", () => {
     });
 
     it("normalises the heuristic strength within the species", () => {
-        const text = [
-            "obs_wl_air(nm)\tritz_wl_air(nm)\tAki(s^-1)\tEk(eV)\tg_k",
-            '"400.0"\t"400.0"\t"1.0e+08"\t"3.0"\t3',
-            '"500.0"\t"500.0"\t"1.0e+07"\t"3.0"\t3',
-        ].join("\n");
+        const text = ["obs_wl_air(nm)\tritz_wl_air(nm)\tAki(s^-1)\tEk(eV)\tg_k", '"400.0"\t"400.0"\t"1.0e+08"\t"3.0"\t3', '"500.0"\t"500.0"\t"1.0e+07"\t"3.0"\t3'].join("\n");
         const { lines } = parseNistLines(text, "Ca", 0, "t");
         expect(Math.max(...lines.map((l) => l.relativeStrength))).toBe(1);
         expect(lines.find((l) => l.wavelengthNm === 500)?.relativeStrength).toBeCloseTo(0.1, 6);
@@ -117,7 +116,13 @@ describe("parseNistLines", () => {
 // ─────────────────────────────────────────────────────────────────────
 
 describe("parseNistLevels", () => {
-    const text = ["J\tg\tPrefix\tLevel (eV)\tSuffix", '"0"\t1\t""\t"0.0000000"\t""', '"1"\t3\t""\t"1.8858075"\t""', '"2"\t5\t""\t"[2.5000]"\t""', '"---"\t\t""\t"6.1131550"\t""'].join("\n");
+    const text = [
+        "J\tg\tPrefix\tLevel (eV)\tSuffix",
+        '"0"\t1\t""\t"0.0000000"\t""',
+        '"1"\t3\t""\t"1.8858075"\t""',
+        '"2"\t5\t""\t"[2.5000]"\t""',
+        '"---"\t\t""\t"6.1131550"\t""',
+    ].join("\n");
 
     it("reads the level list and keeps the ionisation limit apart", () => {
         const { levels, ionisationLimitEv } = parseNistLevels(text);
@@ -161,9 +166,13 @@ describe("the shipped NIST catalogue", () => {
         expect(NIST_PROVENANCE.manifest).toBe("internals/libs/data/MANIFEST.md");
     });
 
-    it("carries six species over three elements, with a checksum each", () => {
+    it("carries nine species over three elements, with a checksum each", () => {
         expect(NIST_CATALOGUE_ELEMENTS).toEqual(["Ca", "Fe", "Si"]);
-        expect(NIST_SPECIES).toHaveLength(6);
+        // Three stages per element: the neutral, the ion and the doubly
+        // ionised atom, which the Saha balance needs because nine per
+        // cent of calcium is already in the third stage at 11 605 K.
+        expect(NIST_SPECIES).toHaveLength(9);
+        expect(NIST_SPECIES.filter((s) => s.ionisation === 2).map((s) => s.asdName)).toEqual(["Ca III", "Fe III", "Si III"]);
         for (const s of NIST_SPECIES) {
             expect(s.sourceSha256.lines).toMatch(/^[0-9a-f]{64}$/);
             expect(s.sourceSha256.levels).toMatch(/^[0-9a-f]{64}$/);

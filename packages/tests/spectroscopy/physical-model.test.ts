@@ -38,7 +38,7 @@ const DATA: IPhysicalModelData = {
     ionisationEnergiesEv: NIST_IONISATION_ENERGIES_EV,
 };
 
-const speciesOf = (element: string, ionisation: 0 | 1) => DATA.species.find((s) => s.element === element && s.ionisation === ionisation)!;
+const speciesOf = (element: string, ionisation: 0 | 1 | 2) => DATA.species.find((s) => s.element === element && s.ionisation === ionisation)!;
 
 // ─────────────────────────────────────────────────────────────────────
 // 1. Photon energy
@@ -133,26 +133,52 @@ describe("sahaRatio and ionisationFractions", () => {
         expect(dense * 100).toBeCloseTo(hot, 6);
     });
 
+    /** The whole chain for one element at one temperature. */
+    const chainOf = (element: string, temperatureK: number, electronDensityCm3 = 1e17) => {
+        const u = (stage: 0 | 1 | 2) => partitionFunction(speciesOf(element, stage).levels, temperatureK).value;
+        const ratio = (lower: 0 | 1) =>
+            sahaRatio(u(lower), u((lower + 1) as 1 | 2), NIST_IONISATION_ENERGIES_EV[`${element} ${lower === 0 ? "I" : "II"}`], temperatureK, electronDensityCm3);
+        return ionisationFractions([ratio(0), ratio(1)]);
+    };
+
     it("leaves calcium almost entirely ionised at 10 000 K", () => {
         // E_ion(Ca I) = 6.11 eV, the lowest of the three elements, so
         // calcium is the textbook case: its LIBS spectrum is dominated
         // by ION lines even at modest temperatures.
-        const f = ionisationFractions(sahaRatio(caNeutral(), caIon(), NIST_IONISATION_ENERGIES_EV["Ca I"], 10000, 1e17));
-        expect(f.neutral).toBeLessThan(0.1);
-        expect(f.neutral + f.singly).toBeCloseTo(1, 12);
+        const f = chainOf("Ca", 10000);
+        expect(f[0]).toBeLessThan(0.1);
+        expect(f.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 12);
     });
 
     it("keeps silicon mostly neutral at the same temperature, because its ionisation energy is higher", () => {
-        const un = partitionFunction(speciesOf("Si", 0).levels, 10000).value;
-        const ui = partitionFunction(speciesOf("Si", 1).levels, 10000).value;
-        const f = ionisationFractions(sahaRatio(un, ui, NIST_IONISATION_ENERGIES_EV["Si I"], 10000, 1e17));
-        expect(f.neutral).toBeGreaterThan(0.2);
-        expect(f.neutral).toBeGreaterThan(ionisationFractions(sahaRatio(caNeutral(), caIon(), NIST_IONISATION_ENERGIES_EV["Ca I"], 10000, 1e17)).neutral);
+        expect(chainOf("Si", 10000)[0]).toBeGreaterThan(0.2);
+        expect(chainOf("Si", 10000)[0]).toBeGreaterThan(chainOf("Ca", 10000)[0]);
+    });
+
+    it("sends calcium to its second ionisation as the plasma heats, which a two-stage balance cannot do", () => {
+        // At 11 605 K, nine per cent of the calcium is already Ca III.
+        // A balance that stopped at the first ion would hand that nine
+        // per cent back to Ca I and Ca II and bias every ratio calcium
+        // appears in. Measured against the NIST LIBS Database in
+        // internals/libs/07-V1B0-NIST-CROSSCHECK.md.
+        const f = chainOf("Ca", 11604.518);
+        expect(f[2]).toBeGreaterThan(0.08);
+        expect(f[2]).toBeLessThan(0.11);
+        // And it keeps rising with temperature, which is the point of
+        // carrying the stage at all.
+        expect(chainOf("Ca", 14000)[2]).toBeGreaterThan(f[2]);
+        // Iron, whose second ionisation energy is higher, stays far
+        // behind at the same point.
+        expect(chainOf("Fe", 11604.518)[2]).toBeLessThan(0.01);
     });
 
     it("is safe on a degenerate input", () => {
         expect(sahaRatio(1, 1, 6, 10000, 0)).toBe(0);
-        expect(ionisationFractions(Number.NaN)).toEqual({ neutral: 1, singly: 0 });
+        // A ratio that is not a number ends the chain there: the stage
+        // below keeps everything and the stages above get nothing.
+        expect(ionisationFractions([Number.NaN])).toEqual([1, 0]);
+        expect(ionisationFractions([])).toEqual([1]);
+        expect(ionisationFractions([1, Number.NaN])).toEqual([0.5, 0.5, 0]);
     });
 });
 
@@ -222,10 +248,30 @@ describe("computePhysicalEmissions", () => {
         const r = emissions({ Ca: 0.5, Si: 0.5 });
         const ca = r.elements.find((e) => e.element === "Ca")!;
         expect(ca.missingSpecies).toEqual([]);
-        expect(ca.missingIonisationEnergy).toBe(false);
-        expect(ca.partitionNeutral).toBeGreaterThan(0);
-        expect(ca.neutralFraction).toBeLessThan(0.1);
+        expect(ca.missingIonisationEnergy).toEqual([]);
+        // Three stages carried, three partition functions, and the
+        // balance solved across all three.
+        expect(ca.partitionFunctions).toHaveLength(3);
+        expect(ca.partitionFunctions.every((u) => u > 0)).toBe(true);
+        expect(ca.stagesSolved).toBe(3);
+        expect(ca.stageFractions).toHaveLength(3);
+        expect(ca.stageFractions.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 12);
+        expect(ca.stageFractions[0]).toBeLessThan(0.1);
         expect(ca.partitionTopDecileShare).toBeLessThan(0.01);
+    });
+
+    it("names the stage its balance stopped at when an ionisation energy is missing", () => {
+        // Strip the energy that takes Ca II to Ca III: the chain must
+        // stop there and say so, rather than carry on with a guess.
+        const trimmed = { ...DATA, ionisationEnergiesEv: { ...DATA.ionisationEnergiesEv, "Ca II": undefined as unknown as number } };
+        delete (trimmed.ionisationEnergiesEv as Record<string, number | undefined>)["Ca II"];
+        const r = computePhysicalEmissions({ Ca: 1 }, trimmed, 10000, 1e17, 1);
+        const ca = r.elements.find((e) => e.element === "Ca")!;
+        expect(ca.missingIonisationEnergy).toEqual(["Ca II"]);
+        expect(ca.stagesSolved).toBe(2);
+        expect(ca.stageFractions[2]).toBe(0);
+        // And no Ca III line is emitted, since no atom was put there.
+        expect(r.intensities.some((i) => i.line.ionisation === 2)).toBe(false);
     });
 });
 

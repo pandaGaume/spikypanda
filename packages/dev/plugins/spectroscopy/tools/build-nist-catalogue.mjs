@@ -36,14 +36,25 @@ const outFile = resolve(process.argv[3] ?? join(pluginRoot, "src/lines/nist-cata
 
 const parser = await import(pathToFileURL(join(pluginRoot, "dist/lines/nist.parse.js")).href);
 
-/** The six species downloaded, with the directory name each one uses. */
+/**
+ * The nine species downloaded, with the directory name each one uses.
+ *
+ * Three stages per element, not two: at 11 605 K, nine per cent of
+ * calcium is already doubly ionised, and a balance that stops at the
+ * first ion puts that nine per cent back into the stages below, which
+ * biases every ratio that calcium takes part in. Measured in
+ * `internals/libs/07-V1B0-NIST-CROSSCHECK.md`.
+ */
 const SPECIES = [
     { element: "Ca", ionisation: 0, dir: "ca1", asdName: "Ca I" },
     { element: "Ca", ionisation: 1, dir: "ca2", asdName: "Ca II" },
+    { element: "Ca", ionisation: 2, dir: "ca3", asdName: "Ca III" },
     { element: "Fe", ionisation: 0, dir: "fe1", asdName: "Fe I" },
     { element: "Fe", ionisation: 1, dir: "fe2", asdName: "Fe II" },
+    { element: "Fe", ionisation: 2, dir: "fe3", asdName: "Fe III" },
     { element: "Si", ionisation: 0, dir: "si1", asdName: "Si I" },
     { element: "Si", ionisation: 1, dir: "si2", asdName: "Si II" },
+    { element: "Si", ionisation: 2, dir: "si3", asdName: "Si III" },
 ];
 
 const sha256 = (buffer) => createHash("sha256").update(buffer).digest("hex");
@@ -64,7 +75,14 @@ for (const s of SPECIES) {
 
     // Compact rows: wavelength, A_ki, E_k, g_k, E_i, g_i. A thousand
     // lines as objects would be a megabyte of repeated key names.
-    const rows = parsedLines.lines.map((l) => [l.wavelengthNm, l.transitionProbability, l.upperLevelEnergyEv, l.upperLevelWeight, l.lowerLevelEnergyEv ?? null, l.lowerLevelWeight ?? null]);
+    const rows = parsedLines.lines.map((l) => [
+        l.wavelengthNm,
+        l.transitionProbability,
+        l.upperLevelEnergyEv,
+        l.upperLevelWeight,
+        l.lowerLevelEnergyEv ?? null,
+        l.lowerLevelWeight ?? null,
+    ]);
     const levels = parsedLevels.levels.map((l) => [l.energyEv, l.weight]);
 
     species.push({
@@ -82,7 +100,9 @@ for (const s of SPECIES) {
         levelsSkipped: parsedLevels.skipped,
     });
 
-    report.push(`${s.asdName}: ${parsedLines.report.kept} lines kept, ${parsedLines.report.skippedNoTransitionProbability} without A_ki, ${parsedLines.report.skippedNoUpperLevel} without an upper level, ${parsedLevels.levels.length} levels`);
+    report.push(
+        `${s.asdName}: ${parsedLines.report.kept} lines kept, ${parsedLines.report.skippedNoTransitionProbability} without A_ki, ${parsedLines.report.skippedNoUpperLevel} without an upper level, ${parsedLevels.levels.length} levels`
+    );
 }
 
 const ionisationRaw = readFileSync(join(sourceDir, "nist-ionisation", "ionization-energies.tsv"));
@@ -95,7 +115,8 @@ const catalogue = {
         dataUpdate: "November 2024",
         doi: "10.18434/T4W30F",
         downloadedOn: "2026-10-19",
-        citation: "Kramida, A., Ralchenko, Yu., Reader, J., and NIST ASD Team. NIST Atomic Spectra Database (version 5.12), National Institute of Standards and Technology, Gaithersburg, MD. https://physics.nist.gov/asd",
+        citation:
+            "Kramida, A., Ralchenko, Yu., Reader, J., and NIST ASD Team. NIST Atomic Spectra Database (version 5.12), National Institute of Standards and Technology, Gaithersburg, MD. https://physics.nist.gov/asd",
         wavelengthMedium: "air",
         wavelengthRangeNm: [200, 900],
         linesFilter: "only transitions with a published transition probability (line_out=1)",

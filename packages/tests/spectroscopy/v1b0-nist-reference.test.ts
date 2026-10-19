@@ -39,7 +39,7 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { BOLTZMANN_CONSTANT, ELEMENTARY_CHARGE } from "spikypanda-core";
+import { BOLTZMANN_CONSTANT, ELEMENTARY_CHARGE, thermalEnergyEv } from "spikypanda-core";
 import {
     computePhysicalEmissions,
     ionisationFractions,
@@ -61,22 +61,6 @@ const DATA: IPhysicalModelData = {
 
 /** An electron temperature in kelvin, from the eV the LIBS form takes. */
 const kelvinOf = (electronVolts: number) => (electronVolts * ELEMENTARY_CHARGE) / BOLTZMANN_CONSTANT;
-
-/**
- * What is left of the agreement once the physics matches.
- *
- * The reference takes its level energies in cm^-1, we take ours from
- * the eV column ASD publishes to seven or eight significant figures, so
- * on a level near 12 eV the two differ by up to 5e-6 eV. That
- * difference travels through exp(-E_k / kT), giving 5e-6 / kT: 7e-6 at
- * 0.7 eV, the coldest case here. Nothing else is left, and the floor is
- * set just above it.
- *
- * It still has teeth: the wavelength-dependent error this comparison
- * found, and that the model no longer makes, was 3.2e-5, three times
- * this floor.
- */
-const ROUNDING_FLOOR = 1e-5;
 
 // ── the fixtures ─────────────────────────────────────────────────────
 
@@ -161,16 +145,56 @@ function pair(element: string, ionisation: number): Array<{ ours: IAtomicLine; r
     // The catalogue types both energies as optional, because ASD does
     // not always publish them; the physical model skips the lines that
     // lack the upper one, and so does the pairing.
+    //
+    // Two lines of a species can share BOTH level energies to the digit
+    // the catalogue keeps: Fe III has two such pairs, their upper levels
+    // differing only in the eighth significant figure. The energies
+    // alone then leave their order undecided, and g_k A_ki settles it,
+    // which is unambiguous because the two sides hold the same lines.
     const key = (ek: number | undefined, ei: number | undefined) => (ek ?? 0) * 1e7 + (ei ?? 0);
+    const strength = (l: IAtomicLine) => (l.upperLevelWeight ?? 0) * (l.transitionProbability ?? 0);
     const ours = [...species.lines]
         .filter((l) => l.upperLevelEnergyEv !== undefined)
-        .sort((a, b) => key(a.upperLevelEnergyEv, a.lowerLevelEnergyEv) - key(b.upperLevelEnergyEv, b.lowerLevelEnergyEv));
+        .sort((a, b) => key(a.upperLevelEnergyEv, a.lowerLevelEnergyEv) - key(b.upperLevelEnergyEv, b.lowerLevelEnergyEv) || strength(a) - strength(b));
     const theirs = referenceLines(element)
         .filter((l) => l.ionisation === ionisation)
-        .sort((a, b) => key(a.upperEnergyCm, a.lowerEnergyCm) - key(b.upperEnergyCm, b.lowerEnergyCm));
+        .sort((a, b) => key(a.upperEnergyCm, a.lowerEnergyCm) - key(b.upperEnergyCm, b.lowerEnergyCm) || a.weightTimesProbability - b.weightTimesProbability);
 
     expect(ours.length).toBe(theirs.length);
     return ours.map((o, i) => ({ ours: o, reference: theirs[i] }));
+}
+
+/**
+ * How well the two sides' upper level energies agree for one species,
+ * in cm^-1, measured rather than assumed.
+ *
+ * It is the floor of everything downstream: the energy enters the
+ * populations through exp(-E_k / kT), so a disagreement of dE on a
+ * level becomes a relative dE/kT on the intensity, and no comparison
+ * can be tighter than that. Measuring it per species matters, because
+ * the three stages are published to very different precisions: the
+ * neutral's levels agree to a thousandth of a wavenumber, while some
+ * Si III levels are given to six significant figures in eV, which is
+ * four tenths of a wavenumber at 31 eV.
+ */
+const energyAgreement = new Map<string, number>();
+function energyAgreementCm(element: string, ionisation: number): number {
+    const cacheKey = `${element}|${ionisation}`;
+    const cached = energyAgreement.get(cacheKey);
+    if (cached !== undefined) return cached;
+    let worst = 0;
+    for (const { ours, reference } of pair(element, ionisation)) {
+        worst = Math.max(worst, Math.abs((ours.upperLevelEnergyEv ?? 0) * CM_PER_EV - reference.upperEnergyCm));
+    }
+    energyAgreement.set(cacheKey, worst);
+    return worst;
+}
+
+/** That agreement as a relative tolerance on an intensity at kT. */
+function allowedSpread(element: string, ionisation: number, ktEv: number): number {
+    // Double precision alone is added so a species whose energies agree
+    // exactly is still allowed its own arithmetic rounding.
+    return energyAgreementCm(element, ionisation) / CM_PER_EV / ktEv + 1e-7;
 }
 
 // ── statistics the comparisons report ────────────────────────────────
@@ -217,7 +241,7 @@ function ourGroupedIntensities(atomFractions: Record<string, number>, temperatur
     // them by reference rather than by a recomputed key.
     const referenceOf = new Map<IAtomicLine, IReferenceLine>();
     for (const element of Object.keys(atomFractions)) {
-        for (const stage of [0, 1]) {
+        for (const stage of [0, 1, 2]) {
             for (const p of pair(element, stage)) referenceOf.set(p.ours, p.reference);
         }
     }
@@ -281,11 +305,26 @@ const RUNS: Array<[string, Record<string, number>]> = [
     ["ca50si50-t1.0ev-c2", { Ca: 0.5, Si: 0.5 }],
 ];
 
+/**
+ * Our ionisation chain for one element: a Saha ratio per adjacent pair
+ * of stages, then the fractions. It is what `computePhysicalEmissions`
+ * does internally, repeated here so the balance can be read on its own.
+ */
+function ourStageFractions(element: string, temperatureK: number, electronDensityCm3: number): number[] {
+    const partition = (stage: number) => partitionFunction(NIST_SPECIES.find((s) => s.element === element && s.ionisation === stage)!.levels, temperatureK).value;
+    const numerals = ["I", "II", "III"];
+    const ratios: number[] = [];
+    for (let k = 0; k + 1 < numerals.length; k++) {
+        ratios.push(sahaRatio(partition(k), partition(k + 1), NIST_IONISATION_ENERGIES_EV[`${element} ${numerals[k]}`], temperatureK, electronDensityCm3));
+    }
+    return ionisationFractions(ratios);
+}
+
 // ── 1. the atomic input ──────────────────────────────────────────────
 
 describe("V1-B0, the atomic input is the same on both sides", () => {
     for (const element of ["Ca", "Fe", "Si"]) {
-        for (const stage of [0, 1]) {
+        for (const stage of [0, 1, 2]) {
             it(`${element} stage ${stage}: same lines, same probabilities, same levels`, () => {
                 const pairs = pair(element, stage);
                 expect(pairs.length).toBeGreaterThan(20);
@@ -306,9 +345,20 @@ describe("V1-B0, the atomic input is the same on both sides", () => {
                 // figures, hence the 1e-3; the wavelengths differ only
                 // by observed against Ritz, which is model-free and far
                 // below any instrument.
-                expect(worstEnergy).toBeLessThan(0.05); // cm^-1
+                // Half a wavenumber: the coarsest grid either side
+                // publishes. Most levels agree far better, but a level
+                // known only to about 1 cm^-1 is given in eV to six
+                // significant figures, and 31.4922 eV carries four
+                // tenths of a wavenumber of rounding.
+                expect(worstEnergy).toBeLessThan(0.5); // cm^-1
                 expect(worstProbability).toBeLessThan(1e-3);
-                expect(worstWavelength).toBeLessThan(0.01); // nm
+                // A level known only to about 1 cm^-1 moves the Ritz
+                // wavelength it implies by 0.019 nm at 437 nm and
+                // 0.064 nm at 800 nm, which is the whole of the
+                // difference seen on Fe III. It no longer enters an
+                // intensity at all, since the photon energy comes from
+                // the levels, and it stays far below any instrument.
+                expect(worstWavelength).toBeLessThan(0.1); // nm
             });
         }
     }
@@ -330,13 +380,25 @@ describe("V1-B0, the shape within a species", () => {
         it(`${run}: every line of a species carries the same ratio`, () => {
             const { bySpecies, unmatched } = ratios(run, atomFractions);
             expect(unmatched).toEqual([]);
-            expect(bySpecies.size).toBe(Object.keys(atomFractions).length * 2);
+            // Three stages per element now, the doubly ionised one
+            // included, which is the whole reason the reference was
+            // fetched with `maxcharge=2` in the first place.
+            expect(bySpecies.size).toBe(Object.keys(atomFractions).length * 3);
 
-            const spreads = [...bySpecies].sort().map(([species, values]) => ({ species, ...spread(values) }));
+            const ktEv = thermalEnergyEv(kelvinOf(Number(fixture(`${run}.tsv`).scalars["temperature-ev"])));
+            const spreads = [...bySpecies].sort().map(([species, values]) => {
+                const [element, stage] = species.split(" ");
+                // What the published precision allows, not a number
+                // chosen to pass: this species' own energy disagreement
+                // carried through exp(-E_k / kT).
+                return { species, allowed: allowedSpread(element, Number(stage), ktEv), ...spread(values) };
+            });
             console.log(
-                `[V1-B0 shape] ${run}\n${spreads.map((s) => `  ${s.species}: n=${s.count} ratio=${s.median.toExponential(6)} spread=${s.relativeSpread.toExponential(2)}`).join("\n")}`
+                `[V1-B0 shape] ${run}\n${spreads
+                    .map((s) => `  ${s.species}: n=${s.count} ratio=${s.median.toExponential(6)} spread=${s.relativeSpread.toExponential(2)} allowed=${s.allowed.toExponential(2)}`)
+                    .join("\n")}`
             );
-            for (const s of spreads) expect(s.relativeSpread).toBeLessThan(ROUNDING_FLOOR);
+            for (const s of spreads) expect(s.relativeSpread).toBeLessThan(s.allowed);
         });
     }
 
@@ -405,41 +467,63 @@ describe("V1-B0, the shape within a species", () => {
  */
 describe("V1-B0, the Saha balance", () => {
     for (const [run, atomFractions] of RUNS) {
-        const elements = Object.keys(atomFractions);
-        for (const element of elements) {
-            it(`${run}, ${element}: the ion fraction matches the reference's, renormalised`, () => {
+        for (const [element, atomFraction] of Object.entries(atomFractions)) {
+            it(`${run}, ${element}: all three stage fractions match the reference's`, () => {
                 const f = fixture(`${run}.tsv`);
-                const temperatureEv = Number(f.scalars["temperature-ev"]);
-                const abundance = (stage: number) => f.abundances.find((a) => a.element === element && a.ionisation === stage)?.abundance ?? 0;
-                const [neutral, singly, doubly] = [abundance(0), abundance(1), abundance(2)];
-                expect(neutral + singly).toBeGreaterThan(0);
+                const temperatureK = kelvinOf(Number(f.scalars["temperature-ev"]));
+                const electronDensityCm3 = Number(f.scalars["electron-density-cm3"]);
+                const ours = ourStageFractions(element, temperatureK, electronDensityCm3);
+                expect(ours).toHaveLength(3);
 
-                const temperatureK = kelvinOf(temperatureEv);
-                const species = (stage: number) => NIST_SPECIES.find((s) => s.element === element && s.ionisation === stage)!;
-                const uNeutral = partitionFunction(species(0).levels, temperatureK).value;
-                const uIon = partitionFunction(species(1).levels, temperatureK).value;
-                const ours = ionisationFractions(sahaRatio(uNeutral, uIon, NIST_IONISATION_ENERGIES_EV[`${element} I`], temperatureK, Number(f.scalars["electron-density-cm3"])));
+                // The reference's abundance carries the atom fraction
+                // of the element, and each of the three is rounded to
+                // two significant figures on its own, so they do not
+                // quite sum to that fraction: in this mixture they sum
+                // to 0.5045 where the element is 0.5. Normalising the
+                // three against each other is what puts both sides on
+                // the same footing, and the interval has to be built
+                // through that same normalisation: a stage is at its
+                // highest when it is at the top of its rounding and the
+                // other two are at the bottom of theirs.
+                const printed = [0, 1, 2].map((stage) => f.abundances.find((a) => a.element === element && a.ionisation === stage)?.abundance ?? 0);
+                const bounds = printed.map((value) => roundingInterval(value));
+                const others = (k: number, pick: (i: { low: number; high: number }) => number) => bounds.reduce((sum, b, i) => sum + (i === k ? 0 : pick(b)), 0);
+                const allowed = printed.map((_value, k) => ({
+                    low: bounds[k].low / (bounds[k].low + others(k, (b) => b.high)),
+                    high: bounds[k].high / (bounds[k].high + others(k, (b) => b.low)),
+                }));
+                void atomFraction;
 
-                // The widest and narrowest ion fraction the printed
-                // pair allows, each number being rounded to two
-                // significant figures.
-                const n = roundingInterval(neutral);
-                const s = roundingInterval(singly);
-                const low = s.low / (s.low + n.high);
-                const high = s.high / (s.high + n.low);
-                const thirdStageShare = doubly / (neutral + singly + doubly);
-
+                const numerals = ["I", "II", "III"];
                 console.log(
-                    `[V1-B0 saha] ${run} ${element}: U(I)=${uNeutral.toFixed(2)} U(II)=${uIon.toFixed(2)}` +
-                        ` ours f_II=${ours.singly.toFixed(5)} reference ${low.toFixed(5)} to ${high.toFixed(5)}` +
-                        ` | third stage takes ${(thirdStageShare * 100).toFixed(2)} % of this element`
+                    `[V1-B0 saha] ${run} ${element}: ` +
+                        ours.map((o, k) => `${numerals[k]} ${o.toFixed(5)} in [${allowed[k].low.toFixed(5)}, ${allowed[k].high.toFixed(5)}]`).join("  ")
                 );
 
-                expect(ours.singly).toBeGreaterThanOrEqual(low);
-                expect(ours.singly).toBeLessThanOrEqual(high);
+                // Every stage, not just the ion: the third one is the
+                // whole point of carrying three.
+                for (let k = 0; k < 3; k++) {
+                    expect(ours[k]).toBeGreaterThanOrEqual(allowed[k].low);
+                    expect(ours[k]).toBeLessThanOrEqual(allowed[k].high);
+                }
+                expect(ours.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 12);
             });
         }
     }
+
+    it("puts nine per cent of calcium in its second ionisation at 11 605 K, where a two-stage balance put none", () => {
+        // The number that moved this work up the queue. Iron and
+        // silicon are two orders of magnitude behind at the same point,
+        // which is why the error did not cancel in a ratio.
+        const ca = ourStageFractions("Ca", kelvinOf(1), 1e17);
+        const fe = ourStageFractions("Fe", kelvinOf(1), 1e17);
+        const si = ourStageFractions("Si", kelvinOf(1), 1e17);
+        console.log(`[V1-B0 third stage] at 1 eV and 1e17 cm^-3: Ca III ${(ca[2] * 100).toFixed(2)} %, Fe III ${(fe[2] * 100).toFixed(2)} %, Si III ${(si[2] * 100).toFixed(3)} %`);
+        expect(ca[2]).toBeGreaterThan(0.08);
+        expect(ca[2]).toBeLessThan(0.11);
+        expect(fe[2]).toBeLessThan(0.01);
+        expect(si[2]).toBeLessThan(0.01);
+    });
 });
 
 // ── 4. the partition functions, across species and elements ──────────
@@ -472,17 +556,7 @@ describe("V1-B0, the partition functions", () => {
                 const [element, stageText] = species.split(" ");
                 const stage = Number(stageText);
                 const atomFraction = atomFractions[element];
-                const levelsOf = (s: number) => NIST_SPECIES.find((x) => x.element === element && x.ionisation === s)!.levels;
-                const ourFractions = ionisationFractions(
-                    sahaRatio(
-                        partitionFunction(levelsOf(0), temperatureK).value,
-                        partitionFunction(levelsOf(1), temperatureK).value,
-                        NIST_IONISATION_ENERGIES_EV[`${element} I`],
-                        temperatureK,
-                        electronDensityCm3
-                    )
-                );
-                const ourShare = stage === 0 ? ourFractions.neutral : ourFractions.singly;
+                const ourShare = ourStageFractions(element, temperatureK, electronDensityCm3)[stage];
                 const theirShare = f.abundances.find((a) => a.element === element && a.ionisation === stage)!.abundance;
                 const raw = spread(values).median;
                 const denominator = ourShare * atomFraction;
@@ -512,21 +586,23 @@ describe("V1-B0, the partition functions", () => {
         });
     }
 
-    it("says what ignoring the second ionisation costs on a two-element sample", () => {
-        // Half calcium, half silicon, by atom, at 11 600 K. Calcium is
-        // 9 % doubly ionised there and silicon is not, so a model that
-        // stops at the first ion puts calcium's missing 9 % back into
-        // its neutral and singly ionised populations and silicon's
-        // nowhere. The error does not cancel in a ratio, which is
-        // precisely what a composition is read from.
+    it("no longer biases a two-element reading, which is what the third stage was added for", () => {
+        // Half calcium, half silicon, by atom, at 11 605 K. Calcium is
+        // 9.1 % doubly ionised there and silicon is 0.07 %, so a model
+        // that stopped at the first ion put calcium's missing 9 % back
+        // into its neutral and singly ionised populations and silicon's
+        // nowhere. That error did not cancel in a ratio, which is
+        // precisely what a composition is read from: measured at
+        // +10.0 % on this very sample, which is why the third stage was
+        // downloaded and the balance extended.
         const { bySpecies } = ratios("ca50si50-t1.0ev-c2", { Ca: 0.5, Si: 0.5 });
         const median = (species: string) => spread(bySpecies.get(species) as number[]).median;
         const bias = median("Ca 1") / median("Si 1");
-        console.log(`[V1-B0 truncation] Ca II over Si II, our ratio against the reference's: ${bias.toFixed(4)}, a bias of ${((bias - 1) * 100).toFixed(1)} % on a Ca/Si reading`);
+        console.log(`[V1-B0 truncation] Ca II over Si II, our ratio against the reference's: ${bias.toFixed(5)}, a bias of ${((bias - 1) * 100).toFixed(2)} % on a Ca/Si reading`);
 
-        // Recorded, not tolerated: the number is the size of a declared
-        // limit of the model, and the test fails if it moves.
-        expect(bias).toBeGreaterThan(1.08);
-        expect(bias).toBeLessThan(1.12);
+        // What is left is the reference's own printing: its abundances
+        // are rounded to two significant figures, which is a few parts
+        // in a thousand on each of the two species compared.
+        expect(Math.abs(bias - 1)).toBeLessThan(0.005);
     });
 });

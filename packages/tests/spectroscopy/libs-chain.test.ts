@@ -27,7 +27,13 @@ function libsDocument(components: string): string {
     const nodes = [
         { id: "material", typeId: "Chemistry.Material:material", x: 0, y: 0, params: { components, basis: "mass", display_name: "sample", provenance: "test" } },
         { id: "plasma", typeId: "Spectro.Libs:plasma", x: 200, y: 0, params: { temperature: 10000, electron_density_cm3: 1e17, continuum_level: 0.01 } },
-        { id: "spectrometer", typeId: "Spectro.Instrument:spectrometer", x: 400, y: 0, params: { range_start: 240, range_end: 450, pixel_count: 2100, resolution_fwhm: 0.1, noise_enabled: false } },
+        {
+            id: "spectrometer",
+            typeId: "Spectro.Instrument:spectrometer",
+            x: 400,
+            y: 0,
+            params: { range_start: 240, range_end: 450, pixel_count: 2100, resolution_fwhm: 0.1, noise_enabled: false },
+        },
         { id: "chart", typeId: "Viz.Plot:xy", x: 600, y: 0, params: {} },
     ];
     const connections = [
@@ -196,7 +202,7 @@ describe("the chain, node by node", () => {
         expect(plasma.missing_elements.split(" ").sort()).toEqual(["C", "Mg", "O"]);
         expect(plasma.line_count).toBeGreaterThan(0);
         // And it reports the Saha balance it solved for the ones it has.
-        expect(plasma.neutral_fraction).toMatch(/Si:/);
+        expect(plasma.stage_fractions).toMatch(/Si:/);
         expect(plasma.partition_top_decile_share).toBeLessThan(0.01);
     });
 });

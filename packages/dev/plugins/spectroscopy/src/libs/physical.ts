@@ -22,10 +22,13 @@
  *    truncation matters at that temperature.
  * 3. BOLTZMANN: the fraction of a species on level k is
  *    g_k exp(-E_k / kT) / U(T).
- * 4. SAHA: the neutral / ion split at a given electron density. Only
- *    the first ionisation is solved; doubly ionised species are left
- *    out, which is reasonable below roughly 15 000 K for these
- *    elements and wrong above.
+ * 4. SAHA: the split between the ionisation stages at a given electron
+ *    density, solved over as many successive stages as the data set
+ *    carries. Where the data stops, the model stops, and the report
+ *    says which stage it stopped at: a balance truncated at the first
+ *    ion attributes the deeper stages' atoms to the stages below, and
+ *    at 11 605 K that is nine per cent of calcium going to the wrong
+ *    place, which biases every ratio calcium takes part in.
  * 5. EMISSIVITY of a line: the standard optically thin form,
  *    eps = (h c / 4 pi lambda) A_ki n_k.
  *
@@ -68,6 +71,16 @@ export interface IPhysicalModelData {
      *  energy to ionise NEUTRAL calcium. */
     readonly ionisationEnergiesEv: Readonly<Record<string, number>>;
 }
+
+/**
+ * The ionisation stages the model can carry, from the neutral atom up.
+ * It is the closed list of `IonisationStage`, in order, because the
+ * Saha balance is a chain and the order is what makes it one.
+ */
+const STAGES: ReadonlyArray<IonisationStage> = [0, 1, 2];
+
+/** How ASD spells each of those stages. */
+const STAGE_NUMERALS = ["I", "II", "III"] as const;
 
 /** A partition function and what the truncation of its level list costs. */
 export interface IPartitionFunction {
@@ -154,16 +167,41 @@ export function sahaRatio(partitionNeutral: number, partitionIon: number, ionisa
 }
 
 /**
- * Fraction of an element's atoms that are neutral and singly ionised,
- * from the Saha ratio. Doubly ionised species are not modelled, so the
- * two fractions sum to 1 by construction: above roughly 15 000 K for
- * these elements that is an understatement of the ionisation, and it is
- * on the list of this model's limits.
+ * Fraction of an element's atoms in each ionisation stage, from the
+ * successive Saha ratios: `ratios[k]` is n(stage k+1) / n(stage k).
+ *
+ * The result has one entry more than `ratios` and sums to 1 by
+ * construction, so it says how the atoms of this element are shared out
+ * among the stages the data set covers, and nothing about stages beyond
+ * them. A ratio that is not a finite number at or above zero ends the
+ * chain there: the stages past it get nothing, which is the honest
+ * answer when the ionisation energy or the level list for them is
+ * missing.
+ *
+ * The products are formed cumulatively rather than stage by stage
+ * because n(k) / n(0) is the product of the ratios up to k, and that is
+ * what the normalisation needs.
  */
-export function ionisationFractions(sahaRatioValue: number): { neutral: number; singly: number } {
-    if (!Number.isFinite(sahaRatioValue) || sahaRatioValue < 0) return { neutral: 1, singly: 0 };
-    const neutral = 1 / (1 + sahaRatioValue);
-    return { neutral, singly: 1 - neutral };
+export function ionisationFractions(ratios: ReadonlyArray<number>): number[] {
+    const relative = [1];
+    for (const r of ratios) {
+        if (!Number.isFinite(r) || r < 0) break;
+        relative.push(relative[relative.length - 1] * r);
+    }
+    const total = relative.reduce((a, b) => a + b, 0);
+    if (!(total > 0) || !Number.isFinite(total)) {
+        // Every stage above the neutral overflowed, which means the
+        // plasma is ionised past the deepest stage we carry. Saying so
+        // is better than returning a NaN that would travel.
+        const out = relative.map(() => 0);
+        out[out.length - 1] = 1;
+        return out;
+    }
+    const fractions = relative.map((r) => r / total);
+    // The chain may have stopped early; the stages it never reached are
+    // reported as empty rather than left undefined.
+    while (fractions.length < ratios.length + 1) fractions.push(0);
+    return fractions;
 }
 
 /** One line's physical emissivity, per unit total atom density. */
@@ -177,14 +215,27 @@ export interface IPhysicalLineIntensity {
     readonly upperLevelFraction: number;
 }
 
-/** What a physical computation could not do, per element. */
+/** What a physical computation did, and could not do, per element. */
 export interface IPhysicalElementReport {
     readonly element: string;
+    /** ASD names of the stages the data set does not carry, in order. */
     readonly missingSpecies: ReadonlyArray<string>;
-    readonly missingIonisationEnergy: boolean;
-    readonly partitionNeutral: number;
-    readonly partitionIon: number;
-    readonly neutralFraction: number;
+    /** ASD names of the stages whose ionisation energy is missing, which
+     *  is where the Saha chain had to stop. */
+    readonly missingIonisationEnergy: ReadonlyArray<string>;
+    /** U(T) per stage, index 0 being the neutral. */
+    readonly partitionFunctions: ReadonlyArray<number>;
+    /** The share of this element's atoms in each stage, summing to 1
+     *  over the stages the data set covers. */
+    readonly stageFractions: ReadonlyArray<number>;
+    /** How deep the balance was solved: 1 means the neutral alone, 3
+     *  means up to the doubly ionised atom. Below the number of stages
+     *  the element has, the deeper stages' atoms are attributed to the
+     *  stages below, and the result carries that error. */
+    readonly stagesSolved: number;
+    /** Worst top-decile share of any stage's partition function: large
+     *  means a published level list stops too early for this
+     *  temperature. */
     readonly partitionTopDecileShare: number;
 }
 
@@ -215,34 +266,55 @@ export function computePhysicalEmissions(
 
     for (const [element, fraction] of Object.entries(atomFractions)) {
         if (!(fraction > 0)) continue;
-        const neutral = data.species.find((s) => s.element === element && s.ionisation === 0);
-        const ion = data.species.find((s) => s.element === element && s.ionisation === 1);
-        if (!neutral && !ion) {
+
+        const present = STAGES.map((k) => data.species.find((s) => s.element === element && s.ionisation === k));
+        if (present.every((s) => s === undefined)) {
             missing.push(element);
             continue;
         }
 
-        const uNeutral = neutral ? partitionFunction(neutral.levels, temperatureK) : { value: 0, levelCount: 0, topDecileShare: 0 };
-        const uIon = ion ? partitionFunction(ion.levels, temperatureK) : { value: 0, levelCount: 0, topDecileShare: 0 };
+        // The balance is a chain from the neutral upwards, and a Saha
+        // ratio needs BOTH of the stages it connects, so the chain stops
+        // at the first stage the data set does not carry. A data set
+        // that starts above the neutral has no chain at all; then the
+        // lowest stage it does carry takes everything, and the report
+        // says which stages are missing.
+        const chain: IPhysicalSpecies[] = [];
+        for (const s of present) {
+            if (!s) break;
+            chain.push(s);
+        }
+        if (chain.length === 0) chain.push(present.find((s) => s !== undefined) as IPhysicalSpecies);
 
-        const ionisationKey = neutral?.asdName ?? `${element} I`;
-        const eIon = data.ionisationEnergiesEv[ionisationKey];
-        const haveBoth = !!neutral && !!ion && uNeutral.value > 0 && uIon.value > 0 && typeof eIon === "number";
+        const partitions = chain.map((s) => partitionFunction(s.levels, temperatureK));
 
-        // With only one stage available, or no ionisation energy, the
-        // balance cannot be solved: everything is attributed to the
-        // stage we have, and the report says so.
-        const ratio = haveBoth ? sahaRatio(uNeutral.value, uIon.value, eIon as number, temperatureK, electronDensityCm3) : 0;
-        const fractions = haveBoth ? ionisationFractions(ratio) : { neutral: neutral ? 1 : 0, singly: neutral ? 0 : 1 };
+        const ratios: number[] = [];
+        const missingIonisationEnergy: string[] = [];
+        for (let k = 0; k + 1 < chain.length; k++) {
+            const energy = data.ionisationEnergiesEv[chain[k].asdName];
+            if (typeof energy !== "number") {
+                // Without the energy to strip the next electron there is
+                // no ratio to compute, and guessing one would be worse
+                // than stopping.
+                missingIonisationEnergy.push(chain[k].asdName);
+                break;
+            }
+            if (!(partitions[k].value > 0) || !(partitions[k + 1].value > 0)) break;
+            ratios.push(sahaRatio(partitions[k].value, partitions[k + 1].value, energy, temperatureK, electronDensityCm3));
+        }
 
-        for (const species of [neutral, ion]) {
-            if (!species) continue;
-            const u = species.ionisation === 0 ? uNeutral : uIon;
-            if (!(u.value > 0)) continue;
-            const speciesFraction = species.ionisation === 0 ? fractions.neutral : fractions.singly;
-            if (!(speciesFraction > 0)) continue;
+        // One entry per stage the data set carries, so a chain that
+        // stopped early reports the stages it never reached as empty
+        // rather than leaving them off the end.
+        const stageFractions = ionisationFractions(ratios);
+        while (stageFractions.length < chain.length) stageFractions.push(0);
 
-            for (const line of species.lines) {
+        for (let k = 0; k < chain.length; k++) {
+            const u = partitions[k];
+            const speciesFraction = stageFractions[k] ?? 0;
+            if (!(u.value > 0) || !(speciesFraction > 0)) continue;
+
+            for (const line of chain[k].lines) {
                 const gk = line.upperLevelWeight;
                 const ek = line.upperLevelEnergyEv;
                 const aki = line.transitionProbability;
@@ -256,12 +328,12 @@ export function computePhysicalEmissions(
 
         reports.push({
             element,
-            missingSpecies: [neutral ? null : `${element} I`, ion ? null : `${element} II`].filter((s): s is string => s !== null),
-            missingIonisationEnergy: typeof eIon !== "number",
-            partitionNeutral: uNeutral.value,
-            partitionIon: uIon.value,
-            neutralFraction: fractions.neutral,
-            partitionTopDecileShare: Math.max(uNeutral.topDecileShare, uIon.topDecileShare),
+            missingSpecies: STAGES.filter((k) => present[k] === undefined).map((k) => `${element} ${STAGE_NUMERALS[k]}`),
+            missingIonisationEnergy,
+            partitionFunctions: partitions.map((u) => u.value),
+            stageFractions,
+            stagesSolved: ratios.length + 1,
+            partitionTopDecileShare: partitions.reduce((m, u) => Math.max(m, u.topDecileShare), 0),
         });
     }
 
