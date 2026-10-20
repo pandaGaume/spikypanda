@@ -73,13 +73,30 @@ const flag = (name, fallback) => {
     return i < 0 ? fallback : (argv[i + 1] ?? fallback);
 };
 if (!archivePath) {
-    console.error("Usage: node predict-regolith-set.mjs <archive.zip> [--calibrate LHS-1] [--condition Earth] [--temperature 9000]");
+    console.error("Usage: node predict-regolith-set.mjs <archive.zip> [--calibrate LHS-1] [--condition Earth] [--temperature 9000] [--exclude A,B]");
     console.error("The archive is 2.25 GB of CC BY 4.0 data recorded in internals/libs/data/MANIFEST.md, so its path is an argument.");
     process.exit(1);
 }
 const CALIBRATE = flag("calibrate", "LHS-1");
 const CONDITION = flag("condition", "Earth");
 const TEMPERATURE = Number(flag("temperature", "9000"));
+
+/**
+ * The samples that the ground-truth confrontation of
+ * `16-GROUND-TRUTH-UNCERTAINTY.md` found defective can be dropped, so that
+ * the composition measurement can be read on the sound subset and set
+ * against the whole set. A name is normalised the way that document's tool
+ * does it, upper case with the spaces removed and a zero read as the letter
+ * O, because the three source files of that data set spell these names
+ * three different ways.
+ */
+const normaliseSampleName = (s) => String(s).toUpperCase().replace(/\s+/g, "").replace(/0/g, "O");
+const EXCLUDE = new Set(
+    String(flag("exclude", ""))
+        .split(",")
+        .filter((s) => s.trim().length > 0)
+        .map(normaliseSampleName)
+);
 
 // From 12-INSTRUMENT-RESPONSE.md and 13-V1B-FIRST-FIT.md.
 const TRUSTED_LOW_NM = 260;
@@ -308,7 +325,16 @@ const frozenWidthAt = (nm) => calibration.width.constant + calibration.width.slo
 
 // ── predict ──────────────────────────────────────────────────────────
 
-const others = table.samples.map((s) => s.name).filter((n) => n !== CALIBRATE);
+const others = table.samples
+    .map((s) => s.name)
+    .filter((n) => n !== CALIBRATE && !EXCLUDE.has(normaliseSampleName(n)));
+if (EXCLUDE.size > 0) {
+    const dropped = table.samples.map((s) => s.name).filter((n) => EXCLUDE.has(normaliseSampleName(n)));
+    console.log(`
+excluded on the ground truth: ${dropped.length} of ${table.samples.length} samples, ${dropped.join(", ")}`);
+    const unknown = [...EXCLUDE].filter((e) => !table.samples.some((s) => normaliseSampleName(s.name) === e));
+    if (unknown.length > 0) console.log(`  named but not in the table: ${unknown.join(", ")}`);
+}
 console.log(`\npredicting ${others.length} samples the instrument was not fitted on\n`);
 console.log(
     `${"sample".padEnd(11)} ${"win".padStart(3)} ${"T (K)".padStart(6)} ${"+/- K".padStart(6)} ${"dex".padStart(5)}  ${"offset pm".padStart(9)} ${"vs froz".padStart(8)}  ${"FWHM pm".padStart(7)} ${"vs froz".padStart(8)}`
