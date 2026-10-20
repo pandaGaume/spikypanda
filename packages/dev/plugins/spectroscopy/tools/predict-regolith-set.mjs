@@ -61,6 +61,7 @@ const spectro = {
     ...(await load(join(pluginRoot, "dist/libs/engine.js"))),
     ...(await load(join(pluginRoot, "dist/libs/window-fit.js"))),
     ...(await load(join(pluginRoot, "dist/libs/boltzmann.js"))),
+    ...(await load(join(pluginRoot, "dist/libs/self-absorption.js"))),
     ...(await load(join(pluginRoot, "dist/instrument/response.js"))),
 };
 const chemistry = {
@@ -127,7 +128,68 @@ const GLOBAL_STARK = argv.includes("--global-stark");
  */
 const SUPPORTED_T = spectro.NIST_STARK_PROVENANCE?.supportedTemperatureK ?? [10000, 16000];
 const STARK_REFERENCE_NE = spectro.NIST_STARK_PROVENANCE?.referenceElectronDensityCm3 ?? 1e17;
-const ELECTRON_DENSITY_CM3 = 1e17;
+
+/**
+ * The electron density the model runs at, one value for every sample.
+ *
+ * It is a GUESS, carried from `11-V1B-FIRST-LOOK.md`, and it was never
+ * identifiable before: with one global collisional coefficient, raising
+ * the density and raising the instrumental width did the same thing to
+ * every line, so the fit could not tell them apart and the frozen
+ * density went quietly into the fitted width.
+ *
+ * Per-line widths break that tie. The density scales each line's
+ * Lorentz width by its OWN tabulated amount, spanning a factor 26,
+ * while the instrument adds one Gaussian common to all of them. The two
+ * now leave different marks, which `--scan-density` measures.
+ */
+const ELECTRON_DENSITY_CM3 = Number(flag("electron-density", "1e17"));
+const SCAN_DENSITY = argv.includes("--scan-density");
+const DUMP_WINDOWS = argv.includes("--dump-windows");
+
+/**
+ * Drop the windows whose fitted width is not a measurement of the
+ * instrument, and fit the trends on the rest.
+ *
+ * Two rules, each with its own signature in the data rather than a
+ * list of wavelengths:
+ *
+ *   1. A window whose fitted width lands on the solver's floor. The fit
+ *      did not choose a width, it ran out of room: the model's own
+ *      profile is already wider than the measured feature, which on
+ *      LHS-1 happens on exactly the two lines carrying the largest
+ *      tabulated Stark widths, 270 and 200 pm.
+ *   2. A window whose strongest line sits deep in its own absorbers. A
+ *      self-absorbed line is flat-topped and fits as a broad Gaussian,
+ *      so its fitted width is a reading of the absorption and not of
+ *      the slit. Over LHS-1's 22 windows the fitted width and the
+ *      absorber depth rank together at Spearman 0.72.
+ */
+const CLEAN_WINDOWS = argv.includes("--clean-windows");
+
+/**
+ * Swap the free parameter: freeze the instrument and free the plasma.
+ *
+ * The run this tool was built for lets a Gaussian width float per
+ * sample and calls it the instrument. That quantity varies by a factor
+ * two across one instrument, which an instrument cannot do, and the two
+ * twinned pairs show why: LHS-1D and LMS-1D are the sieved fine
+ * fractions of LHS-1 and LMS-1, carry their parents' analyses oxide for
+ * oxide, and come out 61 and 71 per cent wider. Same composition, same
+ * instrument, different grain size, different width. So the quantity is
+ * a property of the shot.
+ *
+ * With --free-density the instrumental width is pinned to the trend
+ * LHS-1 gives and the electron density is scanned per sample instead.
+ * The density is a physical parameter of the plume, it is the one the
+ * model already declares and then freezes at a guess, and it moves the
+ * line widths through the tabulated Stark coefficients rather than
+ * through a slit that cannot change.
+ */
+const FREE_DENSITY = argv.includes("--free-density");
+const DENSITY_GRID = [1e16, 2e16, 3e16, 5e16, 7e16, 1e17, 1.5e17, 2e17, 3e17];
+const FLOOR_FWHM_NM = 0.005;
+const DEPTH_LIMIT = Number(flag("depth-limit", "0.1"));
 const PIVOT_NM = 500;
 
 /**
@@ -212,7 +274,9 @@ function fitTemperature(sampleName) {
 }
 
 /** Everything one sample yields: its windows, its trends, its areas. */
-function measure(sampleName, temperatureK = TEMPERATURE) {
+let pinnedWidthAt = undefined;
+
+function measure(sampleName, temperatureK = TEMPERATURE, electronDensityCm3 = ELECTRON_DENSITY_CM3) {
     const analysed = table.samples.find((s) => s.name === sampleName);
     if (!analysed) return { sampleName, blocker: "not in the published analysis" };
 
@@ -241,7 +305,7 @@ function measure(sampleName, temperatureK = TEMPERATURE) {
 
     const resolved = core.resolveElementalComposition(chemistry.oxideComponents(analysed), "mass");
     const atomFractions = Object.fromEntries(Object.entries(resolved.moleFractions).filter(([, v]) => v > 0));
-    const emission = spectro.computePhysicalEmissions(atomFractions, data, temperatureK, ELECTRON_DENSITY_CM3, 1);
+    const emission = spectro.computePhysicalEmissions(atomFractions, data, temperatureK, electronDensityCm3, 1);
     let modelMax = 0;
     for (const i of emission.intensities) modelMax = Math.max(modelMax, i.intensity);
 
@@ -251,7 +315,7 @@ function measure(sampleName, temperatureK = TEMPERATURE) {
     // its density is not a width.
     const starkOf = (line) => {
         if (GLOBAL_STARK || line.collisionalWidthNm === undefined) return undefined;
-        return line.collisionalWidthNm * (ELECTRON_DENSITY_CM3 / STARK_REFERENCE_NE);
+        return line.collisionalWidthNm * (electronDensityCm3 / STARK_REFERENCE_NE);
     };
     const asEmission = (i) => ({
         element: i.line.element,
@@ -297,20 +361,50 @@ function measure(sampleName, temperatureK = TEMPERATURE) {
         const hi = centreNm + WINDOW_HALF_NM + 0.2;
         const inside = emission.intensities.filter((i) => i.line.wavelengthNm >= lo && i.line.wavelengthNm <= hi && i.intensity >= modelMax * 1e-5);
         if (!inside.length) continue;
-        const fit = spectro.fitWindow(w.grid, w.values, inside.map(asEmission), { maxOffsetNm: 0.25, fwhmRangeNm: [0.02, 0.8], collisionalFwhmNm: COLLISIONAL_NM });
+        const pinned = pinnedWidthAt?.(centreNm);
+        const range = pinned === undefined ? [0.02, 0.8] : [Math.max(1e-4, pinned * 0.999), pinned * 1.001];
+        const fit = spectro.fitWindow(w.grid, w.values, inside.map(asEmission), { maxOffsetNm: 0.25, fwhmRangeNm: range, collisionalFwhmNm: COLLISIONAL_NM });
         if (fit.blocker) continue;
         windows.push({ nm: centreNm, ...fit });
     }
     if (windows.length < 3) return { sampleName, blocker: `only ${windows.length} window(s) fitted` };
 
+    // Which windows the instrument trends are allowed to rest on.
+    const depthAt = (centreNm) => {
+        let v = 0;
+        for (const i of emission.intensities) {
+            if (Math.abs(i.line.wavelengthNm - centreNm) > 0.02) continue;
+            const proxy = spectro.opticalDepthProxy(i.line, temperatureK);
+            if (Number.isFinite(proxy)) v = Math.max(v, proxy * (atomFractions[i.line.element] ?? 0) * i.speciesFraction);
+        }
+        return v;
+    };
+    const depths = windows.map((w) => depthAt(w.nm));
+    const deepest = Math.max(...depths, 0);
+    const refused = [];
+    const trendWindows = CLEAN_WINDOWS
+        ? windows.filter((w, k) => {
+              if (!(w.instrumentalFwhmNm > FLOOR_FWHM_NM)) {
+                  refused.push(`${w.nm.toFixed(2)} at the solver floor`);
+                  return false;
+              }
+              if (deepest > 0 && depths[k] / deepest > DEPTH_LIMIT) {
+                  refused.push(`${w.nm.toFixed(2)} depth ${(depths[k] / deepest).toFixed(2)}`);
+                  return false;
+              }
+              return true;
+          })
+        : windows;
+    if (trendWindows.length < 3) return { sampleName, blocker: `only ${trendWindows.length} window(s) left after the clean-window rules` };
+
     const offset = spectro.fitLinearTrend(
-        windows.map((w) => w.nm),
-        windows.map((w) => w.offsetNm),
+        trendWindows.map((w) => w.nm),
+        trendWindows.map((w) => w.offsetNm),
         PIVOT_NM
     );
     const width = spectro.fitLinearTrend(
-        windows.map((w) => w.nm),
-        windows.map((w) => w.instrumentalFwhmNm),
+        trendWindows.map((w) => w.nm),
+        trendWindows.map((w) => w.instrumentalFwhmNm),
         PIVOT_NM
     );
 
@@ -328,6 +422,13 @@ function measure(sampleName, temperatureK = TEMPERATURE) {
         let sum = 0;
         for (const v of w.values) sum += Math.max(0, v - fit.continuum);
         return sum * step;
+    };
+
+    /** Share of an element sitting in one ionisation stage, as the
+     *  Saha balance of this sample put it. */
+    const speciesFractionOf = (element, ionisation) => {
+        for (const i of emission.intensities) if (i.line.element === element && i.line.ionisation === ionisation) return i.speciesFraction;
+        return 0;
     };
 
     /** What the model says that line emits, from the published analysis. */
@@ -371,13 +472,17 @@ function measure(sampleName, temperatureK = TEMPERATURE) {
     return {
         sampleName,
         temperatureK,
+        electronDensityCm3,
         analysed,
         atomFractions,
         windows,
+        trendWindows,
+        refused,
         offset,
         width,
         areaAt,
         modelAt,
+        speciesFractionOf,
         residual,
         stark: { tabulatedShare, windowsWithTabulated, extrapolated: [...extrapolated] },
         blocker: null,
@@ -405,12 +510,213 @@ if (GLOBAL_STARK) {
     );
 }
 console.log("");
-console.log(`frozen instrument, from ${CALIBRATE} over ${calibration.windows.length} windows:`);
+if (CLEAN_WINDOWS) {
+    console.log(
+        `clean windows only: a window is dropped when its fitted width lands on the solver floor, or when its strongest line sits above ${DEPTH_LIMIT} of the deepest absorber depth in that sample`
+    );
+}
+console.log(`frozen instrument, from ${CALIBRATE} over ${calibration.trendWindows.length} of ${calibration.windows.length} windows:`);
+if (CLEAN_WINDOWS && calibration.refused.length > 0) console.log(`  dropped: ${calibration.refused.join(", ")}`);
 console.log(`  offset = ${(calibration.offset.constant * 1000).toFixed(1)} pm, slope ${(calibration.offset.slopePerNm * 1e6).toFixed(2)} pm per 1000 nm`);
 console.log(`  FWHM   = ${(calibration.width.constant * 1000).toFixed(1)} pm, slope ${(calibration.width.slopePerNm * 1e6).toFixed(1)} pm per 1000 nm`);
 
 const frozenOffsetAt = (nm) => calibration.offset.constant + calibration.offset.slopePerNm * (nm - PIVOT_NM);
 const frozenWidthAt = (nm) => calibration.width.constant + calibration.width.slopePerNm * (nm - PIVOT_NM);
+
+/**
+ * How deeply one line sits in its own absorbers, for this sample.
+ *
+ * `opticalDepthProxy` gives the part that belongs to the transition,
+ * lambda^4 g_k A_ki exp(-E_i / kT), and says in its own header that
+ * what it leaves out is the column density of the species. Two thirds
+ * of that is known here, the element's atom fraction and the share of
+ * it sitting in this ionisation stage, and the third, how much material
+ * the pulse removed, is common to every line of one spectrum and so
+ * cancels in a ranking.
+ *
+ * Al I 394.401 is why the ionisation share cannot be dropped: it is a
+ * resonance line of an element at 11 % by atom and it is NOT depressed,
+ * because at 12 900 K almost no aluminium is still neutral. Ca II
+ * 393.366 is a resonance line of an element at 4.9 % and it is the most
+ * depressed line in the spectrum, because almost all the calcium IS
+ * singly ionised. Ground state alone gets that backwards.
+ */
+function absorberDepthOf(line, m) {
+    const proxy = spectro.opticalDepthProxy(line, m.temperatureK);
+    if (!Number.isFinite(proxy)) return 0;
+    const atom = m.atomFractions[line.element] ?? 0;
+    const share = m.speciesFractionOf?.(line.element, line.ionisation) ?? 1;
+    return proxy * atom * share;
+}
+
+// ── what shape is the instrumental width? ────────────────────────────
+
+/**
+ * Print every fitted window of the calibration sample and stop.
+ *
+ * The declared width model is a straight line in wavelength, and
+ * `13-V1B-FIRST-FIT.md` measured 36 % of scatter about it without being
+ * able to say whether the line was the wrong shape or the collisional
+ * width was polluting it. The collisional width is now per line and the
+ * scatter has not moved, so what is left is the shape, and the shape is
+ * only readable window by window.
+ */
+if (DUMP_WINDOWS) {
+    const m = calibration;
+    console.log("");
+    console.log(`every fitted window of ${m.sampleName} at ${m.temperatureK} K, Ne ${m.electronDensityCm3.toExponential(1)} cm^-3, ${GLOBAL_STARK ? "global 50 pm" : "per-line widths"}`);
+    const modelPeak = Math.max(
+        ...m.windows.map((w) => {
+            let v = 0;
+            for (const sp of spectro.NIST_SPECIES) for (const l of sp.lines) if (Math.abs(l.wavelengthNm - w.nm) <= 0.02) v = Math.max(v, m.modelAt(sp.element, sp.ionisation, l.wavelengthNm));
+            return v;
+        })
+    );
+    const depthPeak = Math.max(
+        ...m.windows.map((w) => {
+            let v = 0;
+            for (const sp of spectro.NIST_SPECIES) for (const l of sp.lines) if (Math.abs(l.wavelengthNm - w.nm) <= 0.02) v = Math.max(v, absorberDepthOf(l, m));
+            return v;
+        })
+    );
+    console.log(`${"nm".padStart(8)} ${"FWHM pm".padStart(8)} ${"vs trend".padStart(9)} ${"offset pm".padStart(9)} ${"resid %".padStart(8)} ${"E_low eV".padStart(8)} ${"depth".padStart(9)}  strongest line`);
+    for (const w of [...m.windows].sort((a, b) => a.nm - b.nm)) {
+        const trend = m.width.constant + m.width.slopePerNm * (w.nm - PIVOT_NM);
+        const species = (() => {
+            let best = null;
+            for (const sp of spectro.NIST_SPECIES) {
+                for (const l of sp.lines) {
+                    if (Math.abs(l.wavelengthNm - w.nm) > 0.02) continue;
+                    if (best === null || (l.transitionProbability ?? 0) * (l.upperLevelWeight ?? 0) > best.strength) {
+                        best = {
+                            label: `${sp.element} ${STAGE_NUMERAL[sp.ionisation]} ${l.wavelengthNm.toFixed(3)}`,
+                            strength: (l.transitionProbability ?? 0) * (l.upperLevelWeight ?? 0),
+                            width: l.collisionalWidthNm,
+                            lowerEv: l.lowerLevelEnergyEv ?? 0,
+                            modelled: m.modelAt(sp.element, sp.ionisation, l.wavelengthNm),
+                            depth: absorberDepthOf(l, m),
+                        };
+                    }
+                }
+            }
+            return best;
+        })();
+        console.log(
+            `${w.nm.toFixed(2).padStart(8)} ${(w.instrumentalFwhmNm * 1000).toFixed(1).padStart(8)} ${((w.instrumentalFwhmNm - trend) * 1000).toFixed(1).padStart(9)} ` +
+                `${(w.offsetNm * 1000).toFixed(1).padStart(9)} ${(w.residualShareOfPeak * 100).toFixed(2).padStart(8)} ` +
+                `${(species?.lowerEv ?? 0).toFixed(3).padStart(8)} ${((species?.depth ?? 0) / depthPeak).toExponential(2).padStart(9)}  ` +
+                `${species ? species.label : "?"}${species?.width !== undefined ? ` (Stark ${(species.width * 1000).toFixed(1)} pm)` : ""}`
+        );
+    }
+    console.log("");
+    console.log(`  the declared model: ${(m.width.constant * 1000).toFixed(1)} pm at ${PIVOT_NM} nm, slope ${(m.width.slopePerNm * 1e6).toFixed(0)} pm per 1000 nm, scatter ${(m.width.rmsResidual * 1000).toFixed(1)} pm`);
+    process.exit(0);
+}
+
+// ── is the electron density separable from the instrument? ───────────
+
+/**
+ * Scan the electron density on the calibration sample and stop.
+ *
+ * The question this answers is not what the density is but whether the
+ * spectrum can tell. With one global collisional coefficient it cannot:
+ * the density multiplies every line's Lorentz width by the same factor
+ * and so does nothing the instrumental width cannot undo, which makes
+ * the residual flat in the density and the frozen 1e17 a free parameter
+ * hiding inside the fitted width.
+ *
+ * With per-line widths the two act differently. The density stretches a
+ * distribution that already spans a factor 26 between lines; the
+ * instrument adds one Gaussian to all of them. Run this with and
+ * without --global-stark and the difference between the two residual
+ * curves IS the separability.
+ */
+if (SCAN_DENSITY) {
+    const grid = [1e16, 2e16, 3e16, 5e16, 7e16, 1e17, 1.5e17, 2e17, 3e17, 5e17, 1e18];
+    console.log("");
+    console.log(`electron density scan on ${CALIBRATE} at ${calibration.temperatureK} K, ${GLOBAL_STARK ? "ONE GLOBAL 50 pm" : "per-line widths"}`);
+    console.log(`${"Ne (cm^-3)".padStart(11)} ${"win".padStart(3)} ${"residual %".padStart(10)} ${"FWHM pm".padStart(8)} ${"slope".padStart(8)} ${"scatter pm".padStart(10)} ${"scatter %".padStart(9)}`);
+    const rows = [];
+    for (const ne of grid) {
+        const m = measure(CALIBRATE, calibration.temperatureK, ne);
+        if (m.blocker) {
+            console.log(`${ne.toExponential(1).padStart(11)} ${m.blocker}`);
+            continue;
+        }
+        const resid = m.windows.reduce((a, w) => a + w.residualShareOfPeak, 0) / m.windows.length;
+        const scatterShare = m.width.rmsResidual / m.width.constant;
+        rows.push({ ne, resid, m, scatterShare });
+        console.log(
+            `${ne.toExponential(1).padStart(11)} ${String(m.windows.length).padStart(3)} ${(resid * 100).toFixed(3).padStart(10)} ${(m.width.constant * 1000).toFixed(1).padStart(8)} ` +
+                `${(m.width.slopePerNm * 1e6).toFixed(0).padStart(8)} ${(m.width.rmsResidual * 1000).toFixed(1).padStart(10)} ${(scatterShare * 100).toFixed(1).padStart(9)}`
+        );
+    }
+    if (rows.length > 2) {
+        const best = rows.reduce((a, b) => (b.resid < a.resid ? b : a));
+        const worst = rows.reduce((a, b) => (b.resid > a.resid ? b : a));
+        const flat = rows.reduce((a, b) => (b.resid < a.resid ? b : a)).resid;
+        console.log("");
+        console.log(`  best residual at Ne = ${best.ne.toExponential(1)} cm^-3, ${(best.resid * 100).toFixed(3)} %`);
+        console.log(`  the residual moves by ${(((worst.resid - flat) / flat) * 100).toFixed(1)} % of itself across the whole grid`);
+        console.log(`  width at that density: ${(best.m.width.constant * 1000).toFixed(1)} pm, scatter ${(best.m.width.rmsResidual * 1000).toFixed(1)} pm, ${(best.scatterShare * 100).toFixed(1)} %`);
+        const bestScatter = rows.reduce((a, b) => (b.scatterShare < a.scatterShare ? b : a));
+        console.log(`  the width trend is tidiest at Ne = ${bestScatter.ne.toExponential(1)} cm^-3, scatter ${(bestScatter.scatterShare * 100).toFixed(1)} %`);
+    }
+    process.exit(0);
+}
+
+// ── freeze the instrument, free the plasma ───────────────────────────
+
+if (FREE_DENSITY) {
+    const others = table.samples
+        .map((s) => s.name)
+        .filter((n) => n !== CALIBRATE && !EXCLUDE.has(normaliseSampleName(n)));
+    pinnedWidthAt = frozenWidthAt;
+    console.log("");
+    console.log(`the instrumental width is now FROZEN at ${CALIBRATE}'s trend and the electron density is fitted per sample`);
+    console.log(`${"sample".padEnd(12)} ${"T (K)".padStart(6)} ${"Ne (cm^-3)".padStart(11)} ${"resid %".padStart(8)} ${"free-width resid %".padStart(19)} ${"change".padStart(8)}`);
+    const rows = [];
+    for (const name of [CALIBRATE, ...others]) {
+        // The same sample with the width free, as it was measured
+        // before, so the two are a pair and not two different runs.
+        pinnedWidthAt = undefined;
+        const free = fitTemperature(name) ?? measure(name);
+        if (free.blocker) {
+            console.log(`${name.padEnd(12)} ${free.blocker}`);
+            continue;
+        }
+        const freeResid = free.windows.reduce((a, w) => a + w.residualShareOfPeak, 0) / free.windows.length;
+
+        pinnedWidthAt = frozenWidthAt;
+        let best = null;
+        for (const ne of DENSITY_GRID) {
+            const m = measure(name, free.temperatureK, ne);
+            if (m.blocker) continue;
+            const resid = m.windows.reduce((a, w) => a + w.residualShareOfPeak, 0) / m.windows.length;
+            if (best === null || resid < best.resid) best = { ne, resid, m };
+        }
+        pinnedWidthAt = undefined;
+        if (best === null) {
+            console.log(`${name.padEnd(12)} no density fitted`);
+            continue;
+        }
+        rows.push({ name, ne: best.ne, resid: best.resid, freeResid, temperatureK: free.temperatureK, freeWidth: free.width.constant });
+        console.log(
+            `${name.padEnd(12)} ${String(free.temperatureK).padStart(6)} ${best.ne.toExponential(1).padStart(11)} ${(best.resid * 100).toFixed(3).padStart(8)} ` +
+                `${(freeResid * 100).toFixed(3).padStart(19)} ${(((best.resid - freeResid) / freeResid) * 100).toFixed(1).padStart(7)}%`
+        );
+    }
+    if (rows.length > 2) {
+        const nes = rows.map((r) => r.ne).sort((a, b) => a - b);
+        const worse = rows.map((r) => (r.resid - r.freeResid) / r.freeResid).sort((a, b) => a - b);
+        const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+        console.log("");
+        console.log(`  fitted electron density: ${nes[0].toExponential(1)} to ${nes[nes.length - 1].toExponential(1)} cm^-3, a factor ${(nes[nes.length - 1] / nes[0]).toFixed(1)}`);
+        console.log(`  the residual costs ${(mean(worse) * 100).toFixed(1)} % of itself on average to freeze the instrument, worst ${(worse[worse.length - 1] * 100).toFixed(1)} %`);
+        console.log(`  one instrument for all ${rows.length} samples, and one free plasma parameter each, against a width that varied by a factor 2.1`);
+    }
+    process.exit(0);
+}
 
 // ── predict ──────────────────────────────────────────────────────────
 
