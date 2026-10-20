@@ -144,6 +144,11 @@ const STARK_REFERENCE_NE = spectro.NIST_STARK_PROVENANCE?.referenceElectronDensi
  * now leave different marks, which `--scan-density` measures.
  */
 const ELECTRON_DENSITY_CM3 = Number(flag("electron-density", "1e17"));
+
+/** Partition functions, by species and by temperature to ten kelvin.
+ *  Declared here because `measure` reaches it while this module is
+ *  still being evaluated. */
+const partitionCache = new Map();
 const SCAN_DENSITY = argv.includes("--scan-density");
 const DUMP_WINDOWS = argv.includes("--dump-windows");
 
@@ -389,7 +394,10 @@ function measure(sampleName, temperatureK = TEMPERATURE, electronDensityCm3 = EL
         for (const i of emission.intensities) {
             if (Math.abs(i.line.wavelengthNm - centreNm) > 0.02) continue;
             const proxy = spectro.opticalDepthProxy(i.line, temperatureK);
-            if (Number.isFinite(proxy)) v = Math.max(v, proxy * (atomFractions[i.line.element] ?? 0) * i.speciesFraction);
+            const u = partitionOf(i.line.element, i.line.ionisation, temperatureK);
+            if (Number.isFinite(proxy) && u > 0) {
+                v = Math.max(v, (proxy * (atomFractions[i.line.element] ?? 0) * i.speciesFraction * stimulatedEmissionFactor(i.line.wavelengthNm, temperatureK)) / u);
+            }
         }
         return v;
     };
@@ -559,12 +567,57 @@ const frozenWidthAt = (nm) => calibration.width.constant + calibration.width.slo
  * depressed line in the spectrum, because almost all the calcium IS
  * singly ionised. Ground state alone gets that backwards.
  */
-function absorberDepthOf(line, m) {
-    const proxy = spectro.opticalDepthProxy(line, m.temperatureK);
+function absorberDepthOf(line, m, temperatureK = m.temperatureK, shareOverride) {
+    const proxy = spectro.opticalDepthProxy(line, temperatureK);
     if (!Number.isFinite(proxy)) return 0;
     const atom = m.atomFractions[line.element] ?? 0;
-    const share = m.speciesFractionOf?.(line.element, line.ionisation) ?? 1;
-    return proxy * atom * share;
+    const share = shareOverride ?? m.speciesFractionOf?.(line.element, line.ionisation) ?? 1;
+    const u = partitionOf(line.element, line.ionisation, temperatureK);
+    if (!(u > 0)) return 0;
+    return (proxy * atom * share * stimulatedEmissionFactor(line.wavelengthNm, temperatureK)) / u;
+}
+
+/**
+ * Partition function of one species, cached by species and by
+ * temperature rounded to ten kelvin.
+ *
+ * It is the factor `opticalDepthProxy` leaves out and does not name.
+ * Its header says what is missing is "the column density of the
+ * species", which is true and incomplete: the population of a lower
+ * level is `g_i exp(-E_i / kT) / U_s(T)`, and only the `g_i` cancels
+ * against the cross-section. Within one species `U_s` is common to
+ * every line and drops out of any ranking, which is what that function
+ * was written for. Between Ca I and Ca II it does not drop out at all,
+ * and `U(Ca I) / U(Ca II)` runs from 1.18 at 9 000 K to 3.58 at
+ * 12 877 K, so a crossing between the two stages moves by most of a
+ * thousand kelvin if it is left out.
+ */
+function partitionOf(element, ionisation, temperatureK) {
+    const rounded = Math.round(temperatureK / 10) * 10;
+    const key = `${element} ${ionisation} ${rounded}`;
+    const hit = partitionCache.get(key);
+    if (hit !== undefined) return hit;
+    const sp = spectro.nistSpecies(element, ionisation);
+    const value = sp ? spectro.partitionFunction(sp.levels, rounded).value : NaN;
+    partitionCache.set(key, value);
+    return value;
+}
+
+/**
+ * The correction for stimulated emission, `1 - exp(-hc / lambda kT)`.
+ *
+ * What absorbs is the lower level minus what the upper level puts
+ * back, and under a Boltzmann population that ratio is
+ * `exp(-hc / lambda kT)`. Being a function of the wavelength it does
+ * NOT cancel within a species, unlike the partition function: at
+ * 12 877 K it is 0.942 at Ca II 393.366 and 0.725 at Ca II 866.214,
+ * and those two sit in the same crossing.
+ */
+function stimulatedEmissionFactor(wavelengthNm, temperatureK) {
+    const PLANCK = 6.62607015e-34;
+    const LIGHT = 299792458;
+    const BOLTZMANN = 1.380649e-23;
+    return 1 - Math.exp(-(PLANCK * LIGHT) / (wavelengthNm * 1e-9 * BOLTZMANN * temperatureK));
 }
 
 // ── what shape is the instrumental width? ────────────────────────────
@@ -760,7 +813,7 @@ function absorberTemperatureOf(m) {
             const ls = [];
             for (const r of set) {
                 const share = shareOf(r.element, r.ionisation);
-                const proxy = spectro.opticalDepthProxy(r.line, key * 10) * (m.atomFractions[r.element] ?? 0) * share;
+                const proxy = absorberDepthOf(r.line, m, key * 10, share);
                 if (!(proxy > 0)) continue;
                 ls.push(Math.log10(r.tau0 / (proxy / Math.max(r.thin, 1e-9))));
             }
@@ -1042,7 +1095,7 @@ if (WIDTH_DEPTH) {
             for (const r of absorbing) {
                 const share = shareAt(r.element, r.ionisation);
                 if (!(share > 0)) continue;
-                const proxy = spectro.opticalDepthProxy(r.line, T) * (m.atomFractions[r.element] ?? 0) * share;
+                const proxy = absorberDepthOf(r.line, m, T, share);
                 if (!(proxy > 0)) continue;
                 const col = r.tau0 / (proxy / Math.max(r.thin, 1e-9));
                 ls.push(Math.log10(col));
@@ -1075,7 +1128,7 @@ if (WIDTH_DEPTH) {
             const byElement = new Map();
             for (const r of absorbing) {
                 const share = shareAt(r.element, r.ionisation);
-                const proxy = spectro.opticalDepthProxy(r.line, coolest.T) * (m.atomFractions[r.element] ?? 0) * share;
+                const proxy = absorberDepthOf(r.line, m, coolest.T, share);
                 if (!(proxy > 0)) continue;
                 const col = r.tau0 / (proxy / Math.max(r.thin, 1e-9));
                 if (!byElement.has(r.element)) byElement.set(r.element, []);

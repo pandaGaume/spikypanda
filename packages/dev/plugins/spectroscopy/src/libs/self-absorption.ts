@@ -201,11 +201,30 @@ export function selfAbsorptionIndex(measuredRatio: number, predictedRatio: numbe
  * width in wavelength.
  *
  * What it leaves out, and this is why it orders lines rather than
- * predicting a depression: the column density of the species, which
- * depends on how much material the pulse removed and how the plume
- * expanded. On this data set that term varied enough between samples of
- * the same composition to break any relation between the index and the
- * abundance.
+ * predicting a depression:
+ *
+ *   - the **column density of the species**, which depends on how much
+ *     material the pulse removed and how the plume expanded. On this
+ *     data set that term varied enough between samples of the same
+ *     composition to break any relation between the index and the
+ *     abundance;
+ *   - the **partition function** of the species. The population of the
+ *     lower level is `g_i exp(-E_i / kT) / U_s(T)` and only the `g_i`
+ *     cancels against the cross-section above. `U_s` is common to every
+ *     line of one species, so it drops out of the ranking this function
+ *     is for, and it does NOT drop out of any comparison BETWEEN
+ *     species: `U(Ca I) / U(Ca II)` runs from 1.18 at 9 000 K to 3.58
+ *     at 12 877 K on the shipped catalogue;
+ *   - the correction for **stimulated emission**, `1 - exp(-hc/lambda kT)`,
+ *     since what absorbs is the lower level minus what the upper level
+ *     puts back. Being a function of the wavelength it does not cancel
+ *     even within a species: 0.942 at Ca II 393.366 against 0.725 at
+ *     Ca II 866.214, both at 12 877 K.
+ *
+ * A caller comparing two species, or two lines far apart in wavelength,
+ * has to supply all three. `internals/libs/23-ABSORBING-LAYER-TESTS.md`
+ * is the measurement that found the last two missing from a caller that
+ * did not.
  */
 export function opticalDepthProxy(line: IAtomicLine, temperatureK: number): number {
     const gk = line.upperLevelWeight;
