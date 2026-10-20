@@ -25,10 +25,10 @@
  * was measured with.
  */
 
-import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { archiveResponse, MOLAR_MASS, openArchive, sampleSpectrum, STAGE_NUMERAL } from "./regolith-archive.mjs";
+import { amendedLunarTable } from "./lunar-composition.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pluginRoot = resolve(here, "..");
@@ -44,7 +44,10 @@ const spectro = {
     ...(await load(join(pluginRoot, "dist/libs/self-absorption.js"))),
     ...(await load(join(pluginRoot, "dist/instrument/response.js"))),
 };
-const chemistry = await load(join(repoRoot, "packages/dev/plugins/chemistry/dist/material/oxide-table.js"));
+const chemistry = {
+    ...(await load(join(repoRoot, "packages/dev/plugins/chemistry/dist/material/oxide-table.js"))),
+    ...(await load(join(repoRoot, "packages/dev/plugins/chemistry/dist/material/oxide-amendment.js"))),
+};
 const core = await load(join(repoRoot, "packages/dev/core/dist/index.js"));
 
 const argv = process.argv.slice(2);
@@ -82,7 +85,7 @@ archive.close();
 
 const corrected = spectro.applyInstrumentResponse({ wavelengthNm: measured.wavelengthNm, values: measured.values }, response);
 
-const table = chemistry.parseOxideTable(readFileSync(join(repoRoot, "packages/tests/chemistry/fixtures/moon-regolith-simulants-oxides.tsv"), "utf8"));
+const table = amendedLunarTable(chemistry);
 const analysed = table.samples.find((s) => s.name === SAMPLE);
 if (!analysed) {
     console.error(`${SAMPLE} is not in the lunar composition table, so its composition is unknown and nothing can be fitted against it`);

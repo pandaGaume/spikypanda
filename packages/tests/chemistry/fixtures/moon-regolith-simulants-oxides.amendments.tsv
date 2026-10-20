@@ -1,0 +1,87 @@
+# Amendments to moon-regolith-simulants-oxides.tsv, the LUNAR composition table of
+#
+#   Regolith simulant dataset under simulated terrestrial and extraterrestrial conditions,
+#   Laser-induced Breakdown Spectroscopy. https://doi.org/10.5281/zenodo.21639060, CC BY 4.0.
+#
+# The table beside this file is the publication's own, transcribed and never edited. Four
+# defects were found in it on 19 October 2026 by setting the data set's three routes to the
+# same composition against each other, and every row below is one of those defects, with the
+# figure as published, the figure to use, and the section that authorised the change:
+#
+#   internals/libs/16-GROUND-TRUTH-UNCERTAINTY.md, section 4.
+#
+# How to read a row. "cell" replaces one figure and is refused unless the published column is
+# what the table actually holds, so this ledger cannot stop describing the data it amends.
+# "not-reported" is the absence of a figure, which is never a zero. "recipe" and "premise"
+# change nothing and are there to be read: a recipe whose declared components are wrong, and a
+# claim the data set asserts without measuring it.
+#
+# This ledger is for the LUNAR table only. The martian table of the same publication uses the
+# name Na2O-AL for a different sample (JEZ-1 + MGS-1), so a ledger pointed at the wrong table
+# would silently give a martian mixture a lunar correction. The martian table was checked for
+# the same four classes of defect and carries two of them: one mistyped cell, MgO of K2O-AM,
+# 3.004 pp from what its recipe gives, and that name collision. Its iron is NOT mislabelled,
+# because its mixtures report Fe2O3 and FeO in the two rows that hold them, so the relabelling
+# below has no martian counterpart. Nothing of it is carried as a fixture here, so there is
+# nothing to amend; section 4 of the document records the martian defects.
+kind	sample	oxide	published	corrected	authority	note
+# 1. Section 4.1. The iron row of all fifteen lunar mixtures sits under an Fe2O3 heading and
+# holds the components' FeO figures, averaged by mass. Reading the heading as written loses
+# 10.02 % of the iron; reading the row as FeO reproduces the components' iron to 0.004 pp RMS
+# over the eight mixtures whose convention is unambiguous. So the figure is withdrawn from the
+# Fe2O3 row and written, unchanged, into the FeO row.
+cell	SiO2-AL	Fe2O3	6.33	not-reported	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the Fe2O3 heading holds an FeO figure; LHS-1D and Dusty both report FeO
+cell	SiO2-AL	FeO	not-reported	6.33	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the same figure, under the heading it belongs to
+cell	SiO2-CL	Fe2O3	3.58	not-reported	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the Fe2O3 heading holds an FeO figure
+cell	SiO2-CL	FeO	not-reported	3.58	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	3.587 from the recipe of section 4.4 below, which is a second check on both corrections
+cell	TiO2-AL	Fe2O3	4.86	not-reported	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the Fe2O3 heading holds an FeO figure; LMS-1D and LHS-1 both report FeO
+cell	TiO2-AL	FeO	not-reported	4.86	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the same figure, under the heading it belongs to
+cell	TiO2-BL	Fe2O3	7.22	not-reported	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the Fe2O3 heading holds an FeO figure; LMS-1 and LHS-1D both report FeO
+cell	TiO2-BL	FeO	not-reported	7.22	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the same figure, under the heading it belongs to
+cell	Al2O3-AL	Fe2O3	7.6	not-reported	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the Fe2O3 heading holds an FeO figure; LHS-1 and LMS-1 both report FeO
+cell	Al2O3-AL	FeO	not-reported	7.6	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the same figure, under the heading it belongs to
+cell	Al2O3-BL	Fe2O3	8.1	not-reported	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the Fe2O3 heading holds an FeO figure; LHS-1D and LMS-1D both report FeO
+cell	Al2O3-BL	FeO	not-reported	8.1	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the same figure, under the heading it belongs to
+cell	Na2O-AL	Fe2O3	5.61	not-reported	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the Fe2O3 heading holds an FeO figure; Dusty and LHS-1D both report FeO
+cell	Na2O-AL	FeO	not-reported	5.61	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the same figure, under the heading it belongs to
+cell	MgO-AL	Fe2O3	6.34	not-reported	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the Fe2O3 heading holds an FeO figure; LHS-1D and LMS-1D both report FeO
+cell	MgO-AL	FeO	not-reported	6.34	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the same figure, under the heading it belongs to
+cell	MgO-BL	Fe2O3	4.67	not-reported	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the Fe2O3 heading holds an FeO figure; Dusty and LHS-1 both report FeO
+cell	MgO-BL	FeO	not-reported	4.67	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the same figure, under the heading it belongs to
+cell	MgO-CL	Fe2O3	3.24	not-reported	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the Fe2O3 heading holds an FeO figure; LHS-1 and LMS-1 both report FeO
+cell	MgO-CL	FeO	not-reported	3.24	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the same figure, under the heading it belongs to
+cell	TiO2-CL	Fe2O3	7.69	not-reported	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the Fe2O3 heading holds an FeO figure; Dusty and LMS-1 both report FeO
+cell	TiO2-CL	FeO	not-reported	7.69	16-GROUND-TRUTH-UNCERTAINTY.md section 4.1	the same figure, under the heading it belongs to
+# 2. Section 4.2. Four mixtures are each built with LHS-1E, the one end-member reporting its
+# iron as Fe2O3 while the others report FeO, so their published figure adds an Fe2O3 per cent
+# to an FeO per cent and no reading of the heading recovers the iron. Section 4.2 gives the
+# iron each actually contains, in grams per hundred grams of material, computed from the
+# components and the masses weighed out. It is carried here as the two rows the components
+# themselves fill, the ferric from LHS-1E and the ferrous from the other part, which
+# reproduces that figure to its last digit and gets the oxygen bound to the iron right as
+# well. Four decimals because these figures are computed, not measured, and three would move
+# the iron by 0.001 pp.
+cell	SiO2-BL	Fe2O3	2.988	1.3425	16-GROUND-TRUTH-UNCERTAINTY.md section 4.2	LHS-1E 11.70 g of 29.98, carrying 3.44 % Fe2O3
+cell	SiO2-BL	FeO	not-reported	1.6463	16-GROUND-TRUTH-UNCERTAINTY.md section 4.2	LHS-1 18.28 g of 29.98, carrying 2.7 % FeO; the two give 2.219 g of iron, section 4.2
+cell	K2O-AL	Fe2O3	5.88	1.8106	16-GROUND-TRUTH-UNCERTAINTY.md section 4.2	LHS-1E 15.78 g of 29.98, carrying 3.44 % Fe2O3
+cell	K2O-AL	FeO	not-reported	4.0734	16-GROUND-TRUTH-UNCERTAINTY.md section 4.2	LMS-1D 14.20 g of 29.98, carrying 8.6 % FeO; the two give 4.433 g of iron, section 4.2
+cell	TiO2-DL	Fe2O3	6.46	1.4254	16-GROUND-TRUTH-UNCERTAINTY.md section 4.2	LHS-1E 12.42 g of 29.98, carrying 3.44 % Fe2O3
+cell	TiO2-DL	FeO	not-reported	5.0372	16-GROUND-TRUTH-UNCERTAINTY.md section 4.2	LMS-1D 17.56 g of 29.98, carrying 8.6 % FeO; the two give 4.912 g of iron, section 4.2
+cell	SiO2-DL	Fe2O3	4.58	2.4630	16-GROUND-TRUTH-UNCERTAINTY.md section 4.2	LHS-1E 21.48 g of 30.00, carrying 3.44 % Fe2O3
+cell	SiO2-DL	FeO	not-reported	2.1215	16-GROUND-TRUTH-UNCERTAINTY.md section 4.2	Dusty 8.52 g of 30.00, carrying 7.47 % FeO; the two give 3.372 g of iron, section 4.2
+# 3. Section 4.3. Mistyped cells, by the criterion of a residual above 0.05 pp on an oxide
+# both components report, which separates these from the twelve sound mixtures cleanly: those
+# stop at 0.0115 pp and these start at 0.267.
+cell	MgO-BL	TiO2	2.32	0.571	16-GROUND-TRUTH-UNCERTAINTY.md section 4.3	a row shift: the published 2.32 is this mixture's Na2O, which its Na2O row also carries; 0.571 is the TiO2 its recipe gives, and it is what the P2O5 cell holds
+cell	MgO-BL	P2O5	0.57	not-reported	16-GROUND-TRUTH-UNCERTAINTY.md section 4.3	the other half of that shift; Dusty reports no P2O5, so this mixture has no P2O5 figure of its own. Withdrawing it and correcting TiO2 brings the published total from 101.61 to 99.30, which is why the lunar set reached 101.6
+cell	Na2O-AL	TiO2	0.29	0.557	16-GROUND-TRUTH-UNCERTAINTY.md section 4.3	computed minus published is +0.267 on TiO2; Dusty 18.34 g and LHS-1D 11.66 g give 0.558
+# 4. Section 4.4. One recipe names the wrong component. The composition column is sound; what
+# is wrong is the pair the balance sheet declares, so nothing is amended here and anything
+# mixing SiO2-CL from its declared components must read this row.
+recipe	SiO2-CL	-	-	-	16-GROUND-TRUTH-UNCERTAINTY.md section 4.4	declared LHS-1D + LMS-1 at 24.42 + 5.58 g explains the published column to 0.353 pp RMS; LHS-1D + Dusty at the same masses explains it to 0.081 pp. The published TiO2 of 0.51 settles it alone: LHS-1D and LMS-1 carry 0.6 and 3.6 % TiO2, so no mixture of the two is below 0.6, while LHS-1D and Dusty carry 0.6 and 0.53
+# 5. The twin premise, section 3 of the same document and follow-up 7 of
+# internals/libs/17-V1C-PREDICTION.md. No figure changes; it is recorded because it is a
+# premise and not a measurement, and because the twenty-one lunar samples rest on four
+# analyses rather than six, which anything scoring a model against them has to carry.
+premise	LHS-1D	-	-	-	16-GROUND-TRUTH-UNCERTAINTY.md section 3	this column is LHS-1's analysis, oxide for oxide, and the chemical identity of the sieved fine fraction with its parent grade is asserted by the data set, never measured, and untestable from inside it. The two differ in grain size, which is also what governs how much of each element leaves the pellet
+premise	LMS-1D	-	-	-	16-GROUND-TRUTH-UNCERTAINTY.md section 3	this column is LMS-1's analysis, oxide for oxide, on the same identity, asserted by the data set and never measured. Nine of the fifteen mixtures are built on LHS-1D or LMS-1D, so the premise reaches eleven of the twenty-one samples

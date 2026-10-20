@@ -45,10 +45,10 @@
  *          <archive.zip> [--calibrate LHS-1] [--condition Earth] [--temperature 9000]
  */
 
-import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { archiveResponse, MOLAR_MASS, openArchive, sampleNames, sampleSpectrum, STAGE_NUMERAL } from "./regolith-archive.mjs";
+import { amendedLunarTable } from "./lunar-composition.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pluginRoot = resolve(here, "..");
@@ -63,7 +63,10 @@ const spectro = {
     ...(await load(join(pluginRoot, "dist/libs/boltzmann.js"))),
     ...(await load(join(pluginRoot, "dist/instrument/response.js"))),
 };
-const chemistry = await load(join(repoRoot, "packages/dev/plugins/chemistry/dist/material/oxide-table.js"));
+const chemistry = {
+    ...(await load(join(repoRoot, "packages/dev/plugins/chemistry/dist/material/oxide-table.js"))),
+    ...(await load(join(repoRoot, "packages/dev/plugins/chemistry/dist/material/oxide-amendment.js"))),
+};
 const core = await load(join(repoRoot, "packages/dev/core/dist/index.js"));
 
 const argv = process.argv.slice(2);
@@ -115,7 +118,7 @@ const PAIRS = [
     { a: { element: "Ca", stage: 1, nm: 396.847 }, b: { element: "Al", stage: 0, nm: 396.152 }, klass: "ground state", note: "0.7 nm apart, the blend the first look flagged" },
 ];
 
-const table = chemistry.parseOxideTable(readFileSync(join(repoRoot, "packages/tests/chemistry/fixtures/moon-regolith-simulants-oxides.tsv"), "utf8"));
+const table = amendedLunarTable(chemistry);
 const data = {
     species: spectro.NIST_SPECIES.map((s) => ({ element: s.element, ionisation: s.ionisation, asdName: s.asdName, lines: s.lines, levels: s.levels })),
     ionisationEnergiesEv: spectro.NIST_IONISATION_ENERGIES_EV,
