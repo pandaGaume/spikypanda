@@ -187,6 +187,19 @@ const CLEAN_WINDOWS = argv.includes("--clean-windows");
  * through a slit that cannot change.
  */
 const FREE_DENSITY = argv.includes("--free-density");
+const WIDTH_DEPTH = argv.includes("--width-depth");
+
+/**
+ * The instrument as `20-INSTRUMENT-WIDTH.md` measured it, on the eleven
+ * windows of LHS-1 where the model is sound: no window sitting on the
+ * solver floor, no self-absorbed line, and not the 315 to 374 nm band
+ * that carries its own calibration. It is nearly flat, against the
+ * 89.2 pm and 193.6 pm per 1000 nm the protocol declared, which that
+ * document showed was a straight line fitted through two self-absorbed
+ * Ca II infrared lines.
+ */
+const CLEAN_INSTRUMENT_PM = Number(flag("clean-instrument-pm", "67.9"));
+const CLEAN_INSTRUMENT_SLOPE_PM = Number(flag("clean-instrument-slope-pm", "46.7"));
 const DENSITY_GRID = [1e16, 2e16, 3e16, 5e16, 7e16, 1e17, 1.5e17, 2e17, 3e17];
 const FLOOR_FWHM_NM = 0.005;
 const DEPTH_LIMIT = Number(flag("depth-limit", "0.1"));
@@ -431,6 +444,9 @@ function measure(sampleName, temperatureK = TEMPERATURE, electronDensityCm3 = EL
         return 0;
     };
 
+    /** The modelled emissions, for a caller that needs the lines. */
+    const emissionsOf = () => emission.intensities;
+
     /** What the model says that line emits, from the published analysis. */
     const modelAt = (element, stage, nm) => {
         const near = emission.intensities.filter((i) => i.line.element === element && i.line.ionisation === stage && Math.abs(i.line.wavelengthNm - nm) < 0.02);
@@ -483,6 +499,7 @@ function measure(sampleName, temperatureK = TEMPERATURE, electronDensityCm3 = EL
         areaAt,
         modelAt,
         speciesFractionOf,
+        emissionsOf,
         residual,
         stark: { tabulatedShare, windowsWithTabulated, extrapolated: [...extrapolated] },
         blocker: null,
@@ -661,6 +678,235 @@ if (SCAN_DENSITY) {
         console.log(`  width at that density: ${(best.m.width.constant * 1000).toFixed(1)} pm, scatter ${(best.m.width.rmsResidual * 1000).toFixed(1)} pm, ${(best.scatterShare * 100).toFixed(1)} %`);
         const bestScatter = rows.reduce((a, b) => (b.scatterShare < a.scatterShare ? b : a));
         console.log(`  the width trend is tidiest at Ne = ${bestScatter.ne.toExponential(1)} cm^-3, scatter ${(bestScatter.scatterShare * 100).toFixed(1)} %`);
+    }
+    process.exit(0);
+}
+
+// ── the optical depth, read from the width ───────────────────────────
+
+/**
+ * Full width at half maximum of a line seen through a uniform slab.
+ *
+ * The slab emits `S (1 - exp(-tau0 phi_hat))`, with `phi_hat` the
+ * profile normalised to one at its centre, so the core saturates
+ * before the wings and the line broadens as it is depressed. The
+ * factor turns out to depend almost only on tau0 and hardly at all on
+ * the profile it is applied to: 1.271 against 1.279 at tau0 = 1 for a
+ * 20 pm and an 88 pm Lorentz width. That is what makes the inversion
+ * below worth doing.
+ */
+function slabFwhmNm(gaussNm, lorentzNm, tau0) {
+    const total = spectro.pseudoVoigtFwhm(gaussNm, lorentzNm);
+    if (!(total > 0)) return 0;
+    const span = 40 * total;
+    const n = 4001;
+    const step = span / (n - 1);
+    const peak = spectro.pseudoVoigt(0, gaussNm, lorentzNm);
+    let maxValue = 0;
+    const y = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+        const phi = spectro.pseudoVoigt(-span / 2 + i * step, gaussNm, lorentzNm) / peak;
+        y[i] = tau0 > 0 ? 1 - Math.exp(-tau0 * phi) : phi;
+        if (y[i] > maxValue) maxValue = y[i];
+    }
+    let first = -1;
+    let last = -1;
+    for (let i = 0; i < n; i++) if (y[i] >= maxValue / 2) { if (first < 0) first = i; last = i; }
+    return first < 0 ? 0 : (last - first) * step;
+}
+
+/** The tau0 whose slab broadening reproduces an observed total width. */
+function tauFromWidth(gaussNm, lorentzNm, observedTotalNm) {
+    if (!(observedTotalNm > slabFwhmNm(gaussNm, lorentzNm, 0))) return 0;
+    let low = 0;
+    let high = 200;
+    if (slabFwhmNm(gaussNm, lorentzNm, high) < observedTotalNm) return Number.POSITIVE_INFINITY;
+    for (let k = 0; k < 40; k++) {
+        const mid = (low + high) / 2;
+        if (slabFwhmNm(gaussNm, lorentzNm, mid) < observedTotalNm) low = mid;
+        else high = mid;
+    }
+    return (low + high) / 2;
+}
+
+/**
+ * Read an optical depth per line out of the fitted widths, and test it
+ * the way `14-SELF-ABSORPTION.md` tested the line-ratio route: for
+ * internal consistency.
+ *
+ * That document refused a uniform slab because one line compared
+ * against two partners gave two optical depths differing by up to 5.7,
+ * and it named what would make the question answerable again, "a
+ * measurement of the absorption independent of the emission".
+ * `20-INSTRUMENT-WIDTH.md` found a second observable that the ratio
+ * route does not use: the width, which ranks with absorber depth at
+ * 0.72. This asks whether that second observable is self-consistent
+ * where the first was not.
+ *
+ * The test is the same in spirit: a slab's optical depth must be
+ * proportional to the absorber column times the line's own
+ * `opticalDepthProxy`, with ONE column for the whole spectrum. If the
+ * implied columns agree line to line, the width route works where the
+ * ratio route failed. If they scatter, the refusal stands on a second
+ * and independent ground.
+ */
+if (WIDTH_DEPTH) {
+    const m = calibration;
+    // The instrument, read where the model is sound. Not the trend over
+    // all the windows, which 20-INSTRUMENT-WIDTH.md showed is itself a
+    // line fitted through self-absorption.
+    const instrumentAt = (nm) => CLEAN_INSTRUMENT_PM / 1000 + (CLEAN_INSTRUMENT_SLOPE_PM / 1e6) * (nm - PIVOT_NM);
+    console.log("");
+    console.log(`optical depth from the width, ${m.sampleName} at ${m.temperatureK} K, instrument taken as ${CLEAN_INSTRUMENT_PM} pm at ${PIVOT_NM} nm`);
+    console.log(`${"nm".padStart(8)} ${"species".padEnd(14)} ${"fitted pm".padStart(9)} ${"clean pm".padStart(8)} ${"total pm".padStart(8)} ${"tau0".padStart(7)} ${"proxy".padStart(10)} ${"column".padStart(10)}`);
+    const rows = [];
+    for (const w of [...m.windows].sort((a, b) => a.nm - b.nm)) {
+        let line = null;
+        let species = "";
+        for (const i of m.emissionsOf()) {
+            if (Math.abs(i.line.wavelengthNm - w.nm) > 0.02) continue;
+            const d = absorberDepthOf(i.line, m);
+            if (line === null || d > line.depth) {
+                line = { line: i.line, depth: d, speciesFraction: i.speciesFraction };
+                species = `${i.line.element} ${STAGE_NUMERAL[i.line.ionisation]}`;
+            }
+        }
+        if (line === null || !(line.depth > 0)) continue;
+        const doppler = spectro.dopplerFwhmNm(w.nm, m.temperatureK, MOLAR_MASS[line.line.element] ?? 0.04);
+        const lorentz = (GLOBAL_STARK ? undefined : line.line.collisionalWidthNm) ?? COLLISIONAL_NM;
+        // What the fit says the feature is, intrinsic plus instrument.
+        const observed = spectro.pseudoVoigtFwhm(Math.hypot(doppler, w.instrumentalFwhmNm), lorentz);
+        // What it would be with no absorption and the real instrument.
+        const thin = spectro.pseudoVoigtFwhm(Math.hypot(doppler, instrumentAt(w.nm)), lorentz);
+        const tau0 = observed > thin ? tauFromWidth(Math.hypot(doppler, instrumentAt(w.nm)), lorentz, observed) : 0;
+        const proxy = line.depth / Math.max(thin, 1e-9);
+        const column = proxy > 0 ? tau0 / proxy : NaN;
+        rows.push({ nm: w.nm, species, tau0, proxy, column, line: line.line, element: line.line.element, ionisation: line.line.ionisation, thin });
+        console.log(
+            `${w.nm.toFixed(2).padStart(8)} ${species.padEnd(14)} ${(w.instrumentalFwhmNm * 1000).toFixed(1).padStart(9)} ${(instrumentAt(w.nm) * 1000).toFixed(1).padStart(8)} ` +
+                `${(observed * 1000).toFixed(1).padStart(8)} ${(Number.isFinite(tau0) ? tau0.toFixed(2) : "over").padStart(7)} ${proxy.toExponential(2).padStart(10)} ${(Number.isFinite(column) ? column.toExponential(2) : "-").padStart(10)}`
+        );
+    }
+    const absorbing = rows.filter((r) => r.tau0 > 0.1 && Number.isFinite(r.column));
+    if (absorbing.length > 2) {
+        const cols = absorbing.map((r) => r.column).sort((a, b) => a - b);
+        const logs = cols.map((c) => Math.log10(c));
+        const mean = logs.reduce((a, b) => a + b, 0) / logs.length;
+        const sd = Math.sqrt(logs.reduce((a, b) => a + (b - mean) ** 2, 0) / logs.length);
+        console.log("");
+        console.log(`  ${absorbing.length} windows read an optical depth above 0.1`);
+        console.log(`  the absorber column they each imply spans ${cols[0].toExponential(2)} to ${cols[cols.length - 1].toExponential(2)}, a factor ${(cols[cols.length - 1] / cols[0]).toFixed(1)}`);
+        console.log(`  scatter of the implied column: ${sd.toFixed(3)} dex, so a factor ${Math.pow(10, sd).toFixed(2)} either way about its own mean`);
+        console.log(`  one slab with one column would give the same number for every line`);
+
+        // Where the inconsistency lives. The column of absorbers of one
+        // species is the element's abundance in the absorbing region
+        // times its ionisation share there. If the slab is wrong only
+        // because that region is not the emitting one, the columns
+        // should still agree WITHIN a species and disagree between
+        // them, which is a different and much more specific failure
+        // than a slab being the wrong shape.
+        const bySpecies = new Map();
+        for (const r of absorbing) {
+            if (!bySpecies.has(r.species)) bySpecies.set(r.species, []);
+            bySpecies.get(r.species).push(r.column);
+        }
+        console.log("");
+        console.log(`  within each species, where the absorbing region's composition cancels:`);
+        const withinLogs = [];
+        for (const [sp, cs] of [...bySpecies].sort((a, b) => b[1].length - a[1].length)) {
+            const sorted = [...cs].sort((a, b) => a - b);
+            const ls = cs.map((c) => Math.log10(c));
+            const mu = ls.reduce((a, b) => a + b, 0) / ls.length;
+            for (const l of ls) withinLogs.push(l - mu);
+            const sd = Math.sqrt(ls.reduce((a, b) => a + (b - mu) ** 2, 0) / ls.length);
+            console.log(
+                `    ${sp.padEnd(7)} ${String(cs.length).padStart(2)} line(s), column ${sorted[0].toExponential(2)} to ${sorted[sorted.length - 1].toExponential(2)}` +
+                    (cs.length > 1 ? `, a factor ${(sorted[sorted.length - 1] / sorted[0]).toFixed(2)}, scatter ${sd.toFixed(3)} dex` : "")
+            );
+        }
+        const withinSd = Math.sqrt(withinLogs.reduce((a, b) => a + b * b, 0) / withinLogs.length);
+        console.log("");
+        console.log(`  scatter WITHIN species, pooled: ${withinSd.toFixed(3)} dex, a factor ${Math.pow(10, withinSd).toFixed(2)}`);
+        console.log(`  scatter OVERALL:                ${sd.toFixed(3)} dex, a factor ${Math.pow(10, sd).toFixed(2)}`);
+        console.log(`  so ${(100 * (1 - (withinSd * withinSd) / (sd * sd))).toFixed(0)} % of the variance sits BETWEEN species, not within them`);
+
+        // If the absorbing region is simply COOLER than the emitting
+        // one, which is what 14-SELF-ABSORPTION.md inferred from the
+        // direction of its own inconsistency, then the columns were
+        // computed with the wrong Saha balance and the wrong Boltzmann
+        // factor. Recomputing both at a trial temperature and asking
+        // which one makes the columns agree turns that inference into
+        // a measurement. Calcium settles it on its own, since Ca I and
+        // Ca II need the same element in the same place.
+        console.log("");
+        console.log(`  the absorbing region taken as cooler than the emitting one at ${m.temperatureK} K:`);
+        console.log(`${"T (K)".padStart(9)} ${"column scatter".padStart(15)} ${"as a factor".padStart(12)} ${"Ca I / Ca II".padStart(13)}`);
+        let coolest = null;
+        for (let T = 5000; T <= m.temperatureK; T += 500) {
+            const cold = spectro.computePhysicalEmissions(m.atomFractions, data, T, ELECTRON_DENSITY_CM3, 1);
+            const shareAt = (el, st) => {
+                for (const i of cold.intensities) if (i.line.element === el && i.line.ionisation === st) return i.speciesFraction;
+                return NaN;
+            };
+            const ls = [];
+            const caByStage = [[], []];
+            for (const r of absorbing) {
+                const share = shareAt(r.element, r.ionisation);
+                if (!(share > 0)) continue;
+                const proxy = spectro.opticalDepthProxy(r.line, T) * (m.atomFractions[r.element] ?? 0) * share;
+                if (!(proxy > 0)) continue;
+                const col = r.tau0 / (proxy / Math.max(r.thin, 1e-9));
+                ls.push(Math.log10(col));
+                if (r.element === "Ca" && r.ionisation < 2) caByStage[r.ionisation].push(Math.log10(col));
+            }
+            if (ls.length < 5) continue;
+            const mu = ls.reduce((a, b) => a + b, 0) / ls.length;
+            const sdT = Math.sqrt(ls.reduce((a, b) => a + (b - mu) ** 2, 0) / ls.length);
+            const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN);
+            const caRatio = Math.pow(10, mean(caByStage[0]) - mean(caByStage[1]));
+            if (coolest === null || sdT < coolest.sd) coolest = { T, sd: sdT, caRatio };
+            console.log(`${String(T).padStart(9)} ${sdT.toFixed(3).padStart(15)} ${Math.pow(10, sdT).toFixed(2).padStart(12)} ${(Number.isFinite(caRatio) ? caRatio.toFixed(2) : "-").padStart(13)}`);
+        }
+        if (coolest) {
+            console.log("");
+            console.log(`  tidiest at ${coolest.T} K, scatter ${coolest.sd.toFixed(3)} dex (factor ${Math.pow(10, coolest.sd).toFixed(2)}), against ${sd.toFixed(3)} dex at the emitting temperature`);
+            console.log(`  that is ${m.temperatureK - coolest.T} K below the emitter, and at it Ca I and Ca II ask for columns within a factor ${coolest.caRatio.toFixed(2)} of each other`);
+
+            // Calcium reconciles and the elements do not, so what is
+            // left after the temperature is composition: the absorbing
+            // region is not made of the same stuff as the emitting one.
+            // Naming which way each element goes is naming the
+            // fractionation, on one sample and with no composition
+            // axis needed.
+            const cold = spectro.computePhysicalEmissions(m.atomFractions, data, coolest.T, ELECTRON_DENSITY_CM3, 1);
+            const shareAt = (el, st) => {
+                for (const i of cold.intensities) if (i.line.element === el && i.line.ionisation === st) return i.speciesFraction;
+                return NaN;
+            };
+            const byElement = new Map();
+            for (const r of absorbing) {
+                const share = shareAt(r.element, r.ionisation);
+                const proxy = spectro.opticalDepthProxy(r.line, coolest.T) * (m.atomFractions[r.element] ?? 0) * share;
+                if (!(proxy > 0)) continue;
+                const col = r.tau0 / (proxy / Math.max(r.thin, 1e-9));
+                if (!byElement.has(r.element)) byElement.set(r.element, []);
+                byElement.get(r.element).push(Math.log10(col));
+            }
+            const geo = (xs) => Math.pow(10, xs.reduce((a, b) => a + b, 0) / xs.length);
+            const cols = [...byElement].map(([el, ls]) => ({ el, col: geo(ls), n: ls.length }));
+            const middle = geo(cols.map((c) => Math.log10(c.col)));
+            console.log("");
+            console.log(`  what the temperature does NOT explain, element by element at ${coolest.T} K:`);
+            console.log(`${"element".padStart(9)} ${"lines".padStart(5)} ${"column".padStart(11)} ${"against the middle".padStart(19)}`);
+            for (const c of cols.sort((a, b) => b.col - a.col)) {
+                const rel = c.col / middle;
+                console.log(`${c.el.padStart(9)} ${String(c.n).padStart(5)} ${c.col.toExponential(2).padStart(11)} ${(rel >= 1 ? `x${rel.toFixed(1)} enriched` : `/${(1 / rel).toFixed(1)} depleted`).padStart(19)}`);
+            }
+            console.log("");
+            console.log(`  the absorbing region holds the same calcium as the emitting one and not the same magnesium or sodium,`);
+            console.log(`  which is a composition difference between the two and not a temperature one`);
+        }
     }
     process.exit(0);
 }
