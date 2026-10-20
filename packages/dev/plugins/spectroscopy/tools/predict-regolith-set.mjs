@@ -188,6 +188,7 @@ const CLEAN_WINDOWS = argv.includes("--clean-windows");
  */
 const FREE_DENSITY = argv.includes("--free-density");
 const WIDTH_DEPTH = argv.includes("--width-depth");
+const ABSORBER_SET = argv.includes("--absorber-set");
 
 /**
  * The instrument as `20-INSTRUMENT-WIDTH.md` measured it, on the eleven
@@ -679,6 +680,193 @@ if (SCAN_DENSITY) {
         const bestScatter = rows.reduce((a, b) => (b.scatterShare < a.scatterShare ? b : a));
         console.log(`  the width trend is tidiest at Ne = ${bestScatter.ne.toExponential(1)} cm^-3, scatter ${(bestScatter.scatterShare * 100).toFixed(1)} %`);
     }
+    process.exit(0);
+}
+
+// ── the absorbing layer, over a whole set ────────────────────────────
+
+/**
+ * The absorbing windows of one sample, each with the optical depth its
+ * width implies.
+ *
+ * Shared by --width-depth, which reads one sample in detail, and by
+ * --absorber-set, which reads the layer's temperature over a whole
+ * condition. Keeping one implementation means the set result and the
+ * single-sample result cannot drift apart.
+ */
+function absorbingRowsOf(m, instrumentAt) {
+    const rows = [];
+    for (const w of m.windows) {
+        let pick = null;
+        for (const i of m.emissionsOf()) {
+            if (Math.abs(i.line.wavelengthNm - w.nm) > 0.02) continue;
+            const d = absorberDepthOf(i.line, m);
+            if (pick === null || d > pick.depth) pick = { line: i.line, depth: d };
+        }
+        if (pick === null || !(pick.depth > 0)) continue;
+        const doppler = spectro.dopplerFwhmNm(w.nm, m.temperatureK, MOLAR_MASS[pick.line.element] ?? 0.04);
+        const lorentz = (GLOBAL_STARK ? undefined : pick.line.collisionalWidthNm) ?? COLLISIONAL_NM;
+        const observed = spectro.pseudoVoigtFwhm(Math.hypot(doppler, w.instrumentalFwhmNm), lorentz);
+        const thin = spectro.pseudoVoigtFwhm(Math.hypot(doppler, instrumentAt(w.nm)), lorentz);
+        const tau0 = observed > thin ? tauFromWidth(Math.hypot(doppler, instrumentAt(w.nm)), lorentz, observed) : 0;
+        if (!(tau0 > 0.1) || !Number.isFinite(tau0)) continue;
+        rows.push({
+            nm: w.nm,
+            line: pick.line,
+            element: pick.line.element,
+            ionisation: pick.line.ionisation,
+            species: `${pick.line.element} ${STAGE_NUMERAL[pick.line.ionisation]}`,
+            tau0,
+            thin,
+        });
+    }
+    return rows;
+}
+
+/**
+ * The temperature at which the Ca I and the Ca II lines ask for the
+ * same absorber column, by bisection. This is the estimator
+ * `23-ABSORBING-LAYER-TESTS.md` declared before the run.
+ *
+ * Why this and not a minimisation of the overall column scatter, which
+ * is what `21-ABSORBING-LAYER.md` used on its single sample: that
+ * scatter is dominated by a between-species term no temperature fixes,
+ * 0.505 dex falling only to 0.465, so it is a poor estimator. The
+ * calcium crossing is one-dimensional, and the composition of the
+ * absorbing region cancels out of it entirely, because Ca I and Ca II
+ * are the same element in the same place.
+ *
+ * The two numbers differ for LHS-1, 10 700 K here against the 11 000 K
+ * document 21 reported, and that is the price of declaring an
+ * estimator properly rather than keeping the one that was convenient.
+ */
+function absorberTemperatureOf(m) {
+    const rows = absorbingRowsOf(m, (nm) => CLEAN_INSTRUMENT_PM / 1000 + (CLEAN_INSTRUMENT_SLOPE_PM / 1e6) * (nm - PIVOT_NM));
+    const caI = rows.filter((r) => r.element === "Ca" && r.ionisation === 0);
+    const caII = rows.filter((r) => r.element === "Ca" && r.ionisation === 1);
+    if (caI.length === 0 || caII.length === 0) {
+        return { blocker: `no crossing to find: ${caI.length} Ca I and ${caII.length} Ca II line(s) absorbing`, rows };
+    }
+    const cache = new Map();
+    const logRatioAt = (T) => {
+        const key = Math.round(T / 10);
+        if (cache.has(key)) return cache.get(key);
+        const cold = spectro.computePhysicalEmissions(m.atomFractions, data, key * 10, ELECTRON_DENSITY_CM3, 1);
+        const shareOf = (el, st) => {
+            for (const i of cold.intensities) if (i.line.element === el && i.line.ionisation === st) return i.speciesFraction;
+            return NaN;
+        };
+        const logColumns = (set) => {
+            const ls = [];
+            for (const r of set) {
+                const share = shareOf(r.element, r.ionisation);
+                const proxy = spectro.opticalDepthProxy(r.line, key * 10) * (m.atomFractions[r.element] ?? 0) * share;
+                if (!(proxy > 0)) continue;
+                ls.push(Math.log10(r.tau0 / (proxy / Math.max(r.thin, 1e-9))));
+            }
+            return ls.length ? ls.reduce((a, b) => a + b, 0) / ls.length : NaN;
+        };
+        const value = logColumns(caI) - logColumns(caII);
+        cache.set(key, value);
+        return value;
+    };
+    let low = 5000;
+    let high = m.temperatureK;
+    const atLow = logRatioAt(low);
+    const atHigh = logRatioAt(high);
+    if (!Number.isFinite(atLow) || !Number.isFinite(atHigh) || atLow > 0 || atHigh < 0) {
+        return { blocker: `no root in 5000 to ${m.temperatureK} K, the ratio runs ${Math.pow(10, atLow).toFixed(2)} to ${Math.pow(10, atHigh).toFixed(2)}`, rows, caI: caI.length, caII: caII.length };
+    }
+    for (let k = 0; k < 24 && high - low > 10; k++) {
+        const mid = (low + high) / 2;
+        if (logRatioAt(mid) < 0) low = mid;
+        else high = mid;
+    }
+    const T = Math.round((low + high) / 2);
+    return { temperatureK: T, ratioAtRoot: Math.pow(10, logRatioAt(T)), rows, caI: caI.length, caII: caII.length, blocker: null };
+}
+
+/**
+ * Test 1 of `23-ABSORBING-LAYER-TESTS.md`: does the absorbing layer's
+ * temperature follow the emitting plasma's, or sit where it likes?
+ *
+ * Every threshold below was committed before this ran.
+ */
+if (ABSORBER_SET) {
+    const names = table.samples.map((s) => s.name).filter((n) => !EXCLUDE.has(normaliseSampleName(n)));
+    console.log("");
+    console.log(`absorbing layer over ${names.length} samples, ${CONDITION} condition`);
+    console.log(`the estimator is the Ca I against Ca II crossing, declared in 23-ABSORBING-LAYER-TESTS.md before this ran`);
+    console.log("");
+    console.log(`${"sample".padEnd(12)} ${"T emit".padStart(7)} ${"T abs".padStart(7)} ${"gap".padStart(6)} ${"Ca I".padStart(5)} ${"Ca II".padStart(6)} ${"ratio".padStart(6)} ${"tau 393".padStart(8)}  note`);
+    const points = [];
+    for (const name of names) {
+        const m = name === CALIBRATE ? calibration : (fitTemperature(name) ?? measure(name));
+        if (m.blocker) {
+            console.log(`${name.padEnd(12)} ${m.blocker}`);
+            continue;
+        }
+        const a = absorberTemperatureOf(m);
+        if (a.blocker) {
+            console.log(`${name.padEnd(12)} ${String(m.temperatureK).padStart(7)} ${"-".padStart(7)} ${"-".padStart(6)} ${String(a.caI ?? 0).padStart(5)} ${String(a.caII ?? 0).padStart(6)} ${"-".padStart(6)}  ${a.blocker}`);
+            continue;
+        }
+        // The quantity test 2 is declared on: the line-centre optical
+        // depth of Ca II 393.366, the deepest and best determined
+        // absorber, and one the Vacuum grid carries as well as the
+        // other two so the three conditions rest on the same line.
+        const deepest = a.rows.find((r) => Math.abs(r.nm - 393.366) < 0.05);
+        points.push({ name, emit: m.temperatureK, abs: a.temperatureK, tau393: deepest?.tau0 ?? NaN });
+        console.log(
+            `${name.padEnd(12)} ${String(m.temperatureK).padStart(7)} ${String(a.temperatureK).padStart(7)} ${String(m.temperatureK - a.temperatureK).padStart(6)} ` +
+                `${String(a.caI).padStart(5)} ${String(a.caII).padStart(6)} ${a.ratioAtRoot.toFixed(2).padStart(6)} ${(deepest ? deepest.tau0.toFixed(2) : "-").padStart(8)}`
+        );
+    }
+
+    console.log("");
+    console.log(`  ${points.length} of ${names.length} samples yielded a root`);
+    if (points.length < 10) {
+        console.log(`  NOT MEASURABLE: the declaration requires at least ten roots out of twenty-one`);
+        process.exit(0);
+    }
+    const n = points.length;
+    const xs = points.map((p) => p.emit);
+    const ys = points.map((p) => p.abs);
+    const mx = xs.reduce((a, b) => a + b, 0) / n;
+    const my = ys.reduce((a, b) => a + b, 0) / n;
+    let sxy = 0;
+    let sxx = 0;
+    for (let i = 0; i < n; i++) {
+        sxy += (xs[i] - mx) * (ys[i] - my);
+        sxx += (xs[i] - mx) ** 2;
+    }
+    const b = sxy / sxx;
+    const intercept = my - b * mx;
+    let sse = 0;
+    for (let i = 0; i < n; i++) sse += (ys[i] - (intercept + b * xs[i])) ** 2;
+    const residualSd = Math.sqrt(sse / (n - 2));
+    const se = residualSd / Math.sqrt(sxx);
+    const lo = b - 1.96 * se;
+    const hi = b + 1.96 * se;
+    const sd = (v) => Math.sqrt(v.reduce((a, c) => a + (c - v.reduce((p, q) => p + q, 0) / v.length) ** 2, 0) / v.length);
+
+    console.log(`  emitter   ${Math.min(...xs)} to ${Math.max(...xs)} K, standard deviation ${sd(xs).toFixed(0)} K`);
+    console.log(`  absorber  ${Math.min(...ys)} to ${Math.max(...ys)} K, standard deviation ${sd(ys).toFixed(0)} K`);
+    console.log("");
+    console.log(`  slope of absorber on emitter: b = ${b.toFixed(3)} +/- ${se.toFixed(3)}, 95 % interval ${lo.toFixed(3)} to ${hi.toFixed(3)}`);
+    console.log(`  scatter about that line: ${residualSd.toFixed(0)} K, against the emitter's ${sd(xs).toFixed(0)} K of lever`);
+    const taus = points.map((p) => p.tau393).filter(Number.isFinite);
+    const gaps = points.map((p) => p.emit - p.abs);
+    if (taus.length > 0) {
+        console.log(`  Ca II 393.366 optical depth: mean ${(taus.reduce((a, c) => a + c, 0) / taus.length).toFixed(2)} over ${taus.length} samples, ${Math.min(...taus).toFixed(2)} to ${Math.max(...taus).toFixed(2)}`);
+    }
+    console.log(`  gap between emitter and absorber: mean ${(gaps.reduce((a, c) => a + c, 0) / gaps.length).toFixed(0)} K, ${Math.min(...gaps)} to ${Math.max(...gaps)} K`);
+    const real = b < 0.35 && (lo > 1 || hi < 1);
+    const artefact = b > 0.65 && (lo > 0 || hi < 0);
+    console.log("");
+    if (real) console.log(`  VERDICT: the layer is REAL. b below 0.35 and the interval excludes 1.`);
+    else if (artefact) console.log(`  VERDICT: an ARTEFACT of the inversion. b above 0.65 and the interval excludes 0.`);
+    else console.log(`  VERDICT: INCONCLUSIVE. b is ${b.toFixed(3)} with an interval of ${lo.toFixed(3)} to ${hi.toFixed(3)}, which does not meet either declared condition.`);
     process.exit(0);
 }
 
