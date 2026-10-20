@@ -18,6 +18,7 @@ export * from "./composition/presets.js";
 export * from "./material/material.node.js";
 export * from "./material/presets.js";
 export * from "./material/oxide-table.js";
+export * from "./material/oxide-comparison.js";
 export { chemistryGasSubPlugin } from "./gas/index.js";
 export { chemistryCompositionSubPlugin } from "./composition/index.js";
 export { chemistryMaterialSubPlugin } from "./material/index.js";
