@@ -82,7 +82,7 @@ const flag = (name, fallback) => {
     return i < 0 ? fallback : (argv[i + 1] ?? fallback);
 };
 if (!archivePath) {
-    console.error("Usage: node measure-curve-of-growth.mjs <archive.zip> [--condition Earth] [--temperature 9000] [--min-samples 12]");
+    console.error("Usage: node measure-curve-of-growth.mjs <archive.zip> [--condition Earth] [--temperature 9000] [--min-samples 12] [--floor 0.002] [--min-ratio 1.2]");
     console.error("The archive is 2.25 GB of CC BY 4.0 data recorded in internals/libs/data/MANIFEST.md, so its path is an argument.");
     process.exit(1);
 }
@@ -97,8 +97,21 @@ const WINDOW_HALF_NM = 0.35;
 const COLLISIONAL_NM = 0.05;
 const PIVOT_NM = 500;
 const MIN_SEPARATION_NM = 0.45;
-const PREDICTED_RATIO_RANGE = [1.2, 8];
-const DETECTION_FLOOR = 0.002;
+// Document 14's acceptance window on the predicted ratio, and its detection
+// floor, both overridable because document 18's result turns on them.
+//
+// The floor at 0.002 of the brightest modelled line is what excluded titanium
+// from the first run, and it excluded it by a factor 1.28: the best Ti II pair
+// sits at 1.56e-3 of the peak on the richest sample. Lowering it is a POST-HOC
+// relaxation of a pre-registered criterion, so a run that uses it is
+// exploratory and must never be scored against document 18's thresholds.
+//
+// The lower end of the ratio window matters for the opposite reason. The
+// diagnostic's whole range is 1 down to one over the square root of the ratio,
+// so a pair at 1.2 can move 0.087 in the index and a pair at 4 can move 0.5.
+// Raising that bound selects pairs able to say something.
+const PREDICTED_RATIO_RANGE = [Number(flag("min-ratio", "1.2")), Number(flag("max-ratio", "8"))];
+const DETECTION_FLOOR = Number(flag("floor", "0.002"));
 const OWN_SHARE = 0.85;
 
 // The corrected analyses, not the published ones: `16-GROUND-TRUTH-UNCERTAINTY.md`
@@ -345,6 +358,12 @@ function fitTemperature(sampleName) {
 
 console.log(`the curve of growth, ${CONDITION} condition, ${candidatePairs.length} candidate pairs in the catalogue`);
 console.log(`protocol and thresholds: internals/libs/18-CURVE-OF-GROWTH.md, declared before this ran\n`);
+if (DETECTION_FLOOR !== 0.002 || PREDICTED_RATIO_RANGE[0] !== 1.2 || PREDICTED_RATIO_RANGE[1] !== 8) {
+    console.log(
+        `EXPLORATORY RUN: acceptance relaxed from document 14's, floor ${DETECTION_FLOOR} against 0.002, ratio window ` +
+            `${PREDICTED_RATIO_RANGE[0]} to ${PREDICTED_RATIO_RANGE[1]} against 1.2 to 8. Not to be scored against document 18's thresholds.`
+    );
+}
 
 const readings = new Map(); // label -> [{sample, index, abundance, temperatureK}]
 const samplesDone = [];
