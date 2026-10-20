@@ -106,6 +106,28 @@ const TRUSTED_LOW_NM = 260;
 const TRUSTED_HIGH_NM = 990;
 const WINDOW_HALF_NM = 0.35;
 const COLLISIONAL_NM = 0.05;
+
+/**
+ * Per-line collisional widths, on by default, off with --global-stark.
+ *
+ * The flag exists so the gain is ATTRIBUTABLE rather than assumed: the
+ * two runs differ in this one thing and in nothing else, so whatever
+ * moves between them is this change and not a second edit that came
+ * with it. `--global-stark` reproduces the run of
+ * `17-V1C-PREDICTION.md` exactly, with every line on the single 50 pm.
+ */
+const GLOBAL_STARK = argv.includes("--global-stark");
+
+/**
+ * Where the catalogue's widths are supported by their sources. Outside
+ * it a width is an extrapolation in temperature, and this tool says how
+ * many lines it extrapolated rather than doing it silently. The density
+ * needs no such flag: every width is stated at 1e17 cm^-3 and the model
+ * runs there, so the linear scaling is the identity.
+ */
+const SUPPORTED_T = spectro.NIST_STARK_PROVENANCE?.supportedTemperatureK ?? [10000, 16000];
+const STARK_REFERENCE_NE = spectro.NIST_STARK_PROVENANCE?.referenceElectronDensityCm3 ?? 1e17;
+const ELECTRON_DENSITY_CM3 = 1e17;
 const PIVOT_NM = 500;
 
 /**
@@ -219,16 +241,25 @@ function measure(sampleName, temperatureK = TEMPERATURE) {
 
     const resolved = core.resolveElementalComposition(chemistry.oxideComponents(analysed), "mass");
     const atomFractions = Object.fromEntries(Object.entries(resolved.moleFractions).filter(([, v]) => v > 0));
-    const emission = spectro.computePhysicalEmissions(atomFractions, data, temperatureK, 1e17, 1);
+    const emission = spectro.computePhysicalEmissions(atomFractions, data, temperatureK, ELECTRON_DENSITY_CM3, 1);
     let modelMax = 0;
     for (const i of emission.intensities) modelMax = Math.max(modelMax, i.intensity);
 
+    // The per-line collisional width, scaled from the density it is
+    // stated at to the one the model runs at. Both are 1e17 today, so
+    // the factor is one, and it is written out because a width without
+    // its density is not a width.
+    const starkOf = (line) => {
+        if (GLOBAL_STARK || line.collisionalWidthNm === undefined) return undefined;
+        return line.collisionalWidthNm * (ELECTRON_DENSITY_CM3 / STARK_REFERENCE_NE);
+    };
     const asEmission = (i) => ({
         element: i.line.element,
         species: `${i.line.element} ${STAGE_NUMERAL[i.line.ionisation]}`,
         wavelengthNm: i.line.wavelengthNm,
         intensity: i.intensity,
         dopplerFwhmNm: spectro.dopplerFwhmNm(i.line.wavelengthNm, temperatureK, MOLAR_MASS[i.line.element] ?? 0.04),
+        collisionalFwhmNm: starkOf(i.line),
         provenance: "model",
     });
     const windowOf = (centreNm) => {
@@ -306,7 +337,51 @@ function measure(sampleName, temperatureK = TEMPERATURE) {
     };
 
     const residual = windows.reduce((a, w) => a + w.residualShareOfPeak, 0) / windows.length;
-    return { sampleName, temperatureK, analysed, atomFractions, windows, offset, width, areaAt, modelAt, residual, blocker: null };
+
+    // Which tier the fitted windows actually used, and where a width
+    // was read outside the temperature its source states. Reported per
+    // sample so the gain can be attributed to the lines that moved
+    // rather than to the run as a whole.
+    let tabulatedIntensity = 0;
+    let fallbackIntensity = 0;
+    let windowsWithTabulated = 0;
+    const extrapolated = new Set();
+    for (const centreNm of windows.map((w) => w.nm)) {
+        const lo = centreNm - WINDOW_HALF_NM - 0.2;
+        const hi = centreNm + WINDOW_HALF_NM + 0.2;
+        let any = false;
+        for (const i of emission.intensities) {
+            if (i.line.wavelengthNm < lo || i.line.wavelengthNm > hi) continue;
+            if (i.intensity < modelMax * 1e-5) continue;
+            if (starkOf(i.line) === undefined) {
+                fallbackIntensity += i.intensity;
+                continue;
+            }
+            tabulatedIntensity += i.intensity;
+            any = true;
+            if (temperatureK < SUPPORTED_T[0] || temperatureK > SUPPORTED_T[1]) {
+                const stated = i.line.collisionalWidthTemperatureK;
+                extrapolated.add(`${i.line.element} ${STAGE_NUMERAL[i.line.ionisation]} ${i.line.wavelengthNm.toFixed(3)} stated at ${stated ?? "?"} K`);
+            }
+        }
+        if (any) windowsWithTabulated++;
+    }
+    const tabulatedShare = tabulatedIntensity + fallbackIntensity > 0 ? tabulatedIntensity / (tabulatedIntensity + fallbackIntensity) : 0;
+
+    return {
+        sampleName,
+        temperatureK,
+        analysed,
+        atomFractions,
+        windows,
+        offset,
+        width,
+        areaAt,
+        modelAt,
+        residual,
+        stark: { tabulatedShare, windowsWithTabulated, extrapolated: [...extrapolated] },
+        blocker: null,
+    };
 }
 
 // ── calibrate ────────────────────────────────────────────────────────
@@ -319,6 +394,17 @@ if (calibration.blocker) {
     process.exit(1);
 }
 console.log(`V1-C, ${CONDITION} condition, calibrated on ${CALIBRATE}, model at ${TEMPERATURE} K\n`);
+if (GLOBAL_STARK) {
+    console.log(`collisional width: ONE GLOBAL ${(COLLISIONAL_NM * 1000).toFixed(0)} pm for every line (--global-stark), which is the run 17-V1C-PREDICTION.md records`);
+} else {
+    const withWidth = spectro.NIST_LINE_CATALOGUE.filter((l) => l.collisionalWidthNm !== undefined);
+    const pm = withWidth.map((l) => l.collisionalWidthNm * 1000).sort((a, b) => a - b);
+    const range = pm.length ? `${pm[0].toFixed(1)} to ${pm[pm.length - 1].toFixed(1)} pm` : "none";
+    console.log(
+        `collisional width: PER LINE for ${withWidth.length} catalogue lines, ${range} at ${STARK_REFERENCE_NE.toExponential(0)} cm^-3, the global ${(COLLISIONAL_NM * 1000).toFixed(0)} pm for the rest`
+    );
+}
+console.log("");
 console.log(`frozen instrument, from ${CALIBRATE} over ${calibration.windows.length} windows:`);
 console.log(`  offset = ${(calibration.offset.constant * 1000).toFixed(1)} pm, slope ${(calibration.offset.slopePerNm * 1e6).toFixed(2)} pm per 1000 nm`);
 console.log(`  FWHM   = ${(calibration.width.constant * 1000).toFixed(1)} pm, slope ${(calibration.width.slopePerNm * 1e6).toFixed(1)} pm per 1000 nm`);
@@ -377,6 +463,28 @@ console.log(`  offset departs from the frozen trend by ${(offsetDeparture.median
 console.log(
     `  width  departs by ${(widthDeparture.median * 1000).toFixed(1)} pm at the median, ${(widthDeparture.worst * 1000).toFixed(1)} pm at worst, against a width of ${(calibration.width.constant * 1000).toFixed(0)} pm`
 );
+
+// ── which tier carried the fit ───────────────────────────────────────
+
+if (!GLOBAL_STARK) {
+    const all = [calibration, ...results];
+    const share = all.reduce((a, m) => a + (m.stark?.tabulatedShare ?? 0), 0) / all.length;
+    const windowsHit = all.reduce((a, m) => a + (m.stark?.windowsWithTabulated ?? 0), 0);
+    const windowsAll = all.reduce((a, m) => a + m.windows.length, 0);
+    const extrapolating = all.filter((m) => (m.stark?.extrapolated.length ?? 0) > 0);
+    console.log("");
+    console.log(`collisional width, which tier carried the fit:`);
+    console.log(`  ${(share * 100).toFixed(1)} % of the modelled intensity inside the fitted windows used a tabulated per-line width, averaged over samples`);
+    console.log(`  ${windowsHit} of ${windowsAll} fitted windows contain at least one line that carries one`);
+    if (extrapolating.length === 0) {
+        console.log(`  every sample sits inside ${SUPPORTED_T[0]} to ${SUPPORTED_T[1]} K, where the widths are supported: nothing was extrapolated`);
+    } else {
+        console.log(`  ${extrapolating.length} of ${all.length} samples sit OUTSIDE ${SUPPORTED_T[0]} to ${SUPPORTED_T[1]} K, so their widths are extrapolated in temperature:`);
+        for (const m of extrapolating) {
+            console.log(`    ${m.sampleName} at ${m.temperatureK} K, ${m.stark.extrapolated.length} line(s), e.g. ${m.stark.extrapolated[0]}`);
+        }
+    }
+}
 
 // ── does the model track the composition ─────────────────────────────
 

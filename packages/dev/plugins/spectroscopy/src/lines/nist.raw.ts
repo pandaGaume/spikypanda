@@ -30,6 +30,15 @@ export interface INistSpeciesBlock {
     readonly lines: ReadonlyArray<ReadonlyArray<number | null>>;
     /** [energy(eV), g] */
     readonly levels: ReadonlyArray<ReadonlyArray<number>>;
+    /**
+     * [wavelengthNm, collisionalWidthNm, source, temperatureK|null],
+     * only for the lines a source covers. A separate list rather than
+     * two more columns on every line: twenty-three lines carry a width
+     * and fifteen thousand do not, so two nulls per line would be
+     * kilobytes of nothing and would bury the entries that matter in a
+     * diff.
+     */
+    readonly starkWidths?: ReadonlyArray<ReadonlyArray<number | string | null>>;
     readonly ionisationLimitEv: number | null;
     readonly source: { readonly lines: INistSourceFile; readonly levels: INistSourceFile };
     /** What the reader could not use, kept so the truncation of a
@@ -58,7 +67,21 @@ export interface INistCatalogueRaw {
         readonly generatedBy: string;
         readonly manifest: string;
     };
-    readonly columns: { readonly lines: ReadonlyArray<string>; readonly levels: ReadonlyArray<string> };
+    readonly columns: {
+        readonly lines: ReadonlyArray<string>;
+        readonly levels: ReadonlyArray<string>;
+        readonly starkWidths?: ReadonlyArray<string>;
+    };
+    /** Where the per-line collisional widths come from and what they
+     *  are stated at. Absent in a catalogue built without them. */
+    readonly stark?: {
+        readonly referenceElectronDensityCm3: number;
+        readonly widthConvention: string;
+        readonly table: string;
+        readonly document: string;
+        readonly tiers: Readonly<Record<string, string>>;
+        readonly supportedTemperatureK: ReadonlyArray<number>;
+    };
     readonly ionisationEnergiesEv: Readonly<Record<string, number>>;
     readonly ionisationSource: INistSourceFile;
     readonly species: ReadonlyArray<INistSpeciesBlock>;

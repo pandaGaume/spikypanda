@@ -38,7 +38,14 @@ const DATA: IPhysicalModelData = {
     ionisationEnergiesEv: NIST_IONISATION_ENERGIES_EV,
 };
 
-const PLASMA: IPlasmaParameters = { ...DEFAULT_PLASMA_PARAMETERS, emissionModel: "physical", temperatureK: 10000, electronDensityCm3: 1e17, continuumLevel: 0, collisionalWidthNm: 0.01 };
+const PLASMA: IPlasmaParameters = {
+    ...DEFAULT_PLASMA_PARAMETERS,
+    emissionModel: "physical",
+    temperatureK: 10000,
+    electronDensityCm3: 1e17,
+    continuumLevel: 0,
+    collisionalWidthNm: 0.01,
+};
 
 /** A narrow, finely sampled window: 0.005 nm per pixel. */
 const INSTRUMENT: IInstrumentParameters = { ...DEFAULT_INSTRUMENT_PARAMETERS, rangeStartNm: 380, rangeEndNm: 450, pixelCount: 14001, resolutionFwhmNm: 0.05, noiseEnabled: false };
@@ -71,20 +78,44 @@ function peaks(grid: Float64Array, y: Float32Array, floor: number): Array<{ wave
 
 describe("V1-A, line positions against the NIST catalogue", () => {
     const { emission, spectrum } = spectrumOf({ Ca: 1 });
-    const measured = peaks(spectrum.wavelengthNm, spectrum.instrumented, 0.001);
+    const measured = peaks(spectrum.wavelengthNm, spectrum.instrumented, 0.0005);
 
     // Reference lines: the catalogue lines inside the window, strong
     // enough to show, and far enough from a neighbour of comparable
     // strength that the instrument resolves them.
     const inWindow = emission.lines.filter((l) => l.wavelengthNm > INSTRUMENT.rangeStartNm + 1 && l.wavelengthNm < INSTRUMENT.rangeEndNm - 1);
     const strongest = Math.max(...inWindow.map((l) => l.intensity));
-    const strong = inWindow.filter((l) => l.intensity > strongest * 0.002);
-    const resolvedWidth = 3 * pseudoVoigtFwhm(Math.sqrt(0.05 ** 2), 0.01);
-    const isolated = strong.filter((l) => !strong.some((o) => o !== l && Math.abs(o.wavelengthNm - l.wavelengthNm) < resolvedWidth && o.intensity > l.intensity * 0.05));
+    const strong = inWindow.filter((l) => l.intensity > strongest * 0.001);
+
+    /**
+     * How wide this line actually comes out: its own Doppler width and
+     * its own collisional width, folded with the slit.
+     *
+     * It is per line because the collisional width is. While every
+     * line carried one global coefficient a single constant was right;
+     * now Ca I 445.478 is 200 pm wide against Ca II 393.366's 17 pm,
+     * so the first blends with neighbours the second resolves. Using
+     * one number for both silently declared a line isolated while a
+     * companion sat inside its profile, and the peak then came out
+     * between the two.
+     */
+    const totalWidthOf = (l: (typeof inWindow)[number]) =>
+        pseudoVoigtFwhm(Math.hypot(l.dopplerFwhmNm, INSTRUMENT.resolutionFwhmNm), l.collisionalFwhmNm ?? PLASMA.collisionalWidthNm);
+
+    // The companion that spoils a peak need not itself be strong
+    // enough to be a reference line, so this looks at EVERY line in
+    // the window. Checking only against the reference set was the
+    // second half of the same mistake.
+    const isolated = strong.filter(
+        (l) => !inWindow.some((o) => o !== l && Math.abs(o.wavelengthNm - l.wavelengthNm) < 3 * Math.max(totalWidthOf(l), totalWidthOf(o)) && o.intensity > l.intensity * 0.05)
+    );
     const blended = strong.length - isolated.length;
 
     const errors = isolated.map((l) => {
-        const nearest = measured.reduce((best, p) => (best === null || Math.abs(p.wavelengthNm - l.wavelengthNm) < Math.abs(best.wavelengthNm - l.wavelengthNm) ? p : best), null as (typeof measured)[number] | null);
+        const nearest = measured.reduce(
+            (best, p) => (best === null || Math.abs(p.wavelengthNm - l.wavelengthNm) < Math.abs(best.wavelengthNm - l.wavelengthNm) ? p : best),
+            null as (typeof measured)[number] | null
+        );
         return { line: l, deltaNm: nearest ? nearest.wavelengthNm - l.wavelengthNm : Number.NaN };
     });
 
@@ -113,7 +144,11 @@ describe("V1-A, line positions against the NIST catalogue", () => {
     });
 
     it("identifies the three lines a calcium spectrum is known by", () => {
-        const top = [...measured].sort((a, b) => b.height - a.height).slice(0, 3).map((p) => p.wavelengthNm).sort((a, b) => a - b);
+        const top = [...measured]
+            .sort((a, b) => b.height - a.height)
+            .slice(0, 3)
+            .map((p) => p.wavelengthNm)
+            .sort((a, b) => a - b);
         expect(top[0]).toBeCloseTo(393.366, 2); // Ca II K
         expect(top[1]).toBeCloseTo(396.847, 2); // Ca II H
         expect(top[2]).toBeCloseTo(422.673, 2); // Ca I resonance
@@ -122,7 +157,7 @@ describe("V1-A, line positions against the NIST catalogue", () => {
     it("produces no peak that the catalogue cannot explain", () => {
         const unexplained = measured
             .filter((p) => p.height > Math.max(...Array.from(spectrum.instrumented)) * 0.01)
-            .filter((p) => !inWindow.some((l) => Math.abs(l.wavelengthNm - p.wavelengthNm) < 2 * PIXEL_NM + resolvedWidth));
+            .filter((p) => !inWindow.some((l) => Math.abs(l.wavelengthNm - p.wavelengthNm) < 2 * PIXEL_NM + 3 * totalWidthOf(l)));
         expect(unexplained.map((p) => p.wavelengthNm.toFixed(3))).toEqual([]);
     });
 

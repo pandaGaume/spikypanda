@@ -59,7 +59,55 @@ export interface IAtomicLine {
     readonly lowerLevelEnergyEv?: number;
     /** Statistical weight of the lower level. Same reason. */
     readonly lowerLevelWeight?: number;
+    /**
+     * Collisional (Stark) FWHM [nm] of THIS line, stated at the one
+     * reference electron density `STARK_REFERENCE_ELECTRON_DENSITY_CM3`
+     * and scaled linearly from there, which is the convention both
+     * sources publish.
+     *
+     * Absent when no source covers the line: the engine then falls back
+     * to the plasma's single global coefficient, which is what every
+     * line used before. The widths of the lines that do carry one span
+     * a factor 26, so the fallback is a last resort and not a default.
+     *
+     * The reference density is deliberately NOT a per-line field. Every
+     * value was normalised to one density before it entered the
+     * catalogue, and a second per-line density would be a second way to
+     * get the scaling wrong. See `internals/libs/15-STARK-COEFFICIENTS.md`.
+     */
+    readonly collisionalWidthNm?: number;
+    /** Which tier `collisionalWidthNm` came from, so an error budget
+     *  can read it instead of assuming one number: a measurement is
+     *  worth 15 to 50 % and a calculation 20 to 50 %. */
+    readonly collisionalWidthSource?: CollisionalWidthSource;
+    /** Temperature [K] the collisional width was stated at. The width
+     *  moves by about 11 % over 10 000 to 16 000 K, so this is a flag
+     *  for extrapolation rather than an interpolation axis. */
+    readonly collisionalWidthTemperatureK?: number;
 }
+
+/** Where a per-line collisional width came from. */
+export type CollisionalWidthSource = "measured" | "calculated";
+
+/**
+ * The electron density [cm^-3] every per-line collisional width in the
+ * catalogue is stated at. One constant for the whole table.
+ *
+ * It matches `stark.reference_electron_density` in
+ * `internals/libs/parameters/libs-parameters.json`.
+ */
+export const STARK_REFERENCE_ELECTRON_DENSITY_CM3 = 1e17;
+
+/**
+ * The temperature range [K] over which the per-line widths are
+ * supported by their sources: the measurements sit between 9 700 and
+ * 15 000 K, and the temperature sensitivity of the width was measured
+ * over 10 000 to 16 000 K at 11 % on average and 20 % at worst.
+ *
+ * Outside it a width is an extrapolation, and a caller that cares
+ * should say so rather than extrapolate silently.
+ */
+export const STARK_SUPPORTED_TEMPERATURE_K: readonly [number, number] = Object.freeze([10000, 16000]);
 
 /** Spectroscopic label: `Fe I`, `Ca II`. */
 export function speciesLabel(line: IAtomicLine): string {

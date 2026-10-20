@@ -50,7 +50,7 @@
  */
 
 import { CHEMICAL_ELEMENTS } from "spikypanda-core";
-import { physicalModeBlocker, speciesLabel } from "../lines/lines.catalog.js";
+import { STARK_REFERENCE_ELECTRON_DENSITY_CM3, physicalModeBlocker, speciesLabel } from "../lines/lines.catalog.js";
 import type { IAtomicLine } from "../lines/lines.catalog.js";
 import { computePhysicalEmissions, physicalDataBlocker } from "./physical.js";
 import type { IPhysicalElementReport, IPhysicalModelData } from "./physical.js";
@@ -115,6 +115,17 @@ export interface ILineEmission {
     readonly intensity: number;
     /** Gaussian FWHM [nm] from Doppler broadening at this temperature. */
     readonly dopplerFwhmNm: number;
+    /**
+     * Lorentz FWHM [nm] from collisions, for THIS line, already scaled
+     * to the plasma's electron density.
+     *
+     * Absent when no source covers the line, and then the caller's
+     * single global coefficient applies, which is what every line used
+     * before. It sits beside `dopplerFwhmNm` on purpose: a profile
+     * needs both halves per line, and the Doppler half has been per
+     * line since the beginning.
+     */
+    readonly collisionalFwhmNm?: number;
     readonly provenance: string;
 }
 
@@ -298,6 +309,7 @@ export function computeLineEmissions(
                 wavelengthNm: i.line.wavelengthNm,
                 intensity: i.intensity,
                 dopplerFwhmNm: dopplerOf(i.line.wavelengthNm, i.line.element),
+                collisionalFwhmNm: i.line.collisionalWidthNm === undefined ? undefined : collisionalFwhmNm(plasma, i.line),
                 provenance: i.line.provenance,
             }))
             .sort((a, b) => a.wavelengthNm - b.wavelengthNm);
@@ -329,6 +341,7 @@ export function computeLineEmissions(
                 wavelengthNm: l.wavelengthNm,
                 intensity: plasma.intensityScale * fraction * l.relativeStrength,
                 dopplerFwhmNm: dopplerOf(l.wavelengthNm, element),
+                collisionalFwhmNm: l.collisionalWidthNm === undefined ? undefined : collisionalFwhmNm(plasma, l),
                 provenance: l.provenance,
             });
         }
@@ -346,8 +359,25 @@ export function computeLineEmissions(
     };
 }
 
-/** The collisional FWHM [nm] at the current electron density. */
-export function collisionalFwhmNm(plasma: IPlasmaParameters): number {
+/**
+ * The collisional FWHM [nm] at the current electron density.
+ *
+ * With a line, it is that line's own tabulated width, read at
+ * `STARK_REFERENCE_ELECTRON_DENSITY_CM3` and scaled linearly, which is
+ * the convention both sources publish. Without one, or for a line no
+ * source covers, it is the plasma's single global coefficient: the
+ * third tier, for the fifteen thousand transitions nobody tabulates.
+ *
+ * The density the line's width is stated at is a constant of the
+ * catalogue and not of the plasma, which is why it is not read from
+ * `plasma.referenceElectronDensityCm3`: that field says what the
+ * GLOBAL coefficient is stated at, and the two are independent.
+ */
+export function collisionalFwhmNm(plasma: IPlasmaParameters, line?: Pick<IAtomicLine, "collisionalWidthNm">): number {
+    const perLine = line?.collisionalWidthNm;
+    if (perLine !== undefined && perLine >= 0) {
+        return perLine * (plasma.electronDensityCm3 / STARK_REFERENCE_ELECTRON_DENSITY_CM3);
+    }
     const ref = plasma.referenceElectronDensityCm3;
     if (!(ref > 0)) return 0;
     return plasma.collisionalWidthNm * (plasma.electronDensityCm3 / ref);
@@ -400,13 +430,16 @@ export function accumulateLines(
     for (const line of lines) {
         const centre = line.wavelengthNm + wavelengthOffsetNm;
         const gFwhm = Math.sqrt(line.dopplerFwhmNm * line.dopplerFwhmNm + extraGaussianFwhmNm * extraGaussianFwhmNm);
-        const total = pseudoVoigtFwhm(gFwhm, lorentzFwhmNm);
+        // A line that carries its own collisional width uses it; the
+        // argument is the fallback for the lines no source covers.
+        const lFwhm = line.collisionalFwhmNm ?? lorentzFwhmNm;
+        const total = pseudoVoigtFwhm(gFwhm, lFwhm);
         if (!(total > 0)) continue;
         const halfWindow = WINDOW_FWHM * total;
         const first = Math.max(0, Math.ceil((centre - halfWindow - grid[0]) / step));
         const last = Math.min(grid.length - 1, Math.floor((centre + halfWindow - grid[0]) / step));
         for (let i = first; i <= last; i++) {
-            out[i] += line.intensity * pseudoVoigt(grid[i] - centre, gFwhm, lorentzFwhmNm);
+            out[i] += line.intensity * pseudoVoigt(grid[i] - centre, gFwhm, lFwhm);
         }
     }
     return out;
@@ -483,7 +516,11 @@ export function simulateLibsSpectrum(request: ILibsSimulationRequest): ILibsSimu
  * `catalogueInfo` only feeds the simulation identifier, so that two
  * spectra computed from different catalogues never share an id.
  */
-export function renderSpectrum(emission: IPlasmaEmission, instrument: IInstrumentParameters, catalogueInfo: { catalogueSize: number; unverifiedLines: number } = { catalogueSize: 0, unverifiedLines: 0 }): ILibsSimulation {
+export function renderSpectrum(
+    emission: IPlasmaEmission,
+    instrument: IInstrumentParameters,
+    catalogueInfo: { catalogueSize: number; unverifiedLines: number } = { catalogueSize: 0, unverifiedLines: 0 }
+): ILibsSimulation {
     const plasma = emission.plasma;
     const grid = buildWavelengthGrid(instrument);
     const lorentz = collisionalFwhmNm(plasma);

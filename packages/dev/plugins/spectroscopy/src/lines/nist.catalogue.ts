@@ -48,7 +48,7 @@
  */
 
 import { NIST_CATALOGUE_RAW } from "./nist-catalogue.data.js";
-import type { IAtomicLine, IonisationStage } from "./lines.catalog.js";
+import type { CollisionalWidthSource, IAtomicLine, IonisationStage } from "./lines.catalog.js";
 import type { IEnergyLevel } from "./nist.parse.js";
 import type { INistSpeciesBlock } from "./nist.raw.js";
 
@@ -94,8 +94,21 @@ export const NIST_IONISATION_ENERGIES_EV: Readonly<Record<string, number>> = Obj
 
 function buildSpecies(block: INistSpeciesBlock): INistSpecies {
     const provenance = `${NIST_PROVENANCE.database} ${NIST_PROVENANCE.version}, ${block.asdName}, sha256 ${block.source.lines.sha256.slice(0, 12)}`;
-    const lines: IAtomicLine[] = block.lines.map((row) =>
-        Object.freeze({
+    // The generator writes the catalogue's own wavelengths into the
+    // Stark list, so the key is exact and no tolerance is needed here:
+    // the matching with its tolerance happened once, at build time,
+    // where a miss is a build error rather than a silent gap.
+    const stark = new Map<number, { widthNm: number; source: CollisionalWidthSource; temperatureK?: number }>();
+    for (const row of block.starkWidths ?? []) {
+        stark.set(row[0] as number, {
+            widthNm: row[1] as number,
+            source: row[2] as CollisionalWidthSource,
+            temperatureK: (row[3] ?? undefined) as number | undefined,
+        });
+    }
+    const lines: IAtomicLine[] = block.lines.map((row) => {
+        const width = stark.get(row[0] as number);
+        return Object.freeze({
             element: block.element,
             ionisation: block.ionisation as IonisationStage,
             wavelengthNm: row[0] as number,
@@ -104,13 +117,16 @@ function buildSpecies(block: INistSpeciesBlock): INistSpecies {
             upperLevelWeight: row[3] as number,
             lowerLevelEnergyEv: (row[4] ?? undefined) as number | undefined,
             lowerLevelWeight: (row[5] ?? undefined) as number | undefined,
+            collisionalWidthNm: width?.widthNm,
+            collisionalWidthSource: width?.source,
+            collisionalWidthTemperatureK: width?.temperatureK,
             // Within-species ordering for the `relative` model; the
             // physical model never reads it.
             relativeStrength: 1,
             verified: true,
             provenance,
-        })
-    );
+        });
+    });
     // Normalise the heuristic strength within the species, as the
     // generator does for the parsed form.
     let maxStrength = 0;
@@ -127,6 +143,13 @@ function buildSpecies(block: INistSpeciesBlock): INistSpecies {
         sourceSha256: Object.freeze({ lines: block.source.lines.sha256, levels: block.source.levels.sha256 }),
     });
 }
+
+/**
+ * Where the per-line collisional widths come from, and the one density
+ * they are stated at. Undefined in a catalogue built without the Stark
+ * table, in which case every line falls back to the global coefficient.
+ */
+export const NIST_STARK_PROVENANCE = raw.stark === undefined ? undefined : Object.freeze({ ...raw.stark });
 
 /** Every species the shipped catalogue carries. */
 export const NIST_SPECIES: ReadonlyArray<INistSpecies> = Object.freeze(raw.species.map(buildSpecies));
