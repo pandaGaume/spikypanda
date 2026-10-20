@@ -50,10 +50,10 @@
  *          <archive.zip> [--condition Earth] [--temperature 9000] [--min-samples 12]
  */
 
-import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { archiveResponse, MOLAR_MASS, openArchive, sampleNames, sampleSpectrum, STAGE_NUMERAL } from "./regolith-archive.mjs";
+import { amendedLunarTable } from "./lunar-composition.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pluginRoot = resolve(here, "..");
@@ -69,7 +69,10 @@ const spectro = {
     ...(await load(join(pluginRoot, "dist/libs/self-absorption.js"))),
     ...(await load(join(pluginRoot, "dist/instrument/response.js"))),
 };
-const chemistry = await load(join(repoRoot, "packages/dev/plugins/chemistry/dist/material/oxide-table.js"));
+const chemistry = {
+    ...(await load(join(repoRoot, "packages/dev/plugins/chemistry/dist/material/oxide-table.js"))),
+    ...(await load(join(repoRoot, "packages/dev/plugins/chemistry/dist/material/oxide-amendment.js"))),
+};
 const core = await load(join(repoRoot, "packages/dev/core/dist/index.js"));
 
 const argv = process.argv.slice(2);
@@ -98,7 +101,13 @@ const PREDICTED_RATIO_RANGE = [1.2, 8];
 const DETECTION_FLOOR = 0.002;
 const OWN_SHARE = 0.85;
 
-const table = chemistry.parseOxideTable(readFileSync(join(repoRoot, "packages/tests/chemistry/fixtures/moon-regolith-simulants-oxides.tsv"), "utf8"));
+// The corrected analyses, not the published ones: `16-GROUND-TRUTH-UNCERTAINTY.md`
+// section 4 lists 33 defective cells, and the ledger beside the fixture carries
+// the corrections without editing the published table. The three elements this
+// measurement rests on, magnesium, aluminium and calcium, are unmoved to four
+// decimals either way; titanium's own range is not, falling from 1.109 to
+// 0.904 dex because three of the mistyped cells were its.
+const table = amendedLunarTable(chemistry);
 const data = {
     species: spectro.NIST_SPECIES.map((s) => ({ element: s.element, ionisation: s.ionisation, asdName: s.asdName, lines: s.lines, levels: s.levels })),
     ionisationEnergiesEv: spectro.NIST_IONISATION_ENERGIES_EV,
