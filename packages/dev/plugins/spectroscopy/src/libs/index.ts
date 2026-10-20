@@ -4,6 +4,7 @@ import { createLibsPlasmaNode, isMaterialSpecView, LibsPlasmaNode, PLASMA_IN_MAT
 export * from "./boltzmann.js";
 export * from "./engine.js";
 export * from "./physical.js";
+export * from "./self-absorption.js";
 export * from "./window-fit.js";
 export { LibsPlasmaNode, createLibsPlasmaNode, isMaterialSpecView, PLASMA_IN_MATERIAL, PLASMA_OUT_EMISSION };
 export type { IMaterialSpecView } from "./plasma.node.js";
